@@ -1,0 +1,17 @@
+[project]
+name = "jupyter-deploy"
+version = "0.1.0"
+description = "CLI based tool to deploy Jupyter application that integrates with infrastructure as code frameworks."
+readme = "README.md"
+authors = [
+    { name = "Jonathan Guinegagne", email = "jggg@amazon.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+jupyter-deploy = "jupyter_deploy.cli.deploy_app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
