@@ -7,11 +7,56 @@ authors = [
     { name = "Jonathan Guinegagne", email = "jggg@amazon.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "click>=8.1.8",
+    "typer>=0.15.3",
+]
 
 [project.scripts]
 jupyter-deploy = "jupyter_deploy.cli.deploy_app:main"
 
+
+[project.optional-dependencies]
+terraform = [
+    "python-terraform>=0.10.1",
+]
+
+aws = [
+    "boto3>=1.38.6",
+    "boto3-stubs>=1.38.6",
+    "mypy-boto3-ec2>=1.38.6",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.15.0",
+    "pytest>=8.3.5",
+    "ruff>=0.11.8",
+]
+
+[tool.mypy]
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+mypy_path = ["src"]
+packages = ["jupyter_deploy"]
+
+[tool.ruff]
+extend-exclude = [".conda/"]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+docstring-code-format = true
+docstring-code-line-length = 40
