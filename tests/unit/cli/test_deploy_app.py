@@ -36,7 +36,7 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         mock_app.assert_called_once()
 
     def test_help(self):
-        """Integration test for the CLI."""
+        """Test the help command."""
         runner = CliRunner()
         result = runner.invoke(app_runner.app, ["--help"])
 
@@ -45,6 +45,14 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         self.assertTrue(result.stdout.index("Jupyter-deploy") >= 0)
         self.assertTrue(result.stdout.index("terraform") >= 0)
         self.assertTrue(result.stdout.index("servers") >= 0)
+
+    def test_no_arg_defaults_to_help(self):
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, [])
+
+        # Check that the command ran successfully
+        self.assertEqual(result.exit_code, 0)
+        self.assertTrue(result.stdout.index("Jupyter-deploy") >= 0)
 
 
 class TestMain(unittest.TestCase):

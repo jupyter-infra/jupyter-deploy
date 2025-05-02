@@ -1,7 +1,8 @@
 import typer
 
 servers_app = typer.Typer(
-    help=("""Discover, start, stop or exec into server deployed to infrastructure controlled by your IaC templates.""")
+    help=("""Discover, start, stop or exec into server deployed to infrastructure controlled by your IaC templates."""),
+    no_args_is_help=True,
 )
 
 

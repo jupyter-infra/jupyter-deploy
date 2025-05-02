@@ -12,7 +12,8 @@ class JupyterDeployCliRunner:
     def __init__(self) -> None:
         """Setup the CLI shell, add sub-commands."""
         self.app = typer.Typer(
-            help=("Jupyter-deploy CLI helps you deploy notebooks application to your favorite Cloud provider.")
+            help=("Jupyter-deploy CLI helps you deploy notebooks application to your favorite Cloud provider."),
+            no_args_is_help=True,
         )
         self._setup_basic_commands()
         self.app.add_typer(terraform_app, name="terraform")

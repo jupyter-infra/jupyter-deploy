@@ -4,7 +4,8 @@ terraform_app = typer.Typer(
     help=(
         "Interact with terraform preset templates, generate set of .tf files "
         "and deploy to the Cloud provider of your choice."
-    )
+    ),
+    no_args_is_help=True,
 )
 
 

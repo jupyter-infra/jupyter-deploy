@@ -38,3 +38,10 @@ class TestServersApp(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertTrue(result.stdout.index("list") > 0)
         self.assertTrue(result.stdout.index("describe") > 0)
+
+    def test_no_arg_defaults_to_help(self):
+        runner = CliRunner()
+        result = runner.invoke(servers_app, [])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertTrue(len(result.stdout) > 0)
