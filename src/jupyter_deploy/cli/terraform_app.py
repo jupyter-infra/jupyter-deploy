@@ -3,6 +3,7 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
+from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.handlers.project.project_handler import ProjectHandler
 
 terraform_app = typer.Typer(
@@ -24,7 +25,7 @@ def generate(
     ] = None,
 ) -> None:
     """Write a set of terraform .tf files at the target location."""
-    project = ProjectHandler(project_dir=project_dir, engine_name="terraform", template_name=template_name)
+    project = ProjectHandler(project_dir=project_dir, engine=EngineType.TERRAFORM, template_name=template_name)
 
     # sanity check: if there are files under the project dir, ask if we should clear it first
     if not project.may_export_to_project_path():

@@ -11,7 +11,7 @@ class ProjectHandler:
     def __init__(
         self,
         project_dir: str | None,
-        engine_name: EngineType = EngineType.TERRAFORM,
+        engine: EngineType = EngineType.TERRAFORM,
         template_name: str = "terraform:aws:ec2:tls-via-ngrok",
         project_name: str = "jupyter-deploy",
     ) -> None:
@@ -21,7 +21,7 @@ class ProjectHandler:
         else:
             self.project_path = Path(project_dir)
 
-        self.engine_name = engine_name
+        self.engine = engine
         self.project_name = project_name
         self.source_path = self.find_template_path(template_name)
 
@@ -31,7 +31,7 @@ class ProjectHandler:
         The template should be of the form <engine>:<provider>:<infra-type>:<template_name>.
         """
         template_path_parts = template_name.split(":")
-        tf_template_path = Path(PRESET_ROOT_PATH / self.engine_name)
+        tf_template_path = Path(PRESET_ROOT_PATH / self.engine.lower())
 
         for template_path_part in template_path_parts:
             tf_template_path /= template_path_part

@@ -50,7 +50,7 @@ def safe_clean_directory(directory_path: Path, deleted_ok: bool = False) -> None
     shutil.rmtree(directory_path, ignore_errors=True)
 
 
-def copy_and_make_executable(source_path: Path, dest_path: Path) -> None:
+def copy_and_make_executable(source_path: str, dest_path: str) -> None:
     """Copy file and ensure it is executable by the owner."""
     # Copy the file with metadata
     shutil.copy2(source_path, dest_path)
