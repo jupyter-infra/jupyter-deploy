@@ -35,6 +35,7 @@ build-backend = "hatchling.build"
 dev = [
     "mypy>=1.15.0",
     "pytest>=8.3.5",
+    "pytest-cov>=6.1.1",
     "ruff>=0.11.8",
 ]
 
@@ -67,3 +68,23 @@ skip-magic-trailing-comma = false
 
 docstring-code-format = true
 docstring-code-line-length = 40
+
+[tool.pytest.ini_options]
+addopts = "--cov=jupyter_deploy --cov-report=term-missing --cov-report=xml --cov-report=html"
+testpaths = ["tests/unit"]
+
+[tool.coverage.run]
+source = ["jupyter_deploy"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "raise ImportError",
+]
+fail_under = 80
+show_missing = true
