@@ -159,3 +159,4 @@ cython_debug/
 
 # local files
 /tmp
+/sandbox
