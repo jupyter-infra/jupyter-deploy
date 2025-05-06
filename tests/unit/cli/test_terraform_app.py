@@ -1,20 +1,152 @@
 import unittest
+from unittest.mock import Mock, patch
 
 from typer.testing import CliRunner
 
 from jupyter_deploy.cli.terraform_app import terraform_app
+from jupyter_deploy.engine.enum import EngineType
 
 
 class TestTerraformApp(unittest.TestCase):
     """Test cases for the terraform_app module."""
 
-    def test_generate_command(self):
-        """Test the generate command."""
+    def get_mock_project(self) -> Mock:
+        """Return a mock project."""
+        mock_project = Mock()
+
+        self.mock_may_export_to_project_path = Mock()
+        self.mock_clear_project_path = Mock()
+        self.mock_setup = Mock()
+
+        self.mock_may_export_to_project_path.return_value = True
+
+        mock_project.may_export_to_project_path = self.mock_may_export_to_project_path
+        mock_project.clear_project_path = self.mock_clear_project_path
+        mock_project.setup = self.mock_setup
+
+        return mock_project
+
+    @patch("jupyter_deploy.handlers.project.project_handler.ProjectHandler")
+    def test_generate_command_no_args_default_to_terraform(self, mock_handler_cls: Mock):
+        """Test that the generate command picks up defaults."""
+        mock_handler_cls.return_value = self.get_mock_project()
+
         runner = CliRunner()
         result = runner.invoke(terraform_app, ["generate"])
 
         # Check that the command ran successfully
         self.assertEqual(result.exit_code, 0, "generate command should work")
+
+        mock_handler_cls.assert_called_once_with(
+            project_dir=None,
+            engine=EngineType.TERRAFORM,
+            template_name="aws:ec2:tls-via-ngrok",
+        )
+
+    @patch("jupyter_deploy.handlers.project.project_handler.ProjectHandler")
+    def test_generate_command_passes_attributes_to_project(self, mock_handler_cls: Mock):
+        """Test that the generate command handles optional attributes."""
+        mock_handler_cls.return_value = self.get_mock_project()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            terraform_app,
+            [
+                "generate",
+                "--engine",
+                "terraform",
+                "--template",
+                "aws:ec2:other-template",
+                "--output-path",
+                "sandbox/sb1",
+            ],
+        )
+
+        # Check that the command ran successfully
+        self.assertEqual(result.exit_code, 0, "generate command should work")
+
+        mock_handler_cls.assert_called_once_with(
+            project_dir="sandbox/sb1",
+            engine=EngineType.TERRAFORM,
+            template_name="aws:ec2:other-template",
+        )
+
+    @patch("jupyter_deploy.handlers.project.project_handler.ProjectHandler")
+    def test_generate_command_handles_short_options(self, mock_handler_cls: Mock):
+        """Test that the generate command handles short names of optional attributes."""
+        mock_handler_cls.return_value = self.get_mock_project()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            terraform_app, ["generate", "-e", "terraform", "-t", "aws:ec2:other-template", "-p", "sandbox/sb1"]
+        )
+
+        # Check that the command ran successfully
+        self.assertEqual(result.exit_code, 0, "generate command should work")
+
+        mock_handler_cls.assert_called_once_with(
+            project_dir="sandbox/sb1",
+            engine=EngineType.TERRAFORM,
+            template_name="aws:ec2:other-template",
+        )
+
+    @patch("jupyter_deploy.handlers.project.project_handler.ProjectHandler")
+    def test_generate_command_calls_project_methods(self, mock_handler_cls: Mock):
+        """Test that the generate commands correctly calls project.may_export() and .setup()."""
+        mock_handler_cls.return_value = self.get_mock_project()
+
+        runner = CliRunner()
+        result = runner.invoke(terraform_app, ["generate"])
+
+        self.assertEqual(result.exit_code, 0, "generate command should work")
+        self.mock_may_export_to_project_path.assert_called_once()
+        self.mock_setup.assert_called_once()
+
+    @patch("jupyter_deploy.handlers.project.project_handler.ProjectHandler")
+    def test_generate_command_surfaces_project_setup_error(self, mock_handler_cls: Mock):
+        """Test that the generate commands correctly calls project.setup()."""
+        mock_handler_cls.return_value = self.get_mock_project()
+        self.mock_setup.side_effect = OSError("Access denied")
+
+        runner = CliRunner()
+        result = runner.invoke(terraform_app, ["generate"])
+
+        self.assertNotEqual(result.exit_code, 0, "generate command should work")
+        self.mock_setup.assert_called_once()
+
+    @patch("jupyter_deploy.handlers.project.project_handler.ProjectHandler")
+    @patch("typer.confirm")
+    def test_generate_command_prompt_user_on_project_conflict(self, mock_confirm: Mock, mock_handler_cls: Mock):
+        """Test that the generate commands prompts the user on project conflict and deletes after confirmation."""
+        mock_handler_cls.return_value = self.get_mock_project()
+        self.mock_may_export_to_project_path.return_value = False
+        mock_confirm.return_value = True
+
+        runner = CliRunner()
+        result = runner.invoke(terraform_app, ["generate"])
+
+        self.assertEqual(result.exit_code, 0, "generate command should work")
+        self.mock_may_export_to_project_path.assert_called_once()
+        mock_confirm.assert_called_once()
+        self.mock_clear_project_path.assert_called_once()
+        self.mock_setup.assert_called_once()
+
+    @patch("jupyter_deploy.handlers.project.project_handler.ProjectHandler")
+    @patch("typer.confirm")
+    def test_generate_command_abort_when_user_declines_deletion(self, mock_confirm: Mock, mock_handler_cls: Mock):
+        """Test that the generate prompts the user on project conflict and abort on decline."""
+        mock_handler_cls.return_value = self.get_mock_project()
+        self.mock_may_export_to_project_path.return_value = False
+        mock_confirm.return_value = False
+
+        runner = CliRunner()
+        result = runner.invoke(terraform_app, ["generate"])
+
+        self.assertEqual(result.exit_code, 0, "generate command should work")
+        self.mock_may_export_to_project_path.assert_called_once()
+        mock_confirm.assert_called_once()
+        self.mock_clear_project_path.assert_not_called()
+        self.mock_setup.assert_not_called()
 
     def test_apply_command(self):
         """Test the apply command."""

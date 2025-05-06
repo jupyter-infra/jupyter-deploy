@@ -12,8 +12,7 @@ class ProjectHandler:
         self,
         project_dir: str | None,
         engine: EngineType = EngineType.TERRAFORM,
-        template_name: str = "terraform:aws:ec2:tls-via-ngrok",
-        project_name: str = "jupyter-deploy",
+        template_name: str = "",
     ) -> None:
         """Create the project handler."""
         if not project_dir:
@@ -22,13 +21,12 @@ class ProjectHandler:
             self.project_path = Path(project_dir)
 
         self.engine = engine
-        self.project_name = project_name
-        self.source_path = self.find_template_path(template_name)
+        self.source_path = self._find_template_path(template_name)
 
-    def find_template_path(self, template_name: str) -> Path:
+    def _find_template_path(self, template_name: str) -> Path:
         """Return the path of the template name.
 
-        The template should be of the form <engine>:<provider>:<infra-type>:<template_name>.
+        The template should be of the form <provider>:<infra-type>:<template_name>.
         """
         template_path_parts = template_name.split(":")
         tf_template_path = Path(PRESET_ROOT_PATH / self.engine.lower())

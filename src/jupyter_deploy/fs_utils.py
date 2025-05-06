@@ -38,19 +38,19 @@ def safe_clean_directory(directory_path: Path, deleted_ok: bool = False) -> None
     """
     if not directory_path.exists():
         if deleted_ok:
-            print(f"Directory {directory_path.absolute()} does not exist")
+            print(f"Directory {directory_path.absolute()} does not exist.")
             return
         else:
-            raise FileNotFoundError(f"Directory {directory_path} does not exist.")
+            raise FileNotFoundError(f"Directory {directory_path.absolute()} does not exist.")
 
     if not directory_path.is_dir():
-        raise NotADirectoryError(f"{directory_path} is not a directory.")
+        raise NotADirectoryError(f"{directory_path.absolute()} is not a directory.")
 
     # TODO: improve to dryrun and ensure all permission will succeed
     shutil.rmtree(directory_path, ignore_errors=True)
 
 
-def copy_and_make_executable(source_path: str, dest_path: str) -> None:
+def _copy_and_make_executable(source_path: str, dest_path: str) -> None:
     """Copy file and ensure it is executable by the owner."""
     # Copy the file with metadata
     shutil.copy2(source_path, dest_path)
@@ -59,7 +59,7 @@ def copy_and_make_executable(source_path: str, dest_path: str) -> None:
     os.chmod(dest_path, mode=USER_POSIX_755)
 
 
-def safe_copy_tree(source_path: Path, dest_path: Path, ignore_patterns: list[str] = DEFAULT_IGNORE_PATTERNS) -> None:
+def safe_copy_tree(source_path: Path, dest_path: Path, ignore: list[str] = DEFAULT_IGNORE_PATTERNS) -> None:
     """Verify that the source directory exists, recursively copies it to the target, make executable by user.
 
     Creates the destination dir path if they do not exist.
@@ -70,11 +70,17 @@ def safe_copy_tree(source_path: Path, dest_path: Path, ignore_patterns: list[str
     """
 
     if not source_path.exists():
-        raise FileNotFoundError(f"Source directory {source_path} does not exist.")
+        raise FileNotFoundError(f"Source directory {source_path.absolute()} does not exist.")
     if not source_path.is_dir():
-        raise NotADirectoryError(f"Source path {source_path} is not a directory.")
+        raise NotADirectoryError(f"Source path {source_path.absolute()} is not a directory.")
 
     os.makedirs(dest_path, mode=USER_POSIX_755, exist_ok=True)
 
     # TODO: improve to dryrun and ensure all permission will succeed otherwise rollback
-    shutil.copytree(src=source_path, dst=dest_path, copy_function=copy_and_make_executable, dirs_exist_ok=True)
+    shutil.copytree(
+        src=source_path,
+        dst=dest_path,
+        copy_function=_copy_and_make_executable,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(*ignore),
+    )
