@@ -50,21 +50,21 @@ resource "aws_security_group" "ec2_jupyter_server_sg" {
   description = "Security group for the EC2 instance serving the JupyterServer"
   vpc_id      = data.aws_vpc.default.id
 
-  # Allow SSH access
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # Disallow SSH access (we'll use aws ssm instead)
+  # ingress {
+  #   from_port   = 22
+  #   to_port     = 22
+  #   protocol    = "tcp"
+  #   cidr_blocks = ["0.0.0.0/0"]
+  # }
 
-  # Allow HTTPS access
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # disallow direct HTTPS access for now
+  # ingress {
+  #   from_port   = 443
+  #   to_port     = 443
+  #   protocol    = "tcp"
+  #   cidr_blocks = ["0.0.0.0/0"]
+  # }
 
   # Allow all outbound traffic
   egress {
@@ -108,21 +108,32 @@ data "aws_ami" "amazon_linux_2023" {
   }
 }
 
+locals {
+  root_block_device = [
+    for device in data.aws_ami.amazon_linux_2023.block_device_mappings :
+    device if device.device_name == data.aws_ami.amazon_linux_2023.root_device_name
+  ][0]
+}
+
+
 # Define EC2 instance
 resource "aws_instance" "ec2_jupyter_server" {
   ami                    = coalesce(var.ami_id, data.aws_ami.amazon_linux_2023.id)
   instance_type          = var.instance_type
-  subnet_id              = data.aws_subnet.first_subnet_of_default_vpc
+  subnet_id              = data.aws_subnet.first_subnet_of_default_vpc.id
   vpc_security_group_ids = [aws_security_group.ec2_jupyter_server_sg.id]
   key_name               = var.key_name
   tags                   = local.combined_tags
   
   # Root volume configuration
   root_block_device {
-    volume_size = 10
-    volume_type = "gp2"
-    encrypted   = true
+    volume_size = local.root_block_device.ebs.volume_size
+    volume_type = try(local.root_block_device.ebs.volume_type, "gp3")
+    encrypted   = try(local.root_block_device.ebs.encrypted, true)
   }
+
+  # IAM instance profile configuration
+  iam_instance_profile = aws_iam_instance_profile.server_instance_profile.name
 }
 
 # Define the IAM role
@@ -139,7 +150,7 @@ data "aws_iam_policy_document" "server_assume_role_policy" {
 }
 
 resource "aws_iam_role" "execution_role" {
-  name = var.iam_role_name
+  name_prefix = "${var.iam_role_name_prefix}-"
   description = "Execution role for the JupyterServer instance, with access to SSM"
 
   assume_role_policy = data.aws_iam_policy_document.server_assume_role_policy.json
@@ -155,7 +166,7 @@ resource "aws_iam_role_policy_attachment" "execution_role_ssm_policy_attachment"
 # Define the instance profile
 resource "aws_iam_instance_profile" "server_instance_profile" {
   role = aws_iam_role.execution_role.name
-  name = var.iam_role_name
+  name_prefix = "${var.iam_role_name_prefix}-"
   lifecycle {
     create_before_destroy = true
   }
@@ -165,8 +176,8 @@ resource "aws_iam_instance_profile" "server_instance_profile" {
 # Define EBS volume
 resource "aws_ebs_volume" "jupyter_data" {
   availability_zone = aws_instance.ec2_jupyter_server.availability_zone
-  size              = 10
-  type              = "gp2"
+  size              = var.jupyter_data_volume_size
+  type              = var.jupyter_data_volume_type
   encrypted         = true
 
   tags = local.combined_tags
