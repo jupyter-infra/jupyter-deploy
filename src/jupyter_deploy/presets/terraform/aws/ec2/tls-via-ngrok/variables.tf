@@ -5,12 +5,6 @@ variable "aws_region" {
   default     = "us-west-2"
 }
 
-variable "aws_partition" {
-  description = "AWS partition for the AWS region"
-  type        = string
-  default     = "aws"
-}
-
 variable "instance_type" {
   description = "AWS EC2 instance type"
   type = string
@@ -23,16 +17,10 @@ variable "key_name" {
   default     = null # optional: use AWS SSM instead
 }
 
-variable "subnet_cidr" {
-  description = "CIDR block for the subnet"
-  type        = string
-  default     = "10.0.1.0/24"
-}
-
 variable "ami_id" {
   description = "AMI ID for the EC2 instance"
   type        = string
-  default     = null # to pin the Amazon Linux 2 AMI (adjust as needed)
+  default     = null # to pin the AMI (adjust as needed), otherwise defaults to latest AL2023
 }
 
 variable "iam_role_name" {

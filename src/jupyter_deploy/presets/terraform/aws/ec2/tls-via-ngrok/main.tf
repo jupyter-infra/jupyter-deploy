@@ -15,6 +15,10 @@ data "aws_availability_zones" "available_zones" {
   state = "available"
 }
 
+data "aws_iam_policy" "ssm_managed_policy" {
+  arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 locals {
   default_tags = {
     Source = "jupyter-deploy"
@@ -28,12 +32,16 @@ locals {
   )
 }
 
-# Define a subnet in the default VPC
-resource "aws_subnet" "ec2_jupyter_server_subset" {
-  vpc_id            = data.aws_vpc.default.id
-  cidr_block        = var.subnet_cidr
-  availability_zone = data.aws_availability_zones.available_zones.names[0]
-  tags = local.combined_tags
+# Retrieve the first subnet in the default VPC
+data "aws_subnets" "default_vpc_subnets" {
+  filter {
+    name = "vpc-id"
+    values = [data.aws_vpc.default.id] 
+  }
+}
+
+data "aws_subnet" "first_subnet_of_default_vpc" {
+  id = tolist(data.aws_subnets.default_vpc_subnets.ids)[0]
 }
 
 # Define security group for EC2 instance
@@ -70,7 +78,7 @@ resource "aws_security_group" "ec2_jupyter_server_sg" {
 }
 
 # Define the AMI
-data "aws_ami" "amazon_linux_2" {
+data "aws_ami" "amazon_linux_2023" {
   most_recent = true
   owners = ["amazon"]
 
@@ -81,15 +89,30 @@ data "aws_ami" "amazon_linux_2" {
 
   filter {
     name = "name"
-    values = ["amzn2-ami-hvm*"]
+    values = ["al2023-ami-*"]
+  }
+
+  filter {
+    name = "architecture"
+    values = ["x86_64"]  # Specify architecture (optional)
+  }
+
+  filter {
+    name = "root-device-type"
+    values = ["ebs"]
+  }
+
+  filter {
+    name = "virtualization-type"
+    values = ["hvm"]
   }
 }
 
 # Define EC2 instance
 resource "aws_instance" "ec2_jupyter_server" {
-  ami                    = coalesce(var.ami_id, data.aws_ami.amazon_linux_2.id)
+  ami                    = coalesce(var.ami_id, data.aws_ami.amazon_linux_2023.id)
   instance_type          = var.instance_type
-  subnet_id              = aws_subnet.ec2_jupyter_server_subset.id
+  subnet_id              = data.aws_subnet.first_subnet_of_default_vpc
   vpc_security_group_ids = [aws_security_group.ec2_jupyter_server_sg.id]
   key_name               = var.key_name
   tags                   = local.combined_tags
@@ -119,16 +142,14 @@ resource "aws_iam_role" "execution_role" {
   name = var.iam_role_name
   description = "Execution role for the JupyterServer instance, with access to SSM"
 
-  assume_role_policy = data.aws_iam_policy_document.assume_role_policy[0].json
+  assume_role_policy = data.aws_iam_policy_document.server_assume_role_policy.json
   force_detach_policies = true
   tags = local.combined_tags
 }
 
-resource "aws_iam_role_policy_attachments_exclusive" "execution_role" {
-  role_name = aws_iam_role.execution_role.name
-  policy_arns = [
-    "arn:${data.aws_partition.current.id}:iam::aws:policy/AmazonSSMManagedInstanceCore"
-  ]
+resource "aws_iam_role_policy_attachment" "execution_role_ssm_policy_attachment" {
+  role = aws_iam_role.execution_role.name
+  policy_arn = data.aws_iam_policy.ssm_managed_policy.arn
 }
 
 # Define the instance profile
@@ -143,7 +164,7 @@ resource "aws_iam_instance_profile" "server_instance_profile" {
 
 # Define EBS volume
 resource "aws_ebs_volume" "jupyter_data" {
-  availability_zone = aws_instance.jupyter_server.availability_zone
+  availability_zone = aws_instance.ec2_jupyter_server.availability_zone
   size              = 10
   type              = "gp2"
   encrypted         = true
