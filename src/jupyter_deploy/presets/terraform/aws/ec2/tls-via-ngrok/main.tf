@@ -189,3 +189,111 @@ resource "aws_volume_attachment" "jupyter_data_attachment" {
   volume_id   = aws_ebs_volume.jupyter_data.id
   instance_id = aws_instance.ec2_jupyter_server.id
 }
+
+# Read the local files
+data "local_file" "cloud_init" {
+  filename = "${path.module}/cloudinit.sh"
+}
+
+data "local_file" "docker_startup" {
+  filename = "${path.module}/docker-startup.sh"
+}
+
+data "local_file" "docker_compose" {
+  filename = "${path.module}/docker-compose.yml"
+}
+
+# SSM into the instance and execute the start-up scripts
+locals {
+  # In order to inject the file content with the correct 
+  indent_count = 10
+  indent_str = join("", [for i in range(local.indent_count) : " "])
+  cloud_init_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.cloud_init.content)))
+  docker_compose_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.docker_compose.content)))
+  docker_startup_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.docker_startup.content)))
+}
+locals {
+  ssm_startup_content=<<DOC
+schemaVersion: '2.2'
+description: Setup docker, mount volume, copy docker-compose, start docker services
+mainSteps:
+  - action: aws:runShellScript
+    name: CloudInit
+    inputs:
+      runCommand:
+        - |
+          ${local.cloud_init_indented}
+
+  - action: aws:runShellScript
+    name: SaveDockerCompose
+    inputs:
+      runCommand:
+        - |
+          tee /opt/docker/docker-compose.yml << 'EOF'
+          ${local.docker_compose_indented}
+          EOF
+
+  - action: aws:runShellScript
+    name: StartDockerServices
+    inputs:
+      runCommand:
+        - |
+          ${local.docker_startup_indented}
+DOC
+
+  # Additional validations
+  has_required_files = alltrue([
+    fileexists("${path.module}/cloudinit.sh"),
+    fileexists("${path.module}/docker-compose.yml"),
+    fileexists("${path.module}/docker-startup.sh")
+  ])
+  
+  files_not_empty = alltrue([
+    length(data.local_file.cloud_init.content) > 0,
+    length(data.local_file.docker_compose.content) > 0,
+    length(data.local_file.docker_startup.content) > 0
+  ])
+
+  docker_compose_valid = can(yamldecode(data.local_file.docker_compose.content))
+  ssm_content_valid = can(yamldecode(local.ssm_startup_content))
+}
+
+resource "aws_ssm_document" "instance_startup_instructions" {
+  name            = "instance-startup-instructions"
+  document_type   = "Command"
+  document_format = "YAML"
+
+  content = local.ssm_startup_content
+  tags = local.combined_tags
+  lifecycle {
+    precondition {
+      condition     = local.has_required_files
+      error_message = "One or more required files are missing"
+    }
+
+    precondition {
+      condition     = local.files_not_empty
+      error_message = "One or more required files are empty"
+    }
+    precondition {
+      condition     = length(local.ssm_startup_content) < 64000  # leaving some buffer
+      error_message = "SSM document content exceeds size limit of 64KB"
+    }
+  }
+}
+
+resource "aws_ssm_association" "instance_startup" {
+  name = aws_ssm_document.instance_startup_instructions.name
+  targets {
+    key    = "InstanceIds"
+    values = [aws_instance.ec2_jupyter_server.id]
+  }
+
+  automation_target_parameter_name = "InstanceIds"
+
+  max_concurrency = "1"
+  max_errors      = "0"
+
+  wait_for_success_timeout_seconds = 120
+  tags = local.combined_tags
+}

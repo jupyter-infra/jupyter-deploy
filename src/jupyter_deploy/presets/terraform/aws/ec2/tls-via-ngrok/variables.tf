@@ -38,7 +38,7 @@ variable "jupyter_data_volume_type" {
 variable "iam_role_name_prefix" {
   description = "Name of the execution IAM role for the EC2 instance of the Jupyter Server"
   type        = string
-  default     = "JD-TlsViaNgrok-Exec"
+  default     = "Jupyter-Ec2TlsViaNgrok-Exec"
   validation {
     condition     = length(var.iam_role_name_prefix) <= 37
     error_message = "Max length for prefix is 38. Input at most 37 chars to account for hyphen postfix."
