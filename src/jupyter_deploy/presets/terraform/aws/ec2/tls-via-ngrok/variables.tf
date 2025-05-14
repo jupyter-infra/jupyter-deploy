@@ -45,6 +45,12 @@ variable "iam_role_name_prefix" {
   }
 }
 
+variable "ngrok_token_secret_prefix" {
+  description = "Prefix for the name of the AWS Secret that contains the ngrok token"
+  type        = string
+  default     = "Jupyter-Ec2TlsViaNgrok-NgrokToken"
+}
+
 variable "custom_tags" {
   description = "Tags added to all resources"
   type        = map(string)

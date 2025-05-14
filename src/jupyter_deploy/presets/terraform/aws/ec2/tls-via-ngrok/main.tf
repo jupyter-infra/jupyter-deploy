@@ -190,6 +190,41 @@ resource "aws_volume_attachment" "jupyter_data_attachment" {
   instance_id = aws_instance.ec2_jupyter_server.id
 }
 
+# AWS Secret for the ngrok token
+resource "aws_secretsmanager_secret" "ngrok_secret" {
+  name_prefix = "${var.ngrok_token_secret_prefix}-"
+  tags = local.combined_tags
+}
+
+data "aws_iam_policy_document" "ngrok_secret_reader_policy_document" {
+  statement {
+    sid   = "SecretsManagerReadNgrokSecret"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:DescribeSecret"
+    ]
+    resources = [
+      aws_secretsmanager_secret.ngrok_secret.arn
+    ]
+  }
+}
+resource "aws_iam_policy" "ngrok_secret_reader_policy" {
+  name_prefix = "ngrok-secret-reader-"
+  tags = local.combined_tags
+  policy = data.aws_iam_policy_document.ngrok_secret_reader_policy_document.json
+}
+resource "aws_iam_role_policy_attachment" "ngrok_secret_reader" {
+  role = aws_iam_role.execution_role.name
+  policy_arn = aws_iam_policy.ngrok_secret_reader_policy.arn
+}
+
+resource "aws_ssm_parameter" "ngrok_secret_arn" {
+  name    = "/jupyter-deploy/ngrok-secret-arn"
+  type    = "String"
+  value   = aws_secretsmanager_secret.ngrok_secret.arn
+  tags    = local.combined_tags 
+}
+
 # Read the local files
 data "local_file" "cloud_init" {
   filename = "${path.module}/cloudinit.sh"
@@ -201,6 +236,15 @@ data "local_file" "docker_startup" {
 
 data "local_file" "docker_compose" {
   filename = "${path.module}/docker-compose.yml"
+}
+
+locals {
+  ngrok_env_exists = fileexists("${path.module}/ngrok.env")
+}
+
+data "local_file" "ngrok_token" {
+  count       = local.ngrok_env_exists ? 1 : 0
+  filename    = "${path.module}/ngrok.env"
 }
 
 # SSM into the instance and execute the start-up scripts
@@ -225,7 +269,7 @@ mainSteps:
           ${local.cloud_init_indented}
 
   - action: aws:runShellScript
-    name: SaveDockerCompose
+    name: SaveDockerFiles
     inputs:
       runCommand:
         - |
@@ -245,13 +289,13 @@ DOC
   has_required_files = alltrue([
     fileexists("${path.module}/cloudinit.sh"),
     fileexists("${path.module}/docker-compose.yml"),
-    fileexists("${path.module}/docker-startup.sh")
+    fileexists("${path.module}/docker-startup.sh"),
   ])
   
   files_not_empty = alltrue([
     length(data.local_file.cloud_init.content) > 0,
     length(data.local_file.docker_compose.content) > 0,
-    length(data.local_file.docker_startup.content) > 0
+    length(data.local_file.docker_startup.content) > 0,
   ])
 
   docker_compose_valid = can(yamldecode(data.local_file.docker_compose.content))
@@ -270,7 +314,6 @@ resource "aws_ssm_document" "instance_startup_instructions" {
       condition     = local.has_required_files
       error_message = "One or more required files are missing"
     }
-
     precondition {
       condition     = local.files_not_empty
       error_message = "One or more required files are empty"
@@ -279,21 +322,69 @@ resource "aws_ssm_document" "instance_startup_instructions" {
       condition     = length(local.ssm_startup_content) < 64000  # leaving some buffer
       error_message = "SSM document content exceeds size limit of 64KB"
     }
+    precondition {
+      condition     = local.ssm_content_valid
+      error_message = "SSM document is not a valid YAML"
+    }
+    precondition {
+      condition     = local.docker_compose_valid
+      error_message = "Docker compose is not a valid YAML"
+    }
   }
 }
 
-resource "aws_ssm_association" "instance_startup" {
+resource "null_resource" "store_ngrok_secret" {
+  count = local.ngrok_env_exists ? 1 : 0
+  triggers = {
+    secret_arn = aws_secretsmanager_secret.ngrok_secret.arn
+  }
+  provisioner "local-exec" {
+    command = <<EOT
+      TOKEN="${data.local_file.ngrok_token[0].content}"
+      aws secretsmanager put-secret-value \
+        --secret-id ${aws_secretsmanager_secret.ngrok_secret.arn} \
+        --secret-string "$TOKEN"
+      EOT
+  }
+
+  depends_on = [ aws_secretsmanager_secret.ngrok_secret ]
+}
+
+# When ngrok.env exists
+resource "aws_ssm_association" "instance_startup_with_secret" {
+  count = local.ngrok_env_exists ? 1 : 0
+  
   name = aws_ssm_document.instance_startup_instructions.name
   targets {
     key    = "InstanceIds"
     values = [aws_instance.ec2_jupyter_server.id]
   }
-
   automation_target_parameter_name = "InstanceIds"
-
   max_concurrency = "1"
   max_errors      = "0"
-
-  wait_for_success_timeout_seconds = 120
+  wait_for_success_timeout_seconds = 300
   tags = local.combined_tags
+
+  depends_on = [
+    aws_ssm_parameter.ngrok_secret_arn,
+    null_resource.store_ngrok_secret[0]
+  ]
+}
+
+# When ngrok.env doesn't exist
+resource "aws_ssm_association" "instance_startup_without_secret" {
+  count = local.ngrok_env_exists ? 0 : 1
+  
+  name = aws_ssm_document.instance_startup_instructions.name
+  targets {
+    key    = "InstanceIds"
+    values = [aws_instance.ec2_jupyter_server.id]
+  }
+  automation_target_parameter_name = "InstanceIds"
+  max_concurrency = "1"
+  max_errors      = "0"
+  wait_for_success_timeout_seconds = 300
+  tags = local.combined_tags
+
+  depends_on = [aws_ssm_parameter.ngrok_secret_arn]
 }
