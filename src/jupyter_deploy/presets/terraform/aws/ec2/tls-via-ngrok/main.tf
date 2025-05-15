@@ -238,13 +238,20 @@ data "local_file" "docker_compose" {
   filename = "${path.module}/docker-compose.yml"
 }
 
+# variables consistency checks
 locals {
-  ngrok_env_exists = fileexists("${path.module}/ngrok.env")
+  google_emails_valid = var.oauth_provider != "google" || length(var.oauth_google_allowed_emails) > 0
+  github_usernames_valid = var.oauth_provider != "github" || length(var.oauth_github_allowed_usernames) > 0
+  ngrok_authtoken_provided = length(var.ngrok_auth_token) > 0
 }
 
-data "local_file" "ngrok_token" {
-  count       = local.ngrok_env_exists ? 1 : 0
-  filename    = "${path.module}/ngrok.env"
+locals {
+  ngrok_config = templatefile("${path.module}/ngrok.yml.tftpl", {
+    oauth_provider            = var.oauth_provider
+    allowed_google_emails     = join(",", [for email in var.oauth_google_allowed_emails : "'${email}'"])
+    allowed_github_usernames  = join(",", [for username in var.oauth_github_allowed_usernames : "'${username}'"])
+    domain_name               = var.ngrok_domain_name
+  })
 }
 
 # SSM into the instance and execute the start-up scripts
@@ -255,7 +262,9 @@ locals {
   cloud_init_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.cloud_init.content)))
   docker_compose_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.docker_compose.content)))
   docker_startup_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.docker_startup.content)))
+  ngrok_config_indented = join("\n${local.indent_str}", compact(split("\n", local.ngrok_config)))
 }
+
 locals {
   ssm_startup_content=<<DOC
 schemaVersion: '2.2'
@@ -276,13 +285,20 @@ mainSteps:
           tee /opt/docker/docker-compose.yml << 'EOF'
           ${local.docker_compose_indented}
           EOF
+          tee /opt/docker/ngrok.yml << 'EOF'
+          ${local.ngrok_config_indented}
+          EOF
+          tee /opt/docker/docker-startup.sh << 'EOF'
+          ${local.docker_startup_indented}
+          EOF
 
   - action: aws:runShellScript
     name: StartDockerServices
     inputs:
       runCommand:
         - |
-          ${local.docker_startup_indented}
+          chmod 744 /opt/docker/docker-startup.sh
+          sh /opt/docker/docker-startup.sh
 DOC
 
   # Additional validations
@@ -300,6 +316,7 @@ DOC
 
   docker_compose_valid = can(yamldecode(data.local_file.docker_compose.content))
   ssm_content_valid = can(yamldecode(local.ssm_startup_content))
+  ngrok_config_valid = can(yamldecode(local.ngrok_config))
 }
 
 resource "aws_ssm_document" "instance_startup_instructions" {
@@ -310,6 +327,14 @@ resource "aws_ssm_document" "instance_startup_instructions" {
   content = local.ssm_startup_content
   tags = local.combined_tags
   lifecycle {
+    precondition {
+      condition     = local.google_emails_valid
+      error_message = "If you use google as oauth provider, provide at least 1 gmail email"
+    }
+    precondition {
+      condition     = local.github_usernames_valid
+      error_message = "If you use github as oauth provider, provide at least 1 github username"
+    }
     precondition {
       condition     = local.has_required_files
       error_message = "One or more required files are missing"
@@ -330,17 +355,21 @@ resource "aws_ssm_document" "instance_startup_instructions" {
       condition     = local.docker_compose_valid
       error_message = "Docker compose is not a valid YAML"
     }
+    precondition {
+      condition     = local.ngrok_config_valid
+      error_message = "ngrok.yml file is not a valid YAML"
+    }
   }
 }
 
 resource "null_resource" "store_ngrok_secret" {
-  count = local.ngrok_env_exists ? 1 : 0
+  count = local.ngrok_authtoken_provided ? 1 : 0
   triggers = {
     secret_arn = aws_secretsmanager_secret.ngrok_secret.arn
   }
   provisioner "local-exec" {
     command = <<EOT
-      TOKEN="${data.local_file.ngrok_token[0].content}"
+      TOKEN="${var.ngrok_auth_token}"
       aws secretsmanager put-secret-value \
         --secret-id ${aws_secretsmanager_secret.ngrok_secret.arn} \
         --secret-string "$TOKEN"
@@ -350,9 +379,10 @@ resource "null_resource" "store_ngrok_secret" {
   depends_on = [ aws_secretsmanager_secret.ngrok_secret ]
 }
 
-# When ngrok.env exists
+# When ngrok auth token is not provided,
+# we need to seed the secret first
 resource "aws_ssm_association" "instance_startup_with_secret" {
-  count = local.ngrok_env_exists ? 1 : 0
+  count = local.ngrok_authtoken_provided ? 1 : 0
   
   name = aws_ssm_document.instance_startup_instructions.name
   targets {
@@ -371,9 +401,10 @@ resource "aws_ssm_association" "instance_startup_with_secret" {
   ]
 }
 
-# When ngrok.env doesn't exist
+# When ngrok auth token is not provided,
+# we assume the secret was already seeded elsewhere
 resource "aws_ssm_association" "instance_startup_without_secret" {
-  count = local.ngrok_env_exists ? 0 : 1
+  count = local.ngrok_authtoken_provided ? 0 : 1
   
   name = aws_ssm_document.instance_startup_instructions.name
   targets {

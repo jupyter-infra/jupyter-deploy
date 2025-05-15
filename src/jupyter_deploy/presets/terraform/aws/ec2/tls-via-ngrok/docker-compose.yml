@@ -1,33 +1,33 @@
 services:
-  nginx:
+  jupyter:
     user: "${SERVICE_UID}:${SERVICE_GID}"
-    image: nginxinc/nginx-unprivileged:latest
+    image: quay.io/jupyter/base-notebook:latest
     ports:
-      - "80:8080"
+      - "8888:8888"
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
     networks:
       - web
+    environment:
+      - JUPYTER_TOKEN=ABC
+    volumes:
+      - /mnt/jupyter-data:/home/jovyan
   ngrok:
     user: "${SERVICE_UID}:${SERVICE_GID}"
     image: ngrok/ngrok:latest
     restart: unless-stopped
     command:
-      - "http"
-      - "nginx:8080"  # Point to the nginx service
-      - "--domain"
-      - "mastodon-closing-catfish.ngrok-free.app"
-      - "--oauth"
-      - "google"
-      - "--oauth-allow-email"
-      - "jonathan.guinegagne@gmail.com"
+      - "start"
+      - "--all"
+      - "--config"
+      - "/etc/ngrok/ngrok.yml"
+    volumes:
+      - ./ngrok.yml:/etc/ngrok/ngrok.yml:ro
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
     networks:
       - web
     depends_on:
-      - nginx  # Ensure nginx starts before ngrok
+      - jupyter  # Ensure jupyter starts before ngrok
 networks:
   web:
     driver: bridge

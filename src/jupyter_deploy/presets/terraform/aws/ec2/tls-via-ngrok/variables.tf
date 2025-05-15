@@ -51,6 +51,40 @@ variable "ngrok_token_secret_prefix" {
   default     = "Jupyter-Ec2TlsViaNgrok-NgrokToken"
 }
 
+variable "ngrok_auth_token" {
+  description = "Auth token for ngrok. You can find it under https://dashboard.ngrok.com/get-started/your-authtoken"
+  type        = string
+  sensitive   = true
+}
+
+variable "ngrok_domain_name" {
+  description = "Domain name provided by ngrok. If you are using the free version, it will look like <some-string>.ngrok-free.app"
+  type        = string
+}
+
+variable "oauth_provider" {
+  description = "OAuth provider to authenticate into the app."
+  type        = string
+  default     = "google"
+
+  validation {
+    condition     = contains(["google", "github"], var.oauth_provider)
+    error_message = "The oauth_provider value must be either 'google' or 'github'."
+  }
+}
+
+variable "oauth_google_allowed_emails" {
+  description = "List of emails to allow for your app"
+  type        = list(string)
+  default     = ["jonathan.guinegagne@gmail.com", "ellisonbg@gmail.com"]
+}
+
+variable "oauth_github_allowed_usernames" {
+  description = "List of GitHub user names to allow for your app"
+  type        = list(string)
+  default     = ["JGuinegagne", "ellisonbg"]
+}
+
 variable "custom_tags" {
   description = "Tags added to all resources"
   type        = map(string)

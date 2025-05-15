@@ -7,9 +7,6 @@ exec > >(tee /var/log/jupyter-deploy/docker-compose.log) 2>&1
 echo "Running docker-startup script as: $(whoami)"
 cd /opt/docker
 
-export SERVICE_UID=$(id -u service-user)
-export SERVICE_GID=$(id -g service-user)
-
 if ! SECRET_ARN=$(aws ssm get-parameter \
     --name "/jupyter-deploy/ngrok-secret-arn" \
     --query "Parameter.Value" \
@@ -31,17 +28,22 @@ if [ -z "$NGROK_TOKEN" ]; then
     exit 1
 fi
 
-export NGROK_AUTHTOKEN="$NGROK_TOKEN"
-echo "$NGROK_AUTHTOKEN" > ./ngrok.env
+tee /opt/docker/.env >/dev/null << EOFENV
+SERVICE_UID=$(id -u service-user)
+SERVICE_GID=$(id -g service-user)
+NGROK_AUTHTOKEN=${NGROK_TOKEN}
+EOFENV
+echo "Saved environment file /opt/docker/.env"
 
 # Validate the file
 if ! docker-compose -f docker-compose.yml config > /dev/null; then
-    echo "Invalid docker-compose configuration."
+    echo "Invalid docker-compose configuration"
     exit 1
 else
-    echo "Validated docker-compose file."
+    echo "Validated docker-compose file"
 fi
 
 # Start the container
-echo "Starting docker-compose with UID=$SERVICE_UID : GID=$SERVICE_GID"
+echo "Starting docker-compose"
 docker-compose up -d
+echo "Docker-compose complete"
