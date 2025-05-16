@@ -3,6 +3,7 @@ provider "aws" {
   region = var.aws_region
 }
 
+data "aws_region" "current" {}
 data "aws_partition" "current" {}
 
 # Fetch the default VPC
@@ -49,22 +50,6 @@ resource "aws_security_group" "ec2_jupyter_server_sg" {
   name        = "jupyter-deploy-tls-via-ngrok-sg"
   description = "Security group for the EC2 instance serving the JupyterServer"
   vpc_id      = data.aws_vpc.default.id
-
-  # Disallow SSH access (we'll use aws ssm instead)
-  # ingress {
-  #   from_port   = 22
-  #   to_port     = 22
-  #   protocol    = "tcp"
-  #   cidr_blocks = ["0.0.0.0/0"]
-  # }
-
-  # disallow direct HTTPS access for now
-  # ingress {
-  #   from_port   = 443
-  #   to_port     = 443
-  #   protocol    = "tcp"
-  #   cidr_blocks = ["0.0.0.0/0"]
-  # }
 
   # Allow all outbound traffic
   egress {
@@ -372,7 +357,8 @@ resource "null_resource" "store_ngrok_secret" {
       TOKEN="${var.ngrok_auth_token}"
       aws secretsmanager put-secret-value \
         --secret-id ${aws_secretsmanager_secret.ngrok_secret.arn} \
-        --secret-string "$TOKEN"
+        --secret-string "$TOKEN" \
+        --region ${data.aws_region.current.name}
       EOT
   }
 
