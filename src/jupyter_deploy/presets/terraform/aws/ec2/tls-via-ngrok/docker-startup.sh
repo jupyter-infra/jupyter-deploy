@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-# Records logs
 exec > >(tee /var/log/jupyter-deploy/docker-compose.log) 2>&1
 
 echo "Running docker-startup script as: $(whoami)"
@@ -35,7 +34,6 @@ NGROK_AUTHTOKEN=${NGROK_TOKEN}
 EOFENV
 echo "Saved environment file /opt/docker/.env"
 
-# Validate the file
 if ! docker-compose -f docker-compose.yml config > /dev/null; then
     echo "Invalid docker-compose configuration"
     exit 1
@@ -43,7 +41,6 @@ else
     echo "Validated docker-compose file"
 fi
 
-# Start the container
 echo "Starting docker-compose"
 docker-compose up -d
 echo "Docker-compose complete"
