@@ -30,6 +30,7 @@ fi
 tee /opt/docker/.env >/dev/null << EOFENV
 SERVICE_UID=$(id -u service-user)
 SERVICE_GID=$(id -g service-user)
+DOCKER_GID=$(getent group docker | cut -d: -f3)
 NGROK_AUTHTOKEN=${NGROK_TOKEN}
 EOFENV
 echo "Saved environment file /opt/docker/.env"

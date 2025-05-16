@@ -223,6 +223,11 @@ data "local_file" "docker_compose" {
   filename = "${path.module}/docker-compose.yml"
 }
 
+
+data "local_file" "dockerfile_jupyter" {
+  filename = "${path.module}/dockerfile.jupyter"
+}
+
 # variables consistency checks
 locals {
   google_emails_valid = var.oauth_provider != "google" || length(var.oauth_google_allowed_emails) > 0
@@ -246,6 +251,7 @@ locals {
   indent_str = join("", [for i in range(local.indent_count) : " "])
   cloud_init_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.cloud_init.content)))
   docker_compose_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.docker_compose.content)))
+  dockerfile_jupyter_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.dockerfile_jupyter.content)))
   docker_startup_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.docker_startup.content)))
   ngrok_config_indented = join("\n${local.indent_str}", compact(split("\n", local.ngrok_config)))
 }
@@ -276,6 +282,9 @@ mainSteps:
           tee /opt/docker/docker-startup.sh << 'EOF'
           ${local.docker_startup_indented}
           EOF
+          tee /opt/docker/dockerfile.jupyter << 'EOF'
+          ${local.dockerfile_jupyter_indented}
+          EOF
 
   - action: aws:runShellScript
     name: StartDockerServices
@@ -291,12 +300,14 @@ DOC
     fileexists("${path.module}/cloudinit.sh"),
     fileexists("${path.module}/docker-compose.yml"),
     fileexists("${path.module}/docker-startup.sh"),
+    fileexists("${path.module}/dockerfile.jupyter"),
   ])
   
   files_not_empty = alltrue([
     length(data.local_file.cloud_init.content) > 0,
     length(data.local_file.docker_compose.content) > 0,
     length(data.local_file.docker_startup.content) > 0,
+    length(data.local_file.dockerfile_jupyter) > 0,
   ])
 
   docker_compose_valid = can(yamldecode(data.local_file.docker_compose.content))
