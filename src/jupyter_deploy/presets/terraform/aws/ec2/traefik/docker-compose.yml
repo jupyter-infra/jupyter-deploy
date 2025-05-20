@@ -1,0 +1,44 @@
+services:
+  jupyter:
+    user: "${SERVICE_UID}:${SERVICE_GID}"
+    group_add:
+      - "${DOCKER_GID}"
+    build:
+      context: .
+      dockerfile: dockerfile.jupyter
+      args:
+        - SERVICE_UID=${SERVICE_UID}
+        - SERVICE_GID=${SERVICE_GID}
+        - DOCKER_GID=${DOCKER_GID}
+    ports:
+      - "8888:8888"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - web
+    environment:
+      - JUPYTER_TOKEN=ABC
+    volumes:
+      - /mnt/jupyter-data:/home/jovyan
+      - /var/run/docker.sock:/var/run/docker.sock
+  ngrok:
+    user: "${SERVICE_UID}:${SERVICE_GID}"
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    command:
+      - "start"
+      - "--all"
+      - "--config"
+      - "/etc/ngrok/ngrok.yml"
+    volumes:
+      - ./ngrok.yml:/etc/ngrok/ngrok.yml:ro
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    networks:
+      - web
+    depends_on:
+      - jupyter
+networks:
+  web:
+    driver: bridge

@@ -1,0 +1,24 @@
+version: 3
+
+agent:
+endpoints:
+  - name: default
+%{ if length(domain_name) > 0 ~}
+    url: ${domain_name}
+%{ endif ~}
+    upstream:
+      url: http://jupyter:8888
+    traffic_policy:
+      on_http_request:
+        - actions:
+          - type: oauth
+            config:
+              provider: ${oauth_provider}
+        - expressions:
+%{ if oauth_provider == "google" ~}
+            - "!(actions.ngrok.oauth.identity.email in [${allowed_google_emails}])"
+%{ else ~}
+            - "!(actions.ngrok.oauth.identity.name in [${allowed_github_usernames}])"
+%{ endif ~}
+          actions:
+            - type: deny

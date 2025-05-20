@@ -1,0 +1,33 @@
+FROM quay.io/jupyter/base-notebook:latest
+
+ARG SERVICE_GID
+ARG DOCKER_GID
+ARG SERVICE_UID
+
+USER root
+
+# Install the docker CLI
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    curl \
+    gnupg
+
+RUN install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    chmod a+r /etc/apt/keyrings/docker.gpg && \
+    echo \
+    "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+    jammy stable" | \
+    tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+RUN apt-get update && apt-get install -y docker-ce-cli
+
+# Create the service user group and docker group with specific GIDs
+RUN groupadd -g ${DOCKER_GID} docker
+RUN groupadd -g ${SERVICE_GID} notebook-user
+
+RUN useradd -u ${SERVICE_UID} -g ${SERVICE_GID} -G docker -d /home/jovyan notebook-user
+RUN chown -R notebook-user:notebook-user /home/jovyan
+
+# docker-compose will override
+USER notebook-user
