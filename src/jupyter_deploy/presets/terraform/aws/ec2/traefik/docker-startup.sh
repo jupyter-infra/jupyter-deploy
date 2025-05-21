@@ -7,31 +7,35 @@ echo "Running docker-startup script as: $(whoami)"
 cd /opt/docker
 
 if ! SECRET_ARN=$(aws ssm get-parameter \
-    --name "/jupyter-deploy/ngrok-secret-arn" \
+    --name "/jupyter-deploy/oauth-github-app-client-secret-arn" \
     --query "Parameter.Value" \
     --output text); then
-    echo "Error: could not retrieve the ARN of the AWS Secret for the ngrok token"
+    echo "Error: could not retrieve the ARN of the AWS Secret for the GitHub oauth app secret"
     exit 1
 fi
 
-if ! NGROK_TOKEN=$(aws secretsmanager get-secret-value \
+if ! GITHUB_CLIENT_SECRET=$(aws secretsmanager get-secret-value \
     --secret-id "$SECRET_ARN" \
     --query 'SecretString' \
     --output text); then
-    echo "Error: could not retrieve the ngrok token from secret: $SECRET_ARN"
+    echo "Error: could not retrieve the GitHub oauth app secret from AWS secret: $SECRET_ARN"
     exit 1
 fi
 
-if [ -z "$NGROK_TOKEN" ]; then
+if [ -z "$GITHUB_CLIENT_SECRET" ]; then
     echo "Error: retrieved empty token from secret: $SECRET_ARN"
     exit 1
 fi
+
+# oauth secret for secure cookie management in the local auth service
+OAUTH_SECRET=$(openssl rand -hex 32)
 
 tee /opt/docker/.env >/dev/null << EOFENV
 SERVICE_UID=$(id -u service-user)
 SERVICE_GID=$(id -g service-user)
 DOCKER_GID=$(getent group docker | cut -d: -f3)
-NGROK_AUTHTOKEN=${NGROK_TOKEN}
+GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+OAUTH_SECRET=${OAUTH_SECRET}
 EOFENV
 echo "Saved environment file /opt/docker/.env"
 

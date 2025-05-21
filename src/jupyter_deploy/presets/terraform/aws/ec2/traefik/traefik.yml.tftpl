@@ -1,0 +1,23 @@
+api:
+  dashboard: false
+
+entryPoints:
+  websecure:
+    address: ":8443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: web
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: ${letsencrypt_notification_email}
+      storage: acme.json
+      dnsChallenge:
+        provider: route53
+        resolvers:
+          - "1.1.1.1:53"  # Cloudflare's DNS
+          - "8.8.8.8:53"  # Google's DNS

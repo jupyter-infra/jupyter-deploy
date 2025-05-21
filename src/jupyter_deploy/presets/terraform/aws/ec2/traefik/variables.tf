@@ -18,9 +18,9 @@ variable "key_name" {
 }
 
 variable "ami_id" {
-  description = "AMI ID for the EC2 instance"
+  description = "AMI ID to pin for the EC2 instance, otherwise defaults to the latest AL2023"
   type        = string
-  default     = null # to pin the AMI (adjust as needed), otherwise defaults to latest AL2023
+  default     = null
 }
 
 variable "jupyter_data_volume_size" {
@@ -38,51 +38,87 @@ variable "jupyter_data_volume_type" {
 variable "iam_role_name_prefix" {
   description = "Name of the execution IAM role for the EC2 instance of the Jupyter Server"
   type        = string
-  default     = "Jupyter-Ec2TlsViaNgrok-Exec"
+  default     = "Jupyter-ec2-traefik"
   validation {
     condition     = length(var.iam_role_name_prefix) <= 37
     error_message = "Max length for prefix is 38. Input at most 37 chars to account for hyphen postfix."
   }
 }
 
-variable "ngrok_token_secret_prefix" {
-  description = "Prefix for the name of the AWS Secret that contains the ngrok token"
+variable "letsencrypt_notification_email" {
+  description = "The email that letsencrypt should use for certificate information."
   type        = string
-  default     = "Jupyter-Ec2TlsViaNgrok-NgrokToken"
+  default     = "jggg@amazon.com"
 }
 
-variable "ngrok_auth_token" {
-  description = "Auth token for ngrok. You can find it under https://dashboard.ngrok.com/get-started/your-authtoken"
+variable "domain_name" {
+  description = <<-EOT
+    Domain name to add subdomain to. E.g. mydomain.com.
+    Your AWS account must have permission to create route 53 records within this domain.
+  EOT
   type        = string
-  sensitive   = true
 }
 
-variable "ngrok_domain_name" {
-  description = "Domain name provided by ngrok. If you are using the free version, it will look like <some-string>.ngrok-free.app"
+variable "subdomain_name" {
+  description = <<-EOT
+    Sub-domain for the notebook URL.
+    E.g., if your domain name is 'mydomain.com', the default will be 'notebook1.notebooks.mydomain.com'
+  EOT
   type        = string
+  default     = "notebook1.notebooks"
 }
 
 variable "oauth_provider" {
   description = "OAuth provider to authenticate into the app."
   type        = string
-  default     = "google"
+  default     = "github"
 
   validation {
-    condition     = contains(["google", "github"], var.oauth_provider)
-    error_message = "The oauth_provider value must be either 'google' or 'github'."
+    condition     = contains(["github"], var.oauth_provider)
+    error_message = "The oauth_provider value must be 'github'."
   }
-}
-
-variable "oauth_google_allowed_emails" {
-  description = "List of emails to allow for your app"
-  type        = list(string)
-  default     = ["jonathan.guinegagne@gmail.com", "ellisonbg@gmail.com"]
 }
 
 variable "oauth_github_allowed_usernames" {
   description = "List of GitHub user names to allow for your app"
   type        = list(string)
   default     = ["JGuinegagne", "ellisonbg"]
+}
+
+variable "oauth_github_app_name" {
+  description = "OAuth app name in GitHub"
+  type        = string
+  default     = "jupyter-deploy-aws-traefik"
+}
+
+variable "oauth_github_app_client_id" {
+  description = <<-EOT
+    You must create a GitHub OAuth app first in your account.\n
+    1. Navigate to https://github.com/ \n
+    2. Click your user icon on the top right\n
+    3. Click 'settings'\n
+    4. On the left nav, click 'Developer settings'\n
+    5. Go to 'OAuth Apps'\n
+    6. Select 'Create New OAuth App'\n
+    7. App name: 'jupyter-deploy-aws-traefik' or the value you selected for 'oauth_github_app_name'\n
+    8. Home page URL: 'jupyter.<subdomain>.<domain>'\n
+    9. Application description: leave blank\n
+    10. Authorization callback URL: auth.<subdomain>.<domain>/_oauth \n
+    11. Click 'Register Application'\n
+    12. Retrieve the Client ID\n
+    Full instructions: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app \n
+  EOT
+  type        = string
+}
+
+variable "oauth_github_app_secret_id" {
+  description = <<-EOT
+    1. Go to https://github.com/settings/developers \n
+    2. Select your OAuth app \n
+    3. Generate a secret and pass it here.
+  EOT
+  type        = string
+  sensitive   = true
 }
 
 variable "custom_tags" {
