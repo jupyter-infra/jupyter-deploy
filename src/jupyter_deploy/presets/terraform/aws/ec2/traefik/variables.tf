@@ -79,10 +79,16 @@ variable "oauth_provider" {
   }
 }
 
-variable "oauth_github_allowed_usernames" {
-  description = "List of GitHub user names to allow for your app"
+variable "oauth_allowed_github_emails" {
+  description = <<-EOT
+    List of email address associated with GitHub accounts to allow for your app.
+    Note: it MUST be the public email address exposed on your public GitHub profile;
+    it is NOT possible to oauth with the GitHub username with this version of the template.
+    Go to your GitHub profile > settings > email, and untick 'Keep my email private'
+    Then from settings, go to 'public profile' and select a 'public email'
+  EOT
   type        = list(string)
-  default     = ["JGuinegagne", "ellisonbg"]
+  default     = ["jonathan.guinegagne@gmail.com", "ellisonbg@gmail.com"]
 }
 
 variable "oauth_github_app_name" {

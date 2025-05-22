@@ -108,7 +108,6 @@ echo "/dev/sdf /mnt/jupyter-data ext4 defaults,nofail 0 2" | tee -a /etc/fstab
 
 # Create the required dirs
 mkdir -p /opt/docker
-mkdir -p /opt/docker/traefik
 touch /opt/docker/acme.json
 chown service-user:service-user /opt/docker/acme.json
-chmod 600 acme.json
+chmod 600 /opt/docker/acme.json

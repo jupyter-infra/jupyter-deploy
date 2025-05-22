@@ -318,15 +318,15 @@ data "local_file" "dockerfile_jupyter" {
 # variables consistency checks
 locals {
   full_domain = "${var.subdomain_name}.${var.domain_name}"
-  github_usernames_valid = var.oauth_provider != "github" || length(var.oauth_github_allowed_usernames) > 0
+  github_emails_valid = var.oauth_provider != "github" || length(var.oauth_allowed_github_emails) > 0
 }
 
 locals {
   docker_compose_file = templatefile("${path.module}/docker-compose.yml.tftpl", {
     full_domain               = local.full_domain
     github_client_id          = var.oauth_github_app_client_id
-    aws_region                = data.aws_region
-    allowed_github_usernames  = join(",", [for username in var.oauth_github_allowed_usernames : "${username}"])
+    aws_region                = data.aws_region.current.name
+    allowed_github_emails  = join(",", [for email in var.oauth_allowed_github_emails : "${email}"])
   })
   traefik_config_file = templatefile("${path.module}/traefik.yml.tftpl", {
     letsencrypt_notification_email  = var.letsencrypt_notification_email
