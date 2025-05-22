@@ -93,28 +93,28 @@ variable "oauth_github_app_name" {
 
 variable "oauth_github_app_client_id" {
   description = <<-EOT
-    You must create a GitHub OAuth app first in your account.\n
-    1. Navigate to https://github.com/ \n
-    2. Click your user icon on the top right\n
-    3. Click 'settings'\n
-    4. On the left nav, click 'Developer settings'\n
-    5. Go to 'OAuth Apps'\n
-    6. Select 'Create New OAuth App'\n
-    7. App name: 'jupyter-deploy-aws-traefik' or the value you selected for 'oauth_github_app_name'\n
-    8. Home page URL: 'jupyter.<subdomain>.<domain>'\n
-    9. Application description: leave blank\n
-    10. Authorization callback URL: auth.<subdomain>.<domain>/_oauth \n
-    11. Click 'Register Application'\n
-    12. Retrieve the Client ID\n
-    Full instructions: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app \n
+    You must create a GitHub OAuth app first in your account.
+    1. Navigate to https://github.com/
+    2. Click your user icon on the top right
+    3. Click 'settings'
+    4. On the left nav, click 'Developer settings'
+    5. Go to 'OAuth Apps'
+    6. Select 'Create New OAuth App'
+    7. App name: 'jupyter-deploy-aws-traefik' or the value you selected for 'oauth_github_app_name'
+    8. Home page URL: 'jupyter.<subdomain>.<domain>'
+    9. Application description: leave blank
+    10. Authorization callback URL: auth.<subdomain>.<domain>/_oauth
+    11. Click 'Register Application'
+    12. Retrieve the Client ID
+    Full instructions: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app
   EOT
   type        = string
 }
 
-variable "oauth_github_app_secret_id" {
+variable "oauth_github_app_client_secret" {
   description = <<-EOT
-    1. Go to https://github.com/settings/developers \n
-    2. Select your OAuth app \n
+    1. Go to https://github.com/settings/developers
+    2. Select your OAuth app
     3. Generate a secret and pass it here.
   EOT
   type        = string

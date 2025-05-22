@@ -17,6 +17,7 @@ services:
       - web
     environment:
       - JUPYTER_TOKEN=""
+      - AWS_REGION=${aws_region}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.jupyter.rule=Host(`jupyter.${full_domain}`)"
@@ -28,7 +29,7 @@ services:
       - /mnt/jupyter-data:/home/jovyan
       - /var/run/docker.sock:/var/run/docker.sock
   oauth:
-    image: thomseddon/traefik-forward-auth:2.2
+    image: thomseddon/traefik-forward-auth:2
     user: "$${SERVICE_UID}:$${SERVICE_GID}"
     restart: unless-stopped
     security_opt:
@@ -38,6 +39,10 @@ services:
       - "traefik.http.routers.oauth.rule=Host(`auth.${full_domain}`)"
       - "traefik.http.routers.oauth.entrypoints=websecure"
       - "traefik.http.routers.oauth.tls.certresolver=letsencrypt"
+      - "traefik.http.services.oauth.loadbalancer.server.port=4181"
+      - "traefik.http.middlewares.oauth.forwardauth.address=http://oauth:4181"
+      - "traefik.http.middlewares.oauth.forwardauth.authResponseHeaders=X-Forwarded-User"
+      - "traefik.http.middlewares.oauth.forwardauth.trustForwardHeader=true"
     networks:
       - web
     environment:
@@ -54,6 +59,8 @@ services:
   traefik:
     image: traefik:v2.10
     user: "$${SERVICE_UID}:$${SERVICE_GID}"
+    group_add:
+      - "${DOCKER_GID}"
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -63,10 +70,11 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik.yml:/traefik.yml:ro
-      - /root/.aws:/root/.aws:ro
       - ./acme.json:/acme.json
     networks:
       - web
+    environment:
+      - AWS_REGION=${aws_region}
 networks:
   web:
     driver: bridge

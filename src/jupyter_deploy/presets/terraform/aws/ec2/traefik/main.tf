@@ -17,16 +17,6 @@ provider "github" {}
 data "aws_region" "current" {}
 data "aws_partition" "current" {}
 
-# Fetch the default VPC
-data "aws_vpc" "default" {
-  default = true
-}
-
-# Fetch availability zones
-data "aws_availability_zones" "available_zones" {
-  state = "available"
-}
-
 locals {
   default_tags = {
     Source = "jupyter-deploy"
@@ -38,6 +28,11 @@ locals {
     local.default_tags,
     var.custom_tags,
   )
+}
+
+# Place the EC2 instance in the default VPC
+data "aws_vpc" "default" {
+  default = true
 }
 
 # Retrieve the first subnet in the default VPC
@@ -52,11 +47,20 @@ data "aws_subnet" "first_subnet_of_default_vpc" {
   id = tolist(data.aws_subnets.default_vpc_subnets.ids)[0]
 }
 
-# Define security group for EC2 instance
+# Create security group for the EC2 instance
 resource "aws_security_group" "ec2_jupyter_server_sg" {
   name        = "jupyter-deploy-traefik-sg"
   description = "Security group for the EC2 instance serving the JupyterServer"
   vpc_id      = data.aws_vpc.default.id
+
+  # Allow only HTTPS inbound traffic
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTPS traffic"
+  }
 
   # Allow all outbound traffic
   egress {
@@ -69,7 +73,7 @@ resource "aws_security_group" "ec2_jupyter_server_sg" {
   tags = local.combined_tags
 }
 
-# Define the AMI
+# Retrieve the latest AL 2023 AMI
 data "aws_ami" "amazon_linux_2023" {
   most_recent = true
   owners = ["amazon"]
@@ -108,7 +112,9 @@ locals {
 }
 
 
-# Define EC2 instance
+# Place the EC2 instance in the first subnet of the default VPC, using:
+# - the security group
+# - the AMI
 resource "aws_instance" "ec2_jupyter_server" {
   ami                    = coalesce(var.ami_id, data.aws_ami.amazon_linux_2023.id)
   instance_type          = var.instance_type
@@ -128,7 +134,7 @@ resource "aws_instance" "ec2_jupyter_server" {
   iam_instance_profile = aws_iam_instance_profile.server_instance_profile.name
 }
 
-# Define the IAM role
+# Define the IAM role for the instance and add policies
 data "aws_iam_policy_document" "server_assume_role_policy" {
   statement {
     sid     = "EC2AssumeRole"
@@ -163,9 +169,10 @@ data "aws_iam_policy_document" "route53_dns_delegation" {
   statement {
     sid   = "Route53DnsDelegation"
     actions = [
-      "route53:ListHostedZones",     // Find the zone for your domain
-      "route53:GetChange",           // Check record creation status
-      "route53:ChangeResourceRecordSets" // Create/delete TXT records
+      "route53:ListHostedZones*",         // Find the zone for your domain (uses ByName)
+      "route53:ListResourceRecordSets",   // Find the record set
+      "route53:GetChange",                // Check record creation status
+      "route53:ChangeResourceRecordSets"  // Create/delete TXT records
     ]
     resources = [
       "*"
@@ -183,7 +190,7 @@ resource "aws_iam_role_policy_attachment" "route53_dns_delegation" {
   policy_arn = aws_iam_policy.route53_dns_delegation.arn
 }
 
-# Define the instance profile
+# Define the instance profile to associate the IAM role with the EC2 instance
 resource "aws_iam_instance_profile" "server_instance_profile" {
   role = aws_iam_role.execution_role.name
   name_prefix = "${var.iam_role_name_prefix}-"
@@ -193,7 +200,7 @@ resource "aws_iam_instance_profile" "server_instance_profile" {
   tags = local.combined_tags
 }
 
-# Define EBS volume
+# Define EBS volume for the notebook data (will mount on /home/jovyan)
 resource "aws_ebs_volume" "jupyter_data" {
   availability_zone = aws_instance.ec2_jupyter_server.availability_zone
   size              = var.jupyter_data_volume_size
@@ -203,14 +210,13 @@ resource "aws_ebs_volume" "jupyter_data" {
   tags = local.combined_tags
 }
 
-# Attach EBS volume to EC2 instance
 resource "aws_volume_attachment" "jupyter_data_attachment" {
   device_name = "/dev/sdf"
   volume_id   = aws_ebs_volume.jupyter_data.id
   instance_id = aws_instance.ec2_jupyter_server.id
 }
 
-# AWS Secret for the GitHub oauth app client secret
+# Define the AWS Secret to store the GitHub oauth app client secret
 resource "aws_secretsmanager_secret" "oauth_github_client_secret" {
   name_prefix = "${var.oauth_github_app_name}-"
   tags = local.combined_tags
@@ -246,7 +252,57 @@ resource "aws_ssm_parameter" "oauth_github_secret_aws_secret_arn" {
   tags    = local.combined_tags 
 }
 
-# Read the local files
+
+# DNS handling
+
+# Check if a Route53 hosted zone exists for the domain
+data "aws_route53_zone" "existing" {
+  name         = var.domain_name
+  private_zone = false
+  count        = 1
+
+  # This will fail gracefully if the zone doesn't exist
+  # The count = 1 ensures it's only created once
+}
+
+locals {
+  zone_already_exists = length(data.aws_route53_zone.existing) > 0
+}
+
+# Create a new hosted zone if one doesn't exist
+resource "aws_route53_zone" "primary" {
+  name = var.domain_name
+  
+  # Only create if the data lookup failed
+  count = local.zone_already_exists == 0 ? 1 : 0
+  
+  tags = local.combined_tags
+}
+
+# Determine which zone ID to use
+locals {
+  hosted_zone_id = local.zone_already_exists ? data.aws_route53_zone.existing[0].zone_id : aws_route53_zone.primary[0].zone_id
+}
+
+# Create DNS records for jupyter and auth subdomains
+resource "aws_route53_record" "jupyter" {
+  zone_id = local.hosted_zone_id
+  name    = "jupyter.${local.full_domain}"
+  type    = "A"
+  ttl     = 300
+  records = [aws_instance.ec2_jupyter_server.public_ip]
+}
+
+resource "aws_route53_record" "auth" {
+  zone_id = local.hosted_zone_id
+  name    = "auth.${local.full_domain}"
+  type    = "A"
+  ttl     = 300
+  records = [aws_instance.ec2_jupyter_server.public_ip]
+}
+
+
+# Read the local files defining the instance and docker services setup
 data "local_file" "cloud_init" {
   filename = "${path.module}/cloudinit.sh"
 }
@@ -261,14 +317,16 @@ data "local_file" "dockerfile_jupyter" {
 
 # variables consistency checks
 locals {
-  full_domain = "${subdomain_name}.${domain_name}"
+  full_domain = "${var.subdomain_name}.${var.domain_name}"
   github_usernames_valid = var.oauth_provider != "github" || length(var.oauth_github_allowed_usernames) > 0
 }
 
 locals {
   docker_compose_file = templatefile("${path.module}/docker-compose.yml.tftpl", {
     full_domain               = local.full_domain
-    allowed_github_usernames  = join(",", [for username in var.oauth_github_allowed_usernames : "'${username}'"])
+    github_client_id          = var.oauth_github_app_client_id
+    aws_region                = data.aws_region
+    allowed_github_usernames  = join(",", [for username in var.oauth_github_allowed_usernames : "${username}"])
   })
   traefik_config_file = templatefile("${path.module}/traefik.yml.tftpl", {
     letsencrypt_notification_email  = var.letsencrypt_notification_email
@@ -390,7 +448,7 @@ resource "null_resource" "store_oauth_github_client_secret" {
   }
   provisioner "local-exec" {
     command = <<EOT
-      CLIENT_SECRET="${var.oauth_github_app_secret_id}"
+      CLIENT_SECRET="${var.oauth_github_app_client_secret}"
       aws secretsmanager put-secret-value \
         --secret-id ${aws_secretsmanager_secret.oauth_github_client_secret.arn} \
         --secret-string "$CLIENT_SECRET" \

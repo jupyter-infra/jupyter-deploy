@@ -5,6 +5,26 @@ entryPoints:
   websecure:
     address: ":8443"
 
+# Add global HTTP configuration
+http:
+  middlewares:
+    domain-filter:
+      headers:
+        customResponseHeaders:
+          X-Denied-Reason: "Invalid hostname"
+      statusCode: 403
+  
+  routers:
+    # This catch-all router will handle any requests that don't match your allowed domains
+    catch-all:
+      rule: "HostRegexp(`{host:.+}`)"
+      priority: 1  # Lower priority than specific routes (which default to 10)
+      service: "noop@internal"  # Built-in no-op service
+      middlewares:
+        - "domain-filter"
+      entryPoints:
+        - "websecure"
+
 providers:
   docker:
     endpoint: "unix:///var/run/docker.sock"
