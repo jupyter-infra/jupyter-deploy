@@ -27,8 +27,8 @@ def generate(
         InfrastructureType, typer.Option("--infrastructure", "-I", help="infrastructure type")
     ] = AWSInfrastructureType.EC2,
     template: Annotated[
-        str, typer.Option("--template", "-T", help="template name (e.g., tls-via-ngrok)")
-    ] = "tls-via-ngrok",
+        str, typer.Option("--template", "-T", help="template name (e.g., traefik)")
+    ] = "traefik",
     project_dir: Annotated[
         str | None, typer.Option("--output-path", "-p", help="output path for your terraform project")
     ] = None,

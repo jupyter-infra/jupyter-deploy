@@ -16,7 +16,6 @@ services:
     networks:
       - web
     environment:
-      - JUPYTER_TOKEN=ABC
       - AWS_REGION=${aws_region}
     labels:
       - "traefik.enable=true"

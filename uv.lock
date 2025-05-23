@@ -672,6 +672,8 @@ version = "0.1.0"
 source = { editable = "libs/jupyter-deploy" }
 dependencies = [
     { name = "click" },
+    { name = "jupyter-deploy-tf-aws-ec2-ngrok" },
+    { name = "jupyter-deploy-tf-aws-ec2-traefik" },
     { name = "typer" },
 ]
 
@@ -680,10 +682,6 @@ aws = [
     { name = "boto3" },
     { name = "boto3-stubs" },
     { name = "mypy-boto3-ec2" },
-]
-default-template = [
-    { name = "jupyter-deploy-tf-aws-ec2-ngrok" },
-    { name = "jupyter-deploy-tf-aws-ec2-traefik" },
 ]
 terraform = [
     { name = "python-terraform" },
@@ -702,13 +700,13 @@ requires-dist = [
     { name = "boto3", marker = "extra == 'aws'", specifier = ">=1.38.6" },
     { name = "boto3-stubs", marker = "extra == 'aws'", specifier = ">=1.38.6" },
     { name = "click", specifier = "<8.2.0" },
-    { name = "jupyter-deploy-tf-aws-ec2-ngrok", marker = "extra == 'default-template'", editable = "libs/jupyter-deploy-tf-aws-ec2-ngrok" },
-    { name = "jupyter-deploy-tf-aws-ec2-traefik", marker = "extra == 'default-template'", editable = "libs/jupyter-deploy-tf-aws-ec2-traefik" },
+    { name = "jupyter-deploy-tf-aws-ec2-ngrok", editable = "libs/jupyter-deploy-tf-aws-ec2-ngrok" },
+    { name = "jupyter-deploy-tf-aws-ec2-traefik", editable = "libs/jupyter-deploy-tf-aws-ec2-traefik" },
     { name = "mypy-boto3-ec2", marker = "extra == 'aws'", specifier = ">=1.38.6" },
     { name = "python-terraform", marker = "extra == 'terraform'", specifier = ">=0.10.1" },
     { name = "typer", specifier = ">=0.15.4" },
 ]
-provides-extras = ["terraform", "aws", "default-template"]
+provides-extras = ["terraform", "aws"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -722,6 +720,9 @@ dev = [
 name = "jupyter-deploy-monorepo"
 version = "0.1.0"
 source = { virtual = "." }
+dependencies = [
+    { name = "jupyter-deploy" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -734,6 +735,7 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "jupyter-deploy", editable = "libs/jupyter-deploy" }]
 
 [package.metadata.requires-dev]
 dev = [

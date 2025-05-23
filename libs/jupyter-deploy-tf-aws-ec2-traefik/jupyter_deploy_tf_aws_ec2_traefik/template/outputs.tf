@@ -20,6 +20,11 @@ output "ami_id" {
   value       = aws_instance.ec2_jupyter_server.ami
 }
 
+output "jupyter_server_public_ip" {
+  description = "The public IP address of the jupyter server"
+  value       = aws_instance.ec2_jupyter_server.public_ip 
+}
+
 # Secret information
 output "secret_arn" {
   description = "ARN of the AWS Secret where the GitHub app client secret is stored"
