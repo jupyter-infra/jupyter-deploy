@@ -45,6 +45,11 @@ do not forget to format the code before raising a pull request:
 uv run ruff format
 ```
 
+To check that you have run formating, run:
+```
+uv run --script scripts/verify_format.py
+```
+
 ### Enforce type checking
 ```bash
 uv run mypy

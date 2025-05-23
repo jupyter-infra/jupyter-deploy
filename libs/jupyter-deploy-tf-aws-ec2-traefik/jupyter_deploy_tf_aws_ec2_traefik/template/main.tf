@@ -411,7 +411,7 @@ resource "aws_ssm_document" "instance_startup_instructions" {
   tags = local.combined_tags
   lifecycle {
     precondition {
-      condition     = local.github_usernames_valid
+      condition     = local.github_emails_valid
       error_message = "If you use github as oauth provider, provide at least 1 github username"
     }
     precondition {

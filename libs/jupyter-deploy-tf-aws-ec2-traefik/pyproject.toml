@@ -1,40 +1,16 @@
 [project]
-name = "jupyter-deploy"
+name = "jupyter-deploy-tf-aws-ec2-traefik"
 version = "0.1.0"
-description = "CLI based tool to deploy Jupyter application that integrates with infrastructure as code frameworks."
+description = "Add your description here"
 readme = "README.md"
 authors = [
     { name = "Jonathan Guinegagne", email = "jggg@amazon.com" }
 ]
 requires-python = ">=3.12"
-dependencies = [
-    "click<8.2.0",
-    "typer>=0.15.4",
-]
+dependencies = []
 
-[project.scripts]
-jupyter-deploy = "jupyter_deploy.cli.deploy_app:main"
-jd = "jupyter_deploy.cli.deploy_app:main"
-
-[project.optional-dependencies]
-terraform = [
-    "python-terraform>=0.10.1",
-]
-
-aws = [
-    "boto3>=1.38.6",
-    "boto3-stubs>=1.38.6",
-    "mypy-boto3-ec2>=1.38.6",
-]
-
-default_template = [
-    "jupyter-deploy-tf-aws-ec2-traefik",
-    "jupyter-deploy-tf-aws-ec2-ngrok",
-]
-
-[tool.uv.sources]
-jupyter-deploy-tf-aws-ec2-traefik = { workspace = true }
-jupyter-deploy-tf-aws-ec2-ngrok = { workspace = true }
+[project.entry-points."jupyter_deploy.terraform_templates"]
+aws_ec2_traefik = "jupyter_deploy_tf_aws_ec2_traefik.template:TEMPLATE_PATH"
 
 [build-system]
 requires = ["hatchling"]
@@ -54,7 +30,7 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 check_untyped_defs = true
 mypy_path = ["."]
-packages = ["jupyter_deploy"]
+packages = ["jupyter_deploy_tf_aws_ec2_traefik"]
 
 [tool.ruff]
 extend-exclude = [".conda/"]
@@ -79,11 +55,11 @@ docstring-code-format = true
 docstring-code-line-length = 40
 
 [tool.pytest.ini_options]
-addopts = "--cov=jupyter_deploy --cov-report=term-missing --cov-report=xml --cov-report=html"
+addopts = "--cov=jupyter_deploy_tf_aws_ec2_traefik --cov-report=term-missing --cov-report=xml --cov-report=html"
 testpaths = ["tests/unit"]
 
 [tool.coverage.run]
-source = ["jupyter_deploy"]
+source = ["jupyter_deploy_tf_aws_ec2_traefik"]
 omit = ["tests/*"]
 
 [tool.coverage.report]
