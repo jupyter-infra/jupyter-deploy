@@ -42,7 +42,7 @@ class TestTerraformApp(unittest.TestCase):
             engine=EngineType.TERRAFORM,
             provider="aws",
             infrastructure="ec2",
-            template="tls-via-ngrok",
+            template="traefik",
         )
 
     @patch("jupyter_deploy.handlers.project.project_handler.ProjectHandler")
