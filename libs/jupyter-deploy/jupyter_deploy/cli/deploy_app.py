@@ -1,6 +1,7 @@
-# consider using: from jupyter_core.application import JupyterApp
+import sys
 
 import typer
+from jupyter_core.application import JupyterApp
 
 from jupyter_deploy.cli.servers_app import servers_app
 from jupyter_deploy.cli.terraform_app import terraform_app
@@ -31,6 +32,22 @@ class JupyterDeployCliRunner:
 runner = JupyterDeployCliRunner()
 
 
+class JupyterDeployApp(JupyterApp):
+    """Jupyter Deploy application for use with 'jupyter deploy' command."""
+
+    name = "jupyter-deploy"
+    description = "Deploy Jupyter notebooks application to your favorite Cloud provider."
+
+    def start(self):
+        """Run the deploy application."""
+        args_without_command = sys.argv[2:] if len(sys.argv) > 2 else []
+        sys.argv = args_without_command
+
+        runner.run()
+
+
 def main() -> None:
-    """Entry point for the CLI jupyter-deploy."""
-    runner.run()
+    if sys.argv[0].endswith("jupyter") and len(sys.argv) > 1 and sys.argv[1] == "deploy":
+        JupyterDeployApp.launch_instance()
+    else:
+        runner.run()

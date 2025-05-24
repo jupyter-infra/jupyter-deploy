@@ -1,9 +1,10 @@
+import sys
 import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from jupyter_deploy.cli.deploy_app import JupyterDeployCliRunner, main
+from jupyter_deploy.cli.deploy_app import JupyterDeployApp, JupyterDeployCliRunner, main
 from jupyter_deploy.cli.deploy_app import runner as app_runner
 
 
@@ -55,13 +56,43 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         self.assertTrue(result.stdout.index("Jupyter-deploy") >= 0)
 
 
+class TestJupyterDeployApp(unittest.TestCase):
+    """Test cases for the JupyterDeployApp class."""
+
+    @patch("jupyter_deploy.cli.deploy_app.runner")
+    def test_start(self, mock_runner):
+        """Test the start method."""
+        app = JupyterDeployApp()
+
+        # Test with normal arguments
+        with patch.object(sys, "argv", ["jupyter", "deploy", "--help"]):
+            app.start()
+            mock_runner.run.assert_called_once()
+            mock_runner.reset_mock()
+
+        # Test with no arguments
+        with patch.object(sys, "argv", ["jupyter", "deploy"]):
+            app.start()
+            mock_runner.run.assert_called_once()
+
+
 class TestMain(unittest.TestCase):
     """Test cases for the main function."""
 
     @patch("jupyter_deploy.cli.deploy_app.runner")
-    def test_main(self, mock_runner: Mock):
-        """Test the main function."""
-        main()
+    @patch("jupyter_deploy.cli.deploy_app.JupyterDeployApp.launch_instance")
+    def test_main_as_jupyter_deploy(self, mock_launch_instance, mock_runner):
+        """Test the main function when called as 'jupyter deploy'."""
+        with patch.object(sys, "argv", ["jupyter", "deploy"]):
+            main()
+            mock_launch_instance.assert_called_once()
+            mock_runner.run.assert_not_called()
 
-        # Check that the run method of the runner was called
-        mock_runner.run.assert_called_once()
+    @patch("jupyter_deploy.cli.deploy_app.runner")
+    @patch("jupyter_deploy.cli.deploy_app.JupyterDeployApp.launch_instance")
+    def test_main_as_jupyter_deploy_command(self, mock_launch_instance, mock_runner):
+        """Test the main function when called as 'jupyter-deploy'."""
+        with patch.object(sys, "argv", ["jupyter-deploy"]):
+            main()
+            mock_launch_instance.assert_not_called()
+            mock_runner.run.assert_called_once()
