@@ -1,6 +1,7 @@
 services:
   jupyter:
     user: "$${SERVICE_UID}:$${SERVICE_GID}"
+    container_name: jupyter
     group_add:
       - "$${DOCKER_GID}"
     build:
@@ -11,6 +12,8 @@ services:
         - SERVICE_GID=$${SERVICE_GID}
         - DOCKER_GID=$${DOCKER_GID}
     restart: unless-stopped
+    mem_limit: "$${JUPYTER_MEM_LIMIT_MB}M"
+    mem_reservation: "$${JUPYTER_MEM_RESERVATION_MB}M"
     security_opt:
       - no-new-privileges:true
     networks:
@@ -28,8 +31,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
   oauth:
     image: thomseddon/traefik-forward-auth:2
+    container_name: oauth
     user: "$${SERVICE_UID}:$${SERVICE_GID}"
     restart: unless-stopped
+    mem_limit: "256M"
+    mem_reservation: "128M"
     security_opt:
       - no-new-privileges:true
     labels:
@@ -58,10 +64,13 @@ services:
       - LOG_LEVEL=debug
   traefik:
     image: traefik:v2.10
+    container_name: traefik
     user: "$${SERVICE_UID}:$${SERVICE_GID}"
     group_add:
       - "$${DOCKER_GID}"
     restart: unless-stopped
+    mem_limit: "256M"
+    mem_reservation: "128M"
     security_opt:
       - no-new-privileges:true
     ports:
@@ -75,6 +84,31 @@ services:
       - web
     environment:
       - AWS_REGION=${aws_region}
+  log-writer:
+    image: docker:cli
+    container_name: log-writer
+    user: "${SERVICE_UID}:${SERVICE_GID}"
+    group_add:
+      - "${DOCKER_GID}"
+    restart: unless-stopped
+    mem_limit: "64M"
+    mem_reservation: "32M"
+    volumes:
+      - /var/log/services:/logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: |
+      sh -c '
+        docker logs -f jupyter >> /logs/jupyter.log 2>&1 &
+        docker logs -f traefik >> /logs/traefik.log 2>&1 &
+        docker logs -f oauth >> /logs/oauth.log 2>&1 &
+        wait
+      '
+    networks:
+      - web
+    depends_on:
+      - jupyter
+      - traefik
+      - oauth
 networks:
   web:
     driver: bridge

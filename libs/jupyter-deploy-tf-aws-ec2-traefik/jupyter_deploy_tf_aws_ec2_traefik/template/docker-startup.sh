@@ -30,12 +30,23 @@ fi
 # oauth secret for secure cookie management in the local auth service
 OAUTH_SECRET=$(openssl rand -hex 32)
 
+# memory management: allocate 95% of memory to jupyter
+# but keep enough memory to other containers in small instances
+TOTAL_MEMORY_MB=$(free -m | awk '/^Mem:/{print $2}')
+MAX_MEM_RESERVATION_MB=$((TOTAL_MEMORY_MB - 288))
+PERC_MEM_RESERVATION_MB=$((TOTAL_MEMORY_MB * 95 / 100))
+
+JUPYTER_MEM_LIMIT_MB=$(( PERC_MEM_RESERVATION_MB < MAX_MEM_RESERVATION_MB ? PERC_MEM_RESERVATION_MB : MAX_MEM_RESERVATION_MB ))
+JUPYTER_MEM_RESERVATION_MB=$((JUPYTER_MEM_LIMIT_MB / 2))
+
 tee /opt/docker/.env >/dev/null << EOFENV
 SERVICE_UID=$(id -u service-user)
 SERVICE_GID=$(id -g service-user)
 DOCKER_GID=$(getent group docker | cut -d: -f3)
 GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
 OAUTH_SECRET=${OAUTH_SECRET}
+JUPYTER_MEM_LIMIT_MB=${JUPYTER_MEM_LIMIT_MB}
+JUPYTER_MEM_RESERVATION_MB=${JUPYTER_MEM_RESERVATION_MB}
 EOFENV
 echo "Saved environment file /opt/docker/.env"
 

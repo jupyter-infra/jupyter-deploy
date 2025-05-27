@@ -30,8 +30,8 @@ RUN useradd -u ${SERVICE_UID} -g ${SERVICE_GID} -G docker -d /home/jovyan notebo
 RUN chown -R notebook-user:notebook-user /home/jovyan
 
 # disable the token
-RUN echo "c.NotebookApp.token = ''" > /etc/jupyter/jupyter_notebook_config.py
-RUN echo "c.NotebookApp.password_required = False" >> /etc/jupyter/jupyter_notebook_config.py
+RUN echo "c.ServerApp.token = ''" > /etc/jupyter/jupyter_server_config.py
+RUN echo "c.ServerApp.password_required = False" >> /etc/jupyter/jupyter_server_config.py
 
 # docker-compose will override
 USER notebook-user

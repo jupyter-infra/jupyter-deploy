@@ -96,6 +96,34 @@ service-user hard nofile 8192
 EOF
 chmod 440 /etc/security/limits.d/service-user.conf
 
+# Allocate swap memory based on RAM amount
+TOTAL_MEMORY_MB=$(free -m | awk '/^Mem:/{print $2}')
+
+if [ $TOTAL_MEMORY_MB -le 1024 ]; then
+    SWAP_SIZE_MB=2048
+elif [ $TOTAL_MEMORY_MB -le 8192 ]; then
+    SWAP_SIZE_MB=$TOTAL_MEMORY_MB
+else
+    SWAP_SIZE_MB=$((TOTAL_MEMORY_MB / 2))
+fi
+
+CURRENT_SWAP_KB=$(free -k | awk '/^Swap:/{print $2}')
+NEEDED_SWAP_KB=$((SWAP_SIZE_MB * 1024))
+
+if [ $CURRENT_SWAP_KB -eq 0 ]; then
+    echo "Creating new swap file of ${SWAP_SIZE_MB}MB..."
+    sudo fallocate -l ${SWAP_SIZE_MB}M /swapfile
+elif [ $CURRENT_SWAP_KB -ne $NEEDED_SWAP_KB ]; then
+    echo "Resizing swap file from $((CURRENT_SWAP_KB/1024))MB to ${SWAP_SIZE_MB}MB..."
+    swapoff -a
+    fallocate -l ${SWAP_SIZE_MB}M /swapfile
+fi
+
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
 # Mount the jupyter-data drive and save config to persist on reboots
 mkfs -t ext4 /dev/sdf
 mkdir -p /mnt/jupyter-data
@@ -106,8 +134,17 @@ chmod 750 /mnt/jupyter-data
 
 echo "/dev/sdf /mnt/jupyter-data ext4 defaults,nofail 0 2" | tee -a /etc/fstab
 
-# Create the required dirs
+# Create the docker dir
 mkdir -p /opt/docker
 touch /opt/docker/acme.json
 chown service-user:service-user /opt/docker/acme.json
 chmod 600 /opt/docker/acme.json
+
+# Create the log dirs and file
+mkdir -p /var/log/services
+touch /var/log/services/jupyter.log
+touch /var/log/services/traefik.log
+touch /var/log/services/oauth.log
+
+chmod 755 /var/log/services
+chown -R service-user:service-user /var/log/services
