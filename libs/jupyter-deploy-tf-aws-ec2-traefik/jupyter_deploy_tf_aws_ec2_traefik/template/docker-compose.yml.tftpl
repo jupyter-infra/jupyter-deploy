@@ -1,0 +1,80 @@
+services:
+  jupyter:
+    user: "$${SERVICE_UID}:$${SERVICE_GID}"
+    group_add:
+      - "$${DOCKER_GID}"
+    build:
+      context: .
+      dockerfile: dockerfile.jupyter
+      args:
+        - SERVICE_UID=$${SERVICE_UID}
+        - SERVICE_GID=$${SERVICE_GID}
+        - DOCKER_GID=$${DOCKER_GID}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - web
+    environment:
+      - AWS_REGION=${aws_region}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jupyter.rule=Host(`jupyter.${full_domain}`)"
+      - "traefik.http.routers.jupyter.entrypoints=websecure"
+      - "traefik.http.routers.jupyter.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jupyter.loadbalancer.server.port=8888"
+    volumes:
+      - /mnt/jupyter-data:/home/jovyan
+      - /var/run/docker.sock:/var/run/docker.sock
+  oauth:
+    image: thomseddon/traefik-forward-auth:2
+    user: "$${SERVICE_UID}:$${SERVICE_GID}"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.oauth.rule=Host(`auth.${full_domain}`)"
+      - "traefik.http.routers.oauth.entrypoints=websecure"
+      - "traefik.http.routers.oauth.tls.certresolver=letsencrypt"
+      - "traefik.http.middlewares.oauth.forwardauth.address=http://oauth:4181"
+      - "traefik.http.middlewares.oauth.forwardauth.authResponseHeaders=X-Forwarded-User"
+      - "traefik.http.services.oauth.loadbalancer.server.port=4181"
+    networks:
+      - web
+    environment:
+      - DEFAULT_PROVIDER=generic-oauth
+      - PROVIDERS_GENERIC_OAUTH_AUTH_URL=https://github.com/login/oauth/authorize
+      - PROVIDERS_GENERIC_OAUTH_TOKEN_URL=https://github.com/login/oauth/access_token
+      - PROVIDERS_GENERIC_OAUTH_USER_URL=https://api.github.com/user
+      - PROVIDERS_GENERIC_OAUTH_CLIENT_ID=${github_client_id}
+      - PROVIDERS_GENERIC_OAUTH_CLIENT_SECRET=$${GITHUB_CLIENT_SECRET}
+      - PROVIDERS_GENERIC_OAUTH_SCOPE=read:user,user:email
+      - WHITELIST=${allowed_github_emails}
+      - AUTH_HOST=auth.${full_domain}
+      - COOKIE_DOMAIN=${full_domain}
+      - SECRET=$${OAUTH_SECRET}
+      - INSECURE_COOKIE=false
+      - LOG_LEVEL=debug
+  traefik:
+    image: traefik:v2.10
+    user: "$${SERVICE_UID}:$${SERVICE_GID}"
+    group_add:
+      - "$${DOCKER_GID}"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "443:8443"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/traefik.yml:ro
+      - ./acme.json:/acme.json
+    networks:
+      - web
+    environment:
+      - AWS_REGION=${aws_region}
+networks:
+  web:
+    driver: bridge

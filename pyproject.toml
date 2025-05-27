@@ -4,11 +4,18 @@ version = "0.1.0"
 description = "Monorepo for Jupyter deployment packages"
 readme = "README.md"
 requires-python = ">=3.12"
+dependencies = [
+    "jupyter-deploy",
+]
+
+[tool.uv.sources]
+jupyter-deploy = { workspace = true }
 
 [tool.uv.workspace]
 members = [
     "libs/jupyter-deploy",
     "libs/jupyter-deploy-tf-aws-ec2-ngrok",
+    "libs/jupyter-deploy-tf-aws-ec2-traefik",
     "images/uvbase"
 ]
 
@@ -27,10 +34,12 @@ dev-dependencies = [
 files = [
     "libs/jupyter-deploy",
     "libs/jupyter-deploy-tf-aws-ec2-ngrok",
+    "libs/jupyter-deploy-tf-aws-ec2-traefik"
 ]
 
 [tool.pytest.ini_options]
 pythonpath = [
   "libs/jupyter-deploy",
-  "libs/jupyter-deploy-tf-aws-ec2-ngrok"
+  "libs/jupyter-deploy-tf-aws-ec2-ngrok",
+  "libs/jupyter-deploy-tf-aws-ec2-traefik"
 ]

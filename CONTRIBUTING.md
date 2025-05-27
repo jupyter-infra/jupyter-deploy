@@ -22,7 +22,7 @@ Or use the CLI by running `jupyter-deploy --help`
 
 ## Run tools
 This project uses:
-1. [ruff](https://docs.astral.sh/ruff/) for linting, formating and import sorting
+1. [ruff](https://docs.astral.sh/ruff/) for linting, formatting and import sorting
 2. [mypy](https://mypy-lang.org/) for type checking enforcement
 3. [pytest](https://docs.pytest.org/en/stable/) to run unit and integration tests
 
@@ -39,10 +39,15 @@ uv run ruff check --fix
 ```
 
 ### Format your code
-`ruff` is a code formater in addition to a linter,
+`ruff` is a code formatter in addition to a linter,
 do not forget to format the code before raising a pull request:
 ```bash
 uv run ruff format
+```
+
+To check that you have run formatting, run:
+```
+uv run --script scripts/verify_format.py
 ```
 
 ### Enforce type checking

@@ -18,10 +18,6 @@ terraform --version
 From the repository root, run:
 
 ```bash
-# Create and active new environment
-uv venv
-source .venv/bin/activate
-
 # Sync all dependencies
 uv sync
 ```
@@ -39,9 +35,5 @@ uv run jupyter-deploy --help
 To use a template, use the following command format:
 
 ```bash
-uv run jupyter-deploy terraform generate --provider aws --infra ec2 --template tls-via-ngrok
+uv run jupyter-deploy terraform generate --provider aws --infra ec2 --template traefik
 ```
-
-## Contributing
-
-Refer to the contributing guide.
