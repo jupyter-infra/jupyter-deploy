@@ -24,7 +24,7 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         self.assertEqual(runner.app.registered_groups[1].name, "servers")
 
     @patch("jupyter_deploy.cli.deploy_app.typer.Typer")
-    def test_run(self, mock_typer):
+    def test_run(self, mock_typer: MagicMock):
         """Test the run method."""
         # Create a mock app
         mock_app = MagicMock()
@@ -60,7 +60,7 @@ class TestJupyterDeployApp(unittest.TestCase):
     """Test cases for the JupyterDeployApp class."""
 
     @patch("jupyter_deploy.cli.deploy_app.runner")
-    def test_start(self, mock_runner):
+    def test_start(self, mock_runner: MagicMock):
         """Test the start method."""
         app = JupyterDeployApp()
 
@@ -81,7 +81,7 @@ class TestMain(unittest.TestCase):
 
     @patch("jupyter_deploy.cli.deploy_app.runner")
     @patch("jupyter_deploy.cli.deploy_app.JupyterDeployApp.launch_instance")
-    def test_main_as_jupyter_deploy(self, mock_launch_instance, mock_runner):
+    def test_main_as_jupyter_deploy(self, mock_launch_instance: MagicMock, mock_runner: MagicMock):
         """Test the main function when called as 'jupyter deploy'."""
         with patch.object(sys, "argv", ["jupyter", "deploy"]):
             main()
@@ -90,7 +90,7 @@ class TestMain(unittest.TestCase):
 
     @patch("jupyter_deploy.cli.deploy_app.runner")
     @patch("jupyter_deploy.cli.deploy_app.JupyterDeployApp.launch_instance")
-    def test_main_as_jupyter_deploy_command(self, mock_launch_instance, mock_runner):
+    def test_main_as_jupyter_deploy_command(self, mock_launch_instance: MagicMock, mock_runner: MagicMock):
         """Test the main function when called as 'jupyter-deploy'."""
         with patch.object(sys, "argv", ["jupyter-deploy"]):
             main()
