@@ -22,6 +22,4 @@ certificatesResolvers:
           - "1.1.1.1:53"  # Cloudflare's DNS
           - "8.8.8.8:53"  # Google's DNS
 accessLog:
-  bufferingSize: 100
-  filters:
-    retryAttempts: true
+  bufferingSize: 50

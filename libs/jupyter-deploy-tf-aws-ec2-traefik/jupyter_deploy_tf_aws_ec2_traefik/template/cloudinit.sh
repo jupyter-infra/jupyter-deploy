@@ -140,7 +140,7 @@ touch /opt/docker/acme.json
 chown service-user:service-user /opt/docker/acme.json
 chmod 600 /opt/docker/acme.json
 
-# Create the log dirs and file
+# Create the log dirs and files
 mkdir -p /var/log/services
 touch /var/log/services/jupyter.log
 touch /var/log/services/traefik.log
