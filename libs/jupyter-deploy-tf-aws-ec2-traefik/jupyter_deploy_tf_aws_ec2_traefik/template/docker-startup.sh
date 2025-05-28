@@ -33,7 +33,7 @@ OAUTH_SECRET=$(openssl rand -hex 32)
 # memory management: allocate 95% of memory to jupyter
 # but keep enough memory to other containers in small instances
 TOTAL_MEMORY_MB=$(free -m | awk '/^Mem:/{print $2}')
-MAX_MEM_RESERVATION_MB=$((TOTAL_MEMORY_MB - 288))
+MAX_MEM_RESERVATION_MB=$((TOTAL_MEMORY_MB - 320))
 PERC_MEM_RESERVATION_MB=$((TOTAL_MEMORY_MB * 95 / 100))
 
 JUPYTER_MEM_LIMIT_MB=$(( PERC_MEM_RESERVATION_MB < MAX_MEM_RESERVATION_MB ? PERC_MEM_RESERVATION_MB : MAX_MEM_RESERVATION_MB ))

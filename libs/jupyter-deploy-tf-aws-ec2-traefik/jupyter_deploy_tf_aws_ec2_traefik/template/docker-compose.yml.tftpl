@@ -61,7 +61,7 @@ services:
       - COOKIE_DOMAIN=${full_domain}
       - SECRET=$${OAUTH_SECRET}
       - INSECURE_COOKIE=false
-      - LOG_LEVEL=debug
+      - LOG_LEVEL=info
   traefik:
     image: traefik:v2.10
     container_name: traefik
@@ -87,12 +87,12 @@ services:
   log-writer:
     image: docker:cli
     container_name: log-writer
-    user: "${SERVICE_UID}:${SERVICE_GID}"
+    user: "$${SERVICE_UID}:$${SERVICE_GID}"
     group_add:
-      - "${DOCKER_GID}"
+      - "$${DOCKER_GID}"
     restart: unless-stopped
-    mem_limit: "64M"
-    mem_reservation: "32M"
+    mem_limit: "128M"
+    mem_reservation: "64M"
     volumes:
       - /var/log/services:/logs
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -111,4 +111,5 @@ services:
       - oauth
 networks:
   web:
+    name: web
     driver: bridge
