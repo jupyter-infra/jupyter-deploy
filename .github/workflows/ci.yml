@@ -1,0 +1,63 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  get-diff:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      affected_dirs: ${{ steps.get-dirs.outputs.affected_dirs }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: '3.13'
+          working-directory: '.'
+
+      - name: Get affected directories
+        id: get-dirs
+        run: |
+          # Make the script executable
+          chmod +x .github/get_changed_dirs.py
+          
+          # For pull requests, compare with the base branch
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_REF="${{ github.base_ref }}"
+          else
+            # For pushes to main, compare with the previous commit
+            BASE_REF="HEAD^"
+          fi
+          
+          # Run the script and capture the output
+          AFFECTED_DIRS=$(.github/utils/get_modified_dirs.py "$BASE_REF")
+          echo "affected_dirs=$AFFECTED_DIRS" >> $GITHUB_OUTPUT
+          echo "Affected directories: $AFFECTED_DIRS"
+
+  lint:
+    name: ci-lint
+    needs: get-diff
+    strategy:
+      matrix:
+        working-directory: ${{ fromJson(needs.detect-changes.outputs.affected_dirs) }}
+    uses: ./.github/workflows/lint.yml
+    with:
+      working-directory: ${{ matrix.working-directory }}
+
+  test:
+    name: ci-test
+    needs: get-diff
+    strategy:
+      matrix:
+        working-directory: ${{ fromJson(needs.detect-changes.outputs.affected_dirs) }}
+    uses: ./.github/workflows/test.yml
+    with:
+      working-directory: ${{ matrix.working-directory }}
