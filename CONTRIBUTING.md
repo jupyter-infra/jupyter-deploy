@@ -45,9 +45,20 @@ do not forget to format the code before raising a pull request:
 uv run ruff format
 ```
 
-To check that you have run formatting, run:
+furthermore, when contributing HCL files (.tf), run terraform formatting:
+```bash
+terraform fmt -write=true -recursive
 ```
+
+### Verify formatting
+To check that you have run formatting, run:
+```bash
 uv run --script scripts/verify_format.py
+```
+
+and
+```bash
+terraform fmt -check -recursive
 ```
 
 ### Enforce type checking
