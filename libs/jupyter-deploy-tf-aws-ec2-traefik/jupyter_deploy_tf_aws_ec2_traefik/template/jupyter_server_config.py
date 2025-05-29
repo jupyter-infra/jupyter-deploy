@@ -8,6 +8,3 @@ c.ServerApp.root_dir = '/home/jovyan'
 c.ServerApp.terminado_settings = {
     'shell_command': ['bash', '-c', '. /opt/uv/jupyter/.venv/bin/activate; cd ~; bash']
 }
-
-c.FileContentsManager.root_dir = '/home/jovyan'
-c.AsyncFileContentsManager.root_dir = '/home/jovyan'
