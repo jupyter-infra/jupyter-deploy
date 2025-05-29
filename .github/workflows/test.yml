@@ -1,0 +1,59 @@
+name: test
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: false
+        type: string
+        default: '.'
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.12', '3.13']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: ${{ matrix.python-version }}
+          working-directory: ${{ inputs.working-directory }}
+      
+      - name: Install dependencies
+        run: |
+          uv sync --all-extras
+        working-directory: ${{ inputs.working-directory }}
+
+      - name: Run tests
+        run: |
+          uv run pytest
+        working-directory: ${{ inputs.working-directory }}
+
+  coverage:
+    name: Check test coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: '3.13'
+          working-directory: ${{ inputs.working-directory }}
+      
+      - name: Install dependencies
+        run: |
+          uv sync --all-extras
+        working-directory: ${{ inputs.working-directory }}
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest --cov
+        working-directory: ${{ inputs.working-directory }}

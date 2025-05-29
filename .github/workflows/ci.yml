@@ -1,0 +1,58 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      affected_dirs: ${{ steps.get-dirs.outputs.affected_dirs }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: '3.13'
+          working-directory: '.'
+
+      - name: Get affected directories
+        id: get-dirs
+        run: |
+          chmod +x .github/utils/get_modified_dirs.py
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_REF="HEAD^"
+          else
+            BASE_REF=""
+          fi
+
+          AFFECTED_DIRS=$(uv run .github/utils/get_modified_dirs.py "$BASE_REF")
+          echo "affected_dirs=$AFFECTED_DIRS" >> $GITHUB_OUTPUT
+          echo "Affected directories: $AFFECTED_DIRS"
+
+  lint:
+    name: Run linter
+    needs: build
+    strategy:
+      matrix:
+        working-directory: ${{ fromJson(needs.build.outputs.affected_dirs) }}
+    uses: ./.github/workflows/lint.yml
+    with:
+      working-directory: ${{ matrix.working-directory }}
+
+  test:
+    name: Run tests
+    needs: build
+    strategy:
+      matrix:
+        working-directory: ${{ fromJson(needs.build.outputs.affected_dirs) }}
+    uses: ./.github/workflows/test.yml
+    with:
+      working-directory: ${{ matrix.working-directory }}
