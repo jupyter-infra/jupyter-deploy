@@ -76,13 +76,13 @@ variable "oauth_provider" {
 variable "oauth_google_allowed_emails" {
   description = "List of emails to allow for your app"
   type        = list(string)
-  default     = ["jonathan.guinegagne@gmail.com", "ellisonbg@gmail.com"]
+  default     = []
 }
 
 variable "oauth_github_allowed_usernames" {
   description = "List of GitHub user names to allow for your app"
   type        = list(string)
-  default     = ["JGuinegagne", "ellisonbg"]
+  default     = []
 }
 
 variable "custom_tags" {

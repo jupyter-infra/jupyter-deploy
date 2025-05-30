@@ -88,7 +88,10 @@ variable "oauth_allowed_github_emails" {
     Then from settings, go to 'public profile' and select a 'public email'
   EOT
   type        = list(string)
-  default     = ["jonathan.guinegagne@gmail.com", "ellisonbg@gmail.com"]
+  validation {
+    condition     = length(var.oauth_allowed_github_emails) > 0
+    error_message = "Provide at least one github email to authorize."
+  }
 }
 
 variable "oauth_github_app_name" {

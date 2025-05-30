@@ -6,5 +6,11 @@ c.Application.log_level = 'INFO'
 
 c.ServerApp.root_dir = '/home/jovyan'
 c.ServerApp.terminado_settings = {
-    'shell_command': ['bash', '-c', '. /opt/uv/jupyter/.venv/bin/activate; cd ~; bash']
+    'shell_command': [
+        'bash',
+        '-c',
+        'export PATH=$(echo $PATH | sed "s|/opt/uv/jupyter/.venv/bin:||"); '\
+        'echo "This is a UV-managed shell, use \'uv pip\' instead of \'pip\'!"; '\
+        'bash'
+    ]
 }

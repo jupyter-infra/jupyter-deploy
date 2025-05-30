@@ -32,26 +32,26 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# 5/ create jupyter default config dirs
+# 4/ create jupyter default config dirs
 RUN mkdir -p /etc/jupyter
-COPY jupyter_server_config.py /etc/jupyter/jupyter_server_config.py
+COPY jupyter_server_config.py /etc/jupyter/
 
-# 4/ create a dir for UV, copy jupyter toml file, run uv
+# 5/ create a dir for UV, copy jupyter toml file, run uv
 RUN mkdir -p /opt/uv/jupyter
 COPY pyproject.jupyter.toml /opt/uv/jupyter/pyproject.toml
 RUN uv sync --directory /opt/uv/jupyter
 
-# 6/ Change dirs ownership
-RUN chown -R jovyan:jovyan /opt/uv
-RUN chown -R jovyan:jovyan /home/jovyan
-RUN chown -R jovyan:jovyan /etc/jupyter
+# 6/ create the start-up script
+COPY start-jupyter.sh /usr/local/bin/
 
-# 7/ Switch user and workdir
+# 7/ Change dirs ownership and visibility
+RUN chmod -R a+r /opt/uv
+RUN chmod -R a+r /etc/jupyter
+RUN chmod +x /usr/local/bin/start-jupyter.sh
+RUN chown -R jovyan:jovyan /home/jovyan
+
+# 8/ Switch user and workdir
 WORKDIR /home/jovyan
 USER jovyan
 
-ENTRYPOINT []
-CMD ["uv", "run", "--directory", "/opt/uv/jupyter", "jupyter", "lab", \
-     "--no-browser", \
-     "--ip=0.0.0.0", \
-     "--IdentityProvider.token=" ]
+ENTRYPOINT ["/usr/local/bin/start-jupyter.sh"]
