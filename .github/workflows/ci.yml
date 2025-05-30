@@ -33,7 +33,7 @@ jobs:
           else
             BASE_REF=""
           fi
-
+          # a_comment
           AFFECTED_DIRS=$(uv run .github/utils/get_modified_dirs.py "$BASE_REF")
           echo "affected_dirs=$AFFECTED_DIRS" >> $GITHUB_OUTPUT
           echo "Affected directories: $AFFECTED_DIRS"
