@@ -7,8 +7,8 @@ variable "aws_region" {
 
 variable "instance_type" {
   description = "AWS EC2 instance type"
-  type = string
-  default = "t3.medium"
+  type        = string
+  default     = "t3.medium"
 }
 
 variable "key_name" {

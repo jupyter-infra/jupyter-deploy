@@ -22,7 +22,7 @@ output "ami_id" {
 
 output "jupyter_server_public_ip" {
   description = "The public IP address of the jupyter server"
-  value       = aws_instance.ec2_jupyter_server.public_ip 
+  value       = aws_instance.ec2_jupyter_server.public_ip
 }
 
 # Secret information

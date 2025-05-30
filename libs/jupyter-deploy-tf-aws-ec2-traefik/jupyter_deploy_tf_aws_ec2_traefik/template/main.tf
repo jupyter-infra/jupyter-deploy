@@ -19,9 +19,9 @@ data "aws_partition" "current" {}
 
 locals {
   default_tags = {
-    Source = "jupyter-deploy"
+    Source   = "jupyter-deploy"
     Template = "aws-ec2-traefik"
-    Version = "1.0.0"
+    Version  = "1.0.0"
   }
 
   combined_tags = merge(
@@ -38,8 +38,8 @@ data "aws_vpc" "default" {
 # Retrieve the first subnet in the default VPC
 data "aws_subnets" "default_vpc_subnets" {
   filter {
-    name = "vpc-id"
-    values = [data.aws_vpc.default.id] 
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
   }
 }
 
@@ -76,30 +76,30 @@ resource "aws_security_group" "ec2_jupyter_server_sg" {
 # Retrieve the latest AL 2023 AMI
 data "aws_ami" "amazon_linux_2023" {
   most_recent = true
-  owners = ["amazon"]
+  owners      = ["amazon"]
 
   filter {
-    name = "owner-alias"
+    name   = "owner-alias"
     values = ["amazon"]
   }
 
   filter {
-    name = "name"
+    name   = "name"
     values = ["al2023-ami-*"]
   }
 
   filter {
-    name = "architecture"
-    values = ["x86_64"]  # Specify architecture (optional)
+    name   = "architecture"
+    values = ["x86_64"] # Specify architecture (optional)
   }
 
   filter {
-    name = "root-device-type"
+    name   = "root-device-type"
     values = ["ebs"]
   }
 
   filter {
-    name = "virtualization-type"
+    name   = "virtualization-type"
     values = ["hvm"]
   }
 }
@@ -122,7 +122,7 @@ resource "aws_instance" "ec2_jupyter_server" {
   vpc_security_group_ids = [aws_security_group.ec2_jupyter_server_sg.id]
   key_name               = var.key_name
   tags                   = local.combined_tags
-  
+
   # Root volume configuration
   root_block_device {
     volume_size = local.root_block_device.ebs.volume_size
@@ -151,9 +151,9 @@ resource "aws_iam_role" "execution_role" {
   name_prefix = "${var.iam_role_name_prefix}-"
   description = "Execution role for the JupyterServer instance, with access to SSM"
 
-  assume_role_policy = data.aws_iam_policy_document.server_assume_role_policy.json
+  assume_role_policy    = data.aws_iam_policy_document.server_assume_role_policy.json
   force_detach_policies = true
-  tags = local.combined_tags
+  tags                  = local.combined_tags
 }
 
 data "aws_iam_policy" "ssm_managed_policy" {
@@ -161,18 +161,18 @@ data "aws_iam_policy" "ssm_managed_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "execution_role_ssm_policy_attachment" {
-  role = aws_iam_role.execution_role.name
+  role       = aws_iam_role.execution_role.name
   policy_arn = data.aws_iam_policy.ssm_managed_policy.arn
 }
 
 data "aws_iam_policy_document" "route53_dns_delegation" {
   statement {
-    sid   = "Route53DnsDelegation"
+    sid = "Route53DnsDelegation"
     actions = [
-      "route53:ListHostedZones*",         // Find the zone for your domain (uses ByName)
-      "route53:ListResourceRecordSets",   // Find the record set
-      "route53:GetChange",                // Check record creation status
-      "route53:ChangeResourceRecordSets"  // Create/delete TXT records
+      "route53:ListHostedZones*",        // Find the zone for your domain (uses ByName)
+      "route53:ListResourceRecordSets",  // Find the record set
+      "route53:GetChange",               // Check record creation status
+      "route53:ChangeResourceRecordSets" // Create/delete TXT records
     ]
     resources = [
       "*"
@@ -182,17 +182,17 @@ data "aws_iam_policy_document" "route53_dns_delegation" {
 
 resource "aws_iam_policy" "route53_dns_delegation" {
   name_prefix = "route53-dns-delegation-"
-  tags = local.combined_tags
-  policy = data.aws_iam_policy_document.route53_dns_delegation.json
+  tags        = local.combined_tags
+  policy      = data.aws_iam_policy_document.route53_dns_delegation.json
 }
 resource "aws_iam_role_policy_attachment" "route53_dns_delegation" {
-  role = aws_iam_role.execution_role.name
+  role       = aws_iam_role.execution_role.name
   policy_arn = aws_iam_policy.route53_dns_delegation.arn
 }
 
 # Define the instance profile to associate the IAM role with the EC2 instance
 resource "aws_iam_instance_profile" "server_instance_profile" {
-  role = aws_iam_role.execution_role.name
+  role        = aws_iam_role.execution_role.name
   name_prefix = "${var.iam_role_name_prefix}-"
   lifecycle {
     create_before_destroy = true
@@ -219,12 +219,12 @@ resource "aws_volume_attachment" "jupyter_data_attachment" {
 # Define the AWS Secret to store the GitHub oauth app client secret
 resource "aws_secretsmanager_secret" "oauth_github_client_secret" {
   name_prefix = "${var.oauth_github_app_name}-"
-  tags = local.combined_tags
+  tags        = local.combined_tags
 }
 
 data "aws_iam_policy_document" "oauth_github_client_secret" {
   statement {
-    sid   = "SecretsManagerReadGitHubAppClientSecret"
+    sid = "SecretsManagerReadGitHubAppClientSecret"
     actions = [
       "secretsmanager:GetSecretValue",
       "secretsmanager:DescribeSecret"
@@ -237,19 +237,19 @@ data "aws_iam_policy_document" "oauth_github_client_secret" {
 
 resource "aws_iam_policy" "oauth_github_client_secret" {
   name_prefix = "${var.oauth_github_app_name}-"
-  tags = local.combined_tags
-  policy = data.aws_iam_policy_document.oauth_github_client_secret.json
+  tags        = local.combined_tags
+  policy      = data.aws_iam_policy_document.oauth_github_client_secret.json
 }
 resource "aws_iam_role_policy_attachment" "oauth_github_client_secret" {
-  role = aws_iam_role.execution_role.name
+  role       = aws_iam_role.execution_role.name
   policy_arn = aws_iam_policy.oauth_github_client_secret.arn
 }
 
 resource "aws_ssm_parameter" "oauth_github_secret_aws_secret_arn" {
-  name    = "/jupyter-deploy/oauth-github-app-client-secret-arn"
-  type    = "String"
-  value   = aws_secretsmanager_secret.oauth_github_client_secret.arn
-  tags    = local.combined_tags 
+  name  = "/jupyter-deploy/oauth-github-app-client-secret-arn"
+  type  = "String"
+  value = aws_secretsmanager_secret.oauth_github_client_secret.arn
+  tags  = local.combined_tags
 }
 
 
@@ -272,10 +272,10 @@ locals {
 # Create a new hosted zone if one doesn't exist
 resource "aws_route53_zone" "primary" {
   name = var.domain_name
-  
+
   # Only create if the data lookup failed
   count = local.zone_already_exists == 0 ? 1 : 0
-  
+
   tags = local.combined_tags
 }
 
@@ -317,36 +317,36 @@ data "local_file" "dockerfile_jupyter" {
 
 # variables consistency checks
 locals {
-  full_domain = "${var.subdomain_name}.${var.domain_name}"
+  full_domain         = "${var.subdomain_name}.${var.domain_name}"
   github_emails_valid = var.oauth_provider != "github" || length(var.oauth_allowed_github_emails) > 0
 }
 
 locals {
   docker_compose_file = templatefile("${path.module}/docker-compose.yml.tftpl", {
-    full_domain               = local.full_domain
-    github_client_id          = var.oauth_github_app_client_id
-    aws_region                = data.aws_region.current.name
-    allowed_github_emails  = join(",", [for email in var.oauth_allowed_github_emails : "${email}"])
+    full_domain           = local.full_domain
+    github_client_id      = var.oauth_github_app_client_id
+    aws_region            = data.aws_region.current.name
+    allowed_github_emails = join(",", [for email in var.oauth_allowed_github_emails : "${email}"])
   })
   traefik_config_file = templatefile("${path.module}/traefik.yml.tftpl", {
-    letsencrypt_notification_email  = var.letsencrypt_notification_email
+    letsencrypt_notification_email = var.letsencrypt_notification_email
   })
 }
 
 # SSM into the instance and execute the start-up scripts
 locals {
   # In order to inject the file content with the correct 
-  indent_count = 10
-  indent_str = join("", [for i in range(local.indent_count) : " "])
-  cloud_init_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.cloud_init.content)))
-  docker_compose_indented = join("\n${local.indent_str}", compact(split("\n", local.docker_compose_file)))
+  indent_count                = 10
+  indent_str                  = join("", [for i in range(local.indent_count) : " "])
+  cloud_init_indented         = join("\n${local.indent_str}", compact(split("\n", data.local_file.cloud_init.content)))
+  docker_compose_indented     = join("\n${local.indent_str}", compact(split("\n", local.docker_compose_file)))
   dockerfile_jupyter_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.dockerfile_jupyter.content)))
-  docker_startup_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.docker_startup.content)))
-  traefik_config_indented = join("\n${local.indent_str}", compact(split("\n", local.traefik_config_file)))
+  docker_startup_indented     = join("\n${local.indent_str}", compact(split("\n", data.local_file.docker_startup.content)))
+  traefik_config_indented     = join("\n${local.indent_str}", compact(split("\n", local.traefik_config_file)))
 }
 
 locals {
-  ssm_startup_content=<<DOC
+  ssm_startup_content = <<DOC
 schemaVersion: '2.2'
 description: Setup docker, mount volume, copy docker-compose, start docker services
 mainSteps:
@@ -390,7 +390,7 @@ DOC
     fileexists("${path.module}/docker-startup.sh"),
     fileexists("${path.module}/dockerfile.jupyter"),
   ])
-  
+
   files_not_empty = alltrue([
     length(data.local_file.cloud_init.content) > 0,
     length(data.local_file.docker_startup.content) > 0,
@@ -398,7 +398,7 @@ DOC
   ])
 
   docker_compose_valid = can(yamldecode(local.docker_compose_file))
-  ssm_content_valid = can(yamldecode(local.ssm_startup_content))
+  ssm_content_valid    = can(yamldecode(local.ssm_startup_content))
   traefik_config_valid = can(yamldecode(local.traefik_config_file))
 }
 
@@ -408,7 +408,7 @@ resource "aws_ssm_document" "instance_startup_instructions" {
   document_format = "YAML"
 
   content = local.ssm_startup_content
-  tags = local.combined_tags
+  tags    = local.combined_tags
   lifecycle {
     precondition {
       condition     = local.github_emails_valid
@@ -423,7 +423,7 @@ resource "aws_ssm_document" "instance_startup_instructions" {
       error_message = "One or more required files are empty"
     }
     precondition {
-      condition     = length(local.ssm_startup_content) < 64000  # leaving some buffer
+      condition     = length(local.ssm_startup_content) < 64000 # leaving some buffer
       error_message = "SSM document content exceeds size limit of 64KB"
     }
     precondition {
@@ -468,10 +468,10 @@ resource "aws_ssm_association" "instance_startup_with_secret" {
     values = [aws_instance.ec2_jupyter_server.id]
   }
   automation_target_parameter_name = "InstanceIds"
-  max_concurrency = "1"
-  max_errors      = "0"
+  max_concurrency                  = "1"
+  max_errors                       = "0"
   wait_for_success_timeout_seconds = 300
-  tags = local.combined_tags
+  tags                             = local.combined_tags
 
   depends_on = [
     aws_ssm_parameter.oauth_github_secret_aws_secret_arn,
