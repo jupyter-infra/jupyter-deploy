@@ -9,8 +9,11 @@ EXPECTED_TEMPLATE_FILES = [
     "dockerfile.jupyter",
     "main.tf",
     "outputs.tf",
-    "traefik.yml.tftpl",
+    "pyproject.jupyter.toml",
+    "jupyter_server_config.py",
     "README.md",
+    "start-jupyter.sh",
+    "traefik.yml.tftpl",
     "variables.tf",
 ]
 
