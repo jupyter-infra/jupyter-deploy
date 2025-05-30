@@ -1,9 +1,9 @@
 [project]
 name = "jupyter"
 version = "0.1.0"
-description = "A basic image with Jupyter and jupyter-rtc-core"
+description = "A basic image with jupyterlab and server-documents"
 requires-python = ">=3.12"
 dependencies = [
-    "jupyter-rtc-core>=0.1.0a0",
+    "jupyter-server-documents>=0.1.0a0",
     "jupyterlab>=4.4.2",
 ]
