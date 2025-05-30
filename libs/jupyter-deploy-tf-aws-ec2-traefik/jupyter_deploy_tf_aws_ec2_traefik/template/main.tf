@@ -356,8 +356,8 @@ locals {
   start_jupyter_indented         = join("\n${local.indent_str}", compact(split("\n", data.local_file.start_jupyter.content)))
   docker_startup_indented        = join("\n${local.indent_str}", compact(split("\n", data.local_file.docker_startup.content)))
   traefik_config_indented        = join("\n${local.indent_str}", compact(split("\n", local.traefik_config_file)))
-  pyproject_jupyter_indented     = join("\n${local.indent_str}", compact(split("\n", data.local_file.pyproject_jupyter)))
-  jupyter_server_config_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_server_config)))
+  pyproject_jupyter_indented     = join("\n${local.indent_str}", compact(split("\n", data.local_file.pyproject_jupyter.content)))
+  jupyter_server_config_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_server_config.content)))
 }
 
 locals {
