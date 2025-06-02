@@ -176,9 +176,6 @@ aws = [
     { name = "boto3-stubs" },
     { name = "mypy-boto3-ec2" },
 ]
-terraform = [
-    { name = "python-terraform" },
-]
 
 [package.dev-dependencies]
 dev = [
@@ -197,10 +194,9 @@ requires-dist = [
     { name = "jupyter-deploy-tf-aws-ec2-ngrok", editable = "libs/jupyter-deploy-tf-aws-ec2-ngrok" },
     { name = "jupyter-deploy-tf-aws-ec2-traefik", editable = "libs/jupyter-deploy-tf-aws-ec2-traefik" },
     { name = "mypy-boto3-ec2", marker = "extra == 'aws'", specifier = ">=1.38.6" },
-    { name = "python-terraform", marker = "extra == 'terraform'", specifier = ">=0.10.1" },
     { name = "typer", specifier = ">=0.15.4" },
 ]
-provides-extras = ["terraform", "aws"]
+provides-extras = ["aws"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -428,12 +424,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/66/c0/0c8b6ad9f17a802ee
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", size = 229892, upload-time = "2024-03-01T18:36:18.57Z" },
 ]
-
-[[package]]
-name = "python-terraform"
-version = "0.10.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/60/a2/10fa8a5d79096f96f0a1b9917fe3038b453e40b39cc22e07410a365f2dc3/python-terraform-0.10.1.tar.gz", hash = "sha256:0f4d1648c4fec61d5aa53142558ba3761c8f9ee7acce57505a1245d4dd85f5cf", size = 8746, upload-time = "2019-06-21T07:03:00.906Z" }
 
 [[package]]
 name = "pywin32"
