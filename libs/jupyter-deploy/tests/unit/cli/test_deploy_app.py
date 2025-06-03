@@ -1,11 +1,12 @@
 import sys
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from typer.testing import CliRunner
 
 from jupyter_deploy.cli.deploy_app import JupyterDeployApp, JupyterDeployCliRunner, main
 from jupyter_deploy.cli.deploy_app import runner as app_runner
+from jupyter_deploy.engine.enum import EngineType
 
 
 class TestJupyterDeployCliRunner(unittest.TestCase):
@@ -19,9 +20,8 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         self.assertIsNotNone(runner.app, "attribute app should be set")
 
         # Check that the terraform and servers sub-commands are added
-        self.assertGreaterEqual(len(runner.app.registered_groups), 2)
-        self.assertEqual(runner.app.registered_groups[0].name, "terraform")
-        self.assertEqual(runner.app.registered_groups[1].name, "servers")
+        self.assertGreaterEqual(len(runner.app.registered_groups), 1)
+        self.assertEqual(runner.app.registered_groups[0].name, "servers")
 
     @patch("jupyter_deploy.cli.deploy_app.typer.Typer")
     def test_run(self, mock_typer: MagicMock):
@@ -44,7 +44,6 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         # Check that the command ran successfully
         self.assertEqual(result.exit_code, 0)
         self.assertTrue(result.stdout.index("Jupyter-deploy") >= 0)
-        self.assertTrue(result.stdout.index("terraform") >= 0)
         self.assertTrue(result.stdout.index("servers") >= 0)
 
     def test_no_arg_defaults_to_help(self):
@@ -96,3 +95,151 @@ class TestMain(unittest.TestCase):
             main()
             mock_launch_instance.assert_not_called()
             mock_runner.run.assert_called_once()
+
+
+class TestInitCommand(unittest.TestCase):
+    """Test cases for the init command."""
+
+    def get_mock_project(self) -> Mock:
+        """Return a mock project."""
+        mock_project = Mock()
+
+        self.mock_may_export_to_project_path = Mock()
+        self.mock_clear_project_path = Mock()
+        self.mock_setup = Mock()
+
+        self.mock_may_export_to_project_path.return_value = True
+
+        mock_project.may_export_to_project_path = self.mock_may_export_to_project_path
+        mock_project.clear_project_path = self.mock_clear_project_path
+        mock_project.setup = self.mock_setup
+
+        return mock_project
+
+    @patch("jupyter_deploy.cli.deploy_app.InitHandler")
+    def test_init_command_no_args_default_to_terraform(self, mock_handler_cls: Mock):
+        """Test that the init command picks up defaults."""
+        mock_handler_cls.return_value = self.get_mock_project()
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["init", "."])
+
+        # Check that the command ran successfully
+        self.assertEqual(result.exit_code, 0, "init command should work")
+
+        mock_handler_cls.assert_called_once_with(
+            project_dir=".",
+            engine=EngineType.TERRAFORM,
+            provider="aws",
+            infrastructure="ec2",
+            template="traefik",
+        )
+
+    @patch("jupyter_deploy.cli.deploy_app.InitHandler")
+    def test_init_command_passes_attributes_to_project(self, mock_handler_cls: Mock):
+        """Test that the init command handles optional attributes."""
+        mock_handler_cls.return_value = self.get_mock_project()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app_runner.app,
+            [
+                "init",
+                "--engine",
+                "terraform",
+                "--provider",
+                "aws",
+                "--infrastructure",
+                "ec2",
+                "--template",
+                "other-template",
+                "custom-dir",
+            ],
+        )
+
+        # Check that the command ran successfully
+        self.assertEqual(result.exit_code, 0, "init command should work")
+
+        mock_handler_cls.assert_called_once_with(
+            project_dir="custom-dir",
+            engine=EngineType.TERRAFORM,
+            provider="aws",
+            infrastructure="ec2",
+            template="other-template",
+        )
+
+    @patch("jupyter_deploy.cli.deploy_app.InitHandler")
+    def test_init_command_handles_short_options(self, mock_handler_cls: Mock):
+        """Test that the init command handles short names of optional attributes."""
+        mock_handler_cls.return_value = self.get_mock_project()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app_runner.app,
+            ["init", "-E", "terraform", "-P", "aws", "-I", "ec2", "-T", "a-template", "custom-dir"],
+        )
+
+        # Check that the command ran successfully
+        self.assertEqual(result.exit_code, 0, "init command should work")
+
+        mock_handler_cls.assert_called_once_with(
+            project_dir="custom-dir",
+            engine=EngineType.TERRAFORM,
+            provider="aws",
+            infrastructure="ec2",
+            template="a-template",
+        )
+
+    @patch("jupyter_deploy.cli.deploy_app.InitHandler")
+    def test_init_command_calls_project_methods(self, mock_handler_cls: Mock):
+        """Test that the init commands correctly calls project.may_export() and .setup()."""
+        mock_handler_cls.return_value = self.get_mock_project()
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["init", "."])
+
+        self.assertEqual(result.exit_code, 0, "init command should work")
+        self.mock_may_export_to_project_path.assert_called_once()
+        self.mock_setup.assert_called_once()
+
+    @patch("jupyter_deploy.cli.deploy_app.InitHandler")
+    @patch("jupyter_deploy.cli.deploy_app.typer.confirm")
+    def test_init_command_prompt_user_on_project_conflict(self, mock_confirm: Mock, mock_handler_cls: Mock):
+        """Test that the init commands prompts the user on project conflict and deletes after confirmation."""
+        mock_handler_cls.return_value = self.get_mock_project()
+        self.mock_may_export_to_project_path.return_value = False
+        mock_confirm.return_value = True
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["init", "."])
+
+        self.assertEqual(result.exit_code, 0, "init command should work")
+        self.mock_may_export_to_project_path.assert_called_once()
+        mock_confirm.assert_called_once()
+        self.mock_clear_project_path.assert_called_once()
+        self.mock_setup.assert_called_once()
+
+    @patch("jupyter_deploy.cli.deploy_app.InitHandler")
+    @patch("jupyter_deploy.cli.deploy_app.typer.confirm")
+    def test_init_command_abort_when_user_declines_deletion(self, mock_confirm: Mock, mock_handler_cls: Mock):
+        """Test that the init prompts the user on project conflict and abort on decline."""
+        mock_handler_cls.return_value = self.get_mock_project()
+        self.mock_may_export_to_project_path.return_value = False
+        mock_confirm.return_value = False
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["init", "."])
+
+        self.assertEqual(result.exit_code, 0, "init command should work")
+        self.mock_may_export_to_project_path.assert_called_once()
+        mock_confirm.assert_called_once()
+        self.mock_clear_project_path.assert_not_called()
+        self.mock_setup.assert_not_called()
+
+    def test_init_command_requires_output_path(self):
+        """Test that the init command requires the output_path argument."""
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["init"])
+
+        self.assertNotEqual(result.exit_code, 0, "init command should fail without path")
+        self.assertTrue("Missing argument 'PATH'" in result.stdout)

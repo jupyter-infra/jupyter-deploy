@@ -7,7 +7,7 @@ from jupyter_deploy.provider.enum import ProviderType
 from jupyter_deploy.template_utils import TEMPLATES
 
 
-class ProjectHandler:
+class InitHandler:
     """Base class to manage a project at the target disk location."""
 
     def __init__(

@@ -32,8 +32,15 @@ uv run jupyter-deploy --help
 
 ## Templates
 
-To use a template, use the following command format:
+To use a template to initialize a new project, first create a new project directory:
 
 ```bash
-uv run jupyter-deploy terraform generate --provider aws --infra ec2 --template traefik
+mkdir my-jupyter-deployment
+cd my-jupyter-deployment
+```
+
+Then, run the `init` command.
+
+```bash
+uv run jupyter-deploy init -E terraform -P aws -I ec2 -T traefik .
 ```
