@@ -24,11 +24,23 @@ class TerraformConfigHandler(EngineConfigHandler):
         return terraform_installed
 
     def configure(self) -> None:
-        # first, initialize terraform dir with `terraform init`
-        # TODO: possibly skip if detects that the project was initialized already.
-        cmd_utils.run_cmd_and_pipe_to_terminal(
-            TerraformConfigHandler.TF_INIT_CMD.copy(),
-        )
+        console = Console()
+        
+        # filepaths indicating previous tf init
+        lock_file = self.project_path / ".terraform.lock.hcl"
+        terraform_dir = self.project_path / ".terraform"
+
+        # `jd config --update-on-init [True]` - if set to False, still init if files don't exist
+        if self.update_on_init or not (lock_file.exists() and terraform_dir.exists() and terraform_dir.is_dir()):
+            # read and handle possible errors from cmd tf init exec
+            init_retcode, init_timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(
+                TerraformConfigHandler.TF_INIT_CMD.copy(),
+            )
+            if init_retcode != 0 or init_timed_out:
+                console.print("Error initializing Terraform project.", style="red")
+                return
+        else:
+            console.print("Project is already initialized, skipping.")
 
         # second, run terraform plan and save output with `terraform plan PATH`
         plan_cmds = TerraformConfigHandler.TF_PLAN_CMD.copy()
