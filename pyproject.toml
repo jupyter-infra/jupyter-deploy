@@ -31,6 +31,10 @@ dev-dependencies = [
 ]
 
 [tool.mypy]
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
 files = [
     "libs/jupyter-deploy",
     "libs/jupyter-deploy-tf-aws-ec2-ngrok",
