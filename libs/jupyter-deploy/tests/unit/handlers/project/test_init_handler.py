@@ -13,7 +13,9 @@ class TestInitHandler(unittest.TestCase):
 
     @patch("jupyter_deploy.fs_utils.get_default_project_path")
     @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
-    def test_init_with_project_dir(self, mock_find_template_path: MagicMock, mock_get_default_project_path: MagicMock):
+    def test_init_with_project_dir(
+        self, mock_find_template_path: MagicMock, mock_get_default_project_path: MagicMock
+    ) -> None:
         """Test initialization with project_dir provided."""
         # Setup
         project_dir = "/test/project/dir"
@@ -33,7 +35,7 @@ class TestInitHandler(unittest.TestCase):
     @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
     def test_init_without_project_dir(
         self, mock_find_template_path: MagicMock, mock_get_default_project_path: MagicMock
-    ):
+    ) -> None:
         """Test initialization without project_dir provided."""
         # Setup
         mock_default_path = Path("/default/project/path")
@@ -51,7 +53,7 @@ class TestInitHandler(unittest.TestCase):
         mock_get_default_project_path.assert_called_once()
 
     @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
-    def test_init_with_enum_parameters(self, mock_find_template_path: MagicMock):
+    def test_init_with_enum_parameters(self, mock_find_template_path: MagicMock) -> None:
         """Test initialization with enum types for provider and infrastructure."""
         # Setup
         project_dir = "/test/project/dir"
@@ -76,7 +78,7 @@ class TestInitHandler(unittest.TestCase):
     @patch(
         "jupyter_deploy.template_utils.TEMPLATES", {"terraform": {"aws:ec2:tls-via-ngrok": Path("/mock/template/path")}}
     )
-    def test_find_template_path_valid(self, mock_find_template_path: MagicMock):
+    def test_find_template_path_valid(self, mock_find_template_path: MagicMock) -> None:
         """Test _find_template_path with valid template name."""
         # Setup
         mock_find_template_path.return_value = Path("/mock/template/path")
@@ -91,7 +93,7 @@ class TestInitHandler(unittest.TestCase):
         self.assertEqual(result, Path("/mock/template/path"))
 
     @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
-    def test_find_template_path_empty(self, mock_find_template_path: MagicMock):
+    def test_find_template_path_empty(self, mock_find_template_path: MagicMock) -> None:
         """Test _find_template_path with empty template name."""
         # Setup
         mock_find_template_path.side_effect = [
@@ -109,7 +111,7 @@ class TestInitHandler(unittest.TestCase):
 
     @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
     @patch("jupyter_deploy.template_utils.TEMPLATES", {})
-    def test_find_template_path_unsupported_engine(self, mock_find_template_path: MagicMock):
+    def test_find_template_path_unsupported_engine(self, mock_find_template_path: MagicMock) -> None:
         """Test _find_template_path with unsupported engine."""
         # Setup
         mock_find_template_path.side_effect = [
@@ -126,7 +128,7 @@ class TestInitHandler(unittest.TestCase):
 
     @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
     @patch("jupyter_deploy.template_utils.TEMPLATES", {"terraform": {}})
-    def test_find_template_path_template_not_found(self, mock_find_template_path: MagicMock):
+    def test_find_template_path_template_not_found(self, mock_find_template_path: MagicMock) -> None:
         """Test _find_template_path with template not found."""
         # Setup
         mock_find_template_path.side_effect = [
@@ -147,7 +149,7 @@ class TestInitHandler(unittest.TestCase):
     @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
     def test_may_export_to_project_path_not_exists(
         self, mock_find_template_path: MagicMock, mock_is_empty_dir: MagicMock
-    ):
+    ) -> None:
         """Test may_export_to_project_path when project path doesn't exist."""
         # Setup
         mock_path = MagicMock()
@@ -170,7 +172,7 @@ class TestInitHandler(unittest.TestCase):
     @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
     def test_may_export_to_project_path_exists_empty(
         self, mock_find_template_path: MagicMock, mock_is_empty_dir: MagicMock
-    ):
+    ) -> None:
         """Test may_export_to_project_path when project path exists and is empty."""
         # Setup
         mock_path = MagicMock()
@@ -194,7 +196,7 @@ class TestInitHandler(unittest.TestCase):
     @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
     def test_may_export_to_project_path_exists_not_empty(
         self, mock_find_template_path: MagicMock, mock_is_empty_dir: MagicMock
-    ):
+    ) -> None:
         """Test may_export_to_project_path when project path exists and is not empty."""
         # Setup
         mock_path = MagicMock()
@@ -216,7 +218,7 @@ class TestInitHandler(unittest.TestCase):
 
     @patch("jupyter_deploy.fs_utils.safe_clean_directory")
     @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
-    def test_clear_project_path(self, mock_find_template_path: MagicMock, mock_safe_clean_directory: MagicMock):
+    def test_clear_project_path(self, mock_find_template_path: MagicMock, mock_safe_clean_directory: MagicMock) -> None:
         """Test clear_project_path calls fs_utils.safe_clean_directory with correct path."""
         # Setup
         mock_path = Path("/test/project/dir")
@@ -233,7 +235,7 @@ class TestInitHandler(unittest.TestCase):
 
     @patch("jupyter_deploy.fs_utils.safe_copy_tree")
     @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
-    def test_setup(self, mock_find_template_path: MagicMock, mock_safe_copy_tree: MagicMock):
+    def test_setup(self, mock_find_template_path: MagicMock, mock_safe_copy_tree: MagicMock) -> None:
         """Test setup calls fs_utils.safe_copy_tree with correct paths."""
         # Setup
         mock_project_path = Path("/test/project/dir")

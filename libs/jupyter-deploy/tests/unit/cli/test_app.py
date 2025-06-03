@@ -1,5 +1,6 @@
 import sys
 import unittest
+from collections.abc import Iterator
 from contextlib import contextmanager
 from unittest.mock import MagicMock, Mock, patch
 
@@ -13,7 +14,7 @@ from jupyter_deploy.engine.enum import EngineType
 class TestJupyterDeployCliRunner(unittest.TestCase):
     """Test cases for the JupyterDeployCliRunner class."""
 
-    def test_init(self):
+    def test_init(self) -> None:
         """Test the initialization of the JupyterDeployCliRunner class."""
         # Create an instance of the class
         runner = JupyterDeployCliRunner()
@@ -25,7 +26,7 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         self.assertEqual(runner.app.registered_groups[0].name, "servers")
 
     @patch("jupyter_deploy.cli.app.typer.Typer")
-    def test_run(self, mock_typer: MagicMock):
+    def test_run(self, mock_typer: MagicMock) -> None:
         """Test the run method."""
         # Create a mock app
         mock_app = MagicMock()
@@ -37,7 +38,7 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         # Check that the app was called
         mock_app.assert_called_once()
 
-    def test_help(self):
+    def test_help(self) -> None:
         """Test the help command."""
         runner = CliRunner()
         result = runner.invoke(app_runner.app, ["--help"])
@@ -47,7 +48,7 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         self.assertTrue(result.stdout.index("Jupyter-deploy") >= 0)
         self.assertTrue(result.stdout.index("servers") >= 0)
 
-    def test_no_arg_defaults_to_help(self):
+    def test_no_arg_defaults_to_help(self) -> None:
         runner = CliRunner()
         result = runner.invoke(app_runner.app, [])
 
@@ -71,14 +72,14 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
         return mock_config_handler, {"verify": mock_verify, "configure": mock_configure}
 
     @contextmanager
-    def mock_project_dir(*_args, **_kwargs):
-        yield
+    def mock_project_dir(*_args: object, **_kwargs: object) -> Iterator[None]:
+        yield None
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_config_cmd_curr_path_calls_verify_and_configure(
         self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
-    ):
+    ) -> None:
         mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
         mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
         mock_config_handler.return_value = mock_config_handler_instance
@@ -97,7 +98,7 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_config_other_path_calls_verify_and_configure(
         self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
-    ):
+    ) -> None:
         mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
         mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
         mock_config_handler.return_value = mock_config_handler_instance
@@ -114,7 +115,9 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_config_path_calls_verify_and_configure(self, mock_project_ctx_manager: Mock, mock_config_handler: Mock):
+    def test_config_path_calls_verify_and_configure(
+        self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
+    ) -> None:
         mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
         mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
         mock_config_handler.return_value = mock_config_handler_instance
@@ -133,7 +136,7 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_config_stops_if_verify_requirements_returns_false(
         self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
-    ):
+    ) -> None:
         mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
         mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
         mock_config_handler.return_value = mock_config_handler_instance
@@ -151,7 +154,7 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_config_skip_verify(self, mock_project_ctx_manager: Mock, mock_config_handler: Mock):
+    def test_config_skip_verify(self, mock_project_ctx_manager: Mock, mock_config_handler: Mock) -> None:
         mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
         mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
         mock_config_handler.return_value = mock_config_handler_instance
@@ -171,7 +174,7 @@ class TestJupyterDeployApp(unittest.TestCase):
     """Test cases for the JupyterDeployApp class."""
 
     @patch("jupyter_deploy.cli.app.runner")
-    def test_start(self, mock_runner: MagicMock):
+    def test_start(self, mock_runner: MagicMock) -> None:
         """Test the start method."""
         app = JupyterDeployApp()
 
@@ -192,7 +195,7 @@ class TestMain(unittest.TestCase):
 
     @patch("jupyter_deploy.cli.app.runner")
     @patch("jupyter_deploy.cli.app.JupyterDeployApp.launch_instance")
-    def test_main_as_jupyter_deploy(self, mock_launch_instance: MagicMock, mock_runner: MagicMock):
+    def test_main_as_jupyter_deploy(self, mock_launch_instance: MagicMock, mock_runner: MagicMock) -> None:
         """Test the main function when called as 'jupyter deploy'."""
         with patch.object(sys, "argv", ["jupyter", "deploy"]):
             main()
@@ -201,7 +204,7 @@ class TestMain(unittest.TestCase):
 
     @patch("jupyter_deploy.cli.app.runner")
     @patch("jupyter_deploy.cli.app.JupyterDeployApp.launch_instance")
-    def test_main_as_jupyter_deploy_command(self, mock_launch_instance: MagicMock, mock_runner: MagicMock):
+    def test_main_as_jupyter_deploy_command(self, mock_launch_instance: MagicMock, mock_runner: MagicMock) -> None:
         """Test the main function when called as 'jupyter-deploy'."""
         with patch.object(sys, "argv", ["jupyter-deploy"]):
             main()
@@ -229,7 +232,7 @@ class TestInitCommand(unittest.TestCase):
         return mock_project
 
     @patch("jupyter_deploy.cli.app.InitHandler")
-    def test_init_command_no_args_default_to_terraform(self, mock_handler_cls: Mock):
+    def test_init_command_no_args_default_to_terraform(self, mock_handler_cls: Mock) -> None:
         """Test that the init command picks up defaults."""
         mock_handler_cls.return_value = self.get_mock_project()
 
@@ -248,7 +251,7 @@ class TestInitCommand(unittest.TestCase):
         )
 
     @patch("jupyter_deploy.cli.app.InitHandler")
-    def test_init_command_passes_attributes_to_project(self, mock_handler_cls: Mock):
+    def test_init_command_passes_attributes_to_project(self, mock_handler_cls: Mock) -> None:
         """Test that the init command handles optional attributes."""
         mock_handler_cls.return_value = self.get_mock_project()
 
@@ -281,7 +284,7 @@ class TestInitCommand(unittest.TestCase):
         )
 
     @patch("jupyter_deploy.cli.app.InitHandler")
-    def test_init_command_handles_short_options(self, mock_handler_cls: Mock):
+    def test_init_command_handles_short_options(self, mock_handler_cls: Mock) -> None:
         """Test that the init command handles short names of optional attributes."""
         mock_handler_cls.return_value = self.get_mock_project()
 
@@ -303,7 +306,7 @@ class TestInitCommand(unittest.TestCase):
         )
 
     @patch("jupyter_deploy.cli.app.InitHandler")
-    def test_init_command_calls_project_methods(self, mock_handler_cls: Mock):
+    def test_init_command_calls_project_methods(self, mock_handler_cls: Mock) -> None:
         """Test that the init commands correctly calls project.may_export() and .setup()."""
         mock_handler_cls.return_value = self.get_mock_project()
 
@@ -316,7 +319,7 @@ class TestInitCommand(unittest.TestCase):
 
     @patch("jupyter_deploy.cli.app.InitHandler")
     @patch("jupyter_deploy.cli.app.typer.confirm")
-    def test_init_command_prompt_user_on_project_conflict(self, mock_confirm: Mock, mock_handler_cls: Mock):
+    def test_init_command_prompt_user_on_project_conflict(self, mock_confirm: Mock, mock_handler_cls: Mock) -> None:
         """Test that the init commands prompts the user on project conflict and deletes after confirmation."""
         mock_handler_cls.return_value = self.get_mock_project()
         self.mock_may_export_to_project_path.return_value = False
@@ -333,7 +336,7 @@ class TestInitCommand(unittest.TestCase):
 
     @patch("jupyter_deploy.cli.app.InitHandler")
     @patch("jupyter_deploy.cli.app.typer.confirm")
-    def test_init_command_abort_when_user_declines_deletion(self, mock_confirm: Mock, mock_handler_cls: Mock):
+    def test_init_command_abort_when_user_declines_deletion(self, mock_confirm: Mock, mock_handler_cls: Mock) -> None:
         """Test that the init prompts the user on project conflict and abort on decline."""
         mock_handler_cls.return_value = self.get_mock_project()
         self.mock_may_export_to_project_path.return_value = False
@@ -348,7 +351,7 @@ class TestInitCommand(unittest.TestCase):
         self.mock_clear_project_path.assert_not_called()
         self.mock_setup.assert_not_called()
 
-    def test_init_command_requires_output_path(self):
+    def test_init_command_requires_output_path(self) -> None:
         """Test that the init command requires the output_path argument."""
         runner = CliRunner()
         result = runner.invoke(app_runner.app, ["init"])

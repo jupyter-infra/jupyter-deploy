@@ -50,7 +50,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
     @patch("jupyter_deploy.engine.terraform.tf_config.tf_verify.check_terraform_installation")
     @patch("jupyter_deploy.provider.aws.aws_cli.check_aws_cli_installation")
     def test_verify_requirements_return_false_if_either_install_returns_false(
-        self, mock_aws_cli, mock_tf_verify
+        self, mock_aws_cli: Mock, mock_tf_verify: Mock
     ) -> None:
         # Arrange
         handler = TerraformConfigHandler(Path("/fake/path"))

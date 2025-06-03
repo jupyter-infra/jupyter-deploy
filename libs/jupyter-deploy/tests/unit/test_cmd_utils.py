@@ -206,7 +206,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         mock_process.wait.return_value = 0
 
         # Simulate stdout output
-        def read_side_effect(_size):
+        def read_side_effect(_size: int) -> str:
             if hasattr(read_side_effect, "called"):
                 return ""
             read_side_effect.called = True
@@ -235,7 +235,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         mock_process.stdout.read.return_value = ""
 
         # Simulate stderr output
-        def read_side_effect(_size):
+        def read_side_effect(_size: int) -> str:
             if hasattr(read_side_effect, "called"):
                 return ""
             read_side_effect.called = True
@@ -303,7 +303,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         stdout_value = "A whole bunch of text first\nThen we will ask you to\n\ninput a value:\n"
 
         # we simulate the `stdout.read` by offsetting the pos of the `stdout_value`
-        def stdout_read_side_effect(size: int):
+        def stdout_read_side_effect(size: int) -> str:
             if not hasattr(stdout_read_side_effect, "pos") or type(stdout_read_side_effect.pos) != int:  # noqa: E721
                 stdout_read_side_effect.pos = 0
             pos = stdout_read_side_effect.pos
@@ -322,7 +322,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         # Simulate stdin input
         mock_stdin.isatty.return_value = True
 
-        def stdin_readline_side_effect():
+        def stdin_readline_side_effect() -> str:
             if hasattr(stdin_readline_side_effect, "called"):
                 return ""
 
@@ -382,7 +382,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         self.result = (0, False)
 
         # Configure the process to hang until terminated
-        def wait_until_terminated():
+        def wait_until_terminated() -> int:
             wait_until_terminated.terminated = False
 
             # This simulates the process hanging until it's terminated
@@ -399,7 +399,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         mock_process.stderr.read.return_value = ""
 
         # Add a custom terminate method that sets a flag
-        def custom_terminate():
+        def custom_terminate() -> None:
             wait_until_terminated.terminated = True
 
         mock_terminate = Mock()

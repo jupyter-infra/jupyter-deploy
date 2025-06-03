@@ -17,7 +17,7 @@ class TestGetDefaultProjectPath(unittest.TestCase):
     """Test cases for the get_default_project_path function."""
 
     @patch("pathlib.Path.cwd")
-    def test_get_default_project_path(self, mock_cwd: Mock):
+    def test_get_default_project_path(self, mock_cwd: Mock) -> None:
         """Test that get_default_project_path returns the expected path."""
         # Setup
         mock_path = Path("/some/usr/home/path")
@@ -32,7 +32,7 @@ class TestGetDefaultProjectPath(unittest.TestCase):
         mock_cwd.assert_called_once()
 
     @patch("pathlib.Path.cwd")
-    def test_get_default_project_path_error(self, mock_cwd: Mock):
+    def test_get_default_project_path_error(self, mock_cwd: Mock) -> None:
         """Test that get_default_project_path raises OSError when Path.cwd raises OSError."""
         # Setup
         mock_cwd.side_effect = OSError("Test error")
@@ -46,7 +46,7 @@ class TestGetDefaultProjectPath(unittest.TestCase):
 class TestIsEmptyDir(unittest.TestCase):
     """Test cases for the is_empty_dir function."""
 
-    def test_non_existent_path_return_false(self):
+    def test_non_existent_path_return_false(self) -> None:
         """Test that is_empty_dir returns False for a non-existent path."""
         # Setup
         mock_path = MagicMock()
@@ -65,7 +65,7 @@ class TestIsEmptyDir(unittest.TestCase):
         mock_exists.assert_called_once()
         mock_is_dir.assert_not_called()
 
-    def test_not_a_directory_return_false(self):
+    def test_not_a_directory_return_false(self) -> None:
         """Test that is_empty_dir returns False for a path that is not a directory."""
         # Setup
         mock_path = MagicMock()
@@ -85,7 +85,7 @@ class TestIsEmptyDir(unittest.TestCase):
         mock_exists.assert_called_once()
         mock_is_dir.assert_called_once()
 
-    def test_empty_directory_return_true(self):
+    def test_empty_directory_return_true(self) -> None:
         """Test that is_empty_dir returns True for an empty directory."""
         # Setup
         mock_path = MagicMock()
@@ -110,7 +110,7 @@ class TestIsEmptyDir(unittest.TestCase):
         mock_is_dir.assert_called_once()
         mock_iterdir.assert_called_once()
 
-    def test_non_empty_directory_return_false(self):
+    def test_non_empty_directory_return_false(self) -> None:
         """Test that is_empty_dir returns False for a non-empty directory."""
         # Setup
         mock_path = MagicMock()
@@ -157,7 +157,7 @@ class TestSafeCleanDirectory(unittest.TestCase):
 
         return mock_path
 
-    def test_non_existent_path_deleted_ok_false_raises_exception(self):
+    def test_non_existent_path_deleted_ok_false_raises_exception(self) -> None:
         """
         Test that safe_clean_directory raises FileNotFoundError
         for a non-existent path when deleted_ok is False.
@@ -173,7 +173,7 @@ class TestSafeCleanDirectory(unittest.TestCase):
         self.mock_absolute.assert_called_once()
         self.mock_is_dir.assert_not_called()
 
-    def test_non_existent_path_deleted_ok_is_no_op(self):
+    def test_non_existent_path_deleted_ok_is_no_op(self) -> None:
         """Test that safe_clean_directory does not raise for a non-existent path when deleted_ok is True."""
         # Setup
         mock_path = self.get_mocked_path()
@@ -187,7 +187,7 @@ class TestSafeCleanDirectory(unittest.TestCase):
         self.mock_absolute.assert_called_once()
         self.mock_is_dir.assert_not_called()
 
-    def test_not_a_directory_raises_exception(self):
+    def test_not_a_directory_raises_exception(self) -> None:
         """Test that safe_clean_directory raises NotADirectoryError for a path that is not a directory."""
         # Setup
         mock_path = self.get_mocked_path()
@@ -198,7 +198,7 @@ class TestSafeCleanDirectory(unittest.TestCase):
             safe_clean_directory(mock_path)
 
     @patch("shutil.rmtree")
-    def test_valid_directory(self, mock_rmtree: Mock):
+    def test_valid_directory(self, mock_rmtree: Mock) -> None:
         """Test that safe_clean_directory calls shutil.rmtree for a valid directory."""
         # Setup
         mock_path = self.get_mocked_path()
@@ -215,7 +215,7 @@ class TestCopyAndMakeExecutable(unittest.TestCase):
 
     @patch("shutil.copy2")
     @patch("os.chmod")
-    def test_copy_and_make_executable(self, mock_chmod: Mock, mock_copy2: Mock):
+    def test_copy_and_make_executable(self, mock_chmod: Mock, mock_copy2: Mock) -> None:
         """Test that copy_and_make_executable calls shutil.copy2 and os.chmod with the correct arguments."""
         # Setup
         source_path = "/test/source"
@@ -249,7 +249,7 @@ class TestSafeCopyTree(unittest.TestCase):
 
         return mock_src_path
 
-    def test_non_existent_source_path(self):
+    def test_non_existent_source_path(self) -> None:
         """Test that safe_copy_tree raises FileNotFoundError for a non-existent source path."""
         # Setup
         mock_source_path = self.get_mocked_src_path()
@@ -263,7 +263,7 @@ class TestSafeCopyTree(unittest.TestCase):
         self.mock_exists.assert_called_once()
         self.mock_is_dir.assert_not_called()
 
-    def test_source_path_not_a_directory(self):
+    def test_source_path_not_a_directory(self) -> None:
         """Test that safe_copy_tree raises NotADirectoryError for a source path that is not a directory."""
         # Setup
         mock_source_path = self.get_mocked_src_path()
@@ -280,7 +280,9 @@ class TestSafeCopyTree(unittest.TestCase):
     @patch("os.makedirs")
     @patch("shutil.copytree")
     @patch("shutil.ignore_patterns")
-    def test_valid_paths_calls_copytree(self, mock_ignore_patterns: Mock, mock_copytree: Mock, mock_makedirs: Mock):
+    def test_valid_paths_calls_copytree(
+        self, mock_ignore_patterns: Mock, mock_copytree: Mock, mock_makedirs: Mock
+    ) -> None:
         """Test that safe_copy_tree calls os.makedirs and shutil.copytree for valid paths."""
         # Setup
         mock_source_path = self.get_mocked_src_path()
@@ -305,7 +307,7 @@ class TestSafeCopyTree(unittest.TestCase):
     @patch("shutil.ignore_patterns")
     def test_valid_path_with_ignore_patterns_passes_arg(
         self, mock_ignore_patterns: Mock, mock_copytree: Mock, mock_makedirs: Mock
-    ):
+    ) -> None:
         """Test that safe_copy_tree passes ignore_patterns to shutil.copytree."""
         # Setup
         mock_source_path = MagicMock()
@@ -328,7 +330,7 @@ class TestSafeCopyTree(unittest.TestCase):
 
     @patch("os.makedirs")
     @patch("shutil.copytree")
-    def test_valid_path_raises_exception_when_copytree_fails(self, mock_copytree: Mock, mock_makedirs: Mock):
+    def test_valid_path_raises_exception_when_copytree_fails(self, mock_copytree: Mock, mock_makedirs: Mock) -> None:
         """Test that safe_copy_tree passes ignore_patterns to shutil.copytree."""
         # Setup
         mock_source_path = MagicMock()
