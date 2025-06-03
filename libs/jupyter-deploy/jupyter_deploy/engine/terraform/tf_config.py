@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from rich.console import Console
+from rich import console as rich_console
 
 from jupyter_deploy import cmd_utils
 from jupyter_deploy.engine.engine_config import EngineConfigHandler
@@ -31,7 +31,7 @@ class TerraformConfigHandler(EngineConfigHandler):
         return terraform_installed and aws_cli_installed
 
     def configure(self) -> None:
-        console = Console()
+        console = rich_console.Console()
 
         # first, run terraform init.
         # Note that it is safe to run several times, see ``terraform init --help``:
@@ -44,8 +44,6 @@ class TerraformConfigHandler(EngineConfigHandler):
         if init_retcode != 0 or init_timed_out:
             console.print("Error initializing Terraform project.", style="red")
             return
-        else:
-            console.print("Project is already initialized, skipping.")
 
         # second, run terraform plan and save output with ``terraform plan PATH``
         plan_cmds = TerraformConfigHandler.TF_PLAN_CMD.copy()

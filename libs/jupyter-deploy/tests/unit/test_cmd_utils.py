@@ -410,7 +410,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         # Start the function in a separate thread so we can move time forward
         thread = threading.Thread(
             target=lambda: setattr(
-                self, "result", run_cmd_and_pipe_to_terminal(["long_running_command"], timeout_seconds=2)
+                self, "result", run_cmd_and_pipe_to_terminal(["long_running_command"], timeout_seconds=1)
             )
         )
         thread.daemon = True
@@ -427,7 +427,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         self.assertTrue(is_timedout)
         mock_popen.assert_called_once()
         mock_terminate.assert_called_once()
-        mock_print.assert_any_call("Command timed out after 2 second(s).")
+        mock_print.assert_any_call("Command timed out after 1 second(s).")
 
 
 class TestProjectManagerDirContextManager(unittest.TestCase):
