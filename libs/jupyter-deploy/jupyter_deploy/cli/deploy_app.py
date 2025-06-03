@@ -38,8 +38,12 @@ runner = JupyterDeployCliRunner()
 
 @runner.app.command()
 def config(
-    project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None,
-    skip_verify: Annotated[bool, typer.Option("--skip-verify")] = False,
+    project_dir: Annotated[
+        str | None, typer.Option("--path", "-p", help="Directory of the jupyter-deploy project to configure.")
+    ] = None,
+    skip_verify: Annotated[
+        bool, typer.Option("--skip-verify", help="Avoid verifying that the project dependencies are configured.")
+    ] = False,
 ) -> None:
     """Verify the system configuration, prompt inputs and prepare for deployment.
 
