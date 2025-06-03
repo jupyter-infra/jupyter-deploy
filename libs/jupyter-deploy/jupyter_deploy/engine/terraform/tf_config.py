@@ -43,6 +43,11 @@ class TerraformConfigHandler(EngineConfigHandler):
             console.print("Project is already initialized, skipping.")
 
         # second, run terraform plan and save output with `terraform plan PATH`
-        plan_cmds = TerraformConfigHandler.TF_PLAN_CMD.copy()
+       plan_cmds = TerraformConfigHandler.TF_PLAN_CMD.copy()
         plan_cmds.append(f"-out={self.plan_out_path.absolute()}")
-        cmd_utils.run_cmd_and_pipe_to_terminal(plan_cmds)
+        plan_retcode, plan_timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(plan_cmds)
+        
+        if plan_retcode != 0 or plan_timed_out:
+            console.print("Error generating Terraform plan.", style="red")
+        else:
+            console.print(f"Terraform plan generated successfully at: {self.plan_out_path}", style="green")
