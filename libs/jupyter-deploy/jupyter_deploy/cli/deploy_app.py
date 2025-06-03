@@ -38,7 +38,13 @@ runner = JupyterDeployCliRunner()
 
 @runner.app.command()
 def init(
-    path: Annotated[str, typer.Argument(help="output path for your project")],
+    path: Annotated[
+        str,
+        typer.Argument(
+            help="Path to the directory where jupyter-deploy will create your project files. "
+            "Pass '.' to use your current working directory."
+        ),
+    ],
     engine: Annotated[
         EngineType, typer.Option("--engine", "-E", help="software to deploy resources")
     ] = EngineType.TERRAFORM,
