@@ -87,7 +87,7 @@ variable "oauth_allowed_github_emails" {
     Go to your GitHub profile > settings > email, and untick 'Keep my email private'
     Then from settings, go to 'public profile' and select a 'public email'.
 
-    Example: ["jeff@amazon.com", "ajassy@amazon.com"]
+    Example: ["example1@amazon.com", "example2@amazon.com"]
   EOT
   type        = list(string)
   validation {

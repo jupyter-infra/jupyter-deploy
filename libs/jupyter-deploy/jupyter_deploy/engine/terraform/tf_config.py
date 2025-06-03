@@ -1,11 +1,14 @@
-"""Terraform implementation of the `config` hanlder."""
+"""Terraform implementation of the `config` handler."""
 
 from pathlib import Path
+
+from rich.console import Console
 
 from jupyter_deploy import cmd_utils
 from jupyter_deploy.engine.engine_config import EngineConfigHandler
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.terraform import tf_verify
+from jupyter_deploy.provider.aws import aws_cli
 
 
 class TerraformConfigHandler(EngineConfigHandler):
@@ -21,33 +24,37 @@ class TerraformConfigHandler(EngineConfigHandler):
 
     def verify_requirements(self) -> bool:
         terraform_installed = tf_verify.check_terraform_installation()
-        return terraform_installed
+
+        # TODO: assert only when template manifest requires it
+        aws_cli_installed = aws_cli.check_aws_cli_installation()
+
+        return terraform_installed and aws_cli_installed
 
     def configure(self) -> None:
         console = Console()
-        
-        # filepaths indicating previous tf init
-        lock_file = self.project_path / ".terraform.lock.hcl"
-        terraform_dir = self.project_path / ".terraform"
 
-        # `jd config --update-on-init [True]` - if set to False, still init if files don't exist
-        if self.update_on_init or not (lock_file.exists() and terraform_dir.exists() and terraform_dir.is_dir()):
-            # read and handle possible errors from cmd tf init exec
-            init_retcode, init_timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(
-                TerraformConfigHandler.TF_INIT_CMD.copy(),
-            )
-            if init_retcode != 0 or init_timed_out:
-                console.print("Error initializing Terraform project.", style="red")
-                return
+        # first, run terraform init.
+        # Note that it is safe to run several times, see ``terraform init --help``:
+        # ``init`` command is always safe to run multiple times. Though subsequent runs
+        # may give errors, this command will never delete your configuration or
+        # state.
+        init_retcode, init_timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(
+            TerraformConfigHandler.TF_INIT_CMD.copy(),
+        )
+        if init_retcode != 0 or init_timed_out:
+            console.print("Error initializing Terraform project.", style="red")
+            return
         else:
             console.print("Project is already initialized, skipping.")
 
-        # second, run terraform plan and save output with `terraform plan PATH`
-       plan_cmds = TerraformConfigHandler.TF_PLAN_CMD.copy()
+        # second, run terraform plan and save output with ``terraform plan PATH``
+        plan_cmds = TerraformConfigHandler.TF_PLAN_CMD.copy()
         plan_cmds.append(f"-out={self.plan_out_path.absolute()}")
         plan_retcode, plan_timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(plan_cmds)
-        
+
         if plan_retcode != 0 or plan_timed_out:
+            console.line()
             console.print("Error generating Terraform plan.", style="red")
-        else:
-            console.print(f"Terraform plan generated successfully at: {self.plan_out_path}", style="green")
+
+        # on successful plan generation, terraform prints out where the plan is saved,
+        # hence no need to print it again.

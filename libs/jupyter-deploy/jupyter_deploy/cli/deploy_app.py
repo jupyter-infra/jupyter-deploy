@@ -38,13 +38,13 @@ runner = JupyterDeployCliRunner()
 
 @runner.app.command()
 def config(
-    project_dir: Annotated[str | None, typer.Option("--project", "-p")] = None,
+    project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None,
     skip_verify: Annotated[bool, typer.Option("--skip-verify")] = False,
 ) -> None:
     """Verify the system configuration, prompt inputs and prepare for deployment.
 
     Run either from a jupyter-deploy project directory created with `jd init`
-    or pass a --project PATH to such a directory.
+    or pass a --path PATH to such a directory.
     """
     with cmd_utils.project_dir(project_dir):
         handler = config_handler.ConfigHandler()
@@ -66,11 +66,11 @@ def config(
 
 
 @runner.app.command()
-def up(project_dir: Annotated[str | None, typer.Option("--project", "-p")] = None) -> None:
+def up(project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None) -> None:
     """Apply the changes defined in the IaC template.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
-    or pass a --project PATH to such a directory.
+    or pass a --path PATH to such a directory.
 
     Call `jd config` first to set the input variables and
     verify the configuration.
@@ -79,11 +79,11 @@ def up(project_dir: Annotated[str | None, typer.Option("--project", "-p")] = Non
 
 
 @runner.app.command()
-def down(project_dir: Annotated[str | None, typer.Option("--project", "-p")] = None) -> None:
+def down(project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None) -> None:
     """Destroy the resources defined in the IaC template.
 
     Run either from a jupyter-deploy project directed that you created with `jd init`;
-    or pass a --project PATH to such a directory.
+    or pass a --path PATH to such a directory.
 
     No-op if you have not already created the infrastructure with `jd up`, or if you
     already ran `jd down`.
@@ -92,11 +92,11 @@ def down(project_dir: Annotated[str | None, typer.Option("--project", "-p")] = N
 
 
 @runner.app.command()
-def open(project_dir: Annotated[str | None, typer.Option("--project", "-p")] = None) -> None:
+def open(project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None) -> None:
     """Open the jupyter app in your webbrowser.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
-    or pass a --project PATH to such a directory.
+    or pass a --path PATH to such a directory.
 
     Call `jd config` and `jd up` first.
     """
@@ -104,8 +104,11 @@ def open(project_dir: Annotated[str | None, typer.Option("--project", "-p")] = N
 
 
 @runner.app.command()
-def show(project_dir: Annotated[str | None, typer.Option("--project", "-p")] = None) -> None:
+def show(project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None) -> None:
     """Display information about the jupyter-deploy project.
+
+    Run either from a jupyter-deploy project directory that you created with `jd init`;
+    or pass a --path PATH to such a directory.
 
     If the project is up, shows the values of the output as defined in
     the infrastructure as code project.
