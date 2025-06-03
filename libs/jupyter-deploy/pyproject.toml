@@ -16,11 +16,11 @@ dependencies = [
 ]
 
 [project.scripts]
-jupyter-deploy = "jupyter_deploy.cli.deploy_app:main"
-jd = "jupyter_deploy.cli.deploy_app:main"
+jupyter-deploy = "jupyter_deploy.cli.app:main"
+jd = "jupyter_deploy.cli.app:main"
 
 [project.entry-points."jupyter_core.subcommands"]
-deploy = "jupyter_deploy.cli.deploy_app:main"
+deploy = "jupyter_deploy.cli.app:main"
 
 [project.optional-dependencies]
 
