@@ -89,7 +89,7 @@ def run_cmd_and_pipe_to_terminal(cmds: list[str], timeout_seconds: int | None = 
         timer.start()
 
     # Create threads to handle input, output, and error streams concurrently
-    def handle_stdin():
+    def handle_stdin() -> None:
         try:
             while p.poll() is None:  # Continue as long as the process is running
                 # Wait for a prompt to appear
@@ -106,13 +106,13 @@ def run_cmd_and_pipe_to_terminal(cmds: list[str], timeout_seconds: int | None = 
                         # Use non-blocking read for terminals
                         # TODO: check if this works on windows
                         rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
-                        if rlist:
+                        if rlist and p.stdin:
                             line = sys.stdin.readline()
                             if not line:  # EOF (Ctrl+D)
                                 break
                             p.stdin.write(line)
                             p.stdin.flush()
-                    else:
+                    elif p.stdin:
                         # For non-interactive input (e.g., piped input)
                         char = sys.stdin.read(1)
                         if not char:  # EOF
@@ -125,7 +125,7 @@ def run_cmd_and_pipe_to_terminal(cmds: list[str], timeout_seconds: int | None = 
             if p.stdin:
                 p.stdin.close()
 
-    def read_char_by_char(stream: IO[str]):
+    def read_char_by_char(stream: IO[str]) -> None:
         """Read output character-by-character to handle prompts without newlines."""
         output_buffer = ""
         prompt_indicators = ["Enter a value: ", "?", ": "]  # Common prompt endings
@@ -156,13 +156,15 @@ def run_cmd_and_pipe_to_terminal(cmds: list[str], timeout_seconds: int | None = 
         prompt_ready.set()
         stream.close()
 
-    def handle_stdout():
+    def handle_stdout() -> None:
         stdout_active.set()
-        read_char_by_char(p.stdout)
+        if p.stdout:
+            read_char_by_char(p.stdout)
         stdout_active.clear()
 
-    def handle_stderr():
-        read_char_by_char(p.stderr)
+    def handle_stderr() -> None:
+        if p.stderr:
+            read_char_by_char(p.stderr)
 
     # Start threads for I/O
     stdin_thread = threading.Thread(target=handle_stdin)
