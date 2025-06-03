@@ -8,7 +8,6 @@ import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from threading import Event, Timer
 from typing import IO
 
 
@@ -36,7 +35,7 @@ def check_executable_installation(
         return True, version, None
     except FileNotFoundError:
         # This is a fallback in case shutil.which() returns a path but the file isn't actually executable
-        return False, None, f"${executable_name} found in PATH, but executable not found."
+        return False, None, f"{executable_name} found in PATH, but executable not found."
     except subprocess.CalledProcessError as e:
         error_msg = e.stderr.strip() if e.stderr else "Unknown error"
         return False, None, error_msg
@@ -45,7 +44,7 @@ def check_executable_installation(
 
 
 def run_cmd_and_pipe_to_terminal(cmds: list[str], timeout_seconds: int | None = None) -> tuple[int, bool]:
-    """Runs command in a new process, pipes input in and output/error out to current.
+    """Run command in a new process, pipe input in and output/error out to current.
 
     It will appear as though the command is being run in the current process.
     """
@@ -71,11 +70,11 @@ def run_cmd_and_pipe_to_terminal(cmds: list[str], timeout_seconds: int | None = 
     )
 
     retcode: int | None = None
-    timer: Timer | None = None
+    timer: threading.Timer | None = None
 
     # Signal for when a prompt is likely waiting for input
-    prompt_ready = Event()
-    stdout_active = Event()
+    prompt_ready = threading.Event()
+    stdout_active = threading.Event()
 
     def timerout(p: subprocess.Popen) -> None:
         print(f"Command timed out after {timeout_seconds} second(s).")
@@ -86,7 +85,7 @@ def run_cmd_and_pipe_to_terminal(cmds: list[str], timeout_seconds: int | None = 
         p.terminate()
 
     if timeout_seconds:
-        timer = Timer(timeout_seconds, timerout, args=[p])
+        timer = threading.Timer(timeout_seconds, timerout, args=[p])
         timer.start()
 
     # Create threads to handle input, output, and error streams concurrently
@@ -199,9 +198,9 @@ def run_cmd_and_pipe_to_terminal(cmds: list[str], timeout_seconds: int | None = 
 
 @contextmanager
 def project_dir(dir: str | None) -> Generator:
-    """Context manager that executes the inner function within a `cd` to the dir_path argument.
+    """Execute the inner function within a `cd` to the dir_path argument.
 
-    If target_path is None, just executes the inner function.
+    If target_path is None, just execute the inner function.
 
     Raise:
         ValueError if the target_dir is not a valid path, or is not a directory.

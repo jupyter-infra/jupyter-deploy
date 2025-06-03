@@ -41,9 +41,7 @@ def check_aws_cli_installation(min_version: Version | None = None) -> bool:
                 f"This operation requires minimum [bold]aws[/] CLI version: {min_version}\n"
                 f"Found version: {current_version}"
             )
-            console.print(
-                f"Upgrade [bold]aws[/] CLI at least to version: {min_version}.", style="yellow"
-            )
+            console.print(f"Upgrade [bold]aws[/] CLI at least to version: {min_version}.", style="yellow")
             return False
 
     console.print(":white_check_mark: Valid [bold]aws[/] CLI installation detected.")
