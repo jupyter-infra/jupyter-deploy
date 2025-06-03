@@ -88,7 +88,7 @@ class JupyterDeployApp(JupyterApp):
     name = "jupyter-deploy"
     description = "Deploy Jupyter notebooks application to your favorite Cloud provider."
 
-    def start(self):
+    def start(self) -> None:
         """Run the deploy application."""
         args_without_command = sys.argv[2:] if len(sys.argv) > 2 else []
         sys.argv = args_without_command
