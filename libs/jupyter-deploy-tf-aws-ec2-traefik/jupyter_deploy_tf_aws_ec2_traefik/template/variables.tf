@@ -85,7 +85,9 @@ variable "oauth_allowed_github_emails" {
     Note: it MUST be the public email address exposed on your public GitHub profile;
     it is NOT possible to oauth with the GitHub username with this version of the template.
     Go to your GitHub profile > settings > email, and untick 'Keep my email private'
-    Then from settings, go to 'public profile' and select a 'public email'
+    Then from settings, go to 'public profile' and select a 'public email'.
+
+    Example: ["example1@amazon.com", "example2@amazon.com"]
   EOT
   type        = list(string)
   validation {
@@ -110,9 +112,9 @@ variable "oauth_github_app_client_id" {
     5. Go to 'OAuth Apps'
     6. Select 'Create New OAuth App'
     7. App name: 'jupyter-deploy-aws-traefik' or the value you selected for 'oauth_github_app_name'
-    8. Home page URL: 'jupyter.<subdomain>.<domain>'
+    8. Home page URL: 'https://jupyter.<subdomain>.<domain>'
     9. Application description: leave blank
-    10. Authorization callback URL: auth.<subdomain>.<domain>/_oauth
+    10. Authorization callback URL: https://auth.<subdomain>.<domain>/_oauth
     11. Click 'Register Application'
     12. Retrieve the Client ID
     Full instructions: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app

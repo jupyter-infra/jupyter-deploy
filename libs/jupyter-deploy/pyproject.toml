@@ -23,9 +23,6 @@ jd = "jupyter_deploy.cli.deploy_app:main"
 deploy = "jupyter_deploy.cli.deploy_app:main"
 
 [project.optional-dependencies]
-terraform = [
-    "python-terraform>=0.10.1",
-]
 
 aws = [
     "boto3>=1.38.6",
