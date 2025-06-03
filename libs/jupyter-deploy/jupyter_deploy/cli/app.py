@@ -48,13 +48,22 @@ def init(
         ),
     ],
     engine: Annotated[
-        EngineType, typer.Option("--engine", "-E", help="software to deploy resources")
+        EngineType, typer.Option("--engine", "-E", help="Infrastructure as code software to manage your resources.")
     ] = EngineType.TERRAFORM,
-    provider: Annotated[ProviderType, typer.Option("--provider", "-P", help="cloud provider")] = ProviderType.AWS,
+    provider: Annotated[
+        ProviderType, typer.Option("--provider", "-P", help="Cloud provider where your resources will be provisioned.")
+    ] = ProviderType.AWS,
     infrastructure: Annotated[
-        InfrastructureType, typer.Option("--infrastructure", "-I", help="infrastructure type")
+        InfrastructureType,
+        typer.Option(
+            "--infrastructure",
+            "-I",
+            help="Infrastructure service that your cloud provider will use to provision your resources.",
+        ),
     ] = AWSInfrastructureType.EC2,
-    template: Annotated[str, typer.Option("--template", "-T", help="template name (e.g., traefik)")] = "traefik",
+    template: Annotated[
+        str, typer.Option("--template", "-T", help="Base name of the infrastrucuture as code template (e.g., traefik)")
+    ] = "traefik",
 ) -> None:
     """Initialize a project directory containing the specified IaC template.
 
