@@ -1,3 +1,4 @@
+import os
 import sys
 from typing import Annotated
 
@@ -9,7 +10,9 @@ from jupyter_deploy import cmd_utils
 from jupyter_deploy.cli.servers_app import servers_app
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.handlers.project import config_handler
+from jupyter_deploy.handlers.project.down_handler import DownHandler
 from jupyter_deploy.handlers.project.init_handler import InitHandler
+from jupyter_deploy.handlers.project.up_handler import UpHandler
 from jupyter_deploy.infrastructure.enum import AWSInfrastructureType, InfrastructureType
 from jupyter_deploy.provider.enum import ProviderType
 
@@ -133,16 +136,43 @@ def config(
 
 
 @runner.app.command()
-def up(project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None) -> None:
+def up(
+    project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None,
+    plan_file: Annotated[str | None, typer.Option("--planfile", "-pf")] = None,
+) -> None:
     """Apply the changes defined in the IaC template.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
-    or pass a --path PATH to such a directory.
+    or pass a --path PATH to such a directory. Optionally, you can also pass a --planfile
+    argument.
 
     Call `jd config` first to set the input variables and
     verify the configuration.
     """
-    pass
+    with cmd_utils.project_dir(project_dir):
+        from pathlib import Path
+
+        handler = UpHandler()
+        console = Console()
+
+        if plan_file is None:
+            plan_file = handler.get_default_plan_file()
+
+        project_path = Path.cwd() if project_dir is None else Path(project_dir)
+        plan_file_path = project_path / plan_file
+
+        console.rule("[bold]jupyter-deploy:[/] verifying presence of planfile")
+        if not os.path.exists(plan_file_path):
+            console.print(
+                f"Planfile {plan_file} not found in {project_path}. "
+                f"If you have not yet generated a plan file for your current project, "
+                f'please run "jd config" from the project directory first.',
+                style="red",
+            )
+            return
+
+        console.rule("[bold]jupyter-deploy:[/] applying infrastructure changes")
+        handler.apply(str(plan_file_path))
 
 
 @runner.app.command()
@@ -155,7 +185,12 @@ def down(project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None
     No-op if you have not already created the infrastructure with `jd up`, or if you
     already ran `jd down`.
     """
-    pass
+    with cmd_utils.project_dir(project_dir):
+        handler = DownHandler()
+        console = Console()
+
+        console.rule("[bold]jupyter-deploy:[/] destroying infrastructure resources")
+        handler.destroy()
 
 
 @runner.app.command()
