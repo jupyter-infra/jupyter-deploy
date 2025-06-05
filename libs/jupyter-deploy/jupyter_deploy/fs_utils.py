@@ -117,5 +117,5 @@ def find_matching_filenames(dir_path: Path, file_pattern: str) -> list[str]:
     for file_path_str in matching_filepaths:
         filename = Path(file_path_str).name
         valid_filenames.append(filename)
-    
+
     return valid_filenames

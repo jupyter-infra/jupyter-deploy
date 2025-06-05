@@ -46,19 +46,17 @@ class TerraformConfigHandler(EngineConfigHandler):
 
     def _get_recorded_secrets_filepath(self) -> Path:
         return self.project_path / TerraformConfigHandler.TF_RECORDED_SECRETS_FILENAME
-    
+
     def list_presets(self) -> list[str]:
         presets = ["none"]
-        
+
         # Get all files matching the pattern
         matching_filenames = fs_utils.find_matching_filenames(
             dir_path=self.project_path,
             file_pattern="defaults-*.tfvars",
         )
-        presets.extend([
-            n[len("defaults-"):-len(".tfvars")] for n in matching_filenames
-        ])
-        return sorted(presets)        
+        presets.extend([n[len("defaults-") : -len(".tfvars")] for n in matching_filenames])
+        return sorted(presets)
 
     def verify_preset_exists(self, preset_name: str) -> bool:
         file_path = self._get_preset_path(preset_name)
