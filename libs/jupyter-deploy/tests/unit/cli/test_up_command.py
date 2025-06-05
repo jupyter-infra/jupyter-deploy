@@ -1,5 +1,5 @@
 import unittest
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from unittest.mock import Mock, patch
 
@@ -12,7 +12,7 @@ class TestUpCommand(unittest.TestCase):
     """Test cases for the up command."""
 
     @contextmanager
-    def mock_project_dir(*_args: object, **_kwargs: object) -> Iterator[None]:
+    def mock_project_dir(*_args: object, **_kwargs: object) -> Generator[None]:
         yield None
 
     @patch("jupyter_deploy.cli.app.UpHandler")
@@ -24,17 +24,16 @@ class TestUpCommand(unittest.TestCase):
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
 
         mock_up_handler = Mock()
-        mock_up_handler.get_default_plan_file.return_value = "jdout-tfplan"
+        mock_up_handler.get_default_config_filename.return_value = "jdout-tfplan"
+        mock_up_handler.verify_config_file_exists.return_value = ""
         mock_up_handler_cls.return_value = mock_up_handler
 
-        with patch("os.path.exists", return_value=False):
-            runner = CliRunner()
-            result = runner.invoke(app_runner.app, ["up"])
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up"])
 
-            self.assertEqual(result.exit_code, 0)
-            mock_project_ctx_manager.assert_called_once_with(None)
-            mock_up_handler.get_default_plan_file.assert_called_once()
-            self.assertIn("Planfile jdout-tfplan not found", result.stdout)
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_up_handler.verify_config_file_exists.assert_called_once_with(None)
 
     @patch("jupyter_deploy.cli.app.UpHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -43,53 +42,52 @@ class TestUpCommand(unittest.TestCase):
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
 
         mock_up_handler = Mock()
-        mock_up_handler.get_default_plan_file.return_value = "jdout-tfplan"
+        mock_up_handler.get_default_config_filename.return_value = "jdout-tfplan"
+        mock_up_handler.verify_config_file_exists.return_value = ""
         mock_up_handler_cls.return_value = mock_up_handler
 
-        with patch("os.path.exists", return_value=False):
-            runner = CliRunner()
-            result = runner.invoke(app_runner.app, ["up", "--path", "/custom/path"])
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up", "--path", "/custom/path"])
 
-            self.assertEqual(result.exit_code, 0)
-            mock_project_ctx_manager.assert_called_once_with("/custom/path")
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with("/custom/path")
 
     @patch("jupyter_deploy.cli.app.UpHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_up_command_with_custom_planfile(self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock) -> None:
-        """Test that the up command works with a custom plan file."""
+    def test_up_command_with_custom_config_file(
+        self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock
+    ) -> None:
+        """Test that the up command works with a custom config file."""
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
 
         mock_up_handler = Mock()
-        mock_up_handler.get_default_plan_file.return_value = "jdout-tfplan"
+        mock_up_handler.verify_config_file_exists.return_value = ""
         mock_up_handler_cls.return_value = mock_up_handler
 
-        with patch("os.path.exists", return_value=False):
-            runner = CliRunner()
-            result = runner.invoke(app_runner.app, ["up", "--planfile", "custom-plan"])
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up", "--config-file", "custom-plan"])
 
-            self.assertEqual(result.exit_code, 0)
-            mock_project_ctx_manager.assert_called_once_with(None)
-            self.assertIn("Planfile custom-plan not found", result.stdout)
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_up_handler.verify_config_file_exists.assert_called_once_with("custom-plan")
 
     @patch("jupyter_deploy.cli.app.UpHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_up_command_runs_terraform_apply(self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock) -> None:
-        """Test that the up command runs terraform apply when plan file exists."""
+        """Test that the up command runs terraform apply when config file exists."""
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
 
         mock_up_handler = Mock()
-        mock_up_handler.get_default_plan_file.return_value = "jdout-tfplan"
-        mock_up_handler.apply.return_value = True
+        mock_up_handler.verify_config_file_exists.return_value = "/path/to/config"
         mock_up_handler_cls.return_value = mock_up_handler
 
-        with patch("os.path.exists", return_value=True):
-            runner = CliRunner()
-            result = runner.invoke(app_runner.app, ["up"])
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up"])
 
-            self.assertEqual(result.exit_code, 0)
-            mock_project_ctx_manager.assert_called_once_with(None)
-            mock_up_handler.get_default_plan_file.assert_called_once()
-            mock_up_handler.apply.assert_called_once()
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_up_handler.verify_config_file_exists.assert_called_once_with(None)
+        mock_up_handler.apply.assert_called_once_with("/path/to/config", False)
 
     @patch("jupyter_deploy.cli.app.UpHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -100,18 +98,16 @@ class TestUpCommand(unittest.TestCase):
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
 
         mock_up_handler = Mock()
-        mock_up_handler.get_default_plan_file.return_value = "jdout-tfplan"
-        mock_up_handler.apply.return_value = False
+        mock_up_handler.verify_config_file_exists.return_value = "/path/to/config"
         mock_up_handler_cls.return_value = mock_up_handler
 
-        with patch("os.path.exists", return_value=True):
-            runner = CliRunner()
-            result = runner.invoke(app_runner.app, ["up"])
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up"])
 
-            self.assertEqual(result.exit_code, 0)
-            mock_project_ctx_manager.assert_called_once_with(None)
-            mock_up_handler.get_default_plan_file.assert_called_once()
-            mock_up_handler.apply.assert_called_once()
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_up_handler.verify_config_file_exists.assert_called_once_with(None)
+        mock_up_handler.apply.assert_called_once_with("/path/to/config", False)
 
     @patch("jupyter_deploy.cli.app.UpHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -122,15 +118,13 @@ class TestUpCommand(unittest.TestCase):
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
 
         mock_up_handler = Mock()
-        mock_up_handler.get_default_plan_file.return_value = "jdout-tfplan"
-        mock_up_handler.apply.return_value = False
+        mock_up_handler.verify_config_file_exists.return_value = "/path/to/config"
         mock_up_handler_cls.return_value = mock_up_handler
 
-        with patch("os.path.exists", return_value=True):
-            runner = CliRunner()
-            result = runner.invoke(app_runner.app, ["up"])
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up"])
 
-            self.assertEqual(result.exit_code, 0)
-            mock_project_ctx_manager.assert_called_once_with(None)
-            mock_up_handler.get_default_plan_file.assert_called_once()
-            mock_up_handler.apply.assert_called_once()
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_up_handler.verify_config_file_exists.assert_called_once_with(None)
+        mock_up_handler.apply.assert_called_once_with("/path/to/config", False)

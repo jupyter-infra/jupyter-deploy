@@ -10,7 +10,6 @@ class TestTerraformDownHandler(unittest.TestCase):
     """Test cases for the TerraformDownHandler class."""
 
     def test_init_sets_attributes(self) -> None:
-        """Test that the TerraformDownHandler constructor sets the attributes correctly."""
         project_path = Path("/mock/project")
         handler = TerraformDownHandler(project_path=project_path)
 
@@ -19,8 +18,7 @@ class TestTerraformDownHandler(unittest.TestCase):
 
     @patch("jupyter_deploy.engine.terraform.tf_down.cmd_utils")
     @patch("jupyter_deploy.engine.terraform.tf_down.rich_console")
-    def test_destroy_returns_true_on_success(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
-        """Test that destroy returns True when terraform destroy succeeds."""
+    def test_destroy_success(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
         project_path = Path("/mock/project")
         handler = TerraformDownHandler(project_path=project_path)
 
@@ -29,18 +27,16 @@ class TestTerraformDownHandler(unittest.TestCase):
 
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (0, False)
 
-        result = handler.destroy()
+        handler.destroy()
 
-        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "destroy", "-auto-approve"])
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "destroy"])
         mock_console_instance.print.assert_called_once_with(
             "Infrastructure resources destroyed successfully.", style="green"
         )
-        self.assertTrue(result)
 
     @patch("jupyter_deploy.engine.terraform.tf_down.cmd_utils")
     @patch("jupyter_deploy.engine.terraform.tf_down.rich_console")
-    def test_destroy_returns_false_on_error(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
-        """Test that destroy returns False when terraform destroy fails."""
+    def test_destroy_handles_error(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
         project_path = Path("/mock/project")
         handler = TerraformDownHandler(project_path=project_path)
 
@@ -49,16 +45,14 @@ class TestTerraformDownHandler(unittest.TestCase):
 
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (1, False)
 
-        result = handler.destroy()
+        handler.destroy()
 
-        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "destroy", "-auto-approve"])
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "destroy"])
         mock_console_instance.print.assert_called_once_with("Error destroying Terraform infrastructure.", style="red")
-        self.assertFalse(result)
 
     @patch("jupyter_deploy.engine.terraform.tf_down.cmd_utils")
     @patch("jupyter_deploy.engine.terraform.tf_down.rich_console")
-    def test_destroy_returns_false_on_timeout(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
-        """Test that destroy returns False when terraform destroy times out."""
+    def test_destroy_handles_timeout(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
         project_path = Path("/mock/project")
         handler = TerraformDownHandler(project_path=project_path)
 
@@ -67,8 +61,7 @@ class TestTerraformDownHandler(unittest.TestCase):
 
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (0, True)
 
-        result = handler.destroy()
+        handler.destroy()
 
-        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "destroy", "-auto-approve"])
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "destroy"])
         mock_console_instance.print.assert_called_once_with("Error destroying Terraform infrastructure.", style="red")
-        self.assertFalse(result)

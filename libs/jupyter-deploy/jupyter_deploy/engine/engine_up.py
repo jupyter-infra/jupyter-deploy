@@ -11,9 +11,9 @@ class EngineUpHandler(ABC):
         self.engine = engine
 
     @abstractmethod
-    def get_default_plan_file(self) -> str:
+    def get_default_config_filename(self) -> str:
         pass
 
     @abstractmethod
-    def apply(self, plan_file: str) -> bool:
+    def apply(self, config_file: str, auto_approve: bool = False) -> None:
         pass

@@ -1,5 +1,5 @@
 import unittest
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from unittest.mock import Mock, patch
 
@@ -12,7 +12,7 @@ class TestDownCommand(unittest.TestCase):
     """Test cases for the down command."""
 
     @contextmanager
-    def mock_project_dir(*_args: object, **_kwargs: object) -> Iterator[None]:
+    def mock_project_dir(*_args: object, **_kwargs: object) -> Generator[None]:
         yield None
 
     @patch("jupyter_deploy.cli.app.DownHandler")

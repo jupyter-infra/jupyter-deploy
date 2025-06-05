@@ -8,7 +8,7 @@ from jupyter_deploy.engine.terraform import tf_config
 class ConfigHandler:
     _handler: EngineConfigHandler
 
-    def __init__(self) -> None:
+    def __init__(self, output_file: str | None = None) -> None:
         """Base class to manage the configuration of a jupyter-deploy project."""
         project_path = Path.cwd()
 
@@ -16,7 +16,7 @@ class ConfigHandler:
         engine = EngineType.TERRAFORM
 
         if engine == EngineType.TERRAFORM:
-            self._handler = tf_config.TerraformConfigHandler(project_path=project_path)
+            self._handler = tf_config.TerraformConfigHandler(project_path=project_path, output_file=output_file)
         else:
             raise NotImplementedError(f"ConfigHandler implementation not found for engine: {engine}")
 

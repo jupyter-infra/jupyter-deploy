@@ -3,17 +3,28 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from jupyter_deploy.engine.terraform.tf_config import TerraformConfigHandler
+from jupyter_deploy.engine.terraform.tf_constants import TF_DEFAULT_PLAN_FILENAME
 
 
 class TestTerraformConfigHandler(unittest.TestCase):
     def test_class_can_instantiate(self) -> None:
-        # Arrage
+        # Arrange
         path = Path("/fake/path")
         handler = TerraformConfigHandler(path)
 
         # Assert
         self.assertIsNotNone(handler)
-        self.assertEqual(handler.plan_out_path, path / TerraformConfigHandler.TF_DFT_PLAN_FILENAME)
+        self.assertEqual(handler.plan_out_path, path / TF_DEFAULT_PLAN_FILENAME)
+
+    def test_class_uses_custom_output_file_when_provided(self) -> None:
+        # Arrange
+        path = Path("/fake/path")
+        custom_output = "custom-output-file"
+        handler = TerraformConfigHandler(path, output_file=custom_output)
+
+        # Assert
+        self.assertIsNotNone(handler)
+        self.assertEqual(handler.plan_out_path, path / custom_output)
 
     @patch("jupyter_deploy.engine.terraform.tf_config.tf_verify.check_terraform_installation")
     @patch("jupyter_deploy.provider.aws.aws_cli.check_aws_cli_installation")

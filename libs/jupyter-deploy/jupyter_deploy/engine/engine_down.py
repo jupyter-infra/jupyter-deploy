@@ -11,5 +11,5 @@ class EngineDownHandler(ABC):
         self.engine = engine
 
     @abstractmethod
-    def destroy(self) -> bool:
+    def destroy(self, auto_approve: bool = False) -> None:
         pass

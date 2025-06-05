@@ -40,7 +40,7 @@ class TestConfigHandler(unittest.TestCase):
         tf_mock_configure = tf_fns["configure"]
         mock_tf_handler.return_value = tf_mock_handler_instance
 
-        mock_tf_handler.assert_called_once_with(project_path=path)
+        mock_tf_handler.assert_called_once_with(project_path=path, output_file=None)
         tf_mock_verify.assert_not_called()
         tf_mock_configure.assert_not_called()
 

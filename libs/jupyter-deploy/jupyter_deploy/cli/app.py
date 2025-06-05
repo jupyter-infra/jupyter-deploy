@@ -1,4 +1,3 @@
-import os
 import sys
 from typing import Annotated
 
@@ -110,14 +109,18 @@ def config(
     skip_verify: Annotated[
         bool, typer.Option("--skip-verify", help="Avoid verifying that the project dependencies are configured.")
     ] = False,
+    output_file: Annotated[
+        str | None, typer.Option("--output-file", "-f", help="Name of the file to store the configuration to.")
+    ] = None,
 ) -> None:
     """Verify the system configuration, prompt inputs and prepare for deployment.
 
     Run either from a jupyter-deploy project directory created with `jd init`
-    or pass a --path PATH to such a directory.
+    or pass a --path PATH to such a directory. Optionally, you can also pass an
+    --output-file argument.
     """
     with cmd_utils.project_dir(project_dir):
-        handler = config_handler.ConfigHandler()
+        handler = config_handler.ConfigHandler(output_file=output_file)
         run_verify = not skip_verify
         run_configure = False
 
@@ -137,46 +140,48 @@ def config(
 
 @runner.app.command()
 def up(
-    project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None,
-    plan_file: Annotated[str | None, typer.Option("--planfile", "-pf")] = None,
+    project_dir: Annotated[
+        str | None, typer.Option("--path", "-p", help="Directory of the jupyter-deploy project to bring up.")
+    ] = None,
+    config_file: Annotated[
+        str | None,
+        typer.Option(
+            "--config-file", "-f", help="Name of a file in the project_dir containing the execution configuration."
+        ),
+    ] = None,
+    auto_approve: Annotated[
+        bool, typer.Option("--answer-yes", "-y", help="Apply changes without confirmation prompt.")
+    ] = False,
 ) -> None:
     """Apply the changes defined in the IaC template.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
-    or pass a --path PATH to such a directory. Optionally, you can also pass a --planfile
+    or pass a --path PATH to such a directory. Optionally, you can also pass a --config-file
     argument.
 
     Call `jd config` first to set the input variables and
     verify the configuration.
     """
     with cmd_utils.project_dir(project_dir):
-        from pathlib import Path
-
         handler = UpHandler()
         console = Console()
 
-        if plan_file is None:
-            plan_file = handler.get_default_plan_file()
-
-        project_path = Path.cwd() if project_dir is None else Path(project_dir)
-        plan_file_path = project_path / plan_file
-
-        console.rule("[bold]jupyter-deploy:[/] verifying presence of planfile")
-        if not os.path.exists(plan_file_path):
-            console.print(
-                f"Planfile {plan_file} not found in {project_path}. "
-                f"If you have not yet generated a plan file for your current project, "
-                f'please run "jd config" from the project directory first.',
-                style="red",
-            )
-            return
-
-        console.rule("[bold]jupyter-deploy:[/] applying infrastructure changes")
-        handler.apply(str(plan_file_path))
+        console.rule("[bold]jupyter-deploy:[/] verifying presence of config file")
+        plan_file_path = handler.verify_config_file_exists(config_file)
+        if plan_file_path:
+            console.rule("[bold]jupyter-deploy:[/] applying infrastructure changes")
+            handler.apply(plan_file_path, auto_approve)
 
 
 @runner.app.command()
-def down(project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None) -> None:
+def down(
+    project_dir: Annotated[
+        str | None, typer.Option("--path", "-p", help="Directory of the jupyter-deploy project to bring down.")
+    ] = None,
+    auto_approve: Annotated[
+        bool, typer.Option("--answer-yes", "-y", help="Destroy resources without confirmation prompt.")
+    ] = False,
+) -> None:
     """Destroy the resources defined in the IaC template.
 
     Run either from a jupyter-deploy project directed that you created with `jd init`;
@@ -190,7 +195,7 @@ def down(project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None
         console = Console()
 
         console.rule("[bold]jupyter-deploy:[/] destroying infrastructure resources")
-        handler.destroy()
+        handler.destroy(auto_approve)
 
 
 @runner.app.command()

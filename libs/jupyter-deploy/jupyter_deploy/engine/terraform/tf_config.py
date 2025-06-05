@@ -8,19 +8,19 @@ from jupyter_deploy import cmd_utils
 from jupyter_deploy.engine.engine_config import EngineConfigHandler
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.terraform import tf_verify
+from jupyter_deploy.engine.terraform.tf_constants import TF_DEFAULT_PLAN_FILENAME, TF_INIT_CMD, TF_PLAN_CMD
 from jupyter_deploy.provider.aws import aws_cli
 
 
 class TerraformConfigHandler(EngineConfigHandler):
     """Config handler implementation for terraform projects."""
 
-    TF_INIT_CMD = ["terraform", "init"]
-    TF_PLAN_CMD = ["terraform", "plan"]
-    TF_DFT_PLAN_FILENAME = "jdout-tfplan"
-
-    def __init__(self, project_path: Path) -> None:
+    def __init__(self, project_path: Path, output_file: str | None = None) -> None:
         super().__init__(project_path=project_path, engine=EngineType.TERRAFORM)
-        self.plan_out_path = project_path / TerraformConfigHandler.TF_DFT_PLAN_FILENAME
+        if output_file:
+            self.plan_out_path = project_path / output_file
+        else:
+            self.plan_out_path = project_path / TF_DEFAULT_PLAN_FILENAME
 
     def verify_requirements(self) -> bool:
         terraform_installed = tf_verify.check_terraform_installation()
@@ -39,14 +39,14 @@ class TerraformConfigHandler(EngineConfigHandler):
         # may give errors, this command will never delete your configuration or
         # state.
         init_retcode, init_timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(
-            TerraformConfigHandler.TF_INIT_CMD.copy(),
+            TF_INIT_CMD.copy(),
         )
         if init_retcode != 0 or init_timed_out:
             console.print("Error initializing Terraform project.", style="red")
             return
 
         # second, run terraform plan and save output with ``terraform plan PATH``
-        plan_cmds = TerraformConfigHandler.TF_PLAN_CMD.copy()
+        plan_cmds = TF_PLAN_CMD.copy()
         plan_cmds.append(f"-out={self.plan_out_path.absolute()}")
         plan_retcode, plan_timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(plan_cmds)
 

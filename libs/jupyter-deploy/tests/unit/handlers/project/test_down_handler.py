@@ -32,10 +32,9 @@ class TestDownHandler(unittest.TestCase):
         mock_tf_handler_cls.return_value = mock_tf_handler
 
         handler = DownHandler()
-        result = handler.destroy()
+        handler.destroy()
 
         mock_tf_handler.destroy.assert_called_once()
-        self.assertTrue(result)
 
     @patch("jupyter_deploy.handlers.project.down_handler.Path")
     def test_init_raises_not_implemented_error_for_unsupported_engine(self, mock_path: Mock) -> None:

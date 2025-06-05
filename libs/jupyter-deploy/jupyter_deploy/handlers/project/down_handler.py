@@ -23,6 +23,10 @@ class DownHandler:
         # TODO: derive from the project manifest
         return EngineType.TERRAFORM
 
-    def destroy(self) -> bool:
-        """Destroy the infrastructure resources."""
-        return self._handler.destroy()
+    def destroy(self, auto_approve: bool = False) -> None:
+        """Destroy the infrastructure resources.
+
+        Args:
+            auto_approve: Whether to auto-approve the destruction without prompting.
+        """
+        return self._handler.destroy(auto_approve)

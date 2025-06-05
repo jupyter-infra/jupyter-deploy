@@ -11,7 +11,6 @@ class TestUpHandler(unittest.TestCase):
     @patch("jupyter_deploy.engine.terraform.tf_up.TerraformUpHandler")
     @patch("jupyter_deploy.handlers.project.up_handler.Path")
     def test_init_creates_terraform_handler(self, mock_path: Mock, mock_tf_handler_cls: Mock) -> None:
-        """Test that the UpHandler creates a TerraformUpHandler by default."""
         mock_path.cwd.return_value = Path("/mock/cwd")
         mock_tf_handler = Mock()
         mock_tf_handler_cls.return_value = mock_tf_handler
@@ -25,36 +24,31 @@ class TestUpHandler(unittest.TestCase):
     @patch("jupyter_deploy.engine.terraform.tf_up.TerraformUpHandler")
     @patch("jupyter_deploy.handlers.project.up_handler.Path")
     def test_apply_delegates_to_handler(self, mock_path: Mock, mock_tf_handler_cls: Mock) -> None:
-        """Test that apply delegates to the engine-specific handler."""
         mock_path.cwd.return_value = Path("/mock/cwd")
         mock_tf_handler = Mock()
-        mock_tf_handler.apply.return_value = True
         mock_tf_handler_cls.return_value = mock_tf_handler
 
         handler = UpHandler()
-        result = handler.apply("test-plan")
+        handler.apply("test-plan", auto_approve=False)
 
-        mock_tf_handler.apply.assert_called_once_with("test-plan")
-        self.assertTrue(result)
+        mock_tf_handler.apply.assert_called_once_with("test-plan", False)
 
     @patch("jupyter_deploy.engine.terraform.tf_up.TerraformUpHandler")
     @patch("jupyter_deploy.handlers.project.up_handler.Path")
-    def test_get_default_plan_file_delegates_to_handler(self, mock_path: Mock, mock_tf_handler_cls: Mock) -> None:
-        """Test that get_default_plan_file delegates to the engine-specific handler."""
+    def test_get_default_config_filename_delegates_to_handler(self, mock_path: Mock, mock_tf_handler_cls: Mock) -> None:
         mock_path.cwd.return_value = Path("/mock/cwd")
         mock_tf_handler = Mock()
-        mock_tf_handler.get_default_plan_file.return_value = "jdout-tfplan"
+        mock_tf_handler.get_default_config_filename.return_value = "jdout-tfplan"
         mock_tf_handler_cls.return_value = mock_tf_handler
 
         handler = UpHandler()
-        result = handler.get_default_plan_file()
+        result = handler.get_default_config_filename()
 
-        mock_tf_handler.get_default_plan_file.assert_called_once()
+        mock_tf_handler.get_default_config_filename.assert_called_once()
         self.assertEqual(result, "jdout-tfplan")
 
     @patch("jupyter_deploy.handlers.project.up_handler.Path")
     def test_init_raises_not_implemented_error_for_unsupported_engine(self, mock_path: Mock) -> None:
-        """Test that UpHandler raises NotImplementedError for unsupported engines."""
         mock_path.cwd.return_value = Path("/mock/cwd")
 
         with patch.object(UpHandler, "_get_engine_type") as mock_get_engine_type:
