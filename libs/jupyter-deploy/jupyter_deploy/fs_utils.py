@@ -1,3 +1,4 @@
+import glob
 import os
 import shutil
 import stat
@@ -104,3 +105,17 @@ def write_inline_file_content(file_path: Path, lines: list[str]) -> None:
     """Write file as separate lines."""
     with open(file_path, "w+") as f:
         f.writelines(lines)
+
+
+def find_matching_filenames(dir_path: Path, file_pattern: str) -> list[str]:
+    """Return a list of file names which match the pattern in the target dir."""
+
+    path_pattern = dir_path / file_pattern
+    matching_filepaths = glob.glob(f"{path_pattern.absolute()}")
+
+    valid_filenames = []
+    for file_path_str in matching_filepaths:
+        filename = Path(file_path_str).name
+        valid_filenames.append(filename)
+    
+    return valid_filenames

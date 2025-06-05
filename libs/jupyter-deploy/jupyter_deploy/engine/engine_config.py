@@ -25,6 +25,11 @@ class EngineConfigHandler(ABC):
         pass
 
     @abstractmethod
+    def list_presets(self) -> list[str]:
+        """Return the list of default presets that this template supports."""
+        pass
+
+    @abstractmethod
     def configure(self, preset_name: str | None) -> None:
         """Execute commands to set the values of the variables."""
         pass

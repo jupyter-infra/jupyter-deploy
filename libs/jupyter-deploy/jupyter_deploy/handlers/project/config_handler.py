@@ -29,8 +29,9 @@ class ConfigHandler:
 
         if not preset_valid:
             console = rich_console.Console()
-            console.print(f":error: preset '{self.preset_name}' not found.")
-
+            valid_presets = self._handler.list_presets()
+            console.print(f":x: preset [bold]{self.preset_name}[/] is invalid for this template.", style="red")
+            console.print(f"Valid presets: {valid_presets}")
         return preset_valid
 
     def reset_recorded_variables(self) -> None:
