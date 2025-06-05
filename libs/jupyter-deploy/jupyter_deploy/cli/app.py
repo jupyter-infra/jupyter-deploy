@@ -115,7 +115,7 @@ def config(
     defaults_preset_name: Annotated[
         str,
         typer.Option(
-            "--preset-name", "-n", help="Preset defaults to use: 'all', 'none' or template-specific preset names."
+            "--preset-defaults", "-d", help="Preset defaults to use: 'all', 'none' or template-specific preset names."
         ),
     ] = "all",
     record_secrets: Annotated[

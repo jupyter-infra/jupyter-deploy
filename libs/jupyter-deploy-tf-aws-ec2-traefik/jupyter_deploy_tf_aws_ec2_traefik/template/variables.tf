@@ -73,7 +73,7 @@ variable "iam_role_prefix" {
 
     Terraform will assign the postfix to ensure there is no name collision in your AWS account.
 
-    Recommended: Jupyter-ec2-traefik
+    Recommended: Jupyter-deploy-ec2-traefik
   EOT
   type        = string
   validation {
@@ -91,7 +91,7 @@ variable "oauth_app_secret_prefix" {
 
     Terraform will assign the postfix to ensure there is no name collision in your AWS account.
 
-    Recommended: Jupyter-ec2-traefik
+    Recommended: Jupyter-deploy-ec2-traefik
   EOT
   type        = string
 }
