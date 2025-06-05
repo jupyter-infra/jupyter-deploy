@@ -43,6 +43,22 @@ def check_executable_installation(
         return False, None, f"{e}"
 
 
+def run_cmd_and_capture_output(cmds: list[str]) -> str:
+    """Run command, returns output.
+
+    Raises:
+        CalledProcessError if return code is not 0
+    """
+    result = subprocess.run(
+        cmds,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    return result.stdout
+
+
 def run_cmd_and_pipe_to_terminal(cmds: list[str], timeout_seconds: int | None = None) -> tuple[int, bool]:
     """Run command in a new process, pipe input in and output/error out to current.
 

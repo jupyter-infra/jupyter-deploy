@@ -112,18 +112,53 @@ def config(
     skip_verify: Annotated[
         bool, typer.Option("--skip-verify", help="Avoid verifying that the project dependencies are configured.")
     ] = False,
+    defaults_preset_name: Annotated[
+        str,
+        typer.Option(
+            "--preset-name", "-n", help="Preset defaults to use: 'all', 'none' or template-specific preset names."
+        ),
+    ] = "all",
+    record_secrets: Annotated[
+        bool,
+        typer.Option(
+            "--record-secrets",
+            "-s",
+            help="Record the values of variables marked 'sensitive'.",
+        ),
+    ] = False,
+    reset: Annotated[
+        bool, typer.Option("--reset", "-r", help="Delete previously recorded variables and secrets.")
+    ] = False,
 ) -> None:
     """Verify the system configuration, prompt inputs and prepare for deployment.
 
     Run either from a jupyter-deploy project directory created with `jd init`
     or pass a --path PATH to such a directory.
+
+    The `config` command will remember your variable values so that you do not need to
+    specify them again next time you run `config`.
+
+    You can reset these recorded values with `--reset` or `-r`.
+
+    Sensitive variables do not get recorded unless you pass `--save-secrets` or -`s`.
     """
+    preset_name = None if defaults_preset_name == "none" else defaults_preset_name
+
     with cmd_utils.project_dir(project_dir):
-        handler = config_handler.ConfigHandler()
+        handler = config_handler.ConfigHandler(preset_name=preset_name)
+
+        if not handler.validate():
+            return
+
         run_verify = not skip_verify
         run_configure = False
 
         console = Console()
+
+        if reset:
+            console.rule("[bold]jupyter-deploy:[/] resetting recorded variables and secrets")
+            handler.reset_recorded_variables()
+            handler.reset_recorded_secrets()
 
         if run_verify:
             console.rule("[bold]jupyter-deploy:[/] verifying requirements")
@@ -135,6 +170,10 @@ def config(
         if run_configure:
             console.rule("[bold]jupyter-deploy:[/] configuring the project")
             handler.configure()
+
+            console.rule("[bold]jupyter-deploy:[/] recording input values")
+            handler.record(record_vars=True, record_secrets=record_secrets)
+            console.rule()
 
 
 @runner.app.command()
