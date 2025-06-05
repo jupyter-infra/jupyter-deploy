@@ -1,3 +1,4 @@
+import subprocess
 import sys
 from typing import Annotated
 
@@ -41,12 +42,12 @@ runner = JupyterDeployCliRunner()
 @runner.app.command()
 def init(
     path: Annotated[
-        str,
+        str | None,
         typer.Argument(
             help="Path to the directory where jupyter-deploy will create your project files. "
             "Pass '.' to use your current working directory."
         ),
-    ],
+    ] = None,
     engine: Annotated[
         EngineType, typer.Option("--engine", "-E", help="Infrastructure as code software to manage your resources.")
     ] = EngineType.TERRAFORM,
@@ -73,6 +74,10 @@ def init(
     Target project path must be specified. If the path is not empty, prompts
     for confirmation before overwriting existing content.
     """
+    if path is None:
+        init_help_cmds = ["jupyter", "deploy", "init", "--help"]
+        subprocess.run(init_help_cmds)
+        return
     project = InitHandler(
         project_dir=path,
         engine=engine,

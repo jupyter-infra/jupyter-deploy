@@ -351,10 +351,13 @@ class TestInitCommand(unittest.TestCase):
         self.mock_clear_project_path.assert_not_called()
         self.mock_setup.assert_not_called()
 
-    def test_init_command_requires_output_path(self) -> None:
-        """Test that the init command requires the output_path argument."""
+    @patch("subprocess.run")
+    def test_init_command_calls_help_when_no_path(self, mock_subprocess_run: Mock) -> None:
+        mock_subprocess_run.return_value = Mock(returncode=0)
+
         runner = CliRunner()
         result = runner.invoke(app_runner.app, ["init"])
 
-        self.assertNotEqual(result.exit_code, 0, "init command should fail without path")
-        self.assertTrue("Missing argument 'PATH'" in result.stdout)
+        self.assertEqual(result.exit_code, 0, "init command should succeed without path")
+
+        mock_subprocess_run.assert_called_once_with(["jupyter", "deploy", "init", "--help"])
