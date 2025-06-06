@@ -1,6 +1,6 @@
 import sys
 import unittest
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from unittest.mock import MagicMock, Mock, patch
 
@@ -358,3 +358,187 @@ class TestInitCommand(unittest.TestCase):
 
         self.assertNotEqual(result.exit_code, 0, "init command should fail without path")
         self.assertTrue("Missing argument 'PATH'" in result.stdout)
+
+
+class TestUpCommand(unittest.TestCase):
+    def get_mock_up_handler(self) -> tuple[Mock, dict[str, Mock]]:
+        mock_up_handler = Mock()
+        mock_verify_config = Mock()
+        mock_apply = Mock()
+        mock_get_default_filename = Mock()
+
+        mock_up_handler.verify_config_file_exists = mock_verify_config
+        mock_up_handler.apply = mock_apply
+        mock_up_handler.get_default_config_filename = mock_get_default_filename
+
+        mock_get_default_filename.return_value = "jdout-tfplan"
+        mock_verify_config.return_value = ""
+
+        return mock_up_handler, {
+            "verify_config": mock_verify_config,
+            "apply": mock_apply,
+            "get_default_filename": mock_get_default_filename
+        }
+
+    @contextmanager
+    def mock_project_dir(*_args: object, **_kwargs: object) -> Generator[None]:
+        yield None
+
+    @patch("jupyter_deploy.cli.app.UpHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_up_command_checks_plan_file_exists(
+        self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
+        
+        mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
+        mock_up_handler_cls.return_value = mock_up_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_up_fns["verify_config"].assert_called_once_with(None)
+
+    @patch("jupyter_deploy.cli.app.UpHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_up_command_with_custom_path(self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock) -> None:
+        mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
+        
+        mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
+        mock_up_handler_cls.return_value = mock_up_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up", "--path", "/custom/path"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with("/custom/path")
+
+    @patch("jupyter_deploy.cli.app.UpHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_up_command_with_custom_config_file(
+        self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
+        
+        mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
+        mock_up_handler_cls.return_value = mock_up_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up", "--config-file", "custom-plan"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_up_fns["verify_config"].assert_called_once_with("custom-plan")
+
+    @patch("jupyter_deploy.cli.app.UpHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_up_command_runs_apply_when_config_exists(self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock) -> None:
+        mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
+        
+        mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
+        mock_up_fns["verify_config"].return_value = "/path/to/config"
+        mock_up_handler_cls.return_value = mock_up_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_up_fns["verify_config"].assert_called_once_with(None)
+        mock_up_fns["apply"].assert_called_once_with("/path/to/config", False)
+        
+    @patch("jupyter_deploy.cli.app.UpHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_up_command_with_answer_yes_option(self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock) -> None:
+        mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
+        
+        mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
+        mock_up_fns["verify_config"].return_value = "/path/to/config"
+        mock_up_handler_cls.return_value = mock_up_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up", "--answer-yes"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_up_fns["apply"].assert_called_once_with("/path/to/config", True)
+        
+    @patch("jupyter_deploy.cli.app.UpHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_up_command_with_all_args(self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock) -> None:
+        mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
+        
+        mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
+        mock_up_fns["verify_config"].return_value = "/path/to/config"
+        mock_up_handler_cls.return_value = mock_up_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up", "--path", "/custom/path", "--answer-yes"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with("/custom/path")
+        mock_up_fns["verify_config"].assert_called_once_with(None)
+        mock_up_fns["apply"].assert_called_once_with("/path/to/config", True)
+
+
+class TestDownCommand(unittest.TestCase):
+    def get_mock_down_handler(self) -> tuple[Mock, dict[str, Mock]]:
+        mock_down_handler = Mock()
+        mock_destroy = Mock()
+
+        mock_down_handler.destroy = mock_destroy
+        mock_destroy.return_value = True
+
+        return mock_down_handler, {"destroy": mock_destroy}
+
+    @contextmanager
+    def mock_project_dir(*_args: object, **_kwargs: object) -> Generator[None]:
+        yield None
+
+    @patch("jupyter_deploy.cli.app.DownHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_down_command_runs_destroy(
+        self, mock_project_ctx_manager: Mock, mock_down_handler_cls: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestDownCommand.mock_project_dir
+        
+        mock_down_handler_instance, mock_down_fns = self.get_mock_down_handler()
+        mock_down_handler_cls.return_value = mock_down_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["down"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_down_fns["destroy"].assert_called_once()
+
+    @patch("jupyter_deploy.cli.app.DownHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_down_command_with_custom_path(self, mock_project_ctx_manager: Mock, mock_down_handler_cls: Mock) -> None:
+        mock_project_ctx_manager.side_effect = TestDownCommand.mock_project_dir
+        
+        mock_down_handler_instance, mock_down_fns = self.get_mock_down_handler()
+        mock_down_handler_cls.return_value = mock_down_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["down", "--path", "/custom/path"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with("/custom/path")
+        mock_down_fns["destroy"].assert_called_once()
+        
+    @patch("jupyter_deploy.cli.app.DownHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_down_command_with_answer_yes_option(self, mock_project_ctx_manager: Mock, mock_down_handler_cls: Mock) -> None:
+        mock_project_ctx_manager.side_effect = TestDownCommand.mock_project_dir
+        
+        mock_down_handler_instance, mock_down_fns = self.get_mock_down_handler()
+        mock_down_handler_cls.return_value = mock_down_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["down", "--answer-yes"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_down_fns["destroy"].assert_called_once_with(True)
