@@ -62,14 +62,31 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
 
     def get_mock_config_handler(self) -> tuple[Mock, dict[str, Mock]]:
         mock_config_handler = Mock()
+        mock_validate = Mock()
+        mock_reset_variables = Mock()
+        mock_reset_secrets = Mock()
         mock_verify = Mock()
         mock_configure = Mock()
+        mock_record = Mock()
 
+        mock_config_handler.validate = mock_validate
+        mock_config_handler.reset_recorded_variables = mock_reset_variables
+        mock_config_handler.reset_recorded_secrets = mock_reset_secrets
         mock_config_handler.verify_requirements = mock_verify
         mock_config_handler.configure = mock_configure
+        mock_config_handler.record = mock_record
+
+        mock_validate.return_value = True
         mock_verify.return_value = True
 
-        return mock_config_handler, {"verify": mock_verify, "configure": mock_configure}
+        return mock_config_handler, {
+            "validate": mock_validate,
+            "reset_recorded_variables": mock_reset_variables,
+            "reset_recorded_secrets": mock_reset_secrets,
+            "verify": mock_verify,
+            "configure": mock_configure,
+            "record": mock_record,
+        }
 
     @contextmanager
     def mock_project_dir(*_args: object, **_kwargs: object) -> Iterator[None]:
@@ -77,7 +94,7 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_config_cmd_curr_path_calls_verify_and_configure(
+    def test_config_cmd_curr_path_calls_validate_verify_configure_and_record(
         self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
     ) -> None:
         mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
@@ -91,12 +108,68 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
         # Verify
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with(None)
+        mock_config_handler.assert_called_once()
+        mock_config_fns["validate"].assert_called_once()
         mock_config_fns["verify"].assert_called_once()
-        mock_config_fns["configure"].assert_called_once()
+        mock_config_fns["configure"].assert_called_with()
+        mock_config_fns["record"].assert_called_once_with(record_vars=True, record_secrets=False)
+        mock_config_fns["reset_recorded_variables"].assert_not_called()
+        mock_config_fns["reset_recorded_secrets"].assert_not_called()
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_config_other_path_calls_verify_and_configure(
+    def test_config_passes_all_as_default_preset(
+        self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
+        mock_config_handler_instance, _ = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        # Act
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config"])
+
+        # Verify
+        self.assertEqual(result.exit_code, 0)
+        mock_config_handler.assert_called_once_with(preset_name="all")
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_config_passes_no_preset_when_user_passes_none(
+        self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
+        mock_config_handler_instance, _ = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        # Act
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "--defaults-preset-name", "none"])
+
+        # Verify
+        self.assertEqual(result.exit_code, 0)
+        mock_config_handler.assert_called_once_with(preset_name=None)
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_config_passes_the_preset_name_when_user_provides_a_value(
+        self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
+        mock_config_handler_instance, _ = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        # Act
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "-d", "some-preset"])
+
+        # Verify
+        self.assertEqual(result.exit_code, 0)
+        mock_config_handler.assert_called_once_with(preset_name="some-preset")
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_config_other_path_calls_validate_verify_configure_and_record(
         self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
     ) -> None:
         mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
@@ -110,14 +183,17 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
         # Verify
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with("/my/project/path")
+        mock_config_handler.assert_called_once()
+        mock_config_fns["validate"].assert_called_once()
         mock_config_fns["verify"].assert_called_once()
         mock_config_fns["configure"].assert_called_once()
+        mock_config_fns["record"].assert_called_once()
+        mock_config_fns["reset_recorded_variables"].assert_not_called()
+        mock_config_fns["reset_recorded_secrets"].assert_not_called()
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_config_path_calls_verify_and_configure(
-        self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
-    ) -> None:
+    def test_config_accepts_p_flag(self, mock_project_ctx_manager: Mock, mock_config_handler: Mock) -> None:
         mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
         mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
         mock_config_handler.return_value = mock_config_handler_instance
@@ -129,8 +205,32 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
         # Verify
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with("/my/project/path")
-        mock_config_fns["verify"].assert_called_once()
-        mock_config_fns["configure"].assert_called_once()
+        mock_config_handler.assert_called_once()
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_config_stops_if_validate_returns_false(
+        self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+        mock_config_fns["validate"].return_value = False
+
+        # Act
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config"])
+
+        # Verify
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_config_handler.assert_called_once()
+        mock_config_fns["validate"].assert_called_once()
+        mock_config_fns["verify"].assert_not_called()
+        mock_config_fns["configure"].assert_not_called()
+        mock_config_fns["record"].assert_not_called()
+        mock_config_fns["reset_recorded_variables"].assert_not_called()
+        mock_config_fns["reset_recorded_secrets"].assert_not_called()
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -149,8 +249,115 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
         # Verify
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with(None)
+        mock_config_handler.assert_called_once()
+        mock_config_fns["validate"].assert_called_once()
         mock_config_fns["verify"].assert_called_once()
         mock_config_fns["configure"].assert_not_called()
+        mock_config_fns["record"].assert_not_called()
+        mock_config_fns["reset_recorded_variables"].assert_not_called()
+        mock_config_fns["reset_recorded_secrets"].assert_not_called()
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_config_reset_vars_and_secrets_when_user_asks(
+        self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        # Act
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "--reset"])
+
+        # Verify
+        self.assertEqual(result.exit_code, 0)
+        mock_config_fns["validate"].assert_called_once()
+        mock_config_fns["reset_recorded_variables"].assert_called_once()
+        mock_config_fns["reset_recorded_secrets"].assert_called_once()
+        mock_config_fns["verify"].assert_called_once()
+        mock_config_fns["configure"].assert_called_once()
+        mock_config_fns["record"].assert_called_once_with(record_vars=True, record_secrets=False)
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_config_accepts_r_short_flag_for_reset(
+        self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        # Act
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "-r"])
+
+        # Verify
+        self.assertEqual(result.exit_code, 0)
+        mock_config_fns["record"].assert_called_once_with(record_vars=True, record_secrets=False)
+        mock_config_fns["reset_recorded_variables"].assert_called_once()
+        mock_config_fns["reset_recorded_secrets"].assert_called_once()
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_config_with_reset_flag_calls_reset_before_configure_and_record(
+        self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        call_order: list[str] = []
+        mock_config_fns["reset_recorded_variables"].side_effect = lambda *a, **kw: call_order.append("reset_vars")
+        mock_config_fns["reset_recorded_secrets"].side_effect = lambda *a, **kw: call_order.append("reset_secrets")
+        mock_config_fns["configure"].side_effect = lambda *a, **kw: call_order.append("configure")
+        mock_config_fns["record"].side_effect = lambda *a, **kw: call_order.append("record")
+
+        # Act
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "-r"])
+
+        # Verify
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(call_order, ["reset_vars", "reset_secrets", "configure", "record"])
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_config_records_secrets_when_the_user_asks(
+        self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        # Act
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "--record-secrets"])
+
+        # Verify
+        self.assertEqual(result.exit_code, 0)
+        mock_config_fns["record"].assert_called_once_with(record_vars=True, record_secrets=True)
+        mock_config_fns["reset_recorded_variables"].assert_not_called()
+        mock_config_fns["reset_recorded_secrets"].assert_not_called()
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_config_accept_s_flag_to_record_secrets(
+        self, mock_project_ctx_manager: Mock, mock_config_handler: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestJupyterDeployConfigCmd.mock_project_dir
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        # Act
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "-s"])
+
+        # Verify
+        self.assertEqual(result.exit_code, 0)
+        mock_config_fns["record"].assert_called_once_with(record_vars=True, record_secrets=True)
+        mock_config_fns["reset_recorded_variables"].assert_not_called()
+        mock_config_fns["reset_recorded_secrets"].assert_not_called()
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -166,8 +373,13 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
         # Verify
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with(None)
+        mock_config_handler.assert_called_once()
+        mock_config_fns["validate"].assert_called_once()
         mock_config_fns["verify"].assert_not_called()
         mock_config_fns["configure"].assert_called_once()
+        mock_config_fns["record"].assert_called_once()
+        mock_config_fns["reset_recorded_variables"].assert_not_called()
+        mock_config_fns["reset_recorded_secrets"].assert_not_called()
 
 
 class TestJupyterDeployApp(unittest.TestCase):
