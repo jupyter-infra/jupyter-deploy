@@ -109,9 +109,6 @@ def config(
     project_dir: Annotated[
         str | None, typer.Option("--path", "-p", help="Directory of the jupyter-deploy project to configure.")
     ] = None,
-    skip_verify: Annotated[
-        bool, typer.Option("--skip-verify", help="Avoid verifying that the project dependencies are configured.")
-    ] = False,
     defaults_preset_name: Annotated[
         str,
         typer.Option(
@@ -130,6 +127,9 @@ def config(
     ] = False,
     reset: Annotated[
         bool, typer.Option("--reset", "-r", help="Delete previously recorded variables and secrets.")
+    ] = False,
+    skip_verify: Annotated[
+        bool, typer.Option("--skip-verify", help="Avoid verifying that the project dependencies are configured.")
     ] = False,
 ) -> None:
     """Verify the system configuration, prompt inputs and prepare for deployment.
