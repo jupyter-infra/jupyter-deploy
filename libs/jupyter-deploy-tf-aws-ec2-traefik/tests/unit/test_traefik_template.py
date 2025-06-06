@@ -4,6 +4,8 @@ from jupyter_deploy_tf_aws_ec2_traefik.template import TEMPLATE_PATH
 
 EXPECTED_TEMPLATE_FILES = [
     "cloudinit.sh",
+    "defaults-all.tfvars",
+    "defaults-base.tfvars",
     "docker-compose.yml.tftpl",
     "docker-startup.sh",
     "dockerfile.jupyter",

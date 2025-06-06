@@ -1,139 +1,227 @@
 # Variables declaration
-variable "aws_region" {
-  description = "AWS region to deploy resources"
+variable "region" {
+  description = <<-EOT
+    The AWS region where to deploy the resources.
+
+    Refer to: https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions.html
+
+    Example: us-west-2
+  EOT
   type        = string
-  default     = "us-west-2"
 }
 
 variable "instance_type" {
-  description = "AWS EC2 instance type"
+  description = <<-EOT
+    The instance type of the EC2 instance for the jupyter server.
+
+    Refer to: https://aws.amazon.com/ec2/instance-types/
+    Note that instance type availability depends on the AWS region you use.
+
+    Recommended: t3.medium
+  EOT
   type        = string
-  default     = "t3.medium"
 }
 
-variable "key_name" {
-  description = "Key name of the Key Pair to use for the instance"
+variable "key_pair_name" {
+  description = <<-EOT
+    The name of the Key Pair to use for the EC2 instance.
+
+    AWS SSM is the preferred method to access the EC2 instance of the jupyter server,
+    and does not require a Key Pair.
+    If you pass a Key Pair here, ensure that it exists in your AWS account.
+
+    Recommended: leave empty
+  EOT
   type        = string
-  default     = null # optional: use AWS SSM instead
 }
 
 variable "ami_id" {
-  description = "AMI ID to pin for the EC2 instance, otherwise defaults to the latest AL2023"
+  description = <<-EOT
+    The Amazon machine image ID to pin for your EC2 instance.
+
+    Leave empty to use the latest AL2023.
+    Refer to: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/finding-an-ami.html
+
+    Recommended: leave empty
+  EOT
   type        = string
-  default     = null
 }
 
-variable "jupyter_data_volume_size" {
-  description = "The size in GB of the EBS volume accessible to the jupyter server"
+variable "volume_size_gb" {
+  description = <<-EOT
+    The size in gigabytes of the EBS volume accessible to the jupyter server.
+
+    Recommended: 30
+  EOT
   type        = number
-  default     = 30
 }
 
-variable "jupyter_data_volume_type" {
-  description = "The type of EBS volume accessible by the jupyter server"
+variable "volume_type" {
+  description = <<-EOT
+    The type of EBS volume accessible by the jupyter server.
+
+    Refer to: https://docs.aws.amazon.com/ebs/latest/userguide/ebs-volume-types.html
+
+    Recommended: gp3
+  EOT
   type        = string
-  default     = "gp3"
 }
 
-variable "iam_role_name_prefix" {
-  description = "Name of the execution IAM role for the EC2 instance of the Jupyter Server"
+variable "iam_role_prefix" {
+  description = <<-EOT
+    The prefix for the name of the execution IAM role for the EC2 instance of the jupyter server.
+
+    Terraform will assign the postfix to ensure there is no name collision in your AWS account.
+
+    Recommended: Jupyter-deploy-ec2-traefik
+  EOT
   type        = string
-  default     = "Jupyter-ec2-traefik"
   validation {
-    condition     = length(var.iam_role_name_prefix) <= 37
-    error_message = "Max length for prefix is 38. Input at most 37 chars to account for hyphen postfix."
+    condition     = length(var.iam_role_prefix) <= 37
+    error_message = <<-EOT
+      Max length for prefix is 38.
+      Input at most 37 chars to account for the hyphen postfix.
+    EOT
   }
 }
 
-variable "letsencrypt_notification_email" {
-  description = "The email that letsencrypt should use for certificate information."
-  type        = string
-  default     = "jggg@amazon.com"
-}
-
-variable "domain_name" {
+variable "oauth_app_secret_prefix" {
   description = <<-EOT
-    Domain name to add subdomain to. E.g. mydomain.com.
-    Your AWS account must have permission to create route 53 records within this domain.
+    The prefix for the name of the AWS secret where to store your OAuth app client secret.
+
+    Terraform will assign the postfix to ensure there is no name collision in your AWS account.
+
+    Recommended: Jupyter-deploy-ec2-traefik
   EOT
   type        = string
 }
 
-variable "subdomain_name" {
+variable "letsencrypt_email" {
   description = <<-EOT
-    Sub-domain for the notebook URL.
-    E.g., if your domain name is 'mydomain.com', the default will be 'notebook1.notebooks.mydomain.com'
+    The email that letsencrypt will use to deliver notices about certificates.
+
+    Example: yourname+1@example.com
   EOT
   type        = string
-  default     = "notebook1.notebooks"
+}
+
+variable "domain" {
+  description = <<-EOT
+    The domain name where to add the DNS records for the notebook and auth URLs.
+
+    You must own this domain, and your AWS account must have permission
+    to create DNS records for this domain with Route 53.
+    Refer to: https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/welcome-domain-registration.html
+
+    If you do not own any domain yet, you can purchase one on AWS Route 53 console.
+    Refer to: https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-register.html#domain-register-procedure-section
+
+    Example: mydomain.com
+  EOT
+  type        = string
+}
+
+variable "subdomain" {
+  description = <<-EOT
+    The subdomain where to add the DNS records for the notebook and auth URLs.
+
+    For example, if you choose 'notebook1.notebooks' and your domain name is 'mydomain.com',
+    the full notebook URL will be 'jupyter.notebook1.notebooks.mydomain.com'.
+
+    Recommended: notebook1.notebooks
+  EOT
+  type        = string
 }
 
 variable "oauth_provider" {
-  description = "OAuth provider to authenticate into the app."
+  description = <<-EOT
+    OAuth provider to authenticate into the jupyter notebooks app.
+
+    Use: github
+  EOT
   type        = string
   default     = "github"
 
   validation {
     condition     = contains(["github"], var.oauth_provider)
-    error_message = "The oauth_provider value must be 'github'."
+    error_message = "The oauth_provider value must be: github"
   }
 }
 
-variable "oauth_allowed_github_emails" {
+variable "oauth_allowed_emails" {
   description = <<-EOT
-    List of email address associated with GitHub accounts to allow for your app.
-    Note: it MUST be the public email address exposed on your public GitHub profile;
-    it is NOT possible to oauth with the GitHub username with this version of the template.
-    Go to your GitHub profile > settings > email, and untick 'Keep my email private'
-    Then from settings, go to 'public profile' and select a 'public email'.
+    List of email addresses associated with GitHub accounts to allow for your app.
 
-    Example: ["example1@amazon.com", "example2@amazon.com"]
+    Note: such emails must correspond to the email addresses exposed on public GitHub profiles.
+    It is NOT possible to oauth with the GitHub username with this version of the template.
+
+    To configure a public email on your GitHub profile:
+    1. Open GitHub: https://github.com/
+    2. Select your user icon on the top right
+    3. Select 'Settings'
+    4. Select 'Emails' on the left nav
+    5. Ensure 'Keep my email addresses private' is not ticked
+    6. Go back to 'Settings'
+    7. Select to 'Public profile'
+    8. Select a 'Public email' from the email addresses associated with your GitHub account
+    9. Use this public email here
+
+    Example: ["yourname+1@example.com", "yourname+2@example.com"]
   EOT
   type        = list(string)
   validation {
-    condition     = length(var.oauth_allowed_github_emails) > 0
-    error_message = "Provide at least one github email to authorize."
+    condition     = length(var.oauth_allowed_emails) > 0
+    error_message = "Provide at least one email to authorize."
   }
 }
 
-variable "oauth_github_app_name" {
-  description = "OAuth app name in GitHub"
-  type        = string
-  default     = "jupyter-deploy-aws-traefik"
-}
-
-variable "oauth_github_app_client_id" {
+variable "oauth_app_client_id" {
   description = <<-EOT
-    You must create a GitHub OAuth app first in your account.
-    1. Navigate to https://github.com/
-    2. Click your user icon on the top right
-    3. Click 'settings'
-    4. On the left nav, click 'Developer settings'
+    Client ID of the OAuth app that will control access to your jupyter notebooks.
+
+    You must create an OAuth app first in your Github account.
+    1. Open GitHub: https://github.com/
+    2. Select your user icon on the top right
+    3. Select 'Settings'
+    4. On the left nav, select 'Developer settings'
     5. Go to 'OAuth Apps'
-    6. Select 'Create New OAuth App'
-    7. App name: 'jupyter-deploy-aws-traefik' or the value you selected for 'oauth_github_app_name'
-    8. Home page URL: 'https://jupyter.<subdomain>.<domain>'
-    9. Application description: leave blank
+    6. Select 'New OAuth App'
+    7. Select an app name, for example: Jupyter-ec2-traefik
+    8. Input home page URL: https://jupyter.<subdomain>.<domain>
+    9. Application description: add your description or leave blank
     10. Authorization callback URL: https://auth.<subdomain>.<domain>/_oauth
-    11. Click 'Register Application'
+    11. Select 'Register Application'
     12. Retrieve the Client ID
     Full instructions: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app
+
+    Example: 00000aaaaa11111bbbbb
   EOT
   type        = string
 }
 
-variable "oauth_github_app_client_secret" {
+variable "oauth_app_client_secret" {
   description = <<-EOT
-    1. Go to https://github.com/settings/developers
+    Client secret of the OAuth app that will control access to your jupyter notebooks.
+
+    1. Open https://github.com/settings/developers
     2. Select your OAuth app
-    3. Generate a secret and pass it here.
+    3. Generate a secret
+    4. Retrieve and save the secret value
+
+    Example: 00000aaaaa11111bbbbb22222ccccc
   EOT
   type        = string
   sensitive   = true
 }
 
 variable "custom_tags" {
-  description = "Tags added to all resources"
+  description = <<-EOT
+    Tags added to all the AWS resources this template will create in your AWS account.
+
+    This template adds default tags in addition to optional tags you specify here.
+    Example: { MyKey = "MyValue" }
+
+    Recommended: {}
+  EOT
   type        = map(string)
-  default     = {}
 }

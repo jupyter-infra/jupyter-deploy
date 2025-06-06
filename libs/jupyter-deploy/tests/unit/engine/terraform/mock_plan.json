@@ -1,0 +1,120 @@
+{
+    "format_version": "1.2",
+    "terraform_version": "1.5.5",
+    "variables": {
+        "null_var": {
+            "value": null
+        },
+        "str_var": {
+            "value": "some_str"
+        },
+        "empty_list_var": {
+            "value": []
+        },
+        "list_var": {
+            "value": [
+                "user.1@example.com",
+                "user.2@example.com"
+            ]
+        },
+        "empty_dict_var": {
+            "value": {}
+        },
+        "str_dict_var": {
+            "value": {
+                "key1": "val1",
+                "key2": "val2"
+            }
+        },
+        "secret_var": {
+            "value": "some-secret"
+        },
+        "secret_var2": {
+            "value": 3.1459
+        },
+        "int_var": {
+            "value": 30
+        }
+    },
+    "planned_values": {
+        "outputs": {
+            "str_output": {
+                "sensitive": false,
+                "type": "string",
+                "value": "https://some.value.dev"
+            }
+        },
+        "root_module": {
+            "resources": []
+        }
+    },
+    "resource_drift": [],
+    "resource_changes": [],
+    "output_changes": {},
+    "prior_state": {},
+    "configuration": {
+        "provider_config": {
+            "aws": {
+                "name": "aws",
+                "full_name": "registry.terraform.io/hashicorp/aws",
+                "expressions": {
+                    "region": {
+                        "references": [
+                            "var.region"
+                        ]
+                    }
+                }
+            },
+            "github": {
+                "name": "github",
+                "full_name": "registry.terraform.io/integrations/github",
+                "version_constraint": "~> 6.0"
+            },
+            "local": {
+                "name": "local",
+                "full_name": "registry.terraform.io/hashicorp/local"
+            },
+            "null": {
+                "name": "null",
+                "full_name": "registry.terraform.io/hashicorp/null"
+            }
+        },
+        "root_module": {
+            "outputs": {},
+            "resources": [],
+            "variables": {
+                "null_var": {
+                    "description": "null var desc"
+                },
+                "str_var": {
+                    "description": "str var desc"
+                },
+                "empty_list_var": {
+                    "description": "empty list var desc"
+                },
+                "list_var": {
+                    "description": "list var desc"
+                },
+                "empty_dict_var": {
+                    "description": "empty dict var desc"
+                },
+                "str_dict_var": {
+                    "description": "str dict var desc"
+                },
+                "secret_var": {
+                    "description": "secret var desc",
+                    "sensitive": true
+                },
+                "secret_var2": {
+                    "description": "secret var desc 2",
+                    "sensitive": true                    
+                },
+                "int_var": {
+                    "description": "int var desc"
+                }
+            }
+        }
+    },
+    "checks": [],
+    "timestamp": "2024-12-24T12:00:00Z"
+}

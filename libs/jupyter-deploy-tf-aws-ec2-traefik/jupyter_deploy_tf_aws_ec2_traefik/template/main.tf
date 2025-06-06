@@ -9,7 +9,7 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region = var.region
 }
 
 provider "github" {}
@@ -120,7 +120,7 @@ resource "aws_instance" "ec2_jupyter_server" {
   instance_type          = var.instance_type
   subnet_id              = data.aws_subnet.first_subnet_of_default_vpc.id
   vpc_security_group_ids = [aws_security_group.ec2_jupyter_server_sg.id]
-  key_name               = var.key_name
+  key_name               = var.key_pair_name
   tags                   = local.combined_tags
 
   # Root volume configuration
@@ -148,7 +148,7 @@ data "aws_iam_policy_document" "server_assume_role_policy" {
 }
 
 resource "aws_iam_role" "execution_role" {
-  name_prefix = "${var.iam_role_name_prefix}-"
+  name_prefix = "${var.iam_role_prefix}-"
   description = "Execution role for the JupyterServer instance, with access to SSM"
 
   assume_role_policy    = data.aws_iam_policy_document.server_assume_role_policy.json
@@ -193,7 +193,7 @@ resource "aws_iam_role_policy_attachment" "route53_dns_delegation" {
 # Define the instance profile to associate the IAM role with the EC2 instance
 resource "aws_iam_instance_profile" "server_instance_profile" {
   role        = aws_iam_role.execution_role.name
-  name_prefix = "${var.iam_role_name_prefix}-"
+  name_prefix = "${var.iam_role_prefix}-"
   lifecycle {
     create_before_destroy = true
   }
@@ -203,8 +203,8 @@ resource "aws_iam_instance_profile" "server_instance_profile" {
 # Define EBS volume for the notebook data (will mount on /home/jovyan)
 resource "aws_ebs_volume" "jupyter_data" {
   availability_zone = aws_instance.ec2_jupyter_server.availability_zone
-  size              = var.jupyter_data_volume_size
-  type              = var.jupyter_data_volume_type
+  size              = var.volume_size_gb
+  type              = var.volume_type
   encrypted         = true
 
   tags = local.combined_tags
@@ -218,7 +218,7 @@ resource "aws_volume_attachment" "jupyter_data_attachment" {
 
 # Define the AWS Secret to store the GitHub oauth app client secret
 resource "aws_secretsmanager_secret" "oauth_github_client_secret" {
-  name_prefix = "${var.oauth_github_app_name}-"
+  name_prefix = "${var.oauth_app_secret_prefix}-"
   tags        = local.combined_tags
 }
 
@@ -236,7 +236,7 @@ data "aws_iam_policy_document" "oauth_github_client_secret" {
 }
 
 resource "aws_iam_policy" "oauth_github_client_secret" {
-  name_prefix = "${var.oauth_github_app_name}-"
+  name_prefix = "${var.oauth_app_secret_prefix}-"
   tags        = local.combined_tags
   policy      = data.aws_iam_policy_document.oauth_github_client_secret.json
 }
@@ -257,7 +257,7 @@ resource "aws_ssm_parameter" "oauth_github_secret_aws_secret_arn" {
 
 # Check if a Route53 hosted zone exists for the domain
 data "aws_route53_zone" "existing" {
-  name         = var.domain_name
+  name         = var.domain
   private_zone = false
   count        = 1
 
@@ -271,7 +271,7 @@ locals {
 
 # Create a new hosted zone if one doesn't exist
 resource "aws_route53_zone" "primary" {
-  name = var.domain_name
+  name = var.domain
 
   # Only create if the data lookup failed
   count = local.zone_already_exists == 0 ? 1 : 0
@@ -329,19 +329,19 @@ data "local_file" "jupyter_server_config" {
 
 # variables consistency checks
 locals {
-  full_domain         = "${var.subdomain_name}.${var.domain_name}"
-  github_emails_valid = var.oauth_provider != "github" || length(var.oauth_allowed_github_emails) > 0
+  full_domain         = "${var.subdomain}.${var.domain}"
+  github_emails_valid = var.oauth_provider != "github" || length(var.oauth_allowed_emails) > 0
 }
 
 locals {
   docker_compose_file = templatefile("${path.module}/docker-compose.yml.tftpl", {
     full_domain           = local.full_domain
-    github_client_id      = var.oauth_github_app_client_id
+    github_client_id      = var.oauth_app_client_id
     aws_region            = data.aws_region.current.name
-    allowed_github_emails = join(",", [for email in var.oauth_allowed_github_emails : "${email}"])
+    allowed_github_emails = join(",", [for email in var.oauth_allowed_emails : "${email}"])
   })
   traefik_config_file = templatefile("${path.module}/traefik.yml.tftpl", {
-    letsencrypt_notification_email = var.letsencrypt_notification_email
+    letsencrypt_notification_email = var.letsencrypt_email
   })
 }
 
@@ -476,7 +476,7 @@ resource "null_resource" "store_oauth_github_client_secret" {
   }
   provisioner "local-exec" {
     command = <<EOT
-      CLIENT_SECRET="${var.oauth_github_app_client_secret}"
+      CLIENT_SECRET="${var.oauth_app_client_secret}"
       aws secretsmanager put-secret-value \
         --secret-id ${aws_secretsmanager_secret.oauth_github_client_secret.arn} \
         --secret-string "$CLIENT_SECRET" \

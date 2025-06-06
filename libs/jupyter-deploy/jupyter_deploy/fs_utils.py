@@ -1,3 +1,4 @@
+import glob
 import os
 import shutil
 import stat
@@ -84,3 +85,37 @@ def safe_copy_tree(source_path: Path, dest_path: Path, ignore: list[str] = DEFAU
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns(*ignore),
     )
+
+
+def file_exists(file_path: Path) -> bool:
+    """Return True if the provided path exists and corresponds to a file."""
+    return file_path.exists() and file_path.is_file()
+
+
+def delete_file_if_exists(file_path: Path) -> bool:
+    """If path exists, unlinks and return True, else return False."""
+    if not file_path.exists():
+        return False
+
+    file_path.unlink(missing_ok=True)
+    return True
+
+
+def write_inline_file_content(file_path: Path, lines: list[str]) -> None:
+    """Write file as separate lines."""
+    with open(file_path, "w+") as f:
+        f.writelines(lines)
+
+
+def find_matching_filenames(dir_path: Path, file_pattern: str) -> list[str]:
+    """Return a list of file names which match the pattern in the target dir."""
+
+    path_pattern = dir_path / file_pattern
+    matching_filepaths = glob.glob(f"{path_pattern.absolute()}")
+
+    valid_filenames = []
+    for file_path_str in matching_filepaths:
+        filename = Path(file_path_str).name
+        valid_filenames.append(filename)
+
+    return valid_filenames
