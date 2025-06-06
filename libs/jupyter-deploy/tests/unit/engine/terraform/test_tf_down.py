@@ -74,7 +74,7 @@ class TestTerraformDownHandler(unittest.TestCase):
 
         with self.assertRaises(Exception) as context:
             handler.destroy()
-        
+
         self.assertEqual(str(context.exception), "Command failed")
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once()
 

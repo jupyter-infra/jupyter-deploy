@@ -84,7 +84,7 @@ class TestTerraformUpHandler(unittest.TestCase):
 
         with self.assertRaises(Exception) as context:
             handler.apply("test-plan")
-        
+
         self.assertEqual(str(context.exception), "Command failed")
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once()
 

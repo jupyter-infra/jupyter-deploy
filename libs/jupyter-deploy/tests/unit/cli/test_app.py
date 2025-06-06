@@ -377,7 +377,7 @@ class TestUpCommand(unittest.TestCase):
         return mock_up_handler, {
             "verify_config": mock_verify_config,
             "apply": mock_apply,
-            "get_default_filename": mock_get_default_filename
+            "get_default_filename": mock_get_default_filename,
         }
 
     @contextmanager
@@ -390,7 +390,7 @@ class TestUpCommand(unittest.TestCase):
         self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock
     ) -> None:
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
-        
+
         mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
         mock_up_handler_cls.return_value = mock_up_handler_instance
 
@@ -405,7 +405,7 @@ class TestUpCommand(unittest.TestCase):
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_up_command_with_custom_path(self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock) -> None:
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
-        
+
         mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
         mock_up_handler_cls.return_value = mock_up_handler_instance
 
@@ -421,7 +421,7 @@ class TestUpCommand(unittest.TestCase):
         self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock
     ) -> None:
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
-        
+
         mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
         mock_up_handler_cls.return_value = mock_up_handler_instance
 
@@ -434,9 +434,11 @@ class TestUpCommand(unittest.TestCase):
 
     @patch("jupyter_deploy.cli.app.UpHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_up_command_runs_apply_when_config_exists(self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock) -> None:
+    def test_up_command_runs_apply_when_config_exists(
+        self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock
+    ) -> None:
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
-        
+
         mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
         mock_up_fns["verify_config"].return_value = "/path/to/config"
         mock_up_handler_cls.return_value = mock_up_handler_instance
@@ -448,12 +450,12 @@ class TestUpCommand(unittest.TestCase):
         mock_project_ctx_manager.assert_called_once_with(None)
         mock_up_fns["verify_config"].assert_called_once_with(None)
         mock_up_fns["apply"].assert_called_once_with("/path/to/config", False)
-        
+
     @patch("jupyter_deploy.cli.app.UpHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_up_command_with_answer_yes_option(self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock) -> None:
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
-        
+
         mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
         mock_up_fns["verify_config"].return_value = "/path/to/config"
         mock_up_handler_cls.return_value = mock_up_handler_instance
@@ -463,12 +465,12 @@ class TestUpCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_up_fns["apply"].assert_called_once_with("/path/to/config", True)
-        
+
     @patch("jupyter_deploy.cli.app.UpHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_up_command_with_all_args(self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock) -> None:
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
-        
+
         mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
         mock_up_fns["verify_config"].return_value = "/path/to/config"
         mock_up_handler_cls.return_value = mock_up_handler_instance
@@ -498,11 +500,9 @@ class TestDownCommand(unittest.TestCase):
 
     @patch("jupyter_deploy.cli.app.DownHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_down_command_runs_destroy(
-        self, mock_project_ctx_manager: Mock, mock_down_handler_cls: Mock
-    ) -> None:
+    def test_down_command_runs_destroy(self, mock_project_ctx_manager: Mock, mock_down_handler_cls: Mock) -> None:
         mock_project_ctx_manager.side_effect = TestDownCommand.mock_project_dir
-        
+
         mock_down_handler_instance, mock_down_fns = self.get_mock_down_handler()
         mock_down_handler_cls.return_value = mock_down_handler_instance
 
@@ -517,7 +517,7 @@ class TestDownCommand(unittest.TestCase):
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_down_command_with_custom_path(self, mock_project_ctx_manager: Mock, mock_down_handler_cls: Mock) -> None:
         mock_project_ctx_manager.side_effect = TestDownCommand.mock_project_dir
-        
+
         mock_down_handler_instance, mock_down_fns = self.get_mock_down_handler()
         mock_down_handler_cls.return_value = mock_down_handler_instance
 
@@ -527,12 +527,14 @@ class TestDownCommand(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with("/custom/path")
         mock_down_fns["destroy"].assert_called_once()
-        
+
     @patch("jupyter_deploy.cli.app.DownHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_down_command_with_answer_yes_option(self, mock_project_ctx_manager: Mock, mock_down_handler_cls: Mock) -> None:
+    def test_down_command_with_answer_yes_option(
+        self, mock_project_ctx_manager: Mock, mock_down_handler_cls: Mock
+    ) -> None:
         mock_project_ctx_manager.side_effect = TestDownCommand.mock_project_dir
-        
+
         mock_down_handler_instance, mock_down_fns = self.get_mock_down_handler()
         mock_down_handler_cls.return_value = mock_down_handler_instance
 

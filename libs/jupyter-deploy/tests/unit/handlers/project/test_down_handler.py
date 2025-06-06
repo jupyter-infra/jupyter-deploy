@@ -41,10 +41,10 @@ class TestDownHandler(unittest.TestCase):
         mock_tf_handler_cls.return_value = mock_tf_handler
 
         handler = DownHandler()
-        
+
         with self.assertRaises(Exception) as context:
             handler.destroy()
-            
+
         self.assertEqual(str(context.exception), "Destroy failed")
         mock_tf_handler.destroy.assert_called_once()
 

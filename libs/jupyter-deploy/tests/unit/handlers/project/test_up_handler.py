@@ -40,10 +40,10 @@ class TestUpHandler(unittest.TestCase):
         mock_tf_handler_cls.return_value = mock_tf_handler
 
         handler = UpHandler()
-        
+
         with self.assertRaises(Exception) as context:
             handler.apply("test-plan")
-            
+
         self.assertEqual(str(context.exception), "Apply failed")
         mock_tf_handler.apply.assert_called_once()
 
@@ -70,12 +70,14 @@ class TestUpHandler(unittest.TestCase):
 
             with self.assertRaises(NotImplementedError):
                 UpHandler()
-                
+
     @patch("jupyter_deploy.engine.terraform.tf_up.TerraformUpHandler")
     @patch("jupyter_deploy.handlers.project.up_handler.Path")
     @patch("jupyter_deploy.handlers.project.up_handler.os.path.exists")
     @patch("jupyter_deploy.handlers.project.up_handler.Console")
-    def test_verify_config_file_exists_when_file_exists(self, mock_console_cls: Mock, mock_exists: Mock, mock_path: Mock, mock_tf_handler_cls: Mock) -> None:
+    def test_verify_config_file_exists_when_file_exists(
+        self, mock_console_cls: Mock, mock_exists: Mock, mock_path: Mock, mock_tf_handler_cls: Mock
+    ) -> None:
         mock_path.cwd.return_value = Path("/mock/cwd")
         mock_tf_handler = Mock()
         mock_tf_handler.get_default_config_filename.return_value = "jdout-tfplan"
@@ -92,7 +94,9 @@ class TestUpHandler(unittest.TestCase):
     @patch("jupyter_deploy.handlers.project.up_handler.Path")
     @patch("jupyter_deploy.handlers.project.up_handler.os.path.exists")
     @patch("jupyter_deploy.handlers.project.up_handler.Console")
-    def test_verify_config_file_exists_when_file_does_not_exist(self, mock_console_cls: Mock, mock_exists: Mock, mock_path: Mock, mock_tf_handler_cls: Mock) -> None:
+    def test_verify_config_file_exists_when_file_does_not_exist(
+        self, mock_console_cls: Mock, mock_exists: Mock, mock_path: Mock, mock_tf_handler_cls: Mock
+    ) -> None:
         mock_path.cwd.return_value = Path("/mock/cwd")
         mock_tf_handler = Mock()
         mock_tf_handler.get_default_config_filename.return_value = "jdout-tfplan"
