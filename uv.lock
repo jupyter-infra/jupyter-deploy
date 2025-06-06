@@ -176,6 +176,7 @@ dependencies = [
     { name = "jupyter-core" },
     { name = "jupyter-deploy-tf-aws-ec2-ngrok" },
     { name = "jupyter-deploy-tf-aws-ec2-traefik" },
+    { name = "pydantic" },
     { name = "typer" },
 ]
 
@@ -203,6 +204,7 @@ requires-dist = [
     { name = "jupyter-deploy-tf-aws-ec2-ngrok", editable = "libs/jupyter-deploy-tf-aws-ec2-ngrok" },
     { name = "jupyter-deploy-tf-aws-ec2-traefik", editable = "libs/jupyter-deploy-tf-aws-ec2-traefik" },
     { name = "mypy-boto3-ec2", marker = "extra == 'aws'", specifier = ">=1.38.6" },
+    { name = "pydantic", specifier = ">=2.11.5" },
     { name = "typer", specifier = ">=0.15.4" },
 ]
 provides-extras = ["aws"]
