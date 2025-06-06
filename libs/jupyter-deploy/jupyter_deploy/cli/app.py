@@ -142,7 +142,7 @@ def config(
 
     You can reset these recorded values with `--reset` or `-r`.
 
-    Sensitive variables do not get recorded unless you pass `--save-secrets` or -`s`.
+    Sensitive variables do not get recorded unless you pass `--record-secrets` or -`s`.
     """
     preset_name = None if defaults_preset_name == "none" else defaults_preset_name
 
