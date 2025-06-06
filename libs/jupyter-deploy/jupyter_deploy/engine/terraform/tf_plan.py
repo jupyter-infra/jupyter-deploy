@@ -42,14 +42,17 @@ def format_terraform_value(value: Any) -> str:
     elif isinstance(value, bool):
         return str(value).lower()
     elif isinstance(value, list):
-        return f"[{','.join([format_terraform_value(v) for v in value])}]"
+        if not len(value):
+            return "[]"
+        out = ["["] + [f"{format_terraform_value(v)}," for v in value] + ["]"]
+        return "\n".join(out)
     elif isinstance(value, dict):
         if not len(value):
             return "{}"
 
         out = ["{"]
         for key, val in value.items():
-            out.append(f'{key} = "{format_terraform_value(val)}"')
+            out.append(f"{key} = {format_terraform_value(val)}")
         out.append("}")
         return "\n".join(out)
     else:

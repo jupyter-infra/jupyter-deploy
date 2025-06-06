@@ -1,15 +1,18 @@
 import unittest
 from pathlib import Path
-from unittest.mock import ANY, MagicMock, Mock, patch
+from unittest.mock import ANY, MagicMock, Mock, mock_open, patch
 
 from jupyter_deploy.fs_utils import (
     DEFAULT_IGNORE_PATTERNS,
     USER_POSIX_755,
     _copy_and_make_executable,
+    delete_file_if_exists,
+    find_matching_filenames,
     get_default_project_path,
     is_empty_dir,
     safe_clean_directory,
     safe_copy_tree,
+    write_inline_file_content,
 )
 
 
@@ -344,3 +347,135 @@ class TestSafeCopyTree(unittest.TestCase):
 
         # Assert
         mock_makedirs.assert_called_once()
+
+
+class TestDeleteFileIfExists(unittest.TestCase):
+    """Test cases for the delete_file_if_exists function."""
+
+    def test_return_false_if_path_does_not_exist(self) -> None:
+        """Test that delete_file_if_exists returns False if the path does not exist."""
+        # Setup
+        mock_path = MagicMock()
+        mock_exists = MagicMock()
+        mock_exists.return_value = False
+        mock_path.exists = mock_exists
+        mock_unlink = MagicMock()
+        mock_path.unlink = mock_unlink
+
+        # Execute
+        result = delete_file_if_exists(mock_path)
+
+        # Assert
+        self.assertFalse(result)
+        mock_exists.assert_called_once()
+        mock_unlink.assert_not_called()
+
+    def test_calls_unlink_and_return_true_if_pass_exists(self) -> None:
+        """Test that delete_file_if_exists calls unlink and returns True if the path exists."""
+        # Setup
+        mock_path = MagicMock()
+        mock_exists = MagicMock()
+        mock_exists.return_value = True
+        mock_path.exists = mock_exists
+        mock_unlink = MagicMock()
+        mock_path.unlink = mock_unlink
+
+        # Execute
+        result = delete_file_if_exists(mock_path)
+
+        # Assert
+        self.assertTrue(result)
+        mock_exists.assert_called_once()
+        mock_unlink.assert_called_once_with(missing_ok=True)
+
+    def test_raise_os_error_if_unlink_raises_os_error(self) -> None:
+        """Test that delete_file_if_exists raises OSError if unlink raises OSError."""
+        # Setup
+        mock_path = MagicMock()
+        mock_exists = MagicMock()
+        mock_unlink = MagicMock()
+        mock_exists.return_value = True
+        mock_unlink.side_effect = OSError("Test error")
+        mock_path.exists = mock_exists
+        mock_path.unlink = mock_unlink
+
+        # Execute and Assert
+        with self.assertRaises(OSError):
+            delete_file_if_exists(mock_path)
+        mock_exists.assert_called_once()
+
+
+class TestWriteInlineFileContent(unittest.TestCase):
+    """Test cases for the write_inline_file_content function."""
+
+    @patch("builtins.open", new_callable=mock_open)
+    def test_call_open_file_and_writelines(self, mock_file: Mock) -> None:
+        """Test that write_inline_file_content calls open and writelines with the correct arguments."""
+        # Setup
+        file_path = Path("/test/file.txt")
+        lines = ["line1\n", "line2\n", "line3\n"]
+
+        # Execute
+        write_inline_file_content(file_path, lines)
+
+        # Assert
+        mock_file.assert_called_once_with(file_path, "w+")
+        mock_file().writelines.assert_called_once_with(lines)
+
+    @patch("builtins.open")
+    def test_raise_os_error_if_open_raises_os_error(self, mock_open_func: Mock) -> None:
+        """Test that write_inline_file_content raises OSError if open raises OSError."""
+        # Setup
+        file_path = Path("/test/file.txt")
+        lines = ["line1\n", "line2\n", "line3\n"]
+        mock_open_func.side_effect = OSError("Test error")
+
+        # Execute and Assert
+        with self.assertRaises(OSError):
+            write_inline_file_content(file_path, lines)
+
+
+class TestFindMatchingFilenames(unittest.TestCase):
+    """Test cases for the find_matching_filenames function."""
+
+    @patch("glob.glob")
+    def test_call_glob_return_matching_filenames(self, mock_glob: Mock) -> None:
+        """Test that find_matching_filenames calls glob.glob and returns matching filenames."""
+        # Setup
+        dir_path = Path("/test/dir")
+        file_pattern = "*.py"
+        mock_glob.return_value = ["/test/dir/file1.py", "/test/dir/file2.py"]
+
+        # Execute
+        result = find_matching_filenames(dir_path, file_pattern)
+
+        # Assert
+        mock_glob.assert_called_once_with(f"{(dir_path / file_pattern).absolute()}")
+        self.assertEqual(result, ["file1.py", "file2.py"])
+
+    @patch("glob.glob")
+    def test_return_empty_list_if_no_match(self, mock_glob: Mock) -> None:
+        """Test that find_matching_filenames returns an empty list if no files match the pattern."""
+        # Setup
+        dir_path = Path("/test/dir")
+        file_pattern = "*.py"
+        mock_glob.return_value = []
+
+        # Execute
+        result = find_matching_filenames(dir_path, file_pattern)
+
+        # Assert
+        mock_glob.assert_called_once_with(f"{(dir_path / file_pattern).absolute()}")
+        self.assertEqual(result, [])
+
+    @patch("glob.glob")
+    def test_raise_error_if_glob_raise_os_error(self, mock_glob: Mock) -> None:
+        """Test that find_matching_filenames raises an error if glob.glob raises an error."""
+        # Setup
+        dir_path = Path("/test/dir")
+        file_pattern = "*.py"
+        mock_glob.side_effect = OSError("Test error")
+
+        # Execute and Assert
+        with self.assertRaises(OSError):
+            find_matching_filenames(dir_path, file_pattern)

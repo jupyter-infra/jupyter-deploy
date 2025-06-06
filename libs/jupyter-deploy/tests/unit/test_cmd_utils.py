@@ -8,7 +8,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from jupyter_deploy.cmd_utils import check_executable_installation, project_dir, run_cmd_and_pipe_to_terminal
+from jupyter_deploy.cmd_utils import (
+    check_executable_installation,
+    project_dir,
+    run_cmd_and_capture_output,
+    run_cmd_and_pipe_to_terminal,
+)
 
 
 class TestCheckExecutableInstallation(unittest.TestCase):
@@ -146,6 +151,32 @@ class TestCheckExecutableInstallation(unittest.TestCase):
         self.assertEqual(error, "Some unexpected error")
         mock_which.assert_called_once_with("test-executable")
         mock_run.assert_called_once()
+
+
+class TestRunCmdAndCaptureOutput(unittest.TestCase):
+    @patch("subprocess.run")
+    def test_starts_sub_process_with_capture_output_and_check(self, mock_run: Mock) -> None:
+        run_cmd_and_capture_output(["sudo", "whoami"])
+        mock_run.assert_called_once_with(
+            ["sudo", "whoami"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    @patch("subprocess.run")
+    def test_return_stdout(self, mock_run: Mock) -> None:
+        mock_resolved_process = Mock()
+        mock_resolved_process.stdout = "the-giant-spaghetti-monster"
+        mock_run.return_value = mock_resolved_process
+        result = run_cmd_and_capture_output(["sudo", "whoami"])
+        self.assertEqual(result, "the-giant-spaghetti-monster")
+
+    @patch("subprocess.run")
+    def test_raises_called_process_error_if_process_raises_called_process_error(self, mock_run: Mock) -> None:
+        mock_run.side_effect = subprocess.CalledProcessError(1, ["curl"], "compute-says-no", None)
+        with self.assertRaises(subprocess.CalledProcessError):
+            run_cmd_and_capture_output(["curl", "http://the-dark-web.html"])
 
 
 class TestRunCmdAndPipeToTerminal(unittest.TestCase):

@@ -30,14 +30,6 @@ class TerraformConfigHandler(EngineConfigHandler):
         )
         self.plan_out_path = project_path / TerraformConfigHandler.TF_DFT_PLAN_FILENAME
 
-    def verify_requirements(self) -> bool:
-        terraform_installed = tf_verify.check_terraform_installation()
-
-        # TODO: assert only when template manifest requires it
-        aws_cli_installed = aws_cli.check_aws_cli_installation()
-
-        return terraform_installed and aws_cli_installed
-
     def _get_preset_path(self, preset_name: str) -> Path:
         return self.project_path / f"defaults-{preset_name}.tfvars"
 
@@ -46,6 +38,10 @@ class TerraformConfigHandler(EngineConfigHandler):
 
     def _get_recorded_secrets_filepath(self) -> Path:
         return self.project_path / TerraformConfigHandler.TF_RECORDED_SECRETS_FILENAME
+
+    def verify_preset_exists(self, preset_name: str) -> bool:
+        file_path = self._get_preset_path(preset_name)
+        return fs_utils.file_exists(file_path=file_path)
 
     def list_presets(self) -> list[str]:
         presets = ["none"]
@@ -58,9 +54,29 @@ class TerraformConfigHandler(EngineConfigHandler):
         presets.extend([n[len("defaults-") : -len(".tfvars")] for n in matching_filenames])
         return sorted(presets)
 
-    def verify_preset_exists(self, preset_name: str) -> bool:
-        file_path = self._get_preset_path(preset_name)
-        return fs_utils.file_exists(file_path=file_path)
+    def verify_requirements(self) -> bool:
+        terraform_installed = tf_verify.check_terraform_installation()
+
+        # TODO: assert only when template manifest requires it
+        aws_cli_installed = aws_cli.check_aws_cli_installation()
+
+        return terraform_installed and aws_cli_installed
+
+    def reset_recorded_variables(self) -> None:
+        path = self._get_recorded_vars_filepath()
+        deleted = fs_utils.delete_file_if_exists(path)
+
+        if deleted:
+            console = rich_console.Console()
+            console.print(f":wastebasket:  Deleted previously recorded inputs at: {path.name}")
+
+    def reset_recorded_secrets(self) -> None:
+        path = self._get_recorded_secrets_filepath()
+        deleted = fs_utils.delete_file_if_exists(path)
+
+        if deleted:
+            console = rich_console.Console()
+            console.print(f":wastebasket:  Deleted previously recorded secrets at: {path.name}")
 
     def configure(self, preset_name: str | None = None) -> None:
         console = rich_console.Console()
@@ -98,22 +114,6 @@ class TerraformConfigHandler(EngineConfigHandler):
 
         # on successful plan generation, terraform prints out where the plan is saved,
         # hence no need to print it again.
-
-    def reset_recorded_variables(self) -> None:
-        path = self._get_recorded_vars_filepath()
-        deleted = fs_utils.delete_file_if_exists(path)
-
-        if deleted:
-            console = rich_console.Console()
-            console.print(f":wastebasket:  Deleted previously recorded inputs at: {path.name}")
-
-    def reset_recorded_secrets(self) -> None:
-        path = self._get_recorded_secrets_filepath()
-        deleted = fs_utils.delete_file_if_exists(path)
-
-        if deleted:
-            console = rich_console.Console()
-            console.print(f":wastebasket:  Deleted previously recorded secrets at: {path.name}")
 
     def record(self, record_vars: bool = False, record_secrets: bool = False) -> None:
         if not record_vars and not record_secrets:
