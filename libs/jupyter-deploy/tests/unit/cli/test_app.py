@@ -144,7 +144,7 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
 
         # Act
         runner = CliRunner()
-        result = runner.invoke(app_runner.app, ["config", "--defaults-preset-name", "none"])
+        result = runner.invoke(app_runner.app, ["config", "--defaults", "none"])
 
         # Verify
         self.assertEqual(result.exit_code, 0)
