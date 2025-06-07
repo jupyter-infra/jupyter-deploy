@@ -12,6 +12,7 @@ from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.handlers.project import config_handler
 from jupyter_deploy.handlers.project.down_handler import DownHandler
 from jupyter_deploy.handlers.project.init_handler import InitHandler
+from jupyter_deploy.handlers.project.open_handler import OpenHandler
 from jupyter_deploy.handlers.project.up_handler import UpHandler
 from jupyter_deploy.infrastructure.enum import AWSInfrastructureType, InfrastructureType
 from jupyter_deploy.provider.enum import ProviderType
@@ -245,15 +246,24 @@ def down(
 
 
 @runner.app.command()
-def open(project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None) -> None:
-    """Open the jupyter app in your webbrowser.
+def open(
+    project_dir: Annotated[
+        str | None, typer.Option("--path", "-p", help="Directory of the jupyter-deploy project to open.")
+    ] = None,
+    url_only: Annotated[
+        bool, typer.Option("--url-only", "-u", help="Return the Jupyter app URL without launching it.")
+    ] = False,
+) -> None:
+    """Open the Jupyter app in your webbrowser.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
     or pass a --path PATH to such a directory.
 
     Call `jd config` and `jd up` first.
     """
-    pass
+    with cmd_utils.project_dir(project_dir):
+        handler = OpenHandler()
+        handler.open(url_only)
 
 
 @runner.app.command()
