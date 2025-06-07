@@ -15,5 +15,5 @@ class EngineUpHandler(ABC):
         pass
 
     @abstractmethod
-    def apply(self, config_file: str, auto_approve: bool = False) -> None:
+    def apply(self, config_file_path: str, auto_approve: bool = False) -> None:
         pass

@@ -131,7 +131,7 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
 
         # Verify
         self.assertEqual(result.exit_code, 0)
-        mock_config_handler.assert_called_once_with(preset_name="all", output_file=None)
+        mock_config_handler.assert_called_once_with(preset_name="all", output_filename=None)
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -148,7 +148,7 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
 
         # Verify
         self.assertEqual(result.exit_code, 0)
-        mock_config_handler.assert_called_once_with(preset_name=None, output_file=None)
+        mock_config_handler.assert_called_once_with(preset_name=None, output_filename=None)
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -165,7 +165,7 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
 
         # Verify
         self.assertEqual(result.exit_code, 0)
-        mock_config_handler.assert_called_once_with(preset_name="some-preset", output_file=None)
+        mock_config_handler.assert_called_once_with(preset_name="some-preset", output_filename=None)
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -577,19 +577,19 @@ class TestInitCommand(unittest.TestCase):
 class TestUpCommand(unittest.TestCase):
     def get_mock_up_handler(self) -> tuple[Mock, dict[str, Mock]]:
         mock_up_handler = Mock()
-        mock_verify_config = Mock()
+        mock_get_config_file_path = Mock()
         mock_apply = Mock()
         mock_get_default_filename = Mock()
 
-        mock_up_handler.verify_config_file_exists = mock_verify_config
+        mock_up_handler.get_config_file_path = mock_get_config_file_path
         mock_up_handler.apply = mock_apply
         mock_up_handler.get_default_config_filename = mock_get_default_filename
 
         mock_get_default_filename.return_value = "jdout-tfplan"
-        mock_verify_config.return_value = ""
+        mock_get_config_file_path.return_value = ""
 
         return mock_up_handler, {
-            "verify_config": mock_verify_config,
+            "get_config_file_path": mock_get_config_file_path,
             "apply": mock_apply,
             "get_default_filename": mock_get_default_filename,
         }
@@ -613,7 +613,7 @@ class TestUpCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with(None)
-        mock_up_fns["verify_config"].assert_called_once_with(None)
+        mock_up_fns["get_config_file_path"].assert_called_once_with(None)
 
     @patch("jupyter_deploy.cli.app.UpHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -640,11 +640,11 @@ class TestUpCommand(unittest.TestCase):
         mock_up_handler_cls.return_value = mock_up_handler_instance
 
         runner = CliRunner()
-        result = runner.invoke(app_runner.app, ["up", "--config-file", "custom-plan"])
+        result = runner.invoke(app_runner.app, ["up", "--config-filename", "custom-plan"])
 
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with(None)
-        mock_up_fns["verify_config"].assert_called_once_with("custom-plan")
+        mock_up_fns["get_config_file_path"].assert_called_once_with("custom-plan")
 
     @patch("jupyter_deploy.cli.app.UpHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -654,7 +654,7 @@ class TestUpCommand(unittest.TestCase):
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
 
         mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
-        mock_up_fns["verify_config"].return_value = "/path/to/config"
+        mock_up_fns["get_config_file_path"].return_value = "/path/to/config"
         mock_up_handler_cls.return_value = mock_up_handler_instance
 
         runner = CliRunner()
@@ -662,7 +662,7 @@ class TestUpCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with(None)
-        mock_up_fns["verify_config"].assert_called_once_with(None)
+        mock_up_fns["get_config_file_path"].assert_called_once_with(None)
         mock_up_fns["apply"].assert_called_once_with("/path/to/config", False)
 
     @patch("jupyter_deploy.cli.app.UpHandler")
@@ -671,7 +671,7 @@ class TestUpCommand(unittest.TestCase):
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
 
         mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
-        mock_up_fns["verify_config"].return_value = "/path/to/config"
+        mock_up_fns["get_config_file_path"].return_value = "/path/to/config"
         mock_up_handler_cls.return_value = mock_up_handler_instance
 
         runner = CliRunner()
@@ -686,7 +686,7 @@ class TestUpCommand(unittest.TestCase):
         mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
 
         mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler()
-        mock_up_fns["verify_config"].return_value = "/path/to/config"
+        mock_up_fns["get_config_file_path"].return_value = "/path/to/config"
         mock_up_handler_cls.return_value = mock_up_handler_instance
 
         runner = CliRunner()
@@ -694,7 +694,7 @@ class TestUpCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with("/custom/path")
-        mock_up_fns["verify_config"].assert_called_once_with(None)
+        mock_up_fns["get_config_file_path"].assert_called_once_with(None)
         mock_up_fns["apply"].assert_called_once_with("/path/to/config", True)
 
 
@@ -704,7 +704,6 @@ class TestDownCommand(unittest.TestCase):
         mock_destroy = Mock()
 
         mock_down_handler.destroy = mock_destroy
-        mock_destroy.return_value = True
 
         return mock_down_handler, {"destroy": mock_destroy}
 

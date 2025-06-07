@@ -23,18 +23,18 @@ class TerraformUpHandler(EngineUpHandler):
     def get_default_config_filename(self) -> str:
         return TF_DEFAULT_PLAN_FILENAME
 
-    def apply(self, config_file: str, auto_approve: bool = False) -> None:
+    def apply(self, config_file_path: str, auto_approve: bool = False) -> None:
         console = rich_console.Console()
 
         apply_cmd = TF_APPLY_CMD.copy()
         if auto_approve:
             apply_cmd.append(TF_AUTO_APPROVE_CMD_OPTION)
-        apply_cmd.append(config_file)
+        apply_cmd.append(config_file_path)
 
         retcode, timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(apply_cmd)
 
         if retcode != 0 or timed_out:
-            console.print("Error applying Terraform plan.", style="red")
+            console.print(":x: Error applying Terraform plan.", style="red")
             return
 
         console.print("Infrastructure changes applied successfully.", style="green")

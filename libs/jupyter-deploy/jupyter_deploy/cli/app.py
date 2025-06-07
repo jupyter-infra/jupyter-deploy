@@ -133,8 +133,8 @@ def config(
     skip_verify: Annotated[
         bool, typer.Option("--skip-verify", help="Avoid verifying that the project dependencies are configured.")
     ] = False,
-    output_file: Annotated[
-        str | None, typer.Option("--output-file", "-f", help="Name of the file to store the configuration to.")
+    output_filename: Annotated[
+        str | None, typer.Option("--output-filename", "-f", help="Name of the file to store the configuration to.")
     ] = None,
 ) -> None:
     """Verify the system configuration, prompt inputs and prepare for deployment.
@@ -153,7 +153,7 @@ def config(
     preset_name = None if defaults_preset_name == "none" else defaults_preset_name
 
     with cmd_utils.project_dir(project_dir):
-        handler = config_handler.ConfigHandler(preset_name=preset_name, output_file=output_file)
+        handler = config_handler.ConfigHandler(preset_name=preset_name, output_filename=output_filename)
 
         if not handler.validate():
             return
@@ -189,10 +189,10 @@ def up(
     project_dir: Annotated[
         str | None, typer.Option("--path", "-p", help="Directory of the jupyter-deploy project to bring up.")
     ] = None,
-    config_file: Annotated[
+    config_filename: Annotated[
         str | None,
         typer.Option(
-            "--config-file", "-f", help="Name of a file in the project_dir containing the execution configuration."
+            "--config-filename", "-f", help="Name of a file in the project_dir containing the execution configuration."
         ),
     ] = None,
     auto_approve: Annotated[
@@ -213,10 +213,10 @@ def up(
         console = Console()
 
         console.rule("[bold]jupyter-deploy:[/] verifying presence of config file")
-        plan_file_path = handler.verify_config_file_exists(config_file)
-        if plan_file_path:
+        config_file_path = handler.get_config_file_path(config_filename)
+        if config_file_path:
             console.rule("[bold]jupyter-deploy:[/] applying infrastructure changes")
-            handler.apply(plan_file_path, auto_approve)
+            handler.apply(config_file_path, auto_approve)
 
 
 @runner.app.command()

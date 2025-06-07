@@ -26,7 +26,7 @@ class TerraformDownHandler(EngineDownHandler):
         retcode, timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(destroy_cmd)
 
         if retcode != 0 or timed_out:
-            console.print("Error destroying Terraform infrastructure.", style="red")
+            console.print(":x: Error destroying Terraform infrastructure.", style="red")
             return
 
         console.print("Infrastructure resources destroyed successfully.", style="green")

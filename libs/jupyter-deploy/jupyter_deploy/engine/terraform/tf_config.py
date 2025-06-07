@@ -24,15 +24,12 @@ from jupyter_deploy.provider.aws import aws_cli
 class TerraformConfigHandler(EngineConfigHandler):
     """Config handler implementation for terraform projects."""
 
-    def __init__(self, project_path: Path, output_file: str | None = None) -> None:
+    def __init__(self, project_path: Path, output_filename: str | None = None) -> None:
         super().__init__(
             project_path=project_path,
             engine=EngineType.TERRAFORM,
         )
-        if output_file:
-            self.plan_out_path = project_path / output_file
-        else:
-            self.plan_out_path = project_path / TF_DEFAULT_PLAN_FILENAME
+        self.plan_out_path = project_path / (output_filename or TF_DEFAULT_PLAN_FILENAME)
 
     def _get_preset_path(self, preset_name: str) -> Path:
         return self.project_path / f"defaults-{preset_name}.tfvars"

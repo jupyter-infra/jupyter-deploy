@@ -72,42 +72,47 @@ class TestUpHandler(unittest.TestCase):
                 UpHandler()
 
     @patch("jupyter_deploy.engine.terraform.tf_up.TerraformUpHandler")
-    @patch("jupyter_deploy.handlers.project.up_handler.Path")
-    @patch("jupyter_deploy.handlers.project.up_handler.os.path.exists")
+    @patch("pathlib.Path")
     @patch("jupyter_deploy.handlers.project.up_handler.Console")
-    def test_verify_config_file_exists_when_file_exists(
-        self, mock_console_cls: Mock, mock_exists: Mock, mock_path: Mock, mock_tf_handler_cls: Mock
+    def test_get_config_file_path_when_file_exists(
+        self, mock_console_cls: Mock, mock_path_cls: Mock, mock_tf_handler_cls: Mock
     ) -> None:
-        mock_path.cwd.return_value = Path("/mock/cwd")
+        config_path = Path("/mock/cwd/test-config")
+        mock_path_cls.return_value = config_path
         mock_tf_handler = Mock()
         mock_tf_handler.get_default_config_filename.return_value = "jdout-tfplan"
         mock_tf_handler_cls.return_value = mock_tf_handler
-        mock_exists.return_value = True
 
-        handler = UpHandler()
-        result = handler.verify_config_file_exists("test-config")
+        with (
+            patch.object(Path, "exists", return_value=True),
+            patch.object(Path, "cwd", return_value=Path("/mock/cwd")),
+        ):
+            handler = UpHandler()
+            result = handler.get_config_file_path("test-config")
 
-        self.assertEqual(result, str(Path("/mock/cwd/test-config")))
-        mock_exists.assert_called_once()
+        self.assertEqual(result, str(config_path))
 
     @patch("jupyter_deploy.engine.terraform.tf_up.TerraformUpHandler")
-    @patch("jupyter_deploy.handlers.project.up_handler.Path")
-    @patch("jupyter_deploy.handlers.project.up_handler.os.path.exists")
+    @patch("pathlib.Path")
     @patch("jupyter_deploy.handlers.project.up_handler.Console")
-    def test_verify_config_file_exists_when_file_does_not_exist(
-        self, mock_console_cls: Mock, mock_exists: Mock, mock_path: Mock, mock_tf_handler_cls: Mock
+    def test_get_config_file_path_when_file_does_not_exist(
+        self, mock_console_cls: Mock, mock_path_cls: Mock, mock_tf_handler_cls: Mock
     ) -> None:
-        mock_path.cwd.return_value = Path("/mock/cwd")
+        config_path = Path("/mock/cwd/test-config")
+
+        mock_path_cls.return_value = config_path
         mock_tf_handler = Mock()
         mock_tf_handler.get_default_config_filename.return_value = "jdout-tfplan"
         mock_tf_handler_cls.return_value = mock_tf_handler
-        mock_exists.return_value = False
         mock_console_instance = Mock()
         mock_console_cls.return_value = mock_console_instance
 
-        handler = UpHandler()
-        result = handler.verify_config_file_exists("test-config")
+        with (
+            patch.object(Path, "exists", return_value=False),
+            patch.object(Path, "cwd", return_value=Path("/mock/cwd")),
+        ):
+            handler = UpHandler()
+            result = handler.get_config_file_path("test-config")
 
         self.assertEqual(result, "")
-        mock_exists.assert_called_once()
         mock_console_instance.print.assert_called_once()

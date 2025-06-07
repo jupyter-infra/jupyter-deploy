@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from rich.console import Console
@@ -31,18 +30,18 @@ class UpHandler:
         """Get the default config file name for the current engine."""
         return self._handler.get_default_config_filename()
 
-    def verify_config_file_exists(self, config_file: str | None = None) -> str:
-        """Verify that the config file exists."""
+    def get_config_file_path(self, config_filename: str | None = None) -> str:
+        """Get the full path to the config file."""
         console = Console()
 
-        if config_file is None:
-            config_file = self.get_default_config_filename()
+        if config_filename is None:
+            config_filename = self.get_default_config_filename()
 
-        config_file_path = self.project_path / config_file
+        config_file_path = self.project_path / config_filename
 
-        if not os.path.exists(config_file_path):
+        if not config_file_path.exists():
             console.print(
-                f"Config file '{config_file}' not found in {self.project_path}. "
+                f":x: Config file '{config_filename}' not found in {self.project_path}. "
                 f"If you have not yet generated a config file for your current project, "
                 f'please run "jd config" from the project directory first.',
                 style="red",
@@ -51,11 +50,11 @@ class UpHandler:
 
         return str(config_file_path)
 
-    def apply(self, config_file: str, auto_approve: bool = False) -> None:
+    def apply(self, config_file_path: str, auto_approve: bool = False) -> None:
         """Apply the infrastructure changes defined in the config file.
 
         Args:
-            config_file: The path to the config file.
+            config_file_path: The path to the config file.
             auto_approve: Whether to auto-approve the changes without prompting.
         """
-        return self._handler.apply(config_file, auto_approve)
+        return self._handler.apply(config_file_path, auto_approve)

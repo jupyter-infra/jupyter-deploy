@@ -24,7 +24,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         # Arrange
         path = Path("/fake/path")
         custom_output = "custom-output-file"
-        handler = TerraformConfigHandler(path, output_file=custom_output)
+        handler = TerraformConfigHandler(path, output_filename=custom_output)
 
         # Assert
         self.assertIsNotNone(handler)
