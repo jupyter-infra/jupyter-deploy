@@ -17,6 +17,7 @@ from jupyter_deploy.engine.terraform.tf_constants import (
     TF_PLAN_CMD,
     TF_RECORDED_SECRETS_FILENAME,
     TF_RECORDED_VARS_FILENAME,
+    get_preset_filename,
 )
 from jupyter_deploy.provider.aws import aws_cli
 
@@ -32,7 +33,7 @@ class TerraformConfigHandler(EngineConfigHandler):
         self.plan_out_path = project_path / (output_filename or TF_DEFAULT_PLAN_FILENAME)
 
     def _get_preset_path(self, preset_name: str) -> Path:
-        return self.project_path / f"defaults-{preset_name}.tfvars"
+        return self.project_path / get_preset_filename(preset_name)
 
     def _get_recorded_vars_filepath(self) -> Path:
         return self.project_path / TF_RECORDED_VARS_FILENAME

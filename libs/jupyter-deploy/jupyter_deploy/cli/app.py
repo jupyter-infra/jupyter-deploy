@@ -8,7 +8,9 @@ from rich.console import Console
 
 from jupyter_deploy import cmd_utils
 from jupyter_deploy.cli.servers_app import servers_app
+from jupyter_deploy.cli.variables_decorator import with_project_variables
 from jupyter_deploy.engine.enum import EngineType
+from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
 from jupyter_deploy.handlers.project import config_handler
 from jupyter_deploy.handlers.project.down_handler import DownHandler
 from jupyter_deploy.handlers.project.init_handler import InitHandler
@@ -108,6 +110,7 @@ def init(
 
 
 @runner.app.command()
+@with_project_variables()
 def config(
     project_dir: Annotated[
         str | None, typer.Option("--path", "-p", help="Directory of the jupyter-deploy project to configure.")
@@ -137,6 +140,10 @@ def config(
     output_filename: Annotated[
         str | None, typer.Option("--output-filename", "-f", help="Name of the file to store the configuration to.")
     ] = None,
+    variables: Annotated[
+        dict[str, TemplateVariableDefinition] | None,
+        typer.Option("--variables", "-v", help="Will be removed by the decorator."),
+    ] = None,
 ) -> None:
     """Verify the system configuration, prompt inputs and prepare for deployment.
 
@@ -152,6 +159,10 @@ def config(
     Sensitive variables do not get recorded unless you pass `--record-secrets` or `-s`.
     """
     preset_name = None if defaults_preset_name == "none" else defaults_preset_name
+
+    if variables:
+        for var_name, var_def in variables.items():
+            print(f"'{var_name}': {var_def.assigned_value}")
 
     with cmd_utils.project_dir(project_dir):
         handler = config_handler.ConfigHandler(preset_name=preset_name, output_filename=output_filename)
