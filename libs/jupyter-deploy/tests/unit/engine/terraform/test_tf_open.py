@@ -21,9 +21,7 @@ def mock_cwd(tmp_path: Path) -> Generator[Path, None, None]:
 @pytest.fixture
 def mock_terraform_output() -> str:
     """Create a mock terraform output JSON string."""
-    output_content = {
-        "jupyter_url": {"value": "https://example.com/jupyter", "type": "string"}
-    }
+    output_content = {"jupyter_url": {"value": "https://example.com/jupyter", "type": "string"}}
     return json.dumps(output_content)
 
 
@@ -50,15 +48,15 @@ class TestTerraformOpenHandler:
     def test_get_url_invalid_json(self, mock_cwd: Path) -> None:
         """Test that get_url raises a JSONDecodeError if the terraform output contains invalid JSON."""
         handler = TerraformOpenHandler(project_path=Path.cwd())
-        with patch("jupyter_deploy.cmd_utils.run_cmd_and_capture_output", return_value="invalid json"):
-            with pytest.raises(json.JSONDecodeError):
-                handler.get_url()
+        with (
+            patch("jupyter_deploy.cmd_utils.run_cmd_and_capture_output", return_value="invalid json"),
+            pytest.raises(json.JSONDecodeError),
+        ):
+            handler.get_url()
 
     def test_get_url_missing_output(self, mock_cwd: Path) -> None:
         """Test that get_url returns an empty string if the terraform output doesn't contain the jupyter_url output."""
-        output_content = {
-            "other_output": {"value": "https://example.com/other", "type": "string"}
-        }
+        output_content = {"other_output": {"value": "https://example.com/other", "type": "string"}}
         handler = TerraformOpenHandler(project_path=Path.cwd())
         with patch("jupyter_deploy.cmd_utils.run_cmd_and_capture_output", return_value=json.dumps(output_content)):
             url = handler.get_url()

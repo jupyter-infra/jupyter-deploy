@@ -771,7 +771,7 @@ class TestOpenCommand(unittest.TestCase):
 
         mock_open_handler.get_url = mock_get_url
         mock_open_handler.open_url = mock_open_url
-        
+
         mock_get_url.return_value = "https://example.com/jupyter"
 
         return mock_open_handler, {"get_url": mock_get_url, "open_url": mock_open_url}

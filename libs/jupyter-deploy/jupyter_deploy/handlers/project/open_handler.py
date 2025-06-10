@@ -51,6 +51,6 @@ class OpenHandler:
                 style="red",
             )
 
-    def get_url(self) -> None:
+    def get_url(self) -> str:
         """Retrieve the Jupyter URL from the project state file outputs."""
         return self._handler.get_url()

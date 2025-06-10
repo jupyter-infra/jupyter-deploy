@@ -42,7 +42,6 @@ class TestOpenHandler:
             handler = OpenHandler()
             assert handler._handler is not None
 
-
     def test_open_url_success(self) -> None:
         """Test that open_url opens the URL in a web browser, and outputs the URL and cookies help message."""
         handler = OpenHandler()

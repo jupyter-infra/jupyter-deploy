@@ -38,4 +38,4 @@ class TerraformOpenHandler(EngineOpenHandler):
             )
             return ""
 
-        return output_dict["jupyter_url"]["value"]
+        return str(output_dict["jupyter_url"]["value"])
