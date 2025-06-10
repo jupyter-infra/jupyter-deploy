@@ -19,14 +19,10 @@ def to_cli_option_name(s: str) -> str:
         if curr_char.isupper() and prev_char.islower():
             result.append("-")
             result.append(curr_char.lower())
-        # Handle consecutive uppercase letters (e.g., XML)
-        elif curr_char.isupper() and prev_char.isupper():
-            if len(result) > 1 and result[-2] != "-":
-                result.append("-")
-            result.append(curr_char.lower())
         # Handle underscores
         elif curr_char == "_":
-            result.append("-")
+            if prev_char != "-" and prev_char != "_":
+                result.append("-")
         # Handle existing hyphens
         elif curr_char == "-":
             if prev_char != "-":
