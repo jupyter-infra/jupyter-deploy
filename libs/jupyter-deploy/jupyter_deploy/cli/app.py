@@ -71,7 +71,7 @@ def init(
         str, typer.Option("--template", "-T", help="Base name of the infrastrucuture as code template (e.g., traefik)")
     ] = "traefik",
 ) -> None:
-    """Initialize a project directory containing the specified IaC template.
+    """Initialize a project directory containing the specified infrastructure-as-code template.
 
     Template will be selected based on the provided parameters - the matching
     template package must have already been installed.
@@ -144,16 +144,15 @@ def config(
 ) -> None:
     """Verify the system configuration, prompt inputs and prepare for deployment.
 
-    Run either from a jupyter-deploy project directory created with `jd init`
-    or pass a --path PATH to such a directory. Optionally, you can also pass an
-    --output-file argument.
+    You must run this command from a jupyter-deploy project directory created with `jd init`.
 
     The `config` command will remember your variable values so that you do not need to
-    specify them again next time you run `config`.
-
-    You can reset these recorded values with `--reset` or `-r`.
+    specify them again next time you run `config`. You can reset these recorded values
+    with `--reset` or `-r`.
 
     Sensitive variables do not get recorded unless you pass `--record-secrets` or `-s`.
+
+    You can pass an `--output-file` or `-f` argument to choose where to save the planned changes.
     """
     preset_name = None if defaults_preset_name == "none" else defaults_preset_name
 
@@ -203,7 +202,7 @@ def up(
         bool, typer.Option("--answer-yes", "-y", help="Apply changes without confirmation prompt.")
     ] = False,
 ) -> None:
-    """Apply the changes defined in the IaC template.
+    """Apply the changes defined in the infrastructure-as-code template.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
     or pass a --path PATH to such a directory. Optionally, you can also pass a --config-file
@@ -232,7 +231,7 @@ def down(
         bool, typer.Option("--answer-yes", "-y", help="Destroy resources without confirmation prompt.")
     ] = False,
 ) -> None:
-    """Destroy the resources defined in the IaC template.
+    """Destroy the resources defined in the infrastructure-as-code template.
 
     Run either from a jupyter-deploy project directed that you created with `jd init`;
     or pass a --path PATH to such a directory.
