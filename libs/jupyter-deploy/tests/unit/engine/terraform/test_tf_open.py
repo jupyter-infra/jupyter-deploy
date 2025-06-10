@@ -2,10 +2,10 @@ import json
 import os
 from collections.abc import Generator
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from jupyter_deploy.engine.terraform.tf_constants import TF_STATEFILE
 from jupyter_deploy.engine.terraform.tf_open import TerraformOpenHandler
 
 
@@ -19,16 +19,12 @@ def mock_cwd(tmp_path: Path) -> Generator[Path, None, None]:
 
 
 @pytest.fixture
-def mock_tfstate(mock_cwd: Path) -> Path:
-    """Create a mock terraform.tfstate file with a jupyter_url output."""
-    tfstate_content = {
-        "version": 4,
-        "outputs": {"jupyter_url": {"value": "https://example.com/jupyter", "type": "string"}},
+def mock_terraform_output() -> str:
+    """Create a mock terraform output JSON string."""
+    output_content = {
+        "jupyter_url": {"value": "https://example.com/jupyter", "type": "string"}
     }
-    tfstate_path = mock_cwd / TF_STATEFILE
-    with open(tfstate_path, "w") as f:
-        json.dump(tfstate_content, f)
-    return tfstate_path
+    return json.dumps(output_content)
 
 
 class TestTerraformOpenHandler:
@@ -37,36 +33,33 @@ class TestTerraformOpenHandler:
         handler = TerraformOpenHandler(project_path=Path("/fake/path"))
         assert handler.project_path == Path("/fake/path")
 
-    def test_get_url_success(self, mock_tfstate: Path) -> None:
-        """Test that get_url returns the Jupyter URL from the statefile."""
+    def test_get_url_success(self, mock_terraform_output: str) -> None:
+        """Test that get_url returns the Jupyter URL from the terraform output."""
         handler = TerraformOpenHandler(project_path=Path.cwd())
-        url = handler.get_url()
-        assert url == "https://example.com/jupyter"
+        with patch("jupyter_deploy.cmd_utils.run_cmd_and_capture_output", return_value=mock_terraform_output):
+            url = handler.get_url()
+            assert url == "https://example.com/jupyter"
 
-    def test_get_url_no_tfstate(self, mock_cwd: Path) -> None:
-        """Test that get_url returns an empty string if the statefile doesn't exist."""
+    def test_get_url_no_output(self, mock_cwd: Path) -> None:
+        """Test that get_url returns an empty string if there's no terraform output."""
         handler = TerraformOpenHandler(project_path=Path.cwd())
-        url = handler.get_url()
-        assert url == ""
+        with patch("jupyter_deploy.cmd_utils.run_cmd_and_capture_output", return_value="{}"):
+            url = handler.get_url()
+            assert url == ""
 
     def test_get_url_invalid_json(self, mock_cwd: Path) -> None:
-        """Test that get_url returns an empty string if the statefile contains invalid JSON."""
-        tfstate_path = mock_cwd / TF_STATEFILE
-        with open(tfstate_path, "w") as f:
-            f.write("invalid json")
+        """Test that get_url raises a JSONDecodeError if the terraform output contains invalid JSON."""
         handler = TerraformOpenHandler(project_path=Path.cwd())
-        url = handler.get_url()
-        assert url == ""
+        with patch("jupyter_deploy.cmd_utils.run_cmd_and_capture_output", return_value="invalid json"):
+            with pytest.raises(json.JSONDecodeError):
+                handler.get_url()
 
     def test_get_url_missing_output(self, mock_cwd: Path) -> None:
-        """Test that get_url returns an empty string if the statefilefile doesn't contain the jupyter_url output."""
-        tfstate_content = {
-            "version": 4,
-            "outputs": {"other_output": {"value": "https://example.com/other", "type": "string"}},
+        """Test that get_url returns an empty string if the terraform output doesn't contain the jupyter_url output."""
+        output_content = {
+            "other_output": {"value": "https://example.com/other", "type": "string"}
         }
-        tfstate_path = mock_cwd / TF_STATEFILE
-        with open(tfstate_path, "w") as f:
-            json.dump(tfstate_content, f)
         handler = TerraformOpenHandler(project_path=Path.cwd())
-        url = handler.get_url()
-        assert url == ""
+        with patch("jupyter_deploy.cmd_utils.run_cmd_and_capture_output", return_value=json.dumps(output_content)):
+            url = handler.get_url()
+            assert url == ""

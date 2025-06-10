@@ -1,57 +1,41 @@
 import json
 from pathlib import Path
 
-from rich.console import Console
+from rich import console as rich_console
 
+from jupyter_deploy import cmd_utils
 from jupyter_deploy.engine.engine_open import EngineOpenHandler
-from jupyter_deploy.engine.terraform.tf_constants import TF_STATEFILE
+from jupyter_deploy.engine.terraform.tf_constants import TF_OUTPUT_CMD
 
 
 class TerraformOpenHandler(EngineOpenHandler):
     """Terraform implementation of the EngineOpenHandler."""
 
     def __init__(self, project_path: Path) -> None:
-        """Initialize the TerraformOpenHandler.
-
-        Args:
-            project_path: The path to the project directory.
-        """
         self.project_path = project_path
-        self.console = Console()
 
     def get_url(self) -> str:
-        statefile_path = self.project_path / TF_STATEFILE
+        console = rich_console.Console()
 
-        if not statefile_path.exists():
-            self.console.print(
-                f":x: terraform.tfstate file not found in {self.project_path}. "
+        output_cmd = TF_OUTPUT_CMD.copy()
+
+        output = cmd_utils.run_cmd_and_capture_output(output_cmd)
+        output_dict = json.loads(output)
+
+        if not output_dict:
+            console.print(
+                f":x: Terraform state file either has no outputs, or could not be found in {self.project_path}. "
                 f"Have you run `jd up` from the project directory?",
                 style="red",
             )
             return ""
 
-        try:
-            with open(statefile_path) as f:
-                file_dict = json.load(f)
-
-            if (
-                "outputs" not in file_dict
-                or "jupyter_url" not in file_dict["outputs"]
-                or "value" not in file_dict["outputs"]["jupyter_url"]
-            ):
-                self.console.print(
-                    ":x: Could not find jupyter_url value in terraform.tfstate. "
-                    "Have you run `jd up` from the project directory?",
-                    style="red",
-                )
-                return ""
-
-            url = file_dict["outputs"]["jupyter_url"]["value"]
-
-            return str(url)
-        except Exception as e:
-            self.console.print(
-                f":x: An error occurred while attempting to open and read terraform.tfstate: {str(e)}",
+        if "jupyter_url" not in output_dict or "value" not in output_dict["jupyter_url"]:
+            console.print(
+                ":x: Could not find jupyter_url value in Terraform state file. "
+                "Have you run `jd up` from the project directory?",
                 style="red",
             )
             return ""
+
+        return output_dict["jupyter_url"]["value"]

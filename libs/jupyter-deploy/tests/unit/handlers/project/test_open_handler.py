@@ -6,8 +6,10 @@ from unittest.mock import patch
 
 import pytest
 
-from jupyter_deploy.engine.terraform.tf_constants import TF_STATEFILE
 from jupyter_deploy.handlers.project.open_handler import OpenHandler
+
+# Define the constant locally since it was removed from tf_constants
+TF_STATEFILE = "terraform.tfstate"
 
 
 @pytest.fixture
@@ -40,84 +42,48 @@ class TestOpenHandler:
             handler = OpenHandler()
             assert handler._handler is not None
 
-    def test_open_with_url(self, mock_tfstate: Path) -> None:
-        """Test that the open method calls get_url and launch_url with the correct URL."""
-        handler = OpenHandler()
-        with (
-            patch.object(handler._handler, "get_url", return_value="https://example.com/jupyter") as mock_get_url,
-            patch.object(handler, "launch_url") as mock_launch_url,
-        ):
-            handler.open()
 
-            mock_get_url.assert_called_once()
-            mock_launch_url.assert_called_once_with("https://example.com/jupyter")
-
-    def test_open_without_url(self) -> None:
-        """Test that the open method doesn't call launch_url if get_url returns an empty string."""
-        handler = OpenHandler()
-        with (
-            patch.object(handler._handler, "get_url", return_value="") as mock_get_url,
-            patch.object(handler, "launch_url") as mock_launch_url,
-            patch.object(handler, "return_url") as mock_return_url,
-        ):
-            handler.open()
-
-            mock_get_url.assert_called_once()
-            mock_launch_url.assert_not_called()
-            mock_return_url.assert_not_called()
-
-    def test_open_with_url_only(self) -> None:
-        """Test that the open method calls return_url when url_only is True."""
-        handler = OpenHandler()
-        with (
-            patch.object(handler._handler, "get_url", return_value="https://example.com/jupyter") as mock_get_url,
-            patch.object(handler, "launch_url") as mock_launch_url,
-            patch.object(handler, "return_url") as mock_return_url,
-        ):
-            handler.open(url_only=True)
-
-            mock_get_url.assert_called_once()
-            mock_return_url.assert_called_once_with("https://example.com/jupyter")
-            mock_launch_url.assert_not_called()
-
-    def test_launch_url_success(self) -> None:
-        """Test that launch_url opens the URL in a web browser, and outputs the URL and cookies help message."""
+    def test_open_url_success(self) -> None:
+        """Test that open_url opens the URL in a web browser, and outputs the URL and cookies help message."""
         handler = OpenHandler()
         with (
             patch("webbrowser.open", return_value=True) as mock_open,
             patch.object(handler.console, "print") as mock_print,
         ):
-            handler.launch_url("https://example.com/jupyter")
-            mock_open.assert_called_once_with("https://example.com/jupyter")
+            handler.open_url("https://example.com/jupyter")
+            mock_open.assert_called_once_with("https://example.com/jupyter", new=2)
             assert mock_print.call_count == 2
             assert "Opening Jupyter" in mock_print.call_args_list[0][0][0]
             assert "cookies" in mock_print.call_args_list[1][0][0]
 
-    def test_launch_url_empty(self) -> None:
-        """Test that launch_url doesn't do anything when the URL is empty."""
+    def test_open_url_empty(self) -> None:
+        """Test that open_url doesn't do anything when the URL is empty."""
         handler = OpenHandler()
         with patch("webbrowser.open") as mock_open, patch.object(handler.console, "print") as mock_print:
-            handler.launch_url("")
+            handler.open_url("")
             mock_open.assert_not_called()
             mock_print.assert_not_called()
 
-    def test_launch_url_error(self) -> None:
-        """Test that launch_url handles errors when opening the URL."""
+    def test_open_url_error(self) -> None:
+        """Test that open_url handles errors when opening the URL."""
         handler = OpenHandler()
         with (
             patch("webbrowser.open", return_value=False) as mock_open,
             patch.object(handler.console, "print") as mock_print,
         ):
-            handler.launch_url("https://example.com/jupyter")
-            mock_open.assert_called_once_with("https://example.com/jupyter")
+            handler.open_url("https://example.com/jupyter")
+            mock_open.assert_called_once_with("https://example.com/jupyter", new=2)
             assert mock_print.call_count == 3
             assert "Failed to open URL" in mock_print.call_args_list[2][0][0]
 
-    def test_return_url(self) -> None:
-        """Test that return_url prints the URL."""
+    def test_open_url_insecure(self) -> None:
+        """Test that open_url doesn't open non-HTTPS urls."""
         handler = OpenHandler()
-        with patch.object(handler.console, "print") as mock_print:
-            handler.return_url("https://example.com/jupyter")
+        with (
+            patch("webbrowser.open") as mock_open,
+            patch.object(handler.console, "print") as mock_print,
+        ):
+            handler.open_url("http://example.com/jupyter")
+            mock_open.assert_not_called()
             mock_print.assert_called_once()
-            assert "available" in mock_print.call_args[0][0]
-            assert "https://example.com/jupyter" in mock_print.call_args[0][0]
+            assert "Insecure URL detected" in mock_print.call_args[0][0]

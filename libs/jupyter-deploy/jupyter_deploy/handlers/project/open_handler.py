@@ -26,9 +26,16 @@ class OpenHandler:
         # TODO: derive from the project manifest
         return EngineType.TERRAFORM
 
-    def launch_url(self, url: str) -> None:
-        """Launch the Jupyter app URL in the default web browser."""
+    def open_url(self, url: str) -> None:
+        """Launch the Jupyter URL in the default web browser."""
         if not url:
+            return
+
+        if not url.startswith("https://"):
+            self.console.print(
+                ":x: Insecure URL detected. Only HTTPS URLs are allowed for security reasons.",
+                style="red",
+            )
             return
 
         self.console.print(f"\nOpening Jupyter app at: {url}", style="green")
@@ -36,7 +43,7 @@ class OpenHandler:
             "\n[yellow]Note:[/] If you're having trouble accessing the Jupyter notebook, "
             "you may need to clear your browser cookies for this domain.\n"
         )
-        open_status = webbrowser.open(url)
+        open_status = webbrowser.open(url, new=2)
 
         if not open_status:
             self.console.print(
@@ -44,13 +51,6 @@ class OpenHandler:
                 style="red",
             )
 
-    def return_url(self, url: str) -> None:
-        self.console.print(f"\nJupyter app available at: {url}\n", style="green")
-
-    def open(self, url_only: bool = False) -> None:
-        url = self._handler.get_url()
-        if url:
-            if url_only:
-                self.return_url(url)
-            else:
-                self.launch_url(url)
+    def get_url(self) -> None:
+        """Retrieve the Jupyter URL from the project state file outputs."""
+        return self._handler.get_url()

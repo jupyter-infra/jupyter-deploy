@@ -250,9 +250,6 @@ def open(
     project_dir: Annotated[
         str | None, typer.Option("--path", "-p", help="Directory of the jupyter-deploy project to open.")
     ] = None,
-    url_only: Annotated[
-        bool, typer.Option("--url-only", "-u", help="Return the Jupyter app URL without launching it.")
-    ] = False,
 ) -> None:
     """Open the Jupyter app in your webbrowser.
 
@@ -263,7 +260,8 @@ def open(
     """
     with cmd_utils.project_dir(project_dir):
         handler = OpenHandler()
-        handler.open(url_only)
+        url = handler.get_url()
+        handler.open_url(url)
 
 
 @runner.app.command()
