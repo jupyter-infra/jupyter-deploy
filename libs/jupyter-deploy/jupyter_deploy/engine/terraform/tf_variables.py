@@ -14,6 +14,9 @@ class TerraformVariablesHandler(EngineVariablesHandler):
         self.project_path = project_path
         self._template_vars: dict[str, TemplateVariableDefinition] | None = None
 
+    def is_template_directory(self) -> bool:
+        return fs_utils.file_exists(self.project_path / TF_VARIABLES_FILENAME)
+
     def get_template_variables(self) -> dict[str, TemplateVariableDefinition]:
         # cache handling to avoid the expensive fs operation necessary
         # to retrieve the variable definitions.

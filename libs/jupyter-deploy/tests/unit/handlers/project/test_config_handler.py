@@ -179,7 +179,7 @@ class TestConfigHandler(unittest.TestCase):
         handler.configure()
 
         tf_mock_verify.assert_not_called()
-        tf_mock_configure.assert_called_once_with(preset_name=None)
+        tf_mock_configure.assert_called_once_with(preset_name=None, variable_overrides=None)
 
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_configure_passes_the_preset(self, mock_tf_handler: Mock) -> None:
@@ -189,7 +189,7 @@ class TestConfigHandler(unittest.TestCase):
 
         handler = ConfigHandler(preset_name="all")
         handler.configure()
-        tf_mock_configure.assert_called_once_with(preset_name="all")
+        tf_mock_configure.assert_called_once_with(preset_name="all", variable_overrides=None)
 
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_configure_surfaces_underlying_method_exception(self, mock_tf_handler: Mock) -> None:

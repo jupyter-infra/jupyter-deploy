@@ -12,6 +12,11 @@ class EngineVariablesHandler(ABC):
         self.engine = engine
 
     @abstractmethod
+    def is_template_directory(self) -> bool:
+        """Return True if the directory corresponds to a jupyter-deploy directory."""
+        pass
+
+    @abstractmethod
     def get_template_variables(self) -> dict[str, TemplateVariableDefinition]:
         """Return the dict of variable-name->variable-definition.
 

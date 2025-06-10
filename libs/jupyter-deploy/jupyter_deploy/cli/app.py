@@ -112,9 +112,6 @@ def init(
 @runner.app.command()
 @with_project_variables()
 def config(
-    project_dir: Annotated[
-        str | None, typer.Option("--path", "-p", help="Directory of the jupyter-deploy project to configure.")
-    ] = None,
     defaults_preset_name: Annotated[
         str,
         typer.Option(
@@ -160,36 +157,35 @@ def config(
     """
     preset_name = None if defaults_preset_name == "none" else defaults_preset_name
 
-    with cmd_utils.project_dir(project_dir):
-        handler = config_handler.ConfigHandler(preset_name=preset_name, output_filename=output_filename)
+    handler = config_handler.ConfigHandler(preset_name=preset_name, output_filename=output_filename)
 
-        if not handler.validate():
-            return
+    if not handler.validate():
+        return
 
-        run_verify = not skip_verify
-        run_configure = False
+    run_verify = not skip_verify
+    run_configure = False
 
-        console = Console()
+    console = Console()
 
-        if reset:
-            console.rule("[bold]jupyter-deploy:[/] resetting recorded variables and secrets")
-            handler.reset_recorded_variables()
-            handler.reset_recorded_secrets()
+    if reset:
+        console.rule("[bold]jupyter-deploy:[/] resetting recorded variables and secrets")
+        handler.reset_recorded_variables()
+        handler.reset_recorded_secrets()
 
-        if run_verify:
-            console.rule("[bold]jupyter-deploy:[/] verifying requirements")
-            run_configure = handler.verify_requirements()
-        else:
-            console.print("[bold]jupyter-deploy:[/] skipping verification of requirements")
-            run_configure = True
+    if run_verify:
+        console.rule("[bold]jupyter-deploy:[/] verifying requirements")
+        run_configure = handler.verify_requirements()
+    else:
+        console.print("[bold]jupyter-deploy:[/] skipping verification of requirements")
+        run_configure = True
 
-        if run_configure:
-            console.rule("[bold]jupyter-deploy:[/] configuring the project")
-            handler.configure(variable_overrides=variables)
+    if run_configure:
+        console.rule("[bold]jupyter-deploy:[/] configuring the project")
+        handler.configure(variable_overrides=variables)
 
-            console.rule("[bold]jupyter-deploy:[/] recording input values")
-            handler.record(record_vars=True, record_secrets=record_secrets)
-            console.rule()
+        console.rule("[bold]jupyter-deploy:[/] recording input values")
+        handler.record(record_vars=True, record_secrets=record_secrets)
+        console.rule()
 
 
 @runner.app.command()

@@ -23,6 +23,12 @@ class VariablesHandler:
         else:
             raise NotImplementedError(f"VariablesHandler implementation not found for engine: {engine}")
 
+    def is_template_directory(self) -> bool:
+        """Return True if the directory corresponds to a jupyter-deploy project."""
+        return self._handler.is_template_directory()
+
     def get_template_variables(self) -> dict[str, TemplateVariableDefinition]:
         """Call underlying engine handler, return dict of var-name->var-definition."""
+        if not self.is_template_directory():
+            return {}
         return self._handler.get_template_variables()
