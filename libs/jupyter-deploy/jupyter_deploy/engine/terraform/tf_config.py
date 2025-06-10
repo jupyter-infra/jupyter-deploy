@@ -9,7 +9,7 @@ from rich import console as rich_console
 from jupyter_deploy import cmd_utils, fs_utils
 from jupyter_deploy.engine.engine_config import EngineConfigHandler
 from jupyter_deploy.engine.enum import EngineType
-from jupyter_deploy.engine.terraform import tf_plan, tf_verify
+from jupyter_deploy.engine.terraform import tf_plan, tf_vardefs, tf_verify
 from jupyter_deploy.engine.terraform.tf_constants import (
     TF_DEFAULT_PLAN_FILENAME,
     TF_INIT_CMD,
@@ -19,6 +19,7 @@ from jupyter_deploy.engine.terraform.tf_constants import (
     TF_RECORDED_VARS_FILENAME,
     get_preset_filename,
 )
+from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
 from jupyter_deploy.provider.aws import aws_cli
 
 
@@ -80,7 +81,9 @@ class TerraformConfigHandler(EngineConfigHandler):
             console = rich_console.Console()
             console.print(f":wastebasket:  Deleted previously recorded secrets at: {path.name}")
 
-    def configure(self, preset_name: str | None = None) -> None:
+    def configure(
+        self, preset_name: str | None = None, variable_overrides: dict[str, TemplateVariableDefinition] | None = None
+    ) -> None:
         console = rich_console.Console()
 
         # 1/ run terraform init.
@@ -107,7 +110,15 @@ class TerraformConfigHandler(EngineConfigHandler):
             preset_path = self._get_preset_path(preset_name)
             plan_cmds.append(f"-var-file={preset_path.absolute()}")
 
-        # 2.3/ call terraform plan
+        # 2.3/ pass variable overrides
+        if variable_overrides:
+            for var_def in variable_overrides.values():
+                var_value = tf_vardefs.to_tf_assigned_value(var_def)
+
+                plan_cmds.append("-var")
+                plan_cmds.append(f"{var_def.variable_name}={var_value}")
+
+        # 2.4/ call terraform plan
         plan_retcode, plan_timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(plan_cmds)
 
         if plan_retcode != 0 or plan_timed_out:

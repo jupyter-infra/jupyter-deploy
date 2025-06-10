@@ -116,3 +116,16 @@ def create_tf_variable_definition(parsed_config: dict) -> TerraformVariableDefin
     elif tf_type == TerraformType.MAP_STR:
         return TerraformMapOfStrVariableDefinition(**parsed_config)
     raise NotImplementedError(f"No terraform class found for type: {tf_type}.")
+
+
+def to_tf_assigned_value(var_def: TemplateVariableDefinition) -> str:
+    """Return the 'bar' value to pass to terraform as -var 'foo=bar'."""
+    assigned_value = var_def.assigned_value
+
+    if assigned_value == "":
+        return '""'
+
+    if assigned_value is None:
+        return "null"
+
+    return f"{assigned_value}"

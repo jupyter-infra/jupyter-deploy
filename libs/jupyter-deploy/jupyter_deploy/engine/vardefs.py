@@ -21,7 +21,7 @@ class TemplateVariableDefinition(BaseModel, Generic[T]):
         """Return variable name using the kebab-case format."""
         cli_var_name = str_utils.to_cli_option_name(self.variable_name)
         return cli_var_name
-    
+
     def get_cli_description(self) -> str:
         """Return a one-liner description with preset information for the CLI attribute."""
         header = str_utils.get_trimmed_header(self.description)

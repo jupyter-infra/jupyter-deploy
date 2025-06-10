@@ -5,6 +5,7 @@ from rich import console as rich_console
 from jupyter_deploy.engine.engine_config import EngineConfigHandler
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.terraform import tf_config
+from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
 
 
 class ConfigHandler:
@@ -46,9 +47,9 @@ class ConfigHandler:
         """Return True if the user has installed all the required dependencies."""
         return self._handler.verify_requirements()
 
-    def configure(self) -> None:
+    def configure(self, variable_overrides: dict[str, TemplateVariableDefinition] | None = None) -> None:
         """Main method to set the inputs for the project."""
-        self._handler.configure(preset_name=self.preset_name)
+        self._handler.configure(preset_name=self.preset_name, variable_overrides=variable_overrides)
 
     def record(self, record_vars: bool = False, record_secrets: bool = False) -> None:
         """Save the values of the variables to disk in the project dir."""

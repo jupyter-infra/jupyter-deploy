@@ -160,10 +160,6 @@ def config(
     """
     preset_name = None if defaults_preset_name == "none" else defaults_preset_name
 
-    if variables:
-        for var_name, var_def in variables.items():
-            print(f"'{var_name}': {var_def.assigned_value}")
-
     with cmd_utils.project_dir(project_dir):
         handler = config_handler.ConfigHandler(preset_name=preset_name, output_filename=output_filename)
 
@@ -189,7 +185,7 @@ def config(
 
         if run_configure:
             console.rule("[bold]jupyter-deploy:[/] configuring the project")
-            handler.configure()
+            handler.configure(variable_overrides=variables)
 
             console.rule("[bold]jupyter-deploy:[/] recording input values")
             handler.record(record_vars=True, record_secrets=record_secrets)

@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from jupyter_deploy.engine.enum import EngineType
+from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
 
 
 class EngineConfigHandler(ABC):
@@ -30,7 +31,9 @@ class EngineConfigHandler(ABC):
         pass
 
     @abstractmethod
-    def configure(self, preset_name: str | None) -> None:
+    def configure(
+        self, preset_name: str | None = None, variable_overrides: dict[str, TemplateVariableDefinition] | None = None
+    ) -> None:
         """Execute commands to set the values of the variables."""
         pass
 

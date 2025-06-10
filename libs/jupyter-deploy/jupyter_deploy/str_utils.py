@@ -1,6 +1,6 @@
 def to_cli_option_name(s: str) -> str:
     """Return name to kebab-case CLI option format.
-    
+
     Examples:
         FullTitleCase -> full-title-case
         camelCaseName -> camel-case-name
@@ -17,26 +17,27 @@ def to_cli_option_name(s: str) -> str:
     for curr_char in s[1:]:
         # Handle camelCase and TitleCase
         if curr_char.isupper() and prev_char.islower():
-            result.append('-')
+            result.append("-")
             result.append(curr_char.lower())
         # Handle consecutive uppercase letters (e.g., XML)
         elif curr_char.isupper() and prev_char.isupper():
-            if len(result) > 1 and result[-2] != '-':
-                result.append('-')
+            if len(result) > 1 and result[-2] != "-":
+                result.append("-")
             result.append(curr_char.lower())
         # Handle underscores
-        elif curr_char == '_':
-            result.append('-')
+        elif curr_char == "_":
+            result.append("-")
         # Handle existing hyphens
-        elif curr_char == '-':
-            if prev_char != '-':
-                result.append('-')
+        elif curr_char == "-":
+            if prev_char != "-":
+                result.append("-")
         else:
             result.append(curr_char.lower())
-        
+
         prev_char = curr_char
 
-    return ''.join(result).strip('-')
+    return "".join(result).strip("-")
+
 
 def get_trimmed_header(full_text: str, max_length: int = 120) -> str:
     """Return the full line of text, up to the char limit."""
