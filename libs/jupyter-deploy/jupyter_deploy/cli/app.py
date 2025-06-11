@@ -102,7 +102,7 @@ def init(
             console.print("\nIf you want to overwrite this directory, use the --overwrite option.\n", style="yellow")
             return
         else:
-            console.print(f"\nPreparing to overwrite the {project.project_path} directory.")
+            console.print(f"\nPreparing to overwrite the {project.abs_project_path} directory.")
             console.print("\nAre you sure you want to proceed?", style="red")
 
             delete_existing = typer.confirm("")

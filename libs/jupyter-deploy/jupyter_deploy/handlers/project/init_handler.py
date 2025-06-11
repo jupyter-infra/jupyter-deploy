@@ -24,6 +24,7 @@ class InitHandler:
         else:
             self.project_path = Path(project_dir)
 
+        self.abs_project_path = Path.resolve(self.project_path)
         self.engine = engine
 
         full_template_name: str | None = None
