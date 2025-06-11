@@ -70,14 +70,13 @@ def with_project_variables() -> Callable:
         for var_name, var_def in var_defs.items():
             option_name = f"--{var_def.get_cli_var_name()}"
             var_type = var_def.__class__.get_type()
-            default = None  # do NOT use var_def.default here, only overrides
-            cli_description = var_def.get_cli_description()
+            cli_description = var_def.get_cli_description()  # will embed default as [preset: <default>]
 
             # Create parameter with Annotated type for typer.Option
             param = inspect.Parameter(
                 name=var_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                default=default,
+                default=None,  # do NOT use var_def.default here, only overrides
                 annotation=Annotated[
                     var_type, typer.Option(option_name, help=cli_description, rich_help_panel="Template variables")
                 ],

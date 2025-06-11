@@ -147,10 +147,10 @@ def config(
     You must run this command from a jupyter-deploy project directory created with `jd init`.
 
     The `config` command will remember your variable values so that you do not need to
-    specify them again next time you run `config`. You can reset these recorded values
-    with `--reset` or `-r`.
-
-    Sensitive variables do not get recorded unless you pass `--record-secrets` or `-s`.
+    specify them again next time you run `config`.
+    
+    You can reset these recorded values with `--reset` or `-r`. Sensitive variables do not
+    get recorded unless you pass `--record-secrets` or `-s`.
 
     You can pass an `--output-file` or `-f` argument to choose where to save the planned changes.
     """

@@ -128,4 +128,7 @@ def to_tf_assigned_value(var_def: TemplateVariableDefinition) -> str:
     if assigned_value is None:
         return "null"
 
+    if isinstance(assigned_value, bool):
+        return "true" if assigned_value else "false"
+
     return f"{assigned_value}"

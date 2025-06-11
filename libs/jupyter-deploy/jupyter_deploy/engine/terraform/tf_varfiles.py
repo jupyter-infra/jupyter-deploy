@@ -6,6 +6,9 @@ from jupyter_deploy.engine.terraform import tf_vardefs
 
 def parse_variables_dot_tf_content(content: str) -> dict[str, tf_vardefs.TerraformVariableDefinition]:
     """Parse the content of a variables.tf file, return variables as dict name->var_def."""
+    if not content:
+        return {}
+
     parsed_variables_dot_tf = hcl2.loads(content)
     parsed_vars = tf_vardefs.ParsedVariablesDotTf(**parsed_variables_dot_tf)
 
