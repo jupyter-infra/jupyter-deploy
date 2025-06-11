@@ -530,15 +530,29 @@ class TestInitCommand(unittest.TestCase):
         self.mock_setup.assert_called_once()
 
     @patch("jupyter_deploy.cli.app.InitHandler")
+    def test_init_command_exits_on_project_conflict_without_overwrite(self, mock_handler_cls: Mock) -> None:
+        """Test that the init command exits on existing project conflict when --overwrite is False."""
+        mock_handler_cls.return_value = self.get_mock_project()
+        self.mock_may_export_to_project_path.return_value = False
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["init", "."])
+
+        self.assertEqual(result.exit_code, 0, "init command should work")
+        self.mock_may_export_to_project_path.assert_called_once()
+        self.mock_clear_project_path.assert_not_called()
+        self.mock_setup.assert_not_called()
+
+    @patch("jupyter_deploy.cli.app.InitHandler")
     @patch("jupyter_deploy.cli.app.typer.confirm")
-    def test_init_command_prompt_user_on_project_conflict(self, mock_confirm: Mock, mock_handler_cls: Mock) -> None:
-        """Test that the init commands prompts the user on project conflict and deletes after confirmation."""
+    def test_init_command_with_overwrite_and_user_confirms(self, mock_confirm: Mock, mock_handler_cls: Mock) -> None:
+        """Test that the init command with --overwrite prompts the user and proceeds when confirmed."""
         mock_handler_cls.return_value = self.get_mock_project()
         self.mock_may_export_to_project_path.return_value = False
         mock_confirm.return_value = True
 
         runner = CliRunner()
-        result = runner.invoke(app_runner.app, ["init", "."])
+        result = runner.invoke(app_runner.app, ["init", "--overwrite", "."])
 
         self.assertEqual(result.exit_code, 0, "init command should work")
         self.mock_may_export_to_project_path.assert_called_once()
@@ -548,20 +562,36 @@ class TestInitCommand(unittest.TestCase):
 
     @patch("jupyter_deploy.cli.app.InitHandler")
     @patch("jupyter_deploy.cli.app.typer.confirm")
-    def test_init_command_abort_when_user_declines_deletion(self, mock_confirm: Mock, mock_handler_cls: Mock) -> None:
-        """Test that the init prompts the user on project conflict and abort on decline."""
+    def test_init_command_with_overwrite_and_user_declines(self, mock_confirm: Mock, mock_handler_cls: Mock) -> None:
+        """Test that the init command with --overwrite prompts the user and aborts when declined."""
         mock_handler_cls.return_value = self.get_mock_project()
         self.mock_may_export_to_project_path.return_value = False
         mock_confirm.return_value = False
 
         runner = CliRunner()
-        result = runner.invoke(app_runner.app, ["init", "."])
+        result = runner.invoke(app_runner.app, ["init", "--overwrite", "."])
 
         self.assertEqual(result.exit_code, 0, "init command should work")
         self.mock_may_export_to_project_path.assert_called_once()
         mock_confirm.assert_called_once()
         self.mock_clear_project_path.assert_not_called()
         self.mock_setup.assert_not_called()
+
+    @patch("jupyter_deploy.cli.app.InitHandler")
+    @patch("jupyter_deploy.cli.app.typer.confirm")
+    def test_init_command_with_overwrite_on_no_conflict(self, mock_confirm: Mock, mock_handler_cls: Mock) -> None:
+        """Test that the init command with --overwrite proceeds without confirmation if no project conflict."""
+        mock_handler_cls.return_value = self.get_mock_project()
+        self.mock_may_export_to_project_path.return_value = True
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["init", "--overwrite", "."])
+
+        self.assertEqual(result.exit_code, 0, "init command should work")
+        self.mock_may_export_to_project_path.assert_called_once()
+        mock_confirm.assert_not_called()
+        self.mock_clear_project_path.assert_not_called()
+        self.mock_setup.assert_called_once()
 
     @patch("subprocess.run")
     def test_init_command_calls_help_when_no_path(self, mock_subprocess_run: Mock) -> None:
