@@ -10,6 +10,7 @@ from jupyter_deploy.fs_utils import (
     find_matching_filenames,
     get_default_project_path,
     is_empty_dir,
+    read_short_file,
     safe_clean_directory,
     safe_copy_tree,
     write_inline_file_content,
@@ -479,3 +480,137 @@ class TestFindMatchingFilenames(unittest.TestCase):
         # Execute and Assert
         with self.assertRaises(OSError):
             find_matching_filenames(dir_path, file_pattern)
+
+
+class TestReadShortFile(unittest.TestCase):
+    """Test cases for the read_short_file function."""
+
+    @patch("pathlib.Path.open", new_callable=mock_open, read_data="file content")
+    @patch("pathlib.Path.stat")
+    @patch("pathlib.Path.is_file")
+    @patch("pathlib.Path.exists")
+    def test_read_file_and_return_content(
+        self, mock_exists: Mock, mock_is_file: Mock, mock_stat: Mock, mock_open_file: Mock
+    ) -> None:
+        """Test that read_short_file reads and returns the file content."""
+        # Setup
+        file_path = Path("/test/file.txt")
+        mock_exists.return_value = True
+        mock_is_file.return_value = True
+
+        # Mock file stats to return a small file size
+        mock_stat_result = MagicMock()
+        mock_stat_result.st_size = 100  # 100 bytes
+        mock_stat.return_value = mock_stat_result
+
+        # Execute
+        result = read_short_file(file_path)
+
+        # Assert
+        self.assertEqual(result, "file content")
+        mock_exists.assert_called_once()
+        mock_is_file.assert_called_once()
+        mock_stat.assert_called_once()
+        mock_open_file.assert_called_once_with("r")
+
+    @patch("pathlib.Path.absolute")
+    @patch("pathlib.Path.exists")
+    def test_raises_file_not_found_if_path_does_not_exist(self, mock_exists: Mock, mock_absolute: Mock) -> None:
+        """Test that read_short_file raises FileNotFoundError if the path does not exist."""
+        # Setup
+        file_path = Path("/test/file.txt")
+        mock_exists.return_value = False
+        mock_absolute.return_value = "/test/file.txt"
+
+        # Execute and Assert
+        with self.assertRaises(FileNotFoundError):
+            read_short_file(file_path)
+
+        mock_exists.assert_called_once()
+        mock_absolute.assert_called_once()
+
+    @patch("pathlib.Path.absolute")
+    @patch("pathlib.Path.is_file")
+    @patch("pathlib.Path.exists")
+    def test_raises_is_a_dir_error_if_path_is_a_dir(
+        self, mock_exists: Mock, mock_is_file: Mock, mock_absolute: Mock
+    ) -> None:
+        """Test that read_short_file raises IsADirectoryError if the path is a directory."""
+        # Setup
+        file_path = Path("/test/dir")
+        mock_exists.return_value = True
+        mock_is_file.return_value = False
+        mock_absolute.return_value = "/test/dir"
+
+        # Execute and Assert
+        with self.assertRaises(IsADirectoryError):
+            read_short_file(file_path)
+
+        mock_exists.assert_called_once()
+        mock_is_file.assert_called_once()
+        mock_absolute.assert_called_once()
+
+    @patch("pathlib.Path.open")
+    @patch("pathlib.Path.absolute")
+    @patch("pathlib.Path.stat")
+    @patch("pathlib.Path.is_file")
+    @patch("pathlib.Path.exists")
+    def test_raises_runtime_error_before_opening_if_file_is_too_large(
+        self,
+        mock_exists: Mock,
+        mock_is_file: Mock,
+        mock_stat: Mock,
+        mock_absolute: Mock,
+        mock_open_file: Mock,
+    ) -> None:
+        """Test that read_short_file raises RuntimeError if the file is too large."""
+        # Setup
+        file_path = Path("/test/large_file.txt")
+        mock_exists.return_value = True
+        mock_is_file.return_value = True
+        mock_absolute.return_value = "/test/large_file.txt"
+
+        # Mock file stats to return a large file size (2MB, which exceeds the default 1MB limit)
+        mock_stat_result = MagicMock()
+        mock_stat_result.st_size = 2 * 1024 * 1024  # 2MB
+        mock_stat.return_value = mock_stat_result
+
+        # Execute and Assert
+        with self.assertRaises(RuntimeError):
+            read_short_file(file_path)
+
+        mock_exists.assert_called_once()
+        mock_is_file.assert_called_once()
+        mock_stat.assert_called_once()
+        mock_open_file.assert_not_called()
+
+    @patch("pathlib.Path.open", new_callable=mock_open, read_data="large file content")
+    @patch("pathlib.Path.stat")
+    @patch("pathlib.Path.is_file")
+    @patch("pathlib.Path.exists")
+    def test_accept_different_threshold_for_max_size(
+        self, mock_exists: Mock, mock_is_file: Mock, mock_stat: Mock, mock_open_file: Mock
+    ) -> None:
+        """Test that read_short_file accepts a different threshold for max_size."""
+        # Setup
+        file_path = Path("/test/large_file.txt")
+        mock_exists.return_value = True
+        mock_is_file.return_value = True
+
+        # Mock file stats to return a large file size (2MB)
+        mock_stat_result = MagicMock()
+        mock_stat_result.st_size = 2 * 1024 * 1024  # 2MB
+        mock_stat.return_value = mock_stat_result
+
+        # Execute with a higher max_size threshold (3MB)
+        result = read_short_file(file_path, max_size_mb=3.0)
+
+        # Assert
+        self.assertEqual(result, "large file content")
+        mock_exists.assert_called_once()
+        mock_is_file.assert_called_once()
+        mock_stat.assert_called_once()
+        mock_open_file.assert_called_once_with("r")
+
+        with self.assertRaises(RuntimeError):
+            read_short_file(file_path)

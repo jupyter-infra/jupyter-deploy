@@ -119,3 +119,26 @@ def find_matching_filenames(dir_path: Path, file_pattern: str) -> list[str]:
         valid_filenames.append(filename)
 
     return valid_filenames
+
+
+def read_short_file(file_path: Path, max_size_mb: float = 1.0) -> str:
+    """Return the content of the file.
+
+    Raises:
+        FileNotFoundError if the path does not exist.
+        IsADirectoryError if the path does not correspond to a file.
+        RuntimeError if the file size exceeds the limit.
+    """
+    if not file_path.exists():
+        raise FileNotFoundError(f"Invalid file path: {file_path.absolute()} does not exist.")
+    if not file_path.is_file():
+        raise IsADirectoryError(f"Invalid file path: {file_path.absolute()} is not file.")
+
+    file_stats = file_path.stat()
+    file_size_bytes = file_stats.st_size
+
+    if file_size_bytes > int(max_size_mb * 1024 * 1024):
+        raise RuntimeError(f"File size at path '{file_path.absolute()}' is too large.")
+
+    with file_path.open("r") as f:
+        return f.read()

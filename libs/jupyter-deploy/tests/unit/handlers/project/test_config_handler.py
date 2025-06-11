@@ -43,7 +43,7 @@ class TestConfigHandler(unittest.TestCase):
             },
         )
 
-    def test_config_handler_implements_all_engine(self) -> None:
+    def test_config_handler_implements_all_engines(self) -> None:
         for _ in EngineType:
             ConfigHandler()
         # no exception should be raised
@@ -179,7 +179,7 @@ class TestConfigHandler(unittest.TestCase):
         handler.configure()
 
         tf_mock_verify.assert_not_called()
-        tf_mock_configure.assert_called_once_with(preset_name=None)
+        tf_mock_configure.assert_called_once_with(preset_name=None, variable_overrides=None)
 
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_configure_passes_the_preset(self, mock_tf_handler: Mock) -> None:
@@ -189,7 +189,19 @@ class TestConfigHandler(unittest.TestCase):
 
         handler = ConfigHandler(preset_name="all")
         handler.configure()
-        tf_mock_configure.assert_called_once_with(preset_name="all")
+        tf_mock_configure.assert_called_once_with(preset_name="all", variable_overrides=None)
+
+    @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
+    def test_configure_passes_the_variables(self, mock_tf_handler: Mock) -> None:
+        tf_mock_handler_instance, tf_fns = self.get_mock_handler_and_fns()
+        tf_mock_configure = tf_fns["configure"]
+        mock_tf_handler.return_value = tf_mock_handler_instance
+
+        handler = ConfigHandler(preset_name="all")
+
+        overrides = {"var1": Mock()}
+        handler.configure(variable_overrides=overrides)  # type: ignore
+        tf_mock_configure.assert_called_once_with(preset_name="all", variable_overrides=overrides)
 
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_configure_surfaces_underlying_method_exception(self, mock_tf_handler: Mock) -> None:
