@@ -239,11 +239,7 @@ name = "jupyter-deploy-monorepo"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "decorator" },
     { name = "jupyter-deploy" },
-    { name = "packaging" },
-    { name = "pydantic" },
-    { name = "python-hcl2" },
 ]
 
 [package.dev-dependencies]
@@ -259,13 +255,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "decorator", specifier = ">=5.2.1" },
-    { name = "jupyter-deploy", editable = "libs/jupyter-deploy" },
-    { name = "packaging", specifier = ">=25.0" },
-    { name = "pydantic", specifier = ">=2.11.5" },
-    { name = "python-hcl2", specifier = ">=7.2.1" },
-]
+requires-dist = [{ name = "jupyter-deploy", editable = "libs/jupyter-deploy" }]
 
 [package.metadata.requires-dev]
 dev = [
