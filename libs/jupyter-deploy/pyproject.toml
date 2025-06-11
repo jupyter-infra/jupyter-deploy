@@ -13,6 +13,7 @@ dependencies = [
     "typer>=0.15.4",
     "pydantic>=2.11.5",
     "python-hcl2>=7.2.1",
+    "packaging>=25.0",
     "jupyter_core>=5.0.0",
     "jupyter-deploy-tf-aws-ec2-traefik",
     "jupyter-deploy-tf-aws-ec2-ngrok",
