@@ -148,7 +148,7 @@ def config(
 
     The `config` command will remember your variable values so that you do not need to
     specify them again next time you run `config`.
-    
+
     You can reset these recorded values with `--reset` or `-r`. Sensitive variables do not
     get recorded unless you pass `--record-secrets` or `-s`.
 
