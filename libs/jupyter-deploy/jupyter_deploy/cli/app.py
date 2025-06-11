@@ -110,17 +110,13 @@ def init(
             console.print(f":warning: The target directory {project.abs_project_path} is not empty.", style="yellow")
             console.line()
             console.print(
-                "Initiating the project here will delete your existing files, are you sure you want to proceed?",
+                "Initiating the project may overwrite your existing files, are you sure you want to proceed?",
                 style="yellow",
             )
 
-            delete_existing = typer.confirm("")
+            overwrite_existing = typer.confirm("")
 
-            if delete_existing:
-                project.clear_project_path()
-                console.line()
-                console.print("Deleted existing files in project directory.\n", style="yellow")
-            else:
+            if not overwrite_existing:
                 console.line()
                 console.print(f"Left files under {project.project_path} untouched.\n", style="yellow")
                 typer.Abort()

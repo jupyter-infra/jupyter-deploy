@@ -557,7 +557,6 @@ class TestInitCommand(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, "init command should work")
         self.mock_may_export_to_project_path.assert_called_once()
         mock_confirm.assert_called_once()
-        self.mock_clear_project_path.assert_called_once()
         self.mock_setup.assert_called_once()
 
     @patch("jupyter_deploy.cli.app.InitHandler")
@@ -574,7 +573,6 @@ class TestInitCommand(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, "init command should work")
         self.mock_may_export_to_project_path.assert_called_once()
         mock_confirm.assert_called_once()
-        self.mock_clear_project_path.assert_not_called()
         self.mock_setup.assert_not_called()
 
     @patch("jupyter_deploy.cli.app.InitHandler")
@@ -590,7 +588,6 @@ class TestInitCommand(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, "init command should work")
         self.mock_may_export_to_project_path.assert_called_once()
         mock_confirm.assert_not_called()
-        self.mock_clear_project_path.assert_not_called()
         self.mock_setup.assert_called_once()
 
     @patch("subprocess.run")
