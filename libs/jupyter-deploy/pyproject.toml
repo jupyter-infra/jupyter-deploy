@@ -8,9 +8,11 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "decorator>=5.2.1",
     "click<8.2.0",
     "typer>=0.15.4",
     "pydantic>=2.11.5",
+    "python-hcl2>=7.2.1",
     "jupyter_core>=5.0.0",
     "jupyter-deploy-tf-aws-ec2-traefik",
     "jupyter-deploy-tf-aws-ec2-ngrok",
@@ -45,6 +47,7 @@ dev = [
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
     "ruff>=0.11.8",
+    "parameterized>=0.9.0",
 ]
 
 [tool.mypy]

@@ -182,10 +182,12 @@ version = "0.1.0"
 source = { editable = "libs/jupyter-deploy" }
 dependencies = [
     { name = "click" },
+    { name = "decorator" },
     { name = "jupyter-core" },
     { name = "jupyter-deploy-tf-aws-ec2-ngrok" },
     { name = "jupyter-deploy-tf-aws-ec2-traefik" },
     { name = "pydantic" },
+    { name = "python-hcl2" },
     { name = "typer" },
 ]
 
@@ -199,6 +201,7 @@ aws = [
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
+    { name = "parameterized" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
@@ -209,11 +212,13 @@ requires-dist = [
     { name = "boto3", marker = "extra == 'aws'", specifier = ">=1.38.6" },
     { name = "boto3-stubs", marker = "extra == 'aws'", specifier = ">=1.38.6" },
     { name = "click", specifier = "<8.2.0" },
+    { name = "decorator", specifier = ">=5.2.1" },
     { name = "jupyter-core", specifier = ">=5.0.0" },
     { name = "jupyter-deploy-tf-aws-ec2-ngrok", editable = "libs/jupyter-deploy-tf-aws-ec2-ngrok" },
     { name = "jupyter-deploy-tf-aws-ec2-traefik", editable = "libs/jupyter-deploy-tf-aws-ec2-traefik" },
     { name = "mypy-boto3-ec2", marker = "extra == 'aws'", specifier = ">=1.38.6" },
     { name = "pydantic", specifier = ">=2.11.5" },
+    { name = "python-hcl2", specifier = ">=7.2.1" },
     { name = "typer", specifier = ">=0.15.4" },
 ]
 provides-extras = ["aws"]
@@ -221,6 +226,7 @@ provides-extras = ["aws"]
 [package.metadata.requires-dev]
 dev = [
     { name = "mypy", specifier = ">=1.15.0" },
+    { name = "parameterized", specifier = ">=0.9.0" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-cov", specifier = ">=6.1.1" },
     { name = "ruff", specifier = ">=0.11.8" },
