@@ -70,7 +70,9 @@ def init(
     overwrite: Annotated[
         bool,
         typer.Option(
-            "--overwrite", "-o", help="Overwrite the project directory instead of failing when the directory exists."
+            "--overwrite",
+            "-o",
+            help="Overwrite the project directory instead of failing when the directory is not empty.",
         ),
     ] = False,
 ) -> None:
@@ -98,20 +100,29 @@ def init(
 
     if not project.may_export_to_project_path():
         if not overwrite:
-            console.print(f"\n:x: The directory {project.project_path} is not empty, aborting.", style="red")
-            console.print("\nIf you want to overwrite this directory, use the --overwrite option.\n", style="yellow")
+            console.line()
+            console.print(f":x: The directory {project.project_path} is not empty, aborting.", style="red")
+            console.line()
+            console.print("If you want to overwrite this directory, use the --overwrite option.\n", style="yellow")
             return
         else:
-            console.print(f"\nPreparing to overwrite the {project.abs_project_path} directory.")
-            console.print("\nAre you sure you want to proceed?", style="red")
+            console.line()
+            console.print(f":warning: The target directory {project.abs_project_path} is not empty.", style="yellow")
+            console.line()
+            console.print(
+                "Initiating the project here will delete your existing files, are you sure you want to proceed?",
+                style="yellow",
+            )
 
             delete_existing = typer.confirm("")
 
             if delete_existing:
                 project.clear_project_path()
-                console.print("\nDeleted existing files in project directory.\n", style="yellow")
+                console.line()
+                console.print("Deleted existing files in project directory.\n", style="yellow")
             else:
-                console.print(f"\nLeft files under {project.project_path} untouched.\n", style="yellow")
+                console.line()
+                console.print(f"Left files under {project.project_path} untouched.\n", style="yellow")
                 typer.Abort()
                 return
 
