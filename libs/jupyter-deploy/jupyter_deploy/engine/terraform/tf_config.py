@@ -42,6 +42,10 @@ class TerraformConfigHandler(EngineConfigHandler):
     def _get_recorded_secrets_filepath(self) -> Path:
         return self.project_path / TF_RECORDED_SECRETS_FILENAME
 
+    def has_recorded_variables(self) -> bool:
+        file_path = self._get_recorded_vars_filepath()
+        return fs_utils.file_exists(file_path=file_path)
+
     def verify_preset_exists(self, preset_name: str) -> bool:
         file_path = self._get_preset_path(preset_name)
         return fs_utils.file_exists(file_path=file_path)

@@ -172,13 +172,12 @@ def config(
     You can reset these recorded values with `--reset` or `-r`. Sensitive variables do not
     get recorded unless you pass `--record-secrets` or `-s`.
 
-    You can pass an `--output-file` or `-f` argument to choose where to save the planned changes.
+    You can specify where to save the planned change with `--output-file` or `-f`.
     """
     preset_name = None if defaults_preset_name == "none" else defaults_preset_name
+    handler = config_handler.ConfigHandler(output_filename=output_filename)
 
-    handler = config_handler.ConfigHandler(preset_name=preset_name, output_filename=output_filename)
-
-    if not handler.validate():
+    if not handler.validate_and_set_preset(preset_name=preset_name, will_reset_variables=reset):
         return
 
     run_verify = not skip_verify
@@ -187,24 +186,34 @@ def config(
     console = Console()
 
     if reset:
-        console.rule("[bold]jupyter-deploy:[/] resetting recorded variables and secrets")
+        console.rule("[bold]jupyter-deploy:[/] resetting recorded variables and secrets.")
         handler.reset_recorded_variables()
         handler.reset_recorded_secrets()
 
     if run_verify:
-        console.rule("[bold]jupyter-deploy:[/] verifying requirements")
+        console.rule("[bold]jupyter-deploy:[/] verifying requirements.")
         run_configure = handler.verify_requirements()
     else:
-        console.print("[bold]jupyter-deploy:[/] skipping verification of requirements")
+        console.print("[bold]jupyter-deploy:[/] skipping verification of requirements.")
         run_configure = True
 
     if run_configure:
-        console.rule("[bold]jupyter-deploy:[/] configuring the project")
+        console.rule("[bold]jupyter-deploy:[/] configuring the project.")
         handler.configure(variable_overrides=variables)
 
-        console.rule("[bold]jupyter-deploy:[/] recording input values")
+        console.rule("[bold]jupyter-deploy:[/] recording input values.")
         handler.record(record_vars=True, record_secrets=record_secrets)
         console.rule()
+
+        # finally, display a message to the user if config ignored the template defaults
+        # in favor of the recorded variables, with instructions on how to change this behavior.
+        if not handler.has_used_preset(preset_name):
+            console.line()
+            console.print(
+                "[bold]jupyter-deploy:[/] reused the values you elected previously "
+                f"instead of the template defaults: {preset_name}."
+            )
+            console.print("You can call `jd config` with `--reset` option to change this behavior.")
 
 
 @runner.app.command()

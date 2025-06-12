@@ -17,24 +17,28 @@ class TestDeployCmdWithDecorator(unittest.TestCase):
         mock_verify = Mock()
         mock_configure = Mock()
         mock_record = Mock()
+        mock_has_used_preset = Mock()
 
-        mock_config_handler.validate = mock_validate
+        mock_config_handler.validate_and_set_preset = mock_validate
         mock_config_handler.reset_recorded_variables = mock_reset_variables
         mock_config_handler.reset_recorded_secrets = mock_reset_secrets
         mock_config_handler.verify_requirements = mock_verify
         mock_config_handler.configure = mock_configure
         mock_config_handler.record = mock_record
+        mock_config_handler.has_used_preset = mock_has_used_preset
 
         mock_validate.return_value = True
         mock_verify.return_value = True
+        mock_has_used_preset.return_value = True
 
         return mock_config_handler, {
-            "validate": mock_validate,
+            "validate_and_set_preset": mock_validate,
             "reset_recorded_variables": mock_reset_variables,
             "reset_recorded_secrets": mock_reset_secrets,
             "verify": mock_verify,
             "configure": mock_configure,
             "record": mock_record,
+            "has_used_preset": mock_has_used_preset,
         }
 
     def get_mock_decorator(self, mock_variables: dict) -> Callable:
@@ -82,9 +86,10 @@ class TestDeployCmdWithDecorator(unittest.TestCase):
                 self.assertEqual(result.exit_code, 0)
                 mock_decorator_fn.assert_called_once()
                 mock_config_handler.assert_called_once()
-                mock_config_fns["validate"].assert_called_once()
+                mock_config_fns["validate_and_set_preset"].assert_called_once()
                 mock_config_fns["verify"].assert_called_once()
                 mock_config_fns["configure"].assert_called_once_with(variable_overrides=mock_variables)
                 mock_config_fns["record"].assert_called_once_with(record_vars=True, record_secrets=False)
                 mock_config_fns["reset_recorded_variables"].assert_not_called()
                 mock_config_fns["reset_recorded_secrets"].assert_not_called()
+                mock_config_fns["has_used_preset"].assert_called_once_with("all")

@@ -1,6 +1,7 @@
 import json
 import subprocess
 import unittest
+from collections import OrderedDict
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -8,6 +9,7 @@ from pydantic import ValidationError
 
 from jupyter_deploy.engine.terraform.tf_config import TerraformConfigHandler
 from jupyter_deploy.engine.terraform.tf_constants import TF_DEFAULT_PLAN_FILENAME
+from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
 
 
 class TestTerraformConfigHandler(unittest.TestCase):
@@ -261,7 +263,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         self.assertIn("-out=", plan_cmds[2])
 
     @patch("jupyter_deploy.cmd_utils.run_cmd_and_pipe_to_terminal")
-    def test_configure_calls_tf_plan_passes_variable(self, mock_run_cmd: Mock) -> None:
+    def test_configure_calls_tf_plan_passes_preset(self, mock_run_cmd: Mock) -> None:
         # Arrange
         # First call for init returns success
         # Second call for plan returns success
@@ -283,6 +285,55 @@ class TestTerraformConfigHandler(unittest.TestCase):
 
         expect_path = path / "defaults-all.tfvars"
         self.assertEqual(f"-var-file={expect_path.absolute()}", plan_cmds[3])
+
+    @patch("jupyter_deploy.cmd_utils.run_cmd_and_pipe_to_terminal")
+    def test_configure_calls_tf_plan_with_variable_override(self, mock_run_cmd: Mock) -> None:
+        # Arrange
+        # First call for init returns success
+        # Second call for plan returns success
+        mock_run_cmd.side_effect = [(0, False), (0, False)]
+        path = Path("/fake/path")
+        handler = TerraformConfigHandler(path)
+
+        mock_var1 = Mock()
+        mock_var2 = Mock()
+        mock_var3 = Mock()
+        mock_variables: dict[str, TemplateVariableDefinition] = OrderedDict(
+            {
+                "var1": mock_var1,
+                "var2": mock_var2,
+                "var3": mock_var3,
+            }
+        )
+        mock_var1.variable_name = "var1"
+        mock_var1.assigned_value = "some-value"
+        mock_var2.variable_name = "var2"
+        mock_var2.assigned_value = 3.1459
+        mock_var3.variable_name = "var3"
+        mock_var3.assigned_value = True
+
+        # Act
+        handler.configure(preset_name="all", variable_overrides=mock_variables)
+
+        # Assert
+        # Check the second call was to plan
+        self.assertEqual(mock_run_cmd.call_count, 2)
+        plan_cmds = mock_run_cmd.mock_calls[1][1][0]
+
+        expect_path = path / "defaults-all.tfvars"
+        self.assertEqual(f"-var-file={expect_path.absolute()}", plan_cmds[3])
+
+        plan_cmds_len = len(plan_cmds)
+
+        # should append the 3 variables as [-var, varname:varvalue]
+        self.assertEqual("-var", plan_cmds[plan_cmds_len - 6])
+        self.assertEqual("var1=some-value", plan_cmds[plan_cmds_len - 5])
+
+        self.assertEqual("-var", plan_cmds[plan_cmds_len - 4])
+        self.assertEqual("var2=3.1459", plan_cmds[plan_cmds_len - 3])
+
+        self.assertEqual("-var", plan_cmds[plan_cmds_len - 2])
+        self.assertEqual("var3=true", plan_cmds[plan_cmds_len - 1])
 
     @patch("jupyter_deploy.cmd_utils.run_cmd_and_pipe_to_terminal")
     @patch("rich.console.Console")
