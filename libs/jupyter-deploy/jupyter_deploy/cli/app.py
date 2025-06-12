@@ -1,5 +1,6 @@
 import subprocess
 import sys
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -84,8 +85,8 @@ def init(
     Template will be selected based on the provided parameters - the matching
     template package must have already been installed.
 
-    Target project path must be specified. If the path is not empty, command
-    will fail unless the --overwrite flag is passed. --overwrite will prompt
+    You must specify a project path which must be a directory. If such a directory is not empty,
+    the command will fail unless you passed the `--overwrite` or `-o` flag. `--overwrite` will prompt
     for confirmation before deleting existing content.
     """
     if path is None:
@@ -106,7 +107,9 @@ def init(
             console.line()
             console.print(f":x: The directory {project.project_path} is not empty, aborting.", style="red")
             console.line()
-            console.print("If you want to overwrite this directory, use the --overwrite option.\n", style="yellow")
+            console.print(
+                "If you want to overwrite the content of this directory, use the --overwrite option.\n", style="yellow"
+            )
             return
         else:
             console.line()
@@ -126,7 +129,25 @@ def init(
                 return
 
     project.setup()
-    console.print(f"Created start-up project files at: {project.project_path}.\n")
+
+    console.print(f"Created start-up project files at: {project.project_path.absolute()}", style="bold green")
+    console.line()
+
+    if Path.cwd().absolute() != project.project_path.absolute():
+        console.print(
+            f"Change your working directory to [bold]{project.project_path}[/] "
+            "then you can run `[bold cyan]jd config[/]` to configure the project.",
+            style="green",
+        )
+    else:
+        console.print("You can now run `[bold cyan]jd config[/]` to configure the project.")
+    console.line()
+    console.print(
+        "This command will use all the defaults specified in the template, unless you override specific variables."
+    )
+    console.print("The names of the variables depend on the template, use [bold cyan]--help[/] to find them.")
+    console.print("To manually set the value of [italic]all[/] variables, use [bold cyan]--defaults none[/].")
+    console.line()
 
 
 @runner.app.command()
@@ -186,34 +207,44 @@ def config(
     console = Console()
 
     if reset:
-        console.rule("[bold]jupyter-deploy:[/] resetting recorded variables and secrets.")
+        console.rule("[bold]jupyter-deploy:[/] resetting recorded variables and secrets")
         handler.reset_recorded_variables()
         handler.reset_recorded_secrets()
 
     if run_verify:
-        console.rule("[bold]jupyter-deploy:[/] verifying requirements.")
+        console.rule("[bold]jupyter-deploy:[/] verifying requirements")
         run_configure = handler.verify_requirements()
     else:
-        console.print("[bold]jupyter-deploy:[/] skipping verification of requirements.")
+        console.print("[bold]jupyter-deploy:[/] skipping verification of requirements")
         run_configure = True
 
     if run_configure:
-        console.rule("[bold]jupyter-deploy:[/] configuring the project.")
+        console.rule("[bold]jupyter-deploy:[/] configuring the project")
         handler.configure(variable_overrides=variables)
 
-        console.rule("[bold]jupyter-deploy:[/] recording input values.")
+        console.rule("[bold]jupyter-deploy:[/] recording input values")
         handler.record(record_vars=True, record_secrets=record_secrets)
-        console.rule()
 
         # finally, display a message to the user if config ignored the template defaults
         # in favor of the recorded variables, with instructions on how to change this behavior.
         if not handler.has_used_preset(preset_name):
             console.line()
             console.print(
-                "[bold]jupyter-deploy:[/] reused the values you elected previously "
-                f"instead of the template defaults: {preset_name}."
+                "[bold]jupyter-deploy[/] reused the variables values that you elected previously "
+                f"instead of the template preset: [bold cyan]{preset_name}[/]."
             )
-            console.print("You can call `jd config` with `--reset` option to change this behavior.")
+            console.print("You can call `[bold cyan]jd config --reset[/]` to clear your recorded values.")
+        console.rule()
+
+        console.print("Your project is ready.", style="bold green")
+        console.line()
+        if output_filename:
+            console.print(
+                f"You can now run `[bold cyan]jd up --config-filename {output_filename}[/]` to create the resources."
+            )
+        else:
+            console.print("You can now run `[bold cyan]jd up[/]` to create the resources.")
+        console.line()
 
 
 @runner.app.command()

@@ -33,7 +33,13 @@ class ConfigHandler:
         # `jd config` records values automatically, and we want users to be able to rerun `jd config`
         # without getting prompted again or having their previous choices overridden by defaults.
         if not will_reset_variables and self._handler.has_recorded_variables():
-            console.print(":magnifying_glass_tilted_right: detected previous recorded value.")
+            console.rule()
+            console.print(
+                ":magnifying_glass_tilted_right: Detected variables values that [bold]jupyter-deploy[/] "
+                "recorded previously."
+            )
+            console.print("Recorded values take precedent over any default preset.")
+            console.print("You can override any recorded variable value with [bold cyan]--variable-name <value>[/].")
             preset_name = None
 
         preset_valid = preset_name is None or self._handler.verify_preset_exists(preset_name)
