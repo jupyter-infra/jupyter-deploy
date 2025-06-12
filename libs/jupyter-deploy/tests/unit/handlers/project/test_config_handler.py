@@ -31,6 +31,7 @@ class TestConfigHandler(unittest.TestCase):
         mock_has_recorded_variables.return_value = False
         mock_verify.return_value = True
         mock_verify_preset.return_value = True
+        mock_configure.return_value = True
         mock_list_presets.return_value = ["all", "base", "none"]
 
         return (
@@ -218,8 +219,9 @@ class TestConfigHandler(unittest.TestCase):
         mock_tf_handler.return_value = tf_mock_handler_instance
 
         handler = ConfigHandler()
-        handler.configure()
+        result = handler.configure()
 
+        self.assertTrue(result)
         tf_mock_verify.assert_not_called()
         tf_mock_configure.assert_called_once_with(preset_name=None, variable_overrides=None)
 
@@ -231,7 +233,9 @@ class TestConfigHandler(unittest.TestCase):
 
         handler = ConfigHandler()
         handler.validate_and_set_preset(preset_name="all")
-        handler.configure()
+        result = handler.configure()
+
+        self.assertTrue(result)
         tf_mock_configure.assert_called_once_with(preset_name="all", variable_overrides=None)
 
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
@@ -244,7 +248,9 @@ class TestConfigHandler(unittest.TestCase):
         handler.validate_and_set_preset(preset_name="all")
 
         overrides = {"var1": Mock()}
-        handler.configure(variable_overrides=overrides)  # type: ignore
+        result = handler.configure(variable_overrides=overrides)  # type: ignore
+
+        self.assertTrue(result)
         tf_mock_configure.assert_called_once_with(preset_name="all", variable_overrides=overrides)
 
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")

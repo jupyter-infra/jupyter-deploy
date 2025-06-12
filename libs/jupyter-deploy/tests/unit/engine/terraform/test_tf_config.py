@@ -258,10 +258,11 @@ class TestTerraformConfigHandler(unittest.TestCase):
         handler = TerraformConfigHandler(Path("/fake/path"))
 
         # Act
-        handler.configure()
+        result = handler.configure()
 
         # Assert
         # Check the second call was to plan
+        self.assertTrue(result)
         self.assertEqual(mock_run_cmd.call_count, 2)
 
         plan_cmds = mock_run_cmd.mock_calls[1][1][0]
@@ -279,10 +280,11 @@ class TestTerraformConfigHandler(unittest.TestCase):
         handler = TerraformConfigHandler(path)
 
         # Act
-        handler.configure(preset_name="all")
+        result = handler.configure(preset_name="all")
 
         # Assert
         # Check the second call was to plan
+        self.assertTrue(result)
         self.assertEqual(mock_run_cmd.call_count, 2)
 
         plan_cmds = mock_run_cmd.mock_calls[1][1][0]
@@ -320,10 +322,11 @@ class TestTerraformConfigHandler(unittest.TestCase):
         mock_var5.assigned_value = {"Key1": "Val1", "Key2": "Val2"}
 
         # Act
-        handler.configure(preset_name="all", variable_overrides=mock_variables)
+        result = handler.configure(preset_name="all", variable_overrides=mock_variables)
 
         # Assert
         # Check the second call was to plan
+        self.assertTrue(result)
         self.assertEqual(mock_run_cmd.call_count, 2)
         plan_cmds = mock_run_cmd.mock_calls[1][1][0]
 
@@ -358,9 +361,10 @@ class TestTerraformConfigHandler(unittest.TestCase):
         handler = TerraformConfigHandler(Path("/fake/path"))
 
         # Act
-        handler.configure()
+        result = handler.configure()
 
         # Assert
+        self.assertFalse(result)
         self.assertEqual(mock_run_cmd.call_count, 1)  # Only init should be called
         mock_cmd_call = mock_run_cmd.mock_calls[0]
         self.assertEqual(mock_cmd_call[1][0][:2], ["terraform", "init"])
@@ -375,9 +379,10 @@ class TestTerraformConfigHandler(unittest.TestCase):
         handler = TerraformConfigHandler(Path("/fake/path"))
 
         # Act
-        handler.configure()
+        result = handler.configure()
 
         # Assert
+        self.assertFalse(result)
         self.assertEqual(mock_run_cmd.call_count, 1)  # Only init should be called
         mock_cmd_call = mock_run_cmd.mock_calls[0]
         self.assertEqual(mock_cmd_call[1][0][:2], ["terraform", "init"])
@@ -394,9 +399,10 @@ class TestTerraformConfigHandler(unittest.TestCase):
         handler = TerraformConfigHandler(Path("/fake/path"))
 
         # Act
-        handler.configure()
+        result = handler.configure()
 
         # Assert
+        self.assertFalse(result)
         self.assertEqual(mock_run_cmd.call_count, 2)
         self.assertEqual(mock_console_instance.print.call_count, 1)
         mock_print_call = mock_console_instance.print.mock_calls[0]
@@ -415,9 +421,10 @@ class TestTerraformConfigHandler(unittest.TestCase):
         handler = TerraformConfigHandler(Path("/fake/path"))
 
         # Act
-        handler.configure()
+        result = handler.configure()
 
         # Assert
+        self.assertFalse(result)
         self.assertEqual(mock_run_cmd.call_count, 2)
         self.assertEqual(mock_console_instance.print.call_count, 1)
         mock_print_call = mock_console_instance.print.mock_calls[0]

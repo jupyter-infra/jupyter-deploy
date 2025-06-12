@@ -133,12 +133,12 @@ class DictStrTemplateVariableDefinition(TemplateVariableDefinition[dict[str, str
             return None
         if isinstance(assigned_value, list):
             out: dict[str, str] = {}
-            for v in assigned_value:
+            for v in assigned_value:  # guaranteed by typer, but keep to mypy happy
                 if not isinstance(v, str):
                     continue
                 parts = v.split("=")
 
-                if len(parts) != 2:
+                if len(parts) != 2:  # guaranteed to be true by validator above
                     continue
                 out.update({parts[0]: parts[1]})
             return out

@@ -207,6 +207,27 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
         mock_config_fns["has_used_preset"].assert_not_called()
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    def test_config_stops_if_configure_returns_false(self, mock_config_handler: Mock) -> None:
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+        mock_config_fns["configure"].return_value = False
+
+        # Act
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config"])
+
+        # Verify
+        self.assertEqual(result.exit_code, 0)
+        mock_config_handler.assert_called_once()
+        mock_config_fns["validate_and_set_preset"].assert_called_once()
+        mock_config_fns["verify"].assert_called_once()
+        mock_config_fns["configure"].assert_called_once()
+        mock_config_fns["record"].assert_not_called()
+        mock_config_fns["reset_recorded_variables"].assert_not_called()
+        mock_config_fns["reset_recorded_secrets"].assert_not_called()
+        mock_config_fns["has_used_preset"].assert_not_called()
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
     def test_config_reset_vars_and_secrets_when_user_asks(self, mock_config_handler: Mock) -> None:
         mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
         mock_config_handler.return_value = mock_config_handler_instance
