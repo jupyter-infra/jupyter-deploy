@@ -80,6 +80,7 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
 
         mock_validate.return_value = True
         mock_verify.return_value = True
+        mock_configure.return_value = True
         mock_has_used_preset.return_value = False
 
         return mock_config_handler, {
@@ -247,9 +248,14 @@ class TestJupyterDeployConfigCmd(unittest.TestCase):
         mock_config_handler.return_value = mock_config_handler_instance
 
         call_order: list[str] = []
+
+        def configure_mock(*a: list, **kw: dict) -> bool:
+            call_order.append("configure")
+            return True
+
         mock_config_fns["reset_recorded_variables"].side_effect = lambda *a, **kw: call_order.append("reset_vars")
         mock_config_fns["reset_recorded_secrets"].side_effect = lambda *a, **kw: call_order.append("reset_secrets")
-        mock_config_fns["configure"].side_effect = lambda *a, **kw: call_order.append("configure")
+        mock_config_fns["configure"].side_effect = configure_mock
         mock_config_fns["record"].side_effect = lambda *a, **kw: call_order.append("record")
 
         # Act

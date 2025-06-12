@@ -40,11 +40,6 @@ def parse_variables_dot_tf_content(content: str) -> dict[str, tf_vardefs.Terrafo
         var_config["tf_type"] = tf_type
         var_config["variable_name"] = var_name
 
-        # TODO: handle simple nested type
-        if tf_type in [tf_vardefs.TerraformType.LIST_STR, tf_vardefs.TerraformType.MAP_STR]:
-            print(f"Skippping nested variables of type: {tf_type}")
-            continue
-
         try:
             var_def = tf_vardefs.create_tf_variable_definition(var_config)
             result.update({var_name: var_def})

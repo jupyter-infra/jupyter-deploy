@@ -38,8 +38,8 @@ class EngineConfigHandler(ABC):
     @abstractmethod
     def configure(
         self, preset_name: str | None = None, variable_overrides: dict[str, TemplateVariableDefinition] | None = None
-    ) -> None:
-        """Execute commands to set the values of the variables."""
+    ) -> bool:
+        """Execute commands to set the values of the variables, return True if succeeded."""
         pass
 
     @abstractmethod

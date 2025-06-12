@@ -62,24 +62,6 @@ class TestParseVariablesDotTfContent(unittest.TestCase):
             "For example the size of the disk in GB.\n\nRecommended: 30", result["some_int_value"].description
         )
 
-    @patch("hcl2.loads")
-    def test_skips_list_and_dict_vars(self, mock_loads: Mock) -> None:
-        # Create a mock return value that includes list and dict variables
-        mock_parsed = {
-            "variable": [
-                {"some_string_value": {"description": "A string variable", "type": "string"}},
-                {"some_list_var": {"description": "A list variable", "type": "${list(string)}"}},
-                {"some_map_var": {"description": "A map variable", "type": "${map(string)}"}},
-            ]
-        }
-        mock_loads.return_value = mock_parsed
-        result = tf_varfiles.parse_variables_dot_tf_content(self.variables_tf_content)
-
-        # Verify only the string variable is included in the result
-        self.assertIn("some_string_value", result)
-        self.assertNotIn("some_list_var", result)
-        self.assertNotIn("some_map_var", result)
-
     def test_parsing_actual_variables_tf_file_works(self) -> None:
         content = self.variables_tf_content
         result = tf_varfiles.parse_variables_dot_tf_content(content)
@@ -97,6 +79,8 @@ class TestParseVariablesDotTfContent(unittest.TestCase):
         self.assertIsInstance(result["some_float_value"], tf_vardefs.TerraformNumberVariableDefinition)
         self.assertIsInstance(result["some_string_value_with_condition"], tf_vardefs.TerraformStrVariableDefinition)
         self.assertIsInstance(result["some_secret"], tf_vardefs.TerraformStrVariableDefinition)
+        self.assertIsInstance(result["some_list_of_string"], tf_vardefs.TerraformListOfStrVariableDefinition)
+        self.assertIsInstance(result["some_map_of_sring"], tf_vardefs.TerraformMapOfStrVariableDefinition)
 
         # Verify descriptions are correctly parsed
         self.assertIn("Recommended: t3.medium", result["some_string_value"].description)
@@ -106,10 +90,6 @@ class TestParseVariablesDotTfContent(unittest.TestCase):
         # Verify sensitive flag is set correctly
         self.assertTrue(result["some_secret"].sensitive)
         self.assertFalse(result["some_string_value"].sensitive)
-
-        # Verify list and map variables are skipped
-        self.assertNotIn("some_list_of_string", result)
-        self.assertNotIn("some_map_of_sring", result)
 
 
 class TestParseDotTfvarsContentAndAddDefaults(unittest.TestCase):
@@ -216,6 +196,8 @@ class TestParseDotTfvarsContentAndAddDefaults(unittest.TestCase):
         self.assertEqual(30, parsed_variable_defs["some_int_value"].default)
         self.assertEqual(0.9, parsed_variable_defs["some_float_value"].default)
         self.assertIsNone(parsed_variable_defs["some_string_value_with_condition"].default)
+        self.assertEqual(["a", "b"], parsed_variable_defs["some_list_of_string"].default)
+        self.assertEqual({}, parsed_variable_defs["some_map_of_sring"].default)
 
         # Verify sensitive variable does not have default set
         self.assertIn("some_secret", parsed_variable_defs)
@@ -223,7 +205,3 @@ class TestParseDotTfvarsContentAndAddDefaults(unittest.TestCase):
 
         # Verify unrecognized variable from tfvars is not added
         self.assertNotIn("some_unrecognized_value", parsed_variable_defs)
-
-        # Verify list and map variables are still not present (skipped during parsing)
-        self.assertNotIn("some_list_of_string", parsed_variable_defs)
-        self.assertNotIn("some_map_of_sring", parsed_variable_defs)

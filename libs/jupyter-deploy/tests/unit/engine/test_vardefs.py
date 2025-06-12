@@ -198,4 +198,6 @@ class TestTemplateVariableClasses(unittest.TestCase):
         self.assertEqual(var_def.description, "Test description")
         self.assertEqual(var_def.default, default_dict)
         self.assertEqual(var_def.assigned_value, assigned_dict)
-        self.assertEqual(DictStrTemplateVariableDefinition.get_type(), dict[str, str])
+
+        # with a fake type for typer
+        self.assertEqual(DictStrTemplateVariableDefinition.get_type(), list[str])

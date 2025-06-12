@@ -74,9 +74,9 @@ class ConfigHandler:
         """Return True if the user has installed all the required dependencies."""
         return self._handler.verify_requirements()
 
-    def configure(self, variable_overrides: dict[str, TemplateVariableDefinition] | None = None) -> None:
-        """Main method to set the inputs for the project."""
-        self._handler.configure(preset_name=self.preset_name, variable_overrides=variable_overrides)
+    def configure(self, variable_overrides: dict[str, TemplateVariableDefinition] | None = None) -> bool:
+        """Main method to set the inputs for the project, return True on success"""
+        return self._handler.configure(preset_name=self.preset_name, variable_overrides=variable_overrides)
 
     def record(self, record_vars: bool = False, record_secrets: bool = False) -> None:
         """Save the values of the variables to disk in the project dir."""

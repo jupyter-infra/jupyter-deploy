@@ -87,7 +87,7 @@ class TerraformConfigHandler(EngineConfigHandler):
 
     def configure(
         self, preset_name: str | None = None, variable_overrides: dict[str, TemplateVariableDefinition] | None = None
-    ) -> None:
+    ) -> bool:
         console = rich_console.Console()
 
         # 1/ run terraform init.
@@ -100,7 +100,7 @@ class TerraformConfigHandler(EngineConfigHandler):
         )
         if init_retcode != 0 or init_timed_out:
             console.print(":x: Error initializing Terraform project.", style="red")
-            return
+            return False
 
         # 2/ run terraform plan and save output with ``terraform plan PATH``
         plan_cmds = TF_PLAN_CMD.copy()
@@ -117,10 +117,8 @@ class TerraformConfigHandler(EngineConfigHandler):
         # 2.3/ pass variable overrides
         if variable_overrides:
             for var_def in variable_overrides.values():
-                var_value = tf_vardefs.to_tf_assigned_value(var_def)
-
-                plan_cmds.append("-var")
-                plan_cmds.append(f"{var_def.variable_name}={var_value}")
+                var_option = tf_vardefs.to_tf_var_option(var_def)
+                plan_cmds.extend(var_option)
 
         # 2.4/ call terraform plan
         plan_retcode, plan_timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(plan_cmds)
@@ -131,6 +129,7 @@ class TerraformConfigHandler(EngineConfigHandler):
 
         # on successful plan generation, terraform prints out where the plan is saved,
         # hence no need to print it again.
+        return plan_retcode == 0 and not plan_timed_out
 
     def record(self, record_vars: bool = False, record_secrets: bool = False) -> None:
         if not record_vars and not record_secrets:

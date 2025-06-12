@@ -9,7 +9,14 @@ from pydantic import ValidationError
 
 from jupyter_deploy.engine.terraform.tf_config import TerraformConfigHandler
 from jupyter_deploy.engine.terraform.tf_constants import TF_DEFAULT_PLAN_FILENAME
-from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
+from jupyter_deploy.engine.vardefs import (
+    BoolTemplateVariableDefinition,
+    DictStrTemplateVariableDefinition,
+    FloatTemplateVariableDefinition,
+    ListStrTemplateVariableDefinition,
+    StrTemplateVariableDefinition,
+    TemplateVariableDefinition,
+)
 
 
 class TestTerraformConfigHandler(unittest.TestCase):
@@ -295,22 +302,22 @@ class TestTerraformConfigHandler(unittest.TestCase):
         path = Path("/fake/path")
         handler = TerraformConfigHandler(path)
 
-        mock_var1 = Mock()
-        mock_var2 = Mock()
-        mock_var3 = Mock()
+        mock_var1 = Mock(spec=StrTemplateVariableDefinition)
+        mock_var2 = Mock(spec=FloatTemplateVariableDefinition)
+        mock_var3 = Mock(spec=BoolTemplateVariableDefinition)
+        mock_var4 = Mock(spec=ListStrTemplateVariableDefinition)
+        mock_var5 = Mock(spec=DictStrTemplateVariableDefinition)
         mock_variables: dict[str, TemplateVariableDefinition] = OrderedDict(
-            {
-                "var1": mock_var1,
-                "var2": mock_var2,
-                "var3": mock_var3,
-            }
+            {"var1": mock_var1, "var2": mock_var2, "var3": mock_var3, "var4": mock_var4, "var5": mock_var5}
         )
-        mock_var1.variable_name = "var1"
+        for idx, key in enumerate(mock_variables.keys()):
+            mock_variables[key].variable_name = f"var{idx + 1}"
+
         mock_var1.assigned_value = "some-value"
-        mock_var2.variable_name = "var2"
         mock_var2.assigned_value = 3.1459
-        mock_var3.variable_name = "var3"
         mock_var3.assigned_value = True
+        mock_var4.assigned_value = ["email1@example.com", "email2@example.com"]
+        mock_var5.assigned_value = {"Key1": "Val1", "Key2": "Val2"}
 
         # Act
         handler.configure(preset_name="all", variable_overrides=mock_variables)
@@ -326,14 +333,20 @@ class TestTerraformConfigHandler(unittest.TestCase):
         plan_cmds_len = len(plan_cmds)
 
         # should append the 3 variables as [-var, varname:varvalue]
+        self.assertEqual("-var", plan_cmds[plan_cmds_len - 10])
+        self.assertEqual("var1=some-value", plan_cmds[plan_cmds_len - 9])
+
+        self.assertEqual("-var", plan_cmds[plan_cmds_len - 8])
+        self.assertEqual("var2=3.1459", plan_cmds[plan_cmds_len - 7])
+
         self.assertEqual("-var", plan_cmds[plan_cmds_len - 6])
-        self.assertEqual("var1=some-value", plan_cmds[plan_cmds_len - 5])
+        self.assertEqual("var3=true", plan_cmds[plan_cmds_len - 5])
 
         self.assertEqual("-var", plan_cmds[plan_cmds_len - 4])
-        self.assertEqual("var2=3.1459", plan_cmds[plan_cmds_len - 3])
+        self.assertEqual('var4=["email1@example.com", "email2@example.com"]', plan_cmds[plan_cmds_len - 3])
 
         self.assertEqual("-var", plan_cmds[plan_cmds_len - 2])
-        self.assertEqual("var3=true", plan_cmds[plan_cmds_len - 1])
+        self.assertEqual('var5={"Key1": "Val1", "Key2": "Val2"}', plan_cmds[plan_cmds_len - 1])
 
     @patch("jupyter_deploy.cmd_utils.run_cmd_and_pipe_to_terminal")
     @patch("rich.console.Console")

@@ -220,7 +220,10 @@ def config(
 
     if run_configure:
         console.rule("[bold]jupyter-deploy:[/] configuring the project")
-        handler.configure(variable_overrides=variables)
+        configured = handler.configure(variable_overrides=variables)
+
+        if not configured:
+            return
 
         console.rule("[bold]jupyter-deploy:[/] recording input values")
         handler.record(record_vars=True, record_secrets=record_secrets)
@@ -243,7 +246,7 @@ def config(
                 f"You can now run `[bold cyan]jd up --config-filename {output_filename}[/]` to create the resources."
             )
         else:
-            console.print("You can now run `[bold cyan]jd up[/]` to create the resources.")
+            console.print("You can now run `[bold cyan]jd up[/]` to create or update the resources.")
         console.line()
 
 

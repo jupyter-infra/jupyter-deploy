@@ -12,15 +12,16 @@ from jupyter_deploy.engine.terraform.tf_vardefs import (
     TerraformStrVariableDefinition,
     TerraformType,
     create_tf_variable_definition,
-    to_tf_assigned_value,
+    to_tf_var_option,
 )
 from jupyter_deploy.engine.vardefs import (
     AnyNumericTemplateVariableDefinition,
     BoolTemplateVariableDefinition,
+    DictStrTemplateVariableDefinition,
     FloatTemplateVariableDefinition,
     IntTemplateVariableDefinition,
+    ListStrTemplateVariableDefinition,
     StrTemplateVariableDefinition,
-    TemplateVariableDefinition,
 )
 
 
@@ -149,48 +150,54 @@ class TestTerraformTemplateVariableClasses(unittest.TestCase):
         self.assertIsInstance(result, expected_class)
         self.assertEqual(result.variable_name, config["variable_name"])
 
-    @patch("jupyter_deploy.engine.vardefs.TemplateVariableDefinition", spec=True)
-    def test_to_tf_assigned_value_wraps_empty_str(self, mock_var_def: Mock) -> None:
+    @patch("jupyter_deploy.engine.vardefs.StrTemplateVariableDefinition", spec=True)
+    def test_to_tf_var_option_wraps_empty_str(self, mock_var_def: Mock) -> None:
         # Arrange
+        mock_var_def.variable_name = "var1"
         mock_var_def.assigned_value = ""
 
         # Act
-        result = to_tf_assigned_value(mock_var_def)
+        result = to_tf_var_option(mock_var_def)
 
         # Assert
-        self.assertEqual(result, '""')
+        self.assertEqual(result, ["-var", 'var1=""'])
 
-    @patch("jupyter_deploy.engine.vardefs.TemplateVariableDefinition", spec=True)
-    def test_to_tf_assigned_value_converts_none(self, mock_var_def: Mock) -> None:
+    @patch("jupyter_deploy.engine.vardefs.StrTemplateVariableDefinition", spec=True)
+    def test_to_tf_var_option_converts_none(self, mock_var_def: Mock) -> None:
         # Arrange
+        mock_var_def.variable_name = "var1"
         mock_var_def.assigned_value = None
 
         # Act
-        result = to_tf_assigned_value(mock_var_def)
+        result = to_tf_var_option(mock_var_def)
 
         # Assert
-        self.assertEqual(result, "null")
+        self.assertEqual(result, ["-var", "var1=null"])
 
     @parameterized.expand(
         [
-            ("string_value", "hello", "hello"),
-            ("int_value", 42, "42"),
-            ("float_value", 3.14, "3.14"),
-            ("bool_true", True, "true"),
-            ("bool_false", False, "false"),
-            ("list_value", ["a", "b", "c"], "['a', 'b', 'c']"),
-            ("dict_value", {"key": "value"}, "{'key': 'value'}"),
+            ("string_value", "hello", StrTemplateVariableDefinition, ["-var", "string_value=hello"]),
+            ("int_value", 42, IntTemplateVariableDefinition, ["-var", "int_value=42"]),
+            ("float_value", 3.14, FloatTemplateVariableDefinition, ["-var", "float_value=3.14"]),
+            ("bool_true", True, BoolTemplateVariableDefinition, ["-var", "bool_true=true"]),
+            ("bool_false", False, BoolTemplateVariableDefinition, ["-var", "bool_false=false"]),
+            ("list_value", ["a", "b", "c"], ListStrTemplateVariableDefinition, ["-var", 'list_value=["a", "b", "c"]']),
+            (
+                "dict_value",
+                {"key1": "val1", "key2": "val2"},
+                DictStrTemplateVariableDefinition,
+                ["-var", 'dict_value={"key1": "val1", "key2": "val2"}'],
+            ),
         ]
     )
-    def test_to_tf_assigned_value_converts_values_to_str(
-        self, name: str, input_value: Any, expected_output: str
-    ) -> None:
+    def test_to_tf_var_option(self, name: str, input_value: Any, clz: type, expected_output: list[str]) -> None:
         # Arrange
-        mock_var_def = Mock(spec=TemplateVariableDefinition)
+        mock_var_def = Mock(spec=clz)
+        mock_var_def.variable_name = name
         mock_var_def.assigned_value = input_value
 
         # Act
-        result = to_tf_assigned_value(mock_var_def)
+        result = to_tf_var_option(mock_var_def)
 
         # Assert
         self.assertEqual(result, expected_output)

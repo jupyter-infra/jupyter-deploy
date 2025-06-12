@@ -1,3 +1,4 @@
+import json
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Generic, TypeVar  # noqa: UP035
@@ -118,17 +119,23 @@ def create_tf_variable_definition(parsed_config: dict) -> TerraformVariableDefin
     raise NotImplementedError(f"No terraform class found for type: {tf_type}.")
 
 
-def to_tf_assigned_value(var_def: TemplateVariableDefinition) -> str:
+def to_tf_var_option(var_def: TemplateVariableDefinition) -> list[str]:
     """Return the 'bar' value to pass to terraform as -var 'foo=bar'."""
-    assigned_value = var_def.assigned_value
+    if var_def.assigned_value is None:
+        return ["-var", f"{var_def.variable_name}=null"]
 
-    if assigned_value == "":
-        return '""'
+    if isinstance(var_def, StrTemplateVariableDefinition) and var_def.assigned_value == "":
+        return ["-var", f'{var_def.variable_name}=""']
 
-    if assigned_value is None:
-        return "null"
+    if isinstance(var_def, BoolTemplateVariableDefinition):
+        return ["-var", f"{var_def.variable_name}={'true' if var_def.assigned_value else 'false'}"]
 
-    if isinstance(assigned_value, bool):
-        return "true" if assigned_value else "false"
+    if isinstance(var_def, ListStrTemplateVariableDefinition):
+        str_out = json.dumps(var_def.assigned_value)
+        return ["-var", f"{var_def.variable_name}={str_out}"]
 
-    return f"{assigned_value}"
+    if isinstance(var_def, DictStrTemplateVariableDefinition):
+        str_out = json.dumps(var_def.assigned_value)
+        return ["-var", f"{var_def.variable_name}={str_out}"]
+
+    return ["-var", f"{var_def.variable_name}={var_def.assigned_value}"]
