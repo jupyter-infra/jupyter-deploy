@@ -249,7 +249,7 @@ class TestTemplateVariableClasses(unittest.TestCase):
 
         if not cb:
             raise ValueError("to keep mypy happy")
-        
+
         self.assertEqual([], cb([]))
         self.assertEqual(["key1=val1", "key2=val2"], cb(["key1=val1", "key2=val2"]))
 
