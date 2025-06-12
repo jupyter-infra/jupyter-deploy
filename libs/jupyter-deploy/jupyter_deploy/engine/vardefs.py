@@ -104,12 +104,15 @@ class DictStrTemplateVariableDefinition(TemplateVariableDefinition[dict[str, str
         return f"{trimmed_description}\n{hint}"
 
     def get_validator_callback(self) -> Callable | None:
-        def cb(entries: list[str]) -> list[str]:
+        def cb(entries: list[str] | None) -> list[str] | None:
+            if not entries:
+                return []
+
             for idx, v in enumerate(entries):
                 if not v:
                     raise typer.BadParameter(f"Empty value at index {idx}, must be of the form key=val")
-
                 parts = v.split("=")
+                print(parts)
                 if len(parts) != 2 or not parts[0] or not parts[1]:
                     raise typer.BadParameter(f"Invalid value at index {idx}, must be of the form key=val")
             return entries
