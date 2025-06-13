@@ -29,7 +29,7 @@ class TestBaseProjectHandler(unittest.TestCase):
         handler = BaseProjectHandler()
 
         # Assert
-        mock_retrieve.assert_called_once_with(Path("/fake/path/jdmanifest.yml"))
+        mock_retrieve.assert_called_once_with(Path("/fake/path/manifest.yaml"))
         self.assertEqual(handler.engine, EngineType.TERRAFORM)
         self.assertEqual(handler.project_manifest, mock_manifest)
 
@@ -54,7 +54,7 @@ class TestBaseProjectHandler(unittest.TestCase):
             ":x: The path does not correspond to a jupyter-deploy project.", style="bold red"
         )
         mock_console.line.assert_any_call()
-        mock_console.print.assert_any_call("Reason: could not find a jupyter-deploy manifest file.", style="red")
+        mock_console.print.assert_any_call("Reason: could not find the jupyter-deploy manifest file.", style="red")
 
     @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
     @patch("pathlib.Path.cwd")
@@ -177,7 +177,7 @@ class TestRetrieveProjectManifest(unittest.TestCase):
     def test_checks_file_existence(self, mock_file_exists: Mock) -> None:
         # Setup
         mock_file_exists.return_value = False
-        manifest_path = Path("/fake/path/jdmanifest.yml")
+        manifest_path = Path("/fake/path/manifest.yaml")
 
         # Execute and Assert
         with self.assertRaises(FileNotFoundError):
@@ -198,7 +198,7 @@ class TestRetrieveProjectManifest(unittest.TestCase):
     ) -> None:
         # Setup
         mock_file_exists.return_value = True
-        manifest_path = Path("/fake/path/jdmanifest.yml")
+        manifest_path = Path("/fake/path/manifest.yaml")
         yaml_content = {"schema_version": 1, "template": {"name": "test", "engine": "terraform", "version": "1.0.0"}}
         mock_yaml_load.return_value = yaml_content
         mock_manifest = Mock()
@@ -218,7 +218,7 @@ class TestRetrieveProjectManifest(unittest.TestCase):
     def test_parse_manifest_versions(self, mock_open_file: Mock, mock_file_exists: Mock) -> None:
         # Setup
         mock_file_exists.return_value = True
-        manifest_path = Path("/fake/path/jdmanifest.yml")
+        manifest_path = Path("/fake/path/manifest.yaml")
 
         # Test for schema_version 1
         yaml_content = """
@@ -247,7 +247,7 @@ class TestRetrieveProjectManifest(unittest.TestCase):
     def test_surfaces_error_when_open_raises_os_error(self, mock_open_file: Mock, mock_file_exists: Mock) -> None:
         # Setup
         mock_file_exists.return_value = True
-        manifest_path = Path("/fake/path/jdmanifest.yml")
+        manifest_path = Path("/fake/path/manifest.yaml")
         mock_open_file.side_effect = OSError("Permission denied")
 
         # Execute and Assert
@@ -262,7 +262,7 @@ class TestRetrieveProjectManifest(unittest.TestCase):
     ) -> None:
         # Setup
         mock_file_exists.return_value = True
-        manifest_path = Path("/fake/path/jdmanifest.yml")
+        manifest_path = Path("/fake/path/manifest.yaml")
         mock_yaml_load.side_effect = ParserError("YAML parsing error")
 
         # Execute and Assert
@@ -277,7 +277,7 @@ class TestRetrieveProjectManifest(unittest.TestCase):
     ) -> None:
         # Setup
         mock_file_exists.return_value = True
-        manifest_path = Path("/fake/path/jdmanifest.yml")
+        manifest_path = Path("/fake/path/manifest.yaml")
         mock_yaml_load.return_value = ["item1", "item2"]  # Not a dict
 
         # Execute and Assert
@@ -297,7 +297,7 @@ class TestRetrieveProjectManifest(unittest.TestCase):
     ) -> None:
         # Setup
         mock_file_exists.return_value = True
-        manifest_path = Path("/fake/path/jdmanifest.yml")
+        manifest_path = Path("/fake/path/manifest.yaml")
         # Missing required 'engine' field
         mock_yaml_load.return_value = {
             "schema_version": 1,

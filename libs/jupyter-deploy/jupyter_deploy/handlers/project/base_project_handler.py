@@ -21,7 +21,7 @@ class BaseProjectHandler:
     otherwise this class will raise a typer.Exit().
     """
 
-    MANIFEST_FILENAME = "jdmanifest.yml"
+    MANIFEST_FILENAME = "manifest.yaml"
 
     def __init__(self) -> None:
         """Attempts to identify the engine associated with the project."""
@@ -35,7 +35,7 @@ class BaseProjectHandler:
             console = self.get_console()
             console.print(":x: The path does not correspond to a jupyter-deploy project.", style="bold red")
             console.line()
-            console.print("Reason: could not find a jupyter-deploy manifest file.", style="red")
+            console.print("Reason: could not find the jupyter-deploy manifest file.", style="red")
             console.print(f"Expected manifest file location: {manifest_path.absolute()}", style="red")
             console.line()
             console.print(
