@@ -9,6 +9,7 @@ EXPECTED_TEMPLATE_FILES = [
     "docker-compose.yml.tftpl",
     "docker-startup.sh",
     "dockerfile.jupyter",
+    "jdmanifest.yml",
     "main.tf",
     "outputs.tf",
     "pyproject.jupyter.toml",

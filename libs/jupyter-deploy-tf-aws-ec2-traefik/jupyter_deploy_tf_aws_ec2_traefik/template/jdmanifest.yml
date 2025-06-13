@@ -1,0 +1,5 @@
+schema_version: 1
+template:
+  name: "tf-aws-ec2-traefik"
+  engine: "terraform"
+  version: "0.1.0"

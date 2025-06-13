@@ -7,6 +7,7 @@ EXPECTED_TEMPLATE_FILES = [
     "docker-compose.yml",
     "docker-startup.sh",
     "dockerfile.jupyter",
+    "jdmanifest.yml",
     "main.tf",
     "ngrok.yml.tftpl",
     "outputs.tf",

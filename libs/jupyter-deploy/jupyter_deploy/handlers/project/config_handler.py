@@ -1,28 +1,26 @@
-from pathlib import Path
-
 from rich import console as rich_console
 
 from jupyter_deploy.engine.engine_config import EngineConfigHandler
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.terraform import tf_config
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
+from jupyter_deploy.handlers.project.base_project_handler import BaseProjectHandler
 
 
-class ConfigHandler:
+class ConfigHandler(BaseProjectHandler):
     _handler: EngineConfigHandler
 
     def __init__(self, output_filename: str | None = None) -> None:
         """Base class to manage the configuration of a jupyter-deploy project."""
-        project_path = Path.cwd()
+        super().__init__()
         self.preset_name: str | None = None
 
-        # TODO: derive from the project manifest
-        engine = EngineType.TERRAFORM
-
-        if engine == EngineType.TERRAFORM:
-            self._handler = tf_config.TerraformConfigHandler(project_path=project_path, output_filename=output_filename)
+        if self.engine == EngineType.TERRAFORM:
+            self._handler = tf_config.TerraformConfigHandler(
+                project_path=self.project_path, output_filename=output_filename
+            )
         else:
-            raise NotImplementedError(f"ConfigHandler implementation not found for engine: {engine}")
+            raise NotImplementedError(f"ConfigHandler implementation not found for engine: {self.engine}")
 
     def validate_and_set_preset(self, preset_name: str | None, will_reset_variables: bool = False) -> bool:
         """Return True if the settings are correct."""
