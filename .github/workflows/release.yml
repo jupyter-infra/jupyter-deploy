@@ -1,0 +1,181 @@
+name: release
+
+run-name: Release ${{ inputs.working-directory }}
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: true
+        type: string
+        description: "From which folder this pipeline executes"
+  workflow_dispatch:
+    inputs:
+      working-directory:
+        required: true
+        type: choice
+        options:
+          - libs/jupyter-deploy
+          - libs/jupyter-deploy-tf-aws-ec2-traefik
+          - libs/jupyter-deploy-tf-aws-ec2-ngrok
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      pkg-name: ${{ steps.get-version.outputs.pkg-name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: '3.13'
+          working-directory: '.'
+
+      - name: Build package
+        run: |
+          cd ${{ inputs.working-directory }}
+          uv build
+        
+      - name: Get package version
+        id: get-version
+        run: |
+          cd ${{ inputs.working-directory }}
+          echo version=$(uv version --short) >> $GITHUB_OUTPUT
+          echo pkg-name="$(uv version | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  lint:
+    name: Run linters
+    needs: 
+      - build
+    uses: ./.github/workflows/lint.yml
+    with:
+      working-directory: ${{ inputs.working-directory }}
+
+  test:
+    name: Run tests
+    needs: 
+      - lint
+    uses: ./.github/workflows/test.yml
+    with:
+      working-directory: ${{ inputs.working-directory }}
+
+  test-pypi-publish:
+    name: Publish to Test PyPI
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: test-release
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+          
+      - name: List build artifacts
+        run: ls -la dist/
+        
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v3
+        
+      - name: Publish to Test PyPI
+        run: |
+          uv publish \
+            --publish-url https://test.pypi.org/legacy/ \
+            --check-url https://test.pypi.org/simple \
+            --trusted-publishing always
+    
+  test-pypi-install:
+    name: Check installation of the Test PyPI build
+    needs: [test-pypi-publish, build]
+    runs-on: ubuntu-latest
+    env:
+      PKG_NAME: ${{ needs.build.outputs.pkg-name }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v3
+        
+      - name: Test installation from Test PyPi
+        run: |
+          uv venv
+          # Wait a bit for the package to be available
+          sleep 30
+          uv pip install \
+            --extra-index-url https://test.pypi.org/simple/ \
+            --index-strategy unsafe-best-match \
+            ${{ env.PKG_NAME }}==${{ env.VERSION }}
+
+  prod-pypi-publish:
+    name: Publish to PyPI
+    needs: [test-pypi-install, build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: release
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+          
+      - name: List build artifacts
+        run: ls -la dist/
+        
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v3
+        
+      - name: Publish to PyPI
+        run: |
+          uv publish \
+            --trusted-publishing always 
+
+  mark-release:
+    name: Create GitHub Release
+    needs: [prod-pypi-publish, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      PKG_NAME: ${{ needs.build.outputs.pkg-name }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: '3.13'
+          working-directory: '.'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "dist/*"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          generateReleaseNotes: true
+          tag: ${{ env.PKG_NAME }}==${{ env.VERSION }}
+          commit: ${{ github.sha }}

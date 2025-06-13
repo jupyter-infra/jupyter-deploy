@@ -39,22 +39,12 @@ jobs:
           echo "Affected directories: $AFFECTED_DIRS"
 
   lint:
-    name: Run Python linter
+    name: Run linters
     needs: build
     strategy:
       matrix:
         working-directory: ${{ fromJson(needs.build.outputs.affected_dirs) }}
     uses: ./.github/workflows/lint.yml
-    with:
-      working-directory: ${{ matrix.working-directory }}
-
-  lint-tf:
-    name: Run Terraform linter
-    needs: build
-    strategy:
-      matrix:
-        working-directory: ${{ fromJson(needs.build.outputs.affected_dirs) }}
-    uses: ./.github/workflows/lint-tf.yml
     with:
       working-directory: ${{ matrix.working-directory }}
 

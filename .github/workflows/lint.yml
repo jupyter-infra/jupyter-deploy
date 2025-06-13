@@ -44,3 +44,20 @@ jobs:
         run: |
           uv run --script $GITHUB_WORKSPACE/scripts/verify_format.py .
         working-directory: ${{ inputs.working-directory }}
+        
+  lint-tf:
+    name: Lint Terraform templates
+    runs-on: ubuntu-latest
+    if: contains(inputs.working-directory, '-tf-') || inputs.working-directory == '.'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.5"
+
+      - name: Run terraform fmt check
+        run: |
+          terraform fmt -check -diff -recursive "${{ inputs.working-directory }}"
