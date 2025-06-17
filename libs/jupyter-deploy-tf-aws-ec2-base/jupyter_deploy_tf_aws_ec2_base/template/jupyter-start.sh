@@ -9,7 +9,7 @@ setup_uv_env() {
 }
 
 if [ ! -f "/home/jovyan/pyproject.toml" ] || [ ! -f "/home/jovyan/uv.lock" ]; then
-    echo "Did not jupyter uv environment files in /home/jovyan."
+    echo "Did not find uv environment files in /home/jovyan."
     setup_uv_env
 else
     echo "Found existing uv environment files, syncing..."
