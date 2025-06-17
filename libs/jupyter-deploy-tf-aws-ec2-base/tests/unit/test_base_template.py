@@ -14,7 +14,6 @@ EXPECTED_TEMPLATE_FILES = [
     "outputs.tf",
     "pyproject.jupyter.toml",
     "jupyter_server_config.py",
-    "README.md",
     "start-jupyter.sh",
     "traefik.yml.tftpl",
     "variables.tf",
