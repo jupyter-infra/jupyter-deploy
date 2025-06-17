@@ -1,6 +1,6 @@
 [project]
-name = "jupyter-deploy-tf-aws-ec2-traefik"
-version = "0.1.0"
+name = "jupyter-deploy-tf-aws-ec2-base"
+version = "0.1.0a0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
@@ -10,14 +10,14 @@ requires-python = ">=3.12"
 dependencies = []
 
 [project.entry-points."jupyter_deploy.terraform_templates"]
-aws_ec2_traefik = "jupyter_deploy_tf_aws_ec2_traefik.template:TEMPLATE_PATH"
+aws_ec2_base = "jupyter_deploy_tf_aws_ec2_base.template:TEMPLATE_PATH"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["jupyter_deploy_tf_aws_ec2_traefik"]
+packages = ["jupyter_deploy_tf_aws_ec2_base"]
 
 [dependency-groups]
 dev = [
@@ -33,7 +33,7 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 check_untyped_defs = true
 mypy_path = ["."]
-packages = ["jupyter_deploy_tf_aws_ec2_traefik"]
+packages = ["jupyter_deploy_tf_aws_ec2_base"]
 
 [tool.ruff]
 extend-exclude = [".conda/"]
@@ -58,11 +58,11 @@ docstring-code-format = true
 docstring-code-line-length = 40
 
 [tool.pytest.ini_options]
-addopts = "--cov=jupyter_deploy_tf_aws_ec2_traefik --cov-report=term-missing --cov-report=xml --cov-report=html"
+addopts = "--cov=jupyter_deploy_tf_aws_ec2_base --cov-report=term-missing --cov-report=xml --cov-report=html"
 testpaths = ["tests/unit"]
 
 [tool.coverage.run]
-source = ["jupyter_deploy_tf_aws_ec2_traefik"]
+source = ["jupyter_deploy_tf_aws_ec2_base"]
 omit = ["tests/*"]
 
 [tool.coverage.report]

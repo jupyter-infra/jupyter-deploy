@@ -73,7 +73,7 @@ variable "iam_role_prefix" {
 
     Terraform will assign the postfix to ensure there is no name collision in your AWS account.
 
-    Recommended: Jupyter-deploy-ec2-traefik
+    Recommended: Jupyter-deploy-ec2-base
   EOT
   type        = string
   validation {
@@ -91,7 +91,7 @@ variable "oauth_app_secret_prefix" {
 
     Terraform will assign the postfix to ensure there is no name collision in your AWS account.
 
-    Recommended: Jupyter-deploy-ec2-traefik
+    Recommended: Jupyter-deploy-ec2-base
   EOT
   type        = string
 }
@@ -186,7 +186,7 @@ variable "oauth_app_client_id" {
     4. On the left nav, select 'Developer settings'
     5. Go to 'OAuth Apps'
     6. Select 'New OAuth App'
-    7. Select an app name, for example: Jupyter-ec2-traefik
+    7. Select an app name, for example: Jupyter-ec2-base
     8. Input home page URL: https://jupyter.<subdomain>.<domain>
     9. Application description: add your description or leave blank
     10. Authorization callback URL: https://auth.<subdomain>.<domain>/_oauth

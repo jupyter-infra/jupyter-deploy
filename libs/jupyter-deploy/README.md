@@ -42,5 +42,5 @@ cd my-jupyter-deployment
 Then, run the `init` command.
 
 ```bash
-uv run jupyter-deploy init -E terraform -P aws -I ec2 -T traefik .
+uv run jupyter-deploy init -E terraform -P aws -I ec2 -T base .
 ```

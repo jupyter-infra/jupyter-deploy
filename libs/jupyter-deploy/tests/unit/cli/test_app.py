@@ -415,7 +415,7 @@ class TestInitCommand(unittest.TestCase):
             engine=EngineType.TERRAFORM,
             provider="aws",
             infrastructure="ec2",
-            template="traefik",
+            template="base",
         )
 
     @patch("jupyter_deploy.cli.app.InitHandler")

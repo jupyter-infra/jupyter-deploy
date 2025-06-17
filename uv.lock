@@ -6,8 +6,8 @@ requires-python = ">=3.12"
 members = [
     "jupyter-deploy",
     "jupyter-deploy-monorepo",
+    "jupyter-deploy-tf-aws-ec2-base",
     "jupyter-deploy-tf-aws-ec2-ngrok",
-    "jupyter-deploy-tf-aws-ec2-traefik",
 ]
 
 [[package]]
@@ -178,13 +178,13 @@ wheels = [
 
 [[package]]
 name = "jupyter-deploy"
-version = "0.1.0"
+version = "0.1.0a1"
 source = { editable = "libs/jupyter-deploy" }
 dependencies = [
     { name = "click" },
     { name = "decorator" },
     { name = "jupyter-core" },
-    { name = "jupyter-deploy-tf-aws-ec2-traefik" },
+    { name = "jupyter-deploy-tf-aws-ec2-base" },
     { name = "packaging" },
     { name = "pydantic" },
     { name = "python-hcl2" },
@@ -216,7 +216,7 @@ requires-dist = [
     { name = "click", specifier = "<8.2.0" },
     { name = "decorator", specifier = ">=5.2.1" },
     { name = "jupyter-core", specifier = ">=5.0.0" },
-    { name = "jupyter-deploy-tf-aws-ec2-traefik", editable = "libs/jupyter-deploy-tf-aws-ec2-traefik" },
+    { name = "jupyter-deploy-tf-aws-ec2-base", editable = "libs/jupyter-deploy-tf-aws-ec2-base" },
     { name = "mypy-boto3-ec2", marker = "extra == 'aws'", specifier = ">=1.38.6" },
     { name = "packaging", specifier = ">=25.0" },
     { name = "pydantic", specifier = ">=2.11.5" },
@@ -272,9 +272,9 @@ dev = [
 ]
 
 [[package]]
-name = "jupyter-deploy-tf-aws-ec2-ngrok"
-version = "0.1.0"
-source = { editable = "libs/jupyter-deploy-tf-aws-ec2-ngrok" }
+name = "jupyter-deploy-tf-aws-ec2-base"
+version = "0.1.0a0"
+source = { editable = "libs/jupyter-deploy-tf-aws-ec2-base" }
 
 [package.dev-dependencies]
 dev = [
@@ -295,9 +295,9 @@ dev = [
 ]
 
 [[package]]
-name = "jupyter-deploy-tf-aws-ec2-traefik"
-version = "0.1.0"
-source = { editable = "libs/jupyter-deploy-tf-aws-ec2-traefik" }
+name = "jupyter-deploy-tf-aws-ec2-ngrok"
+version = "0.1.0a0"
+source = { editable = "libs/jupyter-deploy-tf-aws-ec2-ngrok" }
 
 [package.dev-dependencies]
 dev = [

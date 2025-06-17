@@ -20,7 +20,7 @@ data "aws_partition" "current" {}
 locals {
   default_tags = {
     Source   = "jupyter-deploy"
-    Template = "aws-ec2-traefik"
+    Template = "aws-ec2-base"
     Version  = "1.0.0"
   }
 
@@ -49,7 +49,7 @@ data "aws_subnet" "first_subnet_of_default_vpc" {
 
 # Create security group for the EC2 instance
 resource "aws_security_group" "ec2_jupyter_server_sg" {
-  name        = "jupyter-deploy-traefik-sg"
+  name        = "jupyter-deploy-base-sg"
   description = "Security group for the EC2 instance serving the JupyterServer"
   vpc_id      = data.aws_vpc.default.id
 

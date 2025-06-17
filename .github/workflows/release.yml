@@ -16,8 +16,7 @@ on:
         type: choice
         options:
           - libs/jupyter-deploy
-          - libs/jupyter-deploy-tf-aws-ec2-traefik
-          - libs/jupyter-deploy-tf-aws-ec2-ngrok
+          - libs/jupyter-deploy-tf-aws-ec2-base
 
 jobs:
   build:

@@ -6,7 +6,7 @@ import json
 LIB_PATHS = [
     "libs/jupyter-deploy",
     "libs/jupyter-deploy-tf-aws-ec2-ngrok",
-    "libs/jupyter-deploy-tf-aws-ec2-traefik",
+    "libs/jupyter-deploy-tf-aws-ec2-base",
     "images/uvbase",
 ]
 

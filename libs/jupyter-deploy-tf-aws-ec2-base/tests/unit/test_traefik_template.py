@@ -1,6 +1,6 @@
 """Tests for the template module."""
 
-from jupyter_deploy_tf_aws_ec2_traefik.template import TEMPLATE_PATH
+from jupyter_deploy_tf_aws_ec2_base.template import TEMPLATE_PATH
 
 EXPECTED_TEMPLATE_FILES = [
     "cloudinit.sh",

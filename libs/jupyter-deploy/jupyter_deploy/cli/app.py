@@ -69,8 +69,8 @@ def init(
         ),
     ] = AWSInfrastructureType.EC2,
     template: Annotated[
-        str, typer.Option("--template", "-T", help="Base name of the infrastrucuture as code template (e.g., traefik)")
-    ] = "traefik",
+        str, typer.Option("--template", "-T", help="Base name of the infrastrucuture as code template (e.g., base)")
+    ] = "base",
     overwrite: Annotated[
         bool,
         typer.Option(

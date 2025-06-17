@@ -1,4 +1,4 @@
-"""Template path provider for the AWS EC2 ngrok template."""
+"""Template path provider for the AWS EC2 base template."""
 
 from pathlib import Path
 

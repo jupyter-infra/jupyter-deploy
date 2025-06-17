@@ -1,6 +1,6 @@
 [project]
 name = "jupyter-deploy"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "CLI based tool to deploy Jupyter application that integrates with infrastructure as code frameworks."
 readme = "README.md"
 authors = [
@@ -15,7 +15,7 @@ dependencies = [
     "python-hcl2>=7.2.1",
     "packaging>=25.0",
     "jupyter_core>=5.0.0",
-    "jupyter-deploy-tf-aws-ec2-traefik",
+    "jupyter-deploy-tf-aws-ec2-base",
     "pyyaml>=6.0.2",
     "types-pyyaml>=6.0.12.20250516",
 ]
@@ -36,7 +36,7 @@ aws = [
 ]
 
 [tool.uv.sources]
-jupyter-deploy-tf-aws-ec2-traefik = { workspace = true }
+jupyter-deploy-tf-aws-ec2-base = { workspace = true }
 jupyter-deploy-tf-aws-ec2-ngrok = { workspace = true }
 
 [build-system]
