@@ -23,10 +23,13 @@ uv run jupyter lab \
     --ip=0.0.0.0 \
     --IdentityProvider.token=
 
+# captures jupyterlab exit code
+jupyter_exit_code=$?
+
 set -e
 
 # Check if jupyter lab failed
-if [ $? -ne 0 ]; then
+if [ $jupyter_exit_code -ne 0 ]; then
     echo "Jupyter lab failed to start, calling reset script..."
-    /usr/local/bin/reset-jupyter.sh
+    /usr/local/bin/jupyter-reset.sh
 fi
