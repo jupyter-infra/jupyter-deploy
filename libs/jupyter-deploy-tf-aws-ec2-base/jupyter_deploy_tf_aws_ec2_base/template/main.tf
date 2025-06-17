@@ -315,8 +315,12 @@ data "local_file" "dockerfile_jupyter" {
   filename = "${path.module}/dockerfile.jupyter"
 }
 
-data "local_file" "start_jupyter" {
-  filename = "${path.module}/start-jupyter.sh"
+data "local_file" "jupyter_start" {
+  filename = "${path.module}/jupyter-start.sh"
+}
+
+data "local_file" "jupyter_reset" {
+  filename = "${path.module}/jupyter-reset.sh"
 }
 
 data "local_file" "pyproject_jupyter" {
@@ -353,7 +357,8 @@ locals {
   cloud_init_indented            = join("\n${local.indent_str}", compact(split("\n", data.local_file.cloud_init.content)))
   docker_compose_indented        = join("\n${local.indent_str}", compact(split("\n", local.docker_compose_file)))
   dockerfile_jupyter_indented    = join("\n${local.indent_str}", compact(split("\n", data.local_file.dockerfile_jupyter.content)))
-  start_jupyter_indented         = join("\n${local.indent_str}", compact(split("\n", data.local_file.start_jupyter.content)))
+  jupyter_start_indented         = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_start.content)))
+  jupyter_reset_indented         = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_reset.content)))
   docker_startup_indented        = join("\n${local.indent_str}", compact(split("\n", data.local_file.docker_startup.content)))
   traefik_config_indented        = join("\n${local.indent_str}", compact(split("\n", local.traefik_config_file)))
   pyproject_jupyter_indented     = join("\n${local.indent_str}", compact(split("\n", data.local_file.pyproject_jupyter.content)))
@@ -389,8 +394,11 @@ mainSteps:
           tee /opt/docker/dockerfile.jupyter << 'EOF'
           ${local.dockerfile_jupyter_indented}
           EOF
-          tee /opt/docker/start-jupyter.sh << 'EOF'
-          ${local.start_jupyter_indented}
+          tee /opt/docker/jupyter-start.sh << 'EOF'
+          ${local.jupyter_start_indented}
+          EOF
+          tee /opt/docker/jupyter-reset.sh << 'EOF'
+          ${local.jupyter_reset_indented}
           EOF
           tee /opt/docker/pyproject.jupyter.toml << 'EOF'
           ${local.pyproject_jupyter_indented}
@@ -413,7 +421,8 @@ DOC
     fileexists("${path.module}/cloudinit.sh"),
     fileexists("${path.module}/docker-startup.sh"),
     fileexists("${path.module}/dockerfile.jupyter"),
-    fileexists("${path.module}/start-jupyter.sh"),
+    fileexists("${path.module}/jupyter-start.sh"),
+    fileexists("${path.module}/jupyter-reset.sh"),
     fileexists("${path.module}/jupyter_server_config.py"),
   ])
 
@@ -421,7 +430,8 @@ DOC
     length(data.local_file.cloud_init.content) > 0,
     length(data.local_file.docker_startup.content) > 0,
     length(data.local_file.dockerfile_jupyter) > 0,
-    length(data.local_file.start_jupyter) > 0,
+    length(data.local_file.jupyter_start) > 0,
+    length(data.local_file.jupyter_reset) > 0,
     length(data.local_file.jupyter_server_config) > 0,
   ])
 

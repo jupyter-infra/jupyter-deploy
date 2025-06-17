@@ -42,16 +42,18 @@ COPY pyproject.jupyter.toml /opt/uv/jupyter/pyproject.toml
 RUN uv sync --directory /opt/uv/jupyter
 
 # 6/ create the start-up script
-COPY start-jupyter.sh /usr/local/bin/
+COPY jupyter-start.sh /usr/local/bin/
+COPY jupyter-reset.sh /usr/local/bin/
 
 # 7/ Change dirs ownership and visibility
 RUN chmod -R a+r /opt/uv
 RUN chmod -R a+r /etc/jupyter
-RUN chmod +x /usr/local/bin/start-jupyter.sh
+RUN chmod +x /usr/local/bin/jupyter-start.sh
+RUN chmod +x /usr/local/bin/jupyter-reset.sh
 RUN chown -R jovyan:jovyan /home/jovyan
 
 # 8/ Switch user and workdir
 WORKDIR /home/jovyan
 USER jovyan
 
-ENTRYPOINT ["/usr/local/bin/start-jupyter.sh"]
+ENTRYPOINT ["/usr/local/bin/jupyter-start.sh"]

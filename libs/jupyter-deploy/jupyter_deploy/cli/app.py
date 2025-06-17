@@ -236,7 +236,7 @@ def config(
                 "[bold]jupyter-deploy[/] reused the variables values that you elected previously "
                 f"instead of the template preset: [bold cyan]{preset_name}[/]."
             )
-            console.print("You use `[bold cyan]--reset[/]` to clear your recorded values.")
+            console.print("You can use `[bold cyan]--reset[/]` to clear your recorded values.")
         console.rule()
 
         console.print("Your project is ready.", style="bold green")

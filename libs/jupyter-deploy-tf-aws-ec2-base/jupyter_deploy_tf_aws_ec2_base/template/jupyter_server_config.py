@@ -9,7 +9,6 @@ c.ServerApp.terminado_settings = {
     "shell_command": [
         "bash",
         "-c",
-        'export PATH=$(echo $PATH | sed "s|/opt/uv/jupyter/.venv/bin:||"); '
         "echo \"This is a UV-managed shell, use 'uv pip' instead of 'pip'!\"; "
         "bash",
     ]
