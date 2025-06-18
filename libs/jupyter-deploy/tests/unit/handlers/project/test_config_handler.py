@@ -60,7 +60,7 @@ class TestConfigHandler(unittest.TestCase):
             }
         )
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     def test_config_handler_reads_the_manifest(self, mock_retrieve_manifest: Mock) -> None:
         mock_retrieve_manifest.return_value = self.mock_manifest
         handler = ConfigHandler()
@@ -68,7 +68,7 @@ class TestConfigHandler(unittest.TestCase):
         self.assertEqual(handler.project_manifest, self.mock_manifest)
         self.assertEqual(handler.engine, self.mock_manifest.get_engine())
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     @patch("pathlib.Path.cwd")
     def test_config_handler_correctly_implements_tf_engine(
@@ -92,7 +92,7 @@ class TestConfigHandler(unittest.TestCase):
         tf_mock_verify.assert_not_called()
         tf_mock_configure.assert_not_called()
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_validate_method_calls_underlying_verify_preset_method(
         self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
@@ -113,7 +113,7 @@ class TestConfigHandler(unittest.TestCase):
         tf_mock_verify_preset.assert_called_once_with("all")
         tf_mock_list_presets.assert_not_called()
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_validate_method_does_not_verify_preset_when_passed_none(
         self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
@@ -134,7 +134,7 @@ class TestConfigHandler(unittest.TestCase):
         tf_mock_verify_preset.assert_not_called()
         tf_mock_list_presets.assert_not_called()
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_validate_method_calls_list_presets_and_print_when_preset_is_not_found(
         self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
@@ -153,7 +153,7 @@ class TestConfigHandler(unittest.TestCase):
         tf_mock_verify_preset.assert_called_once_with("i-do-not-exist")
         tf_mock_list_presets.assert_called_once()
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_validate_method_calls_ignores_preset_when_detects_recorded_values(
         self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
@@ -175,7 +175,7 @@ class TestConfigHandler(unittest.TestCase):
         tf_mock_verify_preset.assert_not_called()
         tf_mock_list_presets.assert_not_called()
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_validate_method_calls_ignores_recorded_values_with_reset(
         self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
@@ -197,7 +197,7 @@ class TestConfigHandler(unittest.TestCase):
         tf_mock_verify_preset.assert_called_once()
         tf_mock_list_presets.assert_not_called()
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_verify_calls_underlying_handler_method(self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock) -> None:
         mock_retrieve_manifest.return_value = self.mock_manifest
@@ -213,7 +213,7 @@ class TestConfigHandler(unittest.TestCase):
         tf_mock_verify.assert_called_once()
         tf_mock_configure.assert_not_called()
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_verify_surfaces_underlying_method_exception(
         self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
@@ -228,7 +228,7 @@ class TestConfigHandler(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "some-error"):
             handler.verify_requirements()
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_reset_variables_calls_underlying_handler_method(
         self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
@@ -247,7 +247,7 @@ class TestConfigHandler(unittest.TestCase):
         tf_mock_reset_vars.assert_called_once()
         tf_mock_reset_secrets.assert_not_called()
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_reset_secrets_calls_underlying_handler_method(
         self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
@@ -264,7 +264,7 @@ class TestConfigHandler(unittest.TestCase):
         tf_mock_reset_vars.assert_not_called()
         tf_mock_reset_secrets.assert_called_once()
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_configure_calls_underlying_handler_method(
         self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
@@ -282,7 +282,7 @@ class TestConfigHandler(unittest.TestCase):
         tf_mock_verify.assert_not_called()
         tf_mock_configure.assert_called_once_with(preset_name=None, variable_overrides=None)
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_configure_passes_the_preset(self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock) -> None:
         mock_retrieve_manifest.return_value = self.mock_manifest
@@ -297,7 +297,7 @@ class TestConfigHandler(unittest.TestCase):
         self.assertTrue(result)
         tf_mock_configure.assert_called_once_with(preset_name="all", variable_overrides=None)
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_configure_passes_the_variables(self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock) -> None:
         mock_retrieve_manifest.return_value = self.mock_manifest
@@ -314,7 +314,7 @@ class TestConfigHandler(unittest.TestCase):
         self.assertTrue(result)
         tf_mock_configure.assert_called_once_with(preset_name="all", variable_overrides=overrides)
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_configure_surfaces_underlying_method_exception(
         self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
@@ -332,7 +332,7 @@ class TestConfigHandler(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "another-error"):
             handler.configure()
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_record_passes_the_flags_correctly(self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock) -> None:
         mock_retrieve_manifest.return_value = self.mock_manifest
@@ -356,7 +356,7 @@ class TestConfigHandler(unittest.TestCase):
         handler.record(record_vars=True, record_secrets=True)
         tf_mock_record.assert_called_once_with(record_vars=True, record_secrets=True)
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
     def test_record_surfaces_underlying_exception(self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock) -> None:
         mock_retrieve_manifest.return_value = self.mock_manifest

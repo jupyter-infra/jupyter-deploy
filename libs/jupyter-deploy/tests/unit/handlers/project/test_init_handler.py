@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from jupyter_deploy.engine.enum import EngineType
-from jupyter_deploy.handlers.project.init_handler import InitHandler
+from jupyter_deploy.handlers.init_handler import InitHandler
 from jupyter_deploy.infrastructure.enum import AWSInfrastructureType
 from jupyter_deploy.provider.enum import ProviderType
 
@@ -12,7 +12,7 @@ class TestInitHandler(unittest.TestCase):
     """Test class for InitHandler."""
 
     @patch("jupyter_deploy.fs_utils.get_default_project_path")
-    @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
     def test_init_with_project_dir(
         self, mock_find_template_path: MagicMock, mock_get_default_project_path: MagicMock
     ) -> None:
@@ -32,7 +32,7 @@ class TestInitHandler(unittest.TestCase):
         mock_get_default_project_path.assert_not_called()
 
     @patch("jupyter_deploy.fs_utils.get_default_project_path")
-    @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
     def test_init_without_project_dir(
         self, mock_find_template_path: MagicMock, mock_get_default_project_path: MagicMock
     ) -> None:
@@ -52,7 +52,7 @@ class TestInitHandler(unittest.TestCase):
         mock_find_template_path.assert_called_once_with("aws:ec2:tls-via-ngrok")
         mock_get_default_project_path.assert_called_once()
 
-    @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
     def test_init_with_enum_parameters(self, mock_find_template_path: MagicMock) -> None:
         """Test initialization with enum types for provider and infrastructure."""
         # Setup
@@ -74,7 +74,7 @@ class TestInitHandler(unittest.TestCase):
         self.assertEqual(handler.engine, EngineType.TERRAFORM)
         mock_find_template_path.assert_called_once_with("aws:ec2:custom-template")
 
-    @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
     @patch(
         "jupyter_deploy.template_utils.TEMPLATES", {"terraform": {"aws:ec2:tls-via-ngrok": Path("/mock/template/path")}}
     )
@@ -92,7 +92,7 @@ class TestInitHandler(unittest.TestCase):
         # Assert
         self.assertEqual(result, Path("/mock/template/path"))
 
-    @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
     def test_find_template_path_empty(self, mock_find_template_path: MagicMock) -> None:
         """Test _find_template_path with empty template name."""
         # Setup
@@ -109,7 +109,7 @@ class TestInitHandler(unittest.TestCase):
             mock_find_template_path.side_effect = ValueError("Template name cannot be empty")
             handler._find_template_path("")
 
-    @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
     @patch("jupyter_deploy.template_utils.TEMPLATES", {})
     def test_find_template_path_unsupported_engine(self, mock_find_template_path: MagicMock) -> None:
         """Test _find_template_path with unsupported engine."""
@@ -126,7 +126,7 @@ class TestInitHandler(unittest.TestCase):
             mock_find_template_path.side_effect = ValueError("Engine 'terraform' is not supported")
             handler._find_template_path("aws:ec2:tls-via-ngrok")
 
-    @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
     @patch("jupyter_deploy.template_utils.TEMPLATES", {"terraform": {}})
     def test_find_template_path_template_not_found(self, mock_find_template_path: MagicMock) -> None:
         """Test _find_template_path with template not found."""
@@ -146,7 +146,7 @@ class TestInitHandler(unittest.TestCase):
             handler._find_template_path("aws:ec2:tls-via-ngrok")
 
     @patch("jupyter_deploy.fs_utils.is_empty_dir")
-    @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
     def test_may_export_to_project_path_not_exists(
         self, mock_find_template_path: MagicMock, mock_is_empty_dir: MagicMock
     ) -> None:
@@ -169,7 +169,7 @@ class TestInitHandler(unittest.TestCase):
         mock_is_empty_dir.assert_not_called()
 
     @patch("jupyter_deploy.fs_utils.is_empty_dir")
-    @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
     def test_may_export_to_project_path_exists_empty(
         self, mock_find_template_path: MagicMock, mock_is_empty_dir: MagicMock
     ) -> None:
@@ -193,7 +193,7 @@ class TestInitHandler(unittest.TestCase):
         mock_is_empty_dir.assert_called_once_with(mock_path)
 
     @patch("jupyter_deploy.fs_utils.is_empty_dir")
-    @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
     def test_may_export_to_project_path_exists_not_empty(
         self, mock_find_template_path: MagicMock, mock_is_empty_dir: MagicMock
     ) -> None:
@@ -217,7 +217,7 @@ class TestInitHandler(unittest.TestCase):
         mock_is_empty_dir.assert_called_once_with(mock_path)
 
     @patch("jupyter_deploy.fs_utils.safe_clean_directory")
-    @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
     def test_clear_project_path(self, mock_find_template_path: MagicMock, mock_safe_clean_directory: MagicMock) -> None:
         """Test clear_project_path calls fs_utils.safe_clean_directory with correct path."""
         # Setup
@@ -234,7 +234,7 @@ class TestInitHandler(unittest.TestCase):
         mock_safe_clean_directory.assert_called_once_with(mock_path)
 
     @patch("jupyter_deploy.fs_utils.safe_copy_tree")
-    @patch("jupyter_deploy.handlers.project.init_handler.InitHandler._find_template_path")
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
     def test_setup(self, mock_find_template_path: MagicMock, mock_safe_copy_tree: MagicMock) -> None:
         """Test setup calls fs_utils.safe_copy_tree with correct paths."""
         # Setup

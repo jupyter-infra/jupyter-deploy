@@ -1,27 +1,20 @@
-from pathlib import Path
-
 from jupyter_deploy.engine.engine_down import EngineDownHandler
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.terraform import tf_down
+from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
 
 
-class DownHandler:
+class DownHandler(BaseProjectHandler):
     _handler: EngineDownHandler
 
     def __init__(self) -> None:
         """Base class to manage the down command of a jupyter-deploy project."""
-        project_path = Path.cwd()
-        engine = self._get_engine_type()
+        super().__init__()
 
-        if engine == EngineType.TERRAFORM:
-            self._handler = tf_down.TerraformDownHandler(project_path=project_path)
+        if self.engine == EngineType.TERRAFORM:
+            self._handler = tf_down.TerraformDownHandler(project_path=self.project_path)
         else:
-            raise NotImplementedError(f"DownHandler implementation not found for engine: {engine}")
-
-    def _get_engine_type(self) -> EngineType:
-        """Get the engine type for the project."""
-        # TODO: derive from the project manifest
-        return EngineType.TERRAFORM
+            raise NotImplementedError(f"DownHandler implementation not found for engine: {self.engine}")
 
     def destroy(self, auto_approve: bool = False) -> None:
         """Destroy the infrastructure resources.

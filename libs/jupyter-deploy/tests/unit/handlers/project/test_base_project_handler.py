@@ -8,7 +8,7 @@ from yaml.parser import ParserError
 from yaml.scanner import ScannerError
 
 from jupyter_deploy.engine.enum import EngineType
-from jupyter_deploy.handlers.project.base_project_handler import (
+from jupyter_deploy.handlers.base_project_handler import (
     BaseProjectHandler,
     NotADictError,
     retrieve_project_manifest,
@@ -16,7 +16,7 @@ from jupyter_deploy.handlers.project.base_project_handler import (
 
 
 class TestBaseProjectHandler(unittest.TestCase):
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("pathlib.Path.cwd")
     def test_calls_retrieve_project_and_save_attributes(self, mock_cwd: Mock, mock_retrieve: Mock) -> None:
         # Setup
@@ -33,7 +33,7 @@ class TestBaseProjectHandler(unittest.TestCase):
         self.assertEqual(handler.engine, EngineType.TERRAFORM)
         self.assertEqual(handler.project_manifest, mock_manifest)
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("pathlib.Path.cwd")
     @patch("rich.console.Console")
     def test_exits_and_print_on_filenotfound_error(
@@ -56,7 +56,7 @@ class TestBaseProjectHandler(unittest.TestCase):
         mock_console.line.assert_any_call()
         mock_console.print.assert_any_call("Reason: could not find the jupyter-deploy manifest file.", style="red")
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("pathlib.Path.cwd")
     @patch("rich.console.Console")
     def test_exits_and_print_on_os_error(self, mock_console_class: Mock, mock_cwd: Mock, mock_retrieve: Mock) -> None:
@@ -77,7 +77,7 @@ class TestBaseProjectHandler(unittest.TestCase):
             "Reason: OS error when reading the jupyter-deploy manifest file.", style="red"
         )
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("pathlib.Path.cwd")
     @patch("rich.console.Console")
     def test_exits_and_prints_on_runtime_error(
@@ -100,7 +100,7 @@ class TestBaseProjectHandler(unittest.TestCase):
             "Reason: expected the jupyter-deploy manifest file to parse as dict.", style="red"
         )
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("pathlib.Path.cwd")
     @patch("rich.console.Console")
     def test_exits_and_prints_on_yamlparse_error(
@@ -123,7 +123,7 @@ class TestBaseProjectHandler(unittest.TestCase):
             "Reason: cannot parse the jupyter-deploy manifest content as YAML.", style="red"
         )
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("pathlib.Path.cwd")
     @patch("rich.console.Console")
     def test_exits_and_prints_on_yamlscanner_error(
@@ -146,7 +146,7 @@ class TestBaseProjectHandler(unittest.TestCase):
             "Reason: cannot parse the jupyter-deploy manifest content as YAML.", style="red"
         )
 
-    @patch("jupyter_deploy.handlers.project.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("pathlib.Path.cwd")
     @patch("rich.console.Console")
     def test_exits_and_prints_on_pydantic_error(

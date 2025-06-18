@@ -1,30 +1,25 @@
 import webbrowser
-from pathlib import Path
 
 from rich.console import Console
 
 from jupyter_deploy.engine.engine_open import EngineOpenHandler
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.terraform import tf_open
+from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
 
 
-class OpenHandler:
+class OpenHandler(BaseProjectHandler):
     _handler: EngineOpenHandler
 
     def __init__(self) -> None:
         """Base class to manage the open command of a jupyter-deploy project."""
-        project_path = Path.cwd()
-        engine = self._get_engine_type()
+        super().__init__()
         self.console = Console()
 
-        if engine == EngineType.TERRAFORM:
-            self._handler = tf_open.TerraformOpenHandler(project_path=project_path)
+        if self.engine == EngineType.TERRAFORM:
+            self._handler = tf_open.TerraformOpenHandler(project_path=self.project_path)
         else:
-            raise NotImplementedError(f"OpenHandler implementation not found for engine: {engine}")
-
-    def _get_engine_type(self) -> EngineType:
-        # TODO: derive from the project manifest
-        return EngineType.TERRAFORM
+            raise NotImplementedError(f"OpenHandler implementation not found for engine: {self.engine}")
 
     def open_url(self, url: str) -> None:
         """Launch the Jupyter URL in the default web browser."""

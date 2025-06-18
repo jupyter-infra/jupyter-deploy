@@ -4,7 +4,7 @@ from jupyter_deploy.engine.engine_config import EngineConfigHandler
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.terraform import tf_config
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
-from jupyter_deploy.handlers.project.base_project_handler import BaseProjectHandler
+from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
 
 
 class ConfigHandler(BaseProjectHandler):
