@@ -1,7 +1,7 @@
 # AWS EC2 instance running a Jupyter Server using a Traefik proxy
 ------
 This terraform project creates an EC2 instance in the default VPC and route 53 records in a domain you own.
-Within the EC2 instance, it runs a `jupyter` service, a `traefik` service for proxy and an `oauth` sidecar for OAuth.
+Within the EC2 instance, it runs a `jupyter` service, a `traefik` service for proxy and an `oauth` sidecar for authentication and authorization.
 
 The instance is configured so that you can access it using [AWS SSM](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html).
 
@@ -15,23 +15,60 @@ This project:
     - `cloudinit.sh` for the basic setup of the instance
     - `docker-compose.yml.tftpl` for the docker services to run in the instance
     - `docker-startup.sh` to run the docker-compose up cmd and post docker-start instructions
-    - `traefik.yml.tftpl` to configure traefik
+    - `traefik.yml.tftpl` traefik configuration file
     - `dockerfile.jupyter` for the Jupyter container
-    - `start-jupyter.sh` to start the Jupyter server
-    - `pyproject.jupyter.toml` for Python dependencies
+    - `jupyter-start.sh` as the entrypoint script for the Jupyter container
+    - `jupyter-reset.sh` as the fallback script if the Jupyter container fails to start
+    - `pyproject.jupyter.toml` for Python dependencies of the base environment where the Jupyter server runs
     - `jupyter_server_config.py` for Jupyter server configuration
 - creates an SSM association, which runs the startup script on the instance
 - creates the Route 53 Hosted Zone for the domain unless it already exists
 - adds DNS records to the Route 53 Hosted Zone
 - creates an AWS Secret to store the OAuth App client secret
+- provides two presets default values for the template variables:
+    - `defaults-all.tfvars` comprehensive preset with all the recommended values
+    - `defaults-base.tfvars` more limited preset; it will prompt user to select the instance type and volume size
 
 ## Prerequisites
 - a domain that you own verifiable by route 53
-- a GitHub OAuth App: you'll need the app client ID and client Secret
-- a list of email addresses to allowlist via GitHub: the email MUST be publicly visible in the GitHub profile of the users 
+    - [instructions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/welcome-domain-registration.html) to register a domain
+    - [instructions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-register.html#domain-register-procedure-section) to acquire a domain
+- a GitHub OAuth App
+    - [instructions](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) to create a new app
+    - you'll need the app client ID and client secret
+- a list of GitHub usernames to authorize
 
 ## Usage
 This terraform project is meant to be used with `jupyter-deploy`.
+
+### Installation (with pip):
+Create or activate a python environment.
+
+```bash
+pip install jupyter-deploy
+pip install jupyter-deploy-tf-aws-ec2-base
+```
+
+### Project setup
+Consider making `my-jupyter-deployment` a git repository.
+```bash
+mkdir my-jupyter-deployment
+cd my-jupyter-deployment
+
+jd init . -E terraform -P aws -I ec2 -T base
+```
+
+### Configure and create the infrastructure
+```bash
+jd config
+jd up
+```
+
+### Access your notebook
+```bash
+
+jd open
+```
 
 ## Requirements
 | Name | Version |
@@ -91,7 +128,7 @@ No modules.
 | domain | `string` | Required | A domain that you own |
 | subdomain | `string` | `notebook1.notebooks` | A sub-domain of `domain` to add DNS records |
 | oauth_provider | `string` | `github` | The OAuth provider to use |
-| oauth_allowed_emails | `list(string)` | Required | The list of GitHub emails to allowlist |
+| oauth_allowed_usernames | `list(string)` | Required | The list of GitHub usernames to allowlist |
 | oauth_app_client_id | `string` | Required | The client ID of the OAuth app |
 | oauth_app_client_secret | `string` | Required | The client secret of the OAuth app |
 | custom_tags | `map(string)` | `{}` | The custom tags to add to all the resources |
