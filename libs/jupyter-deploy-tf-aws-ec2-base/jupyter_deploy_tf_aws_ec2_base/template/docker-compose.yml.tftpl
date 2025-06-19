@@ -26,11 +26,12 @@ services:
       - "traefik.http.routers.jupyter.entrypoints=websecure"
       - "traefik.http.routers.jupyter.tls.certresolver=letsencrypt"
       - "traefik.http.services.jupyter.loadbalancer.server.port=8888"
+      - "traefik.http.routers.jupyter.middlewares=oauth-errors@docker,oauth-auth@docker"
     volumes:
       - /mnt/jupyter-data:/home/jovyan
       - /var/run/docker.sock:/var/run/docker.sock
   oauth:
-    image: thomseddon/traefik-forward-auth:2
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
     container_name: oauth
     user: "$${SERVICE_UID}:$${SERVICE_GID}"
     restart: unless-stopped
@@ -40,28 +41,59 @@ services:
       - no-new-privileges:true
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.oauth.rule=Host(`auth.${full_domain}`)"
+      # Main service definition
+      - "traefik.http.services.oauth.loadbalancer.server.port=4180"
+      # oauth-middleware
+      - "traefik.http.middlewares.oauth-auth.forwardAuth.address=http://oauth:4180/oauth2/auth"
+      - "traefik.http.middlewares.oauth-auth.forwardAuth.trustForwardHeader=true"
+      - "traefik.http.middlewares.oauth-auth.forwardauth.authResponseHeaders=X-Auth-Request-User,X-Auth-Request-Email"
+      # security headers middleware
+      - "traefik.http.middlewares.auth-headers.headers.sslRedirect=true"
+      - "traefik.http.middlewares.auth-headers.headers.stsSeconds=315360000"
+      - "traefik.http.middlewares.auth-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.auth-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.auth-headers.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.auth-headers.headers.sslHost=${full_domain}"
+      - "traefik.http.middlewares.auth-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.auth-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.auth-headers.headers.frameDeny=true"
+      # error handling middleware
+      - "traefik.http.middlewares.oauth-errors.errors.status=401-403"
+      - "traefik.http.middlewares.oauth-errors.errors.service=oauth"
+      - "traefik.http.middlewares.oauth-errors.errors.query=/oauth2/sign_in?rd={url}"
+      # redirect middleware
+      - "traefik.http.middlewares.redirect-to-jupyter.redirectregex.regex=${auth_regex}"
+      - "traefik.http.middlewares.redirect-to-jupyter.redirectregex.replacement=https://jupyter.${full_domain}/"
+      - "traefik.http.middlewares.redirect-to-jupyter.redirectregex.permanent=true"
+      # Auth domain routing
+      - "traefik.http.routers.oauth.rule=Host(`jupyter.${full_domain}`, `auth.${full_domain}`) && PathPrefix(`/oauth2/`)"
       - "traefik.http.routers.oauth.entrypoints=websecure"
       - "traefik.http.routers.oauth.tls.certresolver=letsencrypt"
-      - "traefik.http.middlewares.oauth.forwardauth.address=http://oauth:4181"
-      - "traefik.http.middlewares.oauth.forwardauth.authResponseHeaders=X-Forwarded-User"
-      - "traefik.http.services.oauth.loadbalancer.server.port=4181"
+      - "traefik.http.routers.oauth.middlewares=auth-headers@docker"
+      - "traefik.http.routers.oauth.service=oauth"
+      # Auth redirection routing
+      - "traefik.http.routers.auth-root.rule=Host(`auth.${full_domain}`) && Path(`/`)"
+      - "traefik.http.routers.auth-root.middlewares=redirect-to-jupyter"
+      - "traefik.http.routers.auth-root.entrypoints=websecure"
+      - "traefik.http.routers.auth-root.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.auth-root.service=oauth"
     networks:
       - web
     environment:
-      - DEFAULT_PROVIDER=generic-oauth
-      - PROVIDERS_GENERIC_OAUTH_AUTH_URL=https://github.com/login/oauth/authorize
-      - PROVIDERS_GENERIC_OAUTH_TOKEN_URL=https://github.com/login/oauth/access_token
-      - PROVIDERS_GENERIC_OAUTH_USER_URL=https://api.github.com/user
-      - PROVIDERS_GENERIC_OAUTH_CLIENT_ID=${github_client_id}
-      - PROVIDERS_GENERIC_OAUTH_CLIENT_SECRET=$${GITHUB_CLIENT_SECRET}
-      - PROVIDERS_GENERIC_OAUTH_SCOPE=read:user,user:email
-      - WHITELIST=${allowed_github_emails}
-      - AUTH_HOST=auth.${full_domain}
-      - COOKIE_DOMAIN=${full_domain}
-      - SECRET=$${OAUTH_SECRET}
-      - INSECURE_COOKIE=false
-      - LOG_LEVEL=info
+      - OAUTH2_PROXY_PROVIDER=${oauth_provider}
+      - OAUTH2_PROXY_CLIENT_ID=${github_client_id}
+      - OAUTH2_PROXY_CLIENT_SECRET=$${GITHUB_CLIENT_SECRET}
+      - OAUTH2_PROXY_SCOPE=read:user,user:email,read:org
+      - OAUTH2_PROXY_EMAIL_DOMAINS=*
+      - OAUTH2_PROXY_GITHUB_USERS=${allowed_github_usernames}
+      - OAUTH2_PROXY_REDIRECT_URL=https://auth.${full_domain}/oauth2/callback
+      - OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180
+      - OAUTH2_PROXY_COOKIE_DOMAINS=${full_domain}
+      - OAUTH2_PROXY_COOKIE_SECRET=$${OAUTH_SECRET}
+      - OAUTH2_PROXY_COOKIE_SECURE=true
+      - OAUTH2_PROXY_REVERSE_PROXY=true
+      - OAUTH2_PROXY_UPSTREAMS=https://jupyter.${full_domain}/
+      - OAUTH2_PROXY_WHITELIST_DOMAINS=.${full_domain}
   traefik:
     image: traefik:v2.10
     container_name: traefik

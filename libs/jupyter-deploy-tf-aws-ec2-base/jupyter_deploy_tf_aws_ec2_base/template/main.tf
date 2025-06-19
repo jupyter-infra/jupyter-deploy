@@ -333,16 +333,18 @@ data "local_file" "jupyter_server_config" {
 
 # variables consistency checks
 locals {
-  full_domain         = "${var.subdomain}.${var.domain}"
-  github_emails_valid = var.oauth_provider != "github" || length(var.oauth_allowed_emails) > 0
+  full_domain            = "${var.subdomain}.${var.domain}"
+  github_usernames_valid = var.oauth_provider != "github" || length(var.oauth_allowed_usernames) > 0
 }
 
 locals {
   docker_compose_file = templatefile("${path.module}/docker-compose.yml.tftpl", {
-    full_domain           = local.full_domain
-    github_client_id      = var.oauth_app_client_id
-    aws_region            = data.aws_region.current.name
-    allowed_github_emails = join(",", [for email in var.oauth_allowed_emails : "${email}"])
+    oauth_provider           = var.oauth_provider
+    full_domain              = local.full_domain
+    auth_regex               = "^https://auth\\\\.${replace(local.full_domain, ".", "\\\\.")}/?$"
+    github_client_id         = var.oauth_app_client_id
+    aws_region               = data.aws_region.current.name
+    allowed_github_usernames = join(",", [for username in var.oauth_allowed_usernames : "${username}"])
   })
   traefik_config_file = templatefile("${path.module}/traefik.yml.tftpl", {
     letsencrypt_notification_email = var.letsencrypt_email
@@ -449,7 +451,7 @@ resource "aws_ssm_document" "instance_startup_instructions" {
   tags    = local.combined_tags
   lifecycle {
     precondition {
-      condition     = local.github_emails_valid
+      condition     = local.github_usernames_valid
       error_message = "If you use github as oauth provider, provide at least 1 github username"
     }
     precondition {

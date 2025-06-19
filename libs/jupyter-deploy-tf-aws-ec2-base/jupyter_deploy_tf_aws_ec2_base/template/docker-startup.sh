@@ -28,7 +28,7 @@ if [ -z "$GITHUB_CLIENT_SECRET" ]; then
 fi
 
 # oauth secret for secure cookie management in the local auth service
-OAUTH_SECRET=$(openssl rand -hex 32)
+OAUTH_SECRET=$(openssl rand -base64 32 | tr -- '+/' '-_')
 
 # memory management: attempt to allocate 95% of memory to jupyter
 # while keeping enough memory for other containers

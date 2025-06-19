@@ -148,30 +148,21 @@ variable "oauth_provider" {
   }
 }
 
-variable "oauth_allowed_emails" {
+variable "oauth_allowed_usernames" {
   description = <<-EOT
-    List of email addresses associated with GitHub accounts to allow for your app.
+    List of GitHub usernames to allowlist.
 
-    Note: such emails must correspond to the email addresses exposed on public GitHub profiles.
-    It is NOT possible to oauth with the GitHub username with this version of the template.
+    To find your username:
+    - open https://github.com/
+    - select your profile icon on the top-right
+    - your username is indicated in bold at the top
 
-    To configure a public email on your GitHub profile:
-    1. Open GitHub: https://github.com/
-    2. Select your user icon on the top right
-    3. Select 'Settings'
-    4. Select 'Emails' on the left nav
-    5. Ensure 'Keep my email addresses private' is not ticked
-    6. Go back to 'Settings'
-    7. Select to 'Public profile'
-    8. Select a 'Public email' from the email addresses associated with your GitHub account
-    9. Use this public email here
-
-    Example: ["yourname+1@example.com", "yourname+2@example.com"]
+    Example: ["alias1", "alias2"]
   EOT
   type        = list(string)
   validation {
-    condition     = length(var.oauth_allowed_emails) > 0
-    error_message = "Provide at least one email to authorize."
+    condition     = length(var.oauth_allowed_usernames) > 0
+    error_message = "Provide at least one username to authorize."
   }
 }
 
@@ -189,7 +180,7 @@ variable "oauth_app_client_id" {
     7. Select an app name, for example: Jupyter-ec2-base
     8. Input home page URL: https://jupyter.<subdomain>.<domain>
     9. Application description: add your description or leave blank
-    10. Authorization callback URL: https://auth.<subdomain>.<domain>/_oauth
+    10. Authorization callback URL: https://auth.<subdomain>.<domain>/oauth2/callback
     11. Select 'Register Application'
     12. Retrieve the Client ID
     Full instructions: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app
