@@ -92,6 +92,10 @@ def run_cmd_and_pipe_to_terminal(cmds: list[str], timeout_seconds: int | None = 
     prompt_ready = threading.Event()
     stdout_active = threading.Event()
 
+    # Buffer to store the stderr output while running
+    stderr_buffer = []
+    stderr_lock = threading.Lock()
+
     def timerout(p: subprocess.Popen) -> None:
         print(f"Command timed out after {timeout_seconds} second(s).")
         if timer:
@@ -172,6 +176,18 @@ def run_cmd_and_pipe_to_terminal(cmds: list[str], timeout_seconds: int | None = 
         prompt_ready.set()
         stream.close()
 
+    def buffer_stderr(stream: IO[str]) -> None:
+        """Buffer stderr output to print at the end."""
+        while True:
+            line = stream.readline()
+            if not line:
+                break
+
+            with stderr_lock:
+                stderr_buffer.append(line)
+
+        stream.close()
+
     def handle_stdout() -> None:
         stdout_active.set()
         if p.stdout:
@@ -180,7 +196,7 @@ def run_cmd_and_pipe_to_terminal(cmds: list[str], timeout_seconds: int | None = 
 
     def handle_stderr() -> None:
         if p.stderr:
-            read_char_by_char(p.stderr)
+            buffer_stderr(p.stderr)
 
     # Start threads for I/O
     stdin_thread = threading.Thread(target=handle_stdin)
@@ -207,6 +223,11 @@ def run_cmd_and_pipe_to_terminal(cmds: list[str], timeout_seconds: int | None = 
     stdout_thread.join(timeout=1)
     stderr_thread.join(timeout=1)
     stdin_thread.join(timeout=1)
+
+    # Print the stderr output (if any) only after stdout is complete
+    if stderr_buffer:
+        for line in stderr_buffer:
+            print(line, end="", flush=True)
 
     if timer:
         timer.cancel()

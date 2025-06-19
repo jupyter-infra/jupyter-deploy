@@ -190,7 +190,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         mock_process.poll.return_value = None
         mock_process.wait.return_value = 0
         mock_process.stdout.read.return_value = ""
-        mock_process.stderr.read.return_value = ""
+        mock_process.stderr.readline.return_value = ""
         mock_popen.return_value = mock_process
 
         # Call the function
@@ -216,7 +216,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         mock_process.poll.return_value = None
         mock_process.wait.return_value = 1
         mock_process.stdout.read.return_value = ""
-        mock_process.stderr.read.return_value = ""
+        mock_process.stderr.readline.return_value = ""
         mock_popen.return_value = mock_process
 
         # Call the function
@@ -244,7 +244,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
             return "hello world"
 
         mock_process.stdout.read.side_effect = read_side_effect
-        mock_process.stderr.read.return_value = ""
+        mock_process.stderr.readline.return_value = ""
         mock_popen.return_value = mock_process
 
         # Call the function
@@ -265,14 +265,13 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         mock_process.wait.return_value = 1
         mock_process.stdout.read.return_value = ""
 
-        # Simulate stderr output
-        def read_side_effect(_size: int) -> str:
-            if hasattr(read_side_effect, "called"):
+        def readline_side_effect() -> str:
+            if hasattr(readline_side_effect, "called"):
                 return ""
-            read_side_effect.called = True
+            readline_side_effect.called = True
             return "cannot just push to main!"
 
-        mock_process.stderr.read.side_effect = read_side_effect
+        mock_process.stderr.readline.side_effect = readline_side_effect
         mock_popen.return_value = mock_process
 
         # Call the function
@@ -284,6 +283,72 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         mock_print.assert_called_with("cannot just push to main!", end="", flush=True)
 
     @patch("subprocess.Popen")
+    @patch("builtins.print")
+    def test_stderr_printed_after_stdout(self, mock_print: Mock, mock_popen: Mock) -> None:
+        """Test that stderr is buffered and only printed after all stdout is complete."""
+        # Setup mock
+        mock_process = Mock()
+        mock_process.poll.return_value = None
+        mock_process.wait.return_value = 1
+
+        # Track print calls to verify order
+        print_calls = []
+        mock_print.side_effect = lambda *args, **kwargs: print_calls.append(args[0])
+
+        # Simulate stdout output with multiple characters
+        stdout_content = "First line of stdout\nSecond line of stdout\n"
+        stdout_pos = 0
+
+        def read_char_by_char(size: int) -> str:
+            nonlocal stdout_pos
+            if stdout_pos >= len(stdout_content):
+                return ""
+            char = stdout_content[stdout_pos : stdout_pos + size]
+            stdout_pos += size
+            return char
+
+        mock_process.stdout.read.side_effect = read_char_by_char
+
+        # Simulate stderr output with multiple lines
+        stderr_lines = ["Error line 1\n", "Error line 2\n", "Final error\n"]
+        stderr_pos = 0
+
+        def readline_side_effect() -> str:
+            nonlocal stderr_pos
+            if stderr_pos >= len(stderr_lines):
+                return ""
+            line = stderr_lines[stderr_pos]
+            stderr_pos += 1
+            return line
+
+        mock_process.stderr.readline.side_effect = readline_side_effect
+        mock_popen.return_value = mock_process
+
+        # Call the function
+        retcode, is_timedout = run_cmd_and_pipe_to_terminal(["command", "with", "output"])
+
+        # Assertions
+        self.assertEqual(retcode, 1)
+        self.assertFalse(is_timedout)
+
+        # Verify that all stdout characters were printed before any stderr
+        stdout_chars = list(stdout_content)
+
+        # Check that stdout appears first in the print calls
+        for i, char in enumerate(stdout_chars):
+            self.assertEqual(print_calls[i], char)
+
+        # Check that stderr appears after all stdout
+        stderr_start_index = len(stdout_chars)
+        for line in stderr_lines:
+            line_found = False
+            for i in range(stderr_start_index, len(print_calls)):
+                if print_calls[i] == line:
+                    line_found = True
+                    break
+            self.assertTrue(line_found, f"Line '{line}' not found in print calls after stdout")
+
+    @patch("subprocess.Popen")
     @patch("sys.stdin")
     def test_captures_stdin(self, mock_stdin: Mock, mock_popen: Mock) -> None:
         """Test that the function captures stdin and passes it to the subprocess."""
@@ -292,7 +357,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         mock_process.poll.side_effect = [None, None, None]
         mock_process.wait.return_value = 0
         mock_process.stdout.read.return_value = ""
-        mock_process.stderr.read.return_value = ""
+        mock_process.stderr.readline.return_value = ""
         mock_popen.return_value = mock_process
 
         # Simulate stdin input
@@ -348,7 +413,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         stdout_read_side_effect.fully_called = False
 
         mock_process.stdout.read.side_effect = stdout_read_side_effect
-        mock_process.stderr.read.return_value = ""
+        mock_process.stderr.readline.return_value = ""
 
         # Simulate stdin input
         mock_stdin.isatty.return_value = True
@@ -392,7 +457,8 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         mock_process.poll.return_value = None
         mock_process.wait.return_value = 0
         mock_process.stdout.read.return_value = ""
-        mock_process.stderr.read.return_value = ""
+        # For the buffered stderr implementation
+        mock_process.stderr.readline.return_value = ""
         mock_popen.return_value = mock_process
 
         # Call the function with timeout
@@ -427,7 +493,7 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         mock_process.poll.return_value = None
         mock_process.wait.side_effect = wait_until_terminated
         mock_process.stdout.read.return_value = ""
-        mock_process.stderr.read.return_value = ""
+        mock_process.stderr.readline.return_value = ""
 
         # Add a custom terminate method that sets a flag
         def custom_terminate() -> None:
