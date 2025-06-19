@@ -44,8 +44,8 @@ services:
       # Main service definition
       - "traefik.http.services.oauth.loadbalancer.server.port=4180"
       # oauth-middleware
-      - "traefik.http.middlewares.oauth-auth.forwardAuth.address=http://oauth:4180/oauth2/auth"
-      - "traefik.http.middlewares.oauth-auth.forwardAuth.trustForwardHeader=true"
+      - "traefik.http.middlewares.oauth-auth.forwardauth.address=http://oauth:4180/oauth2/auth"
+      - "traefik.http.middlewares.oauth-auth.forwardauth.trustForwardHeader=true"
       - "traefik.http.middlewares.oauth-auth.forwardauth.authResponseHeaders=X-Auth-Request-User,X-Auth-Request-Email"
       # security headers middleware
       - "traefik.http.middlewares.auth-headers.headers.sslRedirect=true"
