@@ -153,9 +153,9 @@ variable "oauth_allowed_usernames" {
     List of GitHub usernames to allowlist.
 
     To find your username:
-    - open https://github.com/
-    - select your profile icon on the top-right
-    - your username is indicated in bold at the top
+    1. Open GitHub: https://github.com/
+    2. Click your profile icon on the top-right of the page.
+    3. Find your username indicated in bold at the top of the page.
 
     Example: ["alias1", "alias2"]
   EOT
