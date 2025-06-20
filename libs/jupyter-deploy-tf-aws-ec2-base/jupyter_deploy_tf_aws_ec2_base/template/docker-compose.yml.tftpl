@@ -63,16 +63,18 @@ services:
       - "traefik.http.middlewares.oauth-errors.errors.query=/oauth2/sign_in?rd={url}"
       # redirect middleware
       - "traefik.http.middlewares.redirect-to-jupyter.redirectregex.regex=${auth_regex}"
-      - "traefik.http.middlewares.redirect-to-jupyter.redirectregex.replacement=https://jupyter.${full_domain}/"
+      - "traefik.http.middlewares.redirect-to-jupyter.redirectregex.replacement=https://jupyter.${full_domain}/$1"
       - "traefik.http.middlewares.redirect-to-jupyter.redirectregex.permanent=true"
       # Auth domain routing
       - "traefik.http.routers.oauth.rule=Host(`jupyter.${full_domain}`, `auth.${full_domain}`) && PathPrefix(`/oauth2/`)"
+      - "traefik.http.routers.oauth.priority=200"
       - "traefik.http.routers.oauth.entrypoints=websecure"
       - "traefik.http.routers.oauth.tls.certresolver=letsencrypt"
       - "traefik.http.routers.oauth.middlewares=auth-headers@docker"
       - "traefik.http.routers.oauth.service=oauth"
       # Auth redirection routing
-      - "traefik.http.routers.auth-root.rule=Host(`auth.${full_domain}`) && !PathPrefix(`/oauth2/`)"
+      - "traefik.http.routers.auth-root.rule=Host(`auth.${full_domain}`)"
+      - "traefik.http.routers.auth-root.priority=100"
       - "traefik.http.routers.auth-root.middlewares=redirect-to-jupyter"
       - "traefik.http.routers.auth-root.entrypoints=websecure"
       - "traefik.http.routers.auth-root.tls.certresolver=letsencrypt"
