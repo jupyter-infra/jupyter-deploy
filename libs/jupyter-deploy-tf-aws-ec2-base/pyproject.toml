@@ -1,10 +1,12 @@
 [project]
 name = "jupyter-deploy-tf-aws-ec2-base"
-version = "0.1.0a0"
-description = "Add your description here"
+version = "0.1.0a1"
+description = "Base terraform template to deploy jupyter notebook on AWS EC2."
 readme = "README.md"
 authors = [
-    { name = "Jonathan Guinegagne", email = "jggg@amazon.com" }
+    { name = "Jonathan Guinegagne", email = "jggg@amazon.com" },
+    { name = "Michael Chin", email = "chnmch@amazon.com" },
+    { name = "Brian Granger", email = "brgrange@amazon.com" }
 ]
 requires-python = ">=3.12"
 dependencies = []

@@ -72,7 +72,7 @@ services:
       - "traefik.http.routers.oauth.middlewares=auth-headers@docker"
       - "traefik.http.routers.oauth.service=oauth"
       # Auth redirection routing
-      - "traefik.http.routers.auth-root.rule=Host(`auth.${full_domain}`) && Path(`/`)"
+      - "traefik.http.routers.auth-root.rule=Host(`auth.${full_domain}`) && !PathPrefix(`/oauth2/`)"
       - "traefik.http.routers.auth-root.middlewares=redirect-to-jupyter"
       - "traefik.http.routers.auth-root.entrypoints=websecure"
       - "traefik.http.routers.auth-root.tls.certresolver=letsencrypt"

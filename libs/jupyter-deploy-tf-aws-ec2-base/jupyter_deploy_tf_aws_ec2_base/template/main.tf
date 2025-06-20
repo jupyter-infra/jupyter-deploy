@@ -20,8 +20,8 @@ data "aws_partition" "current" {}
 locals {
   default_tags = {
     Source   = "jupyter-deploy"
-    Template = "aws-ec2-base"
-    Version  = "1.0.0"
+    Template = "tf-aws-ec2-base"
+    Version  = "0.1.0a1"
   }
 
   combined_tags = merge(
