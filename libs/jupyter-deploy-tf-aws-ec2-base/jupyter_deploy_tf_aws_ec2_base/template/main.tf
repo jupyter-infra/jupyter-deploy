@@ -30,16 +30,23 @@ locals {
   )
 }
 
-# Place the EC2 instance in the default VPC
-data "aws_vpc" "default" {
-  default = true
+# Retrieve or create the default VPC
+# The default VPC should exist in every AWS account/region because AWS creates
+# one automatically on account setup.
+# However, a user may delete their default VPC, in which case we need to re-create it.
+# Terraform preserves the default VPC on `terraform destroy`, which is the desired
+# behavior since other jupyter-deploy may rely on it.
+resource "aws_default_vpc" "default" {
+  tags = {
+    Name = "Default VPC"
+  }
 }
 
 # Retrieve the first subnet in the default VPC
 data "aws_subnets" "default_vpc_subnets" {
   filter {
     name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
+    values = [aws_default_vpc.default.id]
   }
 }
 
@@ -50,8 +57,8 @@ data "aws_subnet" "first_subnet_of_default_vpc" {
 # Create security group for the EC2 instance
 resource "aws_security_group" "ec2_jupyter_server_sg" {
   name        = "jupyter-deploy-base-sg"
-  description = "Security group for the EC2 instance serving the JupyterServer"
-  vpc_id      = data.aws_vpc.default.id
+  description = "Security group for the EC2 instance serving the jupyter server"
+  vpc_id      = aws_default_vpc.default.id
 
   # Allow only HTTPS inbound traffic
   ingress {
@@ -245,13 +252,6 @@ resource "aws_iam_role_policy_attachment" "oauth_github_client_secret" {
   policy_arn = aws_iam_policy.oauth_github_client_secret.arn
 }
 
-resource "aws_ssm_parameter" "oauth_github_secret_aws_secret_arn" {
-  name  = "/jupyter-deploy/oauth-github-app-client-secret-arn"
-  type  = "String"
-  value = aws_secretsmanager_secret.oauth_github_client_secret.arn
-  tags  = local.combined_tags
-}
-
 
 # DNS handling
 
@@ -287,28 +287,15 @@ locals {
 # Create DNS records for jupyter and auth subdomains
 resource "aws_route53_record" "jupyter" {
   zone_id = local.hosted_zone_id
-  name    = "jupyter.${local.full_domain}"
+  name    = local.full_domain
   type    = "A"
   ttl     = 300
   records = [aws_instance.ec2_jupyter_server.public_ip]
 }
-
-resource "aws_route53_record" "auth" {
-  zone_id = local.hosted_zone_id
-  name    = "auth.${local.full_domain}"
-  type    = "A"
-  ttl     = 300
-  records = [aws_instance.ec2_jupyter_server.public_ip]
-}
-
 
 # Read the local files defining the instance and docker services setup
 data "local_file" "cloud_init" {
   filename = "${path.module}/cloudinit.sh"
-}
-
-data "local_file" "docker_startup" {
-  filename = "${path.module}/docker-startup.sh"
 }
 
 data "local_file" "dockerfile_jupyter" {
@@ -338,12 +325,14 @@ locals {
 }
 
 locals {
+  docker_startup_file = templatefile(("${path.module}/docker-startup.sh.tftpl"), {
+    oauth_secret_arn = aws_secretsmanager_secret.oauth_github_client_secret.arn
+  })
   docker_compose_file = templatefile("${path.module}/docker-compose.yml.tftpl", {
     oauth_provider           = var.oauth_provider
     full_domain              = local.full_domain
-    auth_regex               = "^https://auth\\\\.${replace(local.full_domain, ".", "\\\\.")}/(.*)"
     github_client_id         = var.oauth_app_client_id
-    aws_region               = data.aws_region.current.name
+    aws_region               = data.aws_region.current.region
     allowed_github_usernames = join(",", [for username in var.oauth_allowed_usernames : "${username}"])
   })
   traefik_config_file = templatefile("${path.module}/traefik.yml.tftpl", {
@@ -361,7 +350,7 @@ locals {
   dockerfile_jupyter_indented    = join("\n${local.indent_str}", compact(split("\n", data.local_file.dockerfile_jupyter.content)))
   jupyter_start_indented         = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_start.content)))
   jupyter_reset_indented         = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_reset.content)))
-  docker_startup_indented        = join("\n${local.indent_str}", compact(split("\n", data.local_file.docker_startup.content)))
+  docker_startup_indented        = join("\n${local.indent_str}", compact(split("\n", local.docker_startup_file)))
   traefik_config_indented        = join("\n${local.indent_str}", compact(split("\n", local.traefik_config_file)))
   pyproject_jupyter_indented     = join("\n${local.indent_str}", compact(split("\n", data.local_file.pyproject_jupyter.content)))
   jupyter_server_config_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_server_config.content)))
@@ -421,7 +410,6 @@ DOC
   # Additional validations
   has_required_files = alltrue([
     fileexists("${path.module}/cloudinit.sh"),
-    fileexists("${path.module}/docker-startup.sh"),
     fileexists("${path.module}/dockerfile.jupyter"),
     fileexists("${path.module}/jupyter-start.sh"),
     fileexists("${path.module}/jupyter-reset.sh"),
@@ -430,7 +418,6 @@ DOC
 
   files_not_empty = alltrue([
     length(data.local_file.cloud_init.content) > 0,
-    length(data.local_file.docker_startup.content) > 0,
     length(data.local_file.dockerfile_jupyter) > 0,
     length(data.local_file.jupyter_start) > 0,
     length(data.local_file.jupyter_reset) > 0,
@@ -492,7 +479,7 @@ resource "null_resource" "store_oauth_github_client_secret" {
       aws secretsmanager put-secret-value \
         --secret-id ${aws_secretsmanager_secret.oauth_github_client_secret.arn} \
         --secret-string "$CLIENT_SECRET" \
-        --region ${data.aws_region.current.name}
+        --region ${data.aws_region.current.region}
       EOT
   }
 
@@ -514,7 +501,6 @@ resource "aws_ssm_association" "instance_startup_with_secret" {
   tags                             = local.combined_tags
 
   depends_on = [
-    aws_ssm_parameter.oauth_github_secret_aws_secret_arn,
     null_resource.store_oauth_github_client_secret
   ]
 }

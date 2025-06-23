@@ -126,7 +126,7 @@ variable "subdomain" {
     The subdomain where to add the DNS records for the notebook and auth URLs.
 
     For example, if you choose 'notebook1.notebooks' and your domain name is 'mydomain.com',
-    the full notebook URL will be 'jupyter.notebook1.notebooks.mydomain.com'.
+    the full notebook URL will be 'notebook1.notebooks.mydomain.com'.
 
     Recommended: notebook1.notebooks
   EOT
@@ -178,9 +178,9 @@ variable "oauth_app_client_id" {
     5. Go to 'OAuth Apps'
     6. Select 'New OAuth App'
     7. Select an app name, for example: Jupyter-ec2-base
-    8. Input home page URL: https://jupyter.<subdomain>.<domain>
+    8. Input home page URL: https://<subdomain>.<domain>
     9. Application description: add your description or leave blank
-    10. Authorization callback URL: https://auth.<subdomain>.<domain>/oauth2/callback
+    10. Authorization callback URL: https://<subdomain>.<domain>/oauth2/callback
     11. Select 'Register Application'
     12. Retrieve the Client ID
     Full instructions: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app

@@ -22,7 +22,7 @@ services:
       - AWS_REGION=${aws_region}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.jupyter.rule=Host(`jupyter.${full_domain}`)"
+      - "traefik.http.routers.jupyter.rule=Host(`${full_domain}`)"
       - "traefik.http.routers.jupyter.entrypoints=websecure"
       - "traefik.http.routers.jupyter.tls.certresolver=letsencrypt"
       - "traefik.http.services.jupyter.loadbalancer.server.port=8888"
@@ -61,24 +61,12 @@ services:
       - "traefik.http.middlewares.oauth-errors.errors.status=401-403"
       - "traefik.http.middlewares.oauth-errors.errors.service=oauth"
       - "traefik.http.middlewares.oauth-errors.errors.query=/oauth2/sign_in?rd={url}"
-      # redirect middleware
-      - "traefik.http.middlewares.redirect-to-jupyter.redirectregex.regex=${auth_regex}"
-      - "traefik.http.middlewares.redirect-to-jupyter.redirectregex.replacement=https://jupyter.${full_domain}/$1"
-      - "traefik.http.middlewares.redirect-to-jupyter.redirectregex.permanent=true"
       # Auth domain routing
-      - "traefik.http.routers.oauth.rule=Host(`jupyter.${full_domain}`, `auth.${full_domain}`) && PathPrefix(`/oauth2/`)"
-      - "traefik.http.routers.oauth.priority=200"
+      - "traefik.http.routers.oauth.rule=Host(`${full_domain}`) && PathPrefix(`/oauth2/`)"
       - "traefik.http.routers.oauth.entrypoints=websecure"
       - "traefik.http.routers.oauth.tls.certresolver=letsencrypt"
       - "traefik.http.routers.oauth.middlewares=auth-headers@docker"
       - "traefik.http.routers.oauth.service=oauth"
-      # Auth redirection routing
-      - "traefik.http.routers.auth-root.rule=Host(`auth.${full_domain}`)"
-      - "traefik.http.routers.auth-root.priority=100"
-      - "traefik.http.routers.auth-root.middlewares=redirect-to-jupyter"
-      - "traefik.http.routers.auth-root.entrypoints=websecure"
-      - "traefik.http.routers.auth-root.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.auth-root.service=oauth"
     networks:
       - web
     environment:
@@ -88,14 +76,14 @@ services:
       - OAUTH2_PROXY_SCOPE=read:user,user:email,read:org
       - OAUTH2_PROXY_EMAIL_DOMAINS=*
       - OAUTH2_PROXY_GITHUB_USERS=${allowed_github_usernames}
-      - OAUTH2_PROXY_REDIRECT_URL=https://auth.${full_domain}/oauth2/callback
+      - OAUTH2_PROXY_REDIRECT_URL=https://${full_domain}/oauth2/callback
       - OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180
       - OAUTH2_PROXY_COOKIE_DOMAINS=${full_domain}
       - OAUTH2_PROXY_COOKIE_SECRET=$${OAUTH_SECRET}
       - OAUTH2_PROXY_COOKIE_SECURE=true
       - OAUTH2_PROXY_REVERSE_PROXY=true
-      - OAUTH2_PROXY_UPSTREAMS=https://jupyter.${full_domain}/
-      - OAUTH2_PROXY_WHITELIST_DOMAINS=.${full_domain}
+      - OAUTH2_PROXY_UPSTREAMS=https://${full_domain}/
+      - OAUTH2_PROXY_WHITELIST_DOMAINS=${full_domain}
   traefik:
     image: traefik:v2.10
     container_name: traefik
