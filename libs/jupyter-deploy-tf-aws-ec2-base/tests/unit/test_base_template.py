@@ -7,7 +7,7 @@ EXPECTED_TEMPLATE_FILES = [
     "defaults-all.tfvars",
     "defaults-base.tfvars",
     "docker-compose.yml.tftpl",
-    "docker-startup.sh",
+    "docker-startup.sh.tftpl",
     "dockerfile.jupyter",
     "jupyter-start.sh",
     "jupyter-reset.sh",

@@ -14,7 +14,7 @@ This project:
 - creates an SSM instance-startup script, which references several files:
     - `cloudinit.sh` for the basic setup of the instance
     - `docker-compose.yml.tftpl` for the docker services to run in the instance
-    - `docker-startup.sh` to run the docker-compose up cmd and post docker-start instructions
+    - `docker-startup.sh.tftpl` to run the docker-compose up cmd and post docker-start instructions
     - `traefik.yml.tftpl` traefik configuration file
     - `dockerfile.jupyter` for the Jupyter container
     - `jupyter-start.sh` as the entrypoint script for the Jupyter container
@@ -104,7 +104,7 @@ No modules.
 | [aws_iam_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy) | resource |
 | [aws_ssm_parameter](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [null_resource](https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource) | resource |
-| [aws_vpc](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/vpc) | data source |
+| [aws_default_vpc](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/default_vpc) | resource |
 | [aws_subnets](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnets) | data source |
 | [aws_subnet](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnet) | data source |
 | [aws_ami](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ami) | data source |
@@ -126,7 +126,7 @@ No modules.
 | oauth_app_secret_prefix | `string` | `Jupyter-deploy-ec2-base` | The prefix for the name of the AWS secret where to store your OAuth app client secret |
 | letsencrypt_email | `string` | Required | An email for letsencrypt to notify about certificate expirations |
 | domain | `string` | Required | A domain that you own |
-| subdomain | `string` | `notebook1.notebooks` | A sub-domain of `domain` to add DNS records |
+| subdomain | `string` | Required | A sub-domain of `domain` to add DNS records |
 | oauth_provider | `string` | `github` | The OAuth provider to use |
 | oauth_allowed_usernames | `list(string)` | Required | The list of GitHub usernames to allowlist |
 | oauth_app_client_id | `string` | Required | The client ID of the OAuth app |
