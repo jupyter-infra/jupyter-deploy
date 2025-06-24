@@ -331,6 +331,10 @@ data "local_file" "jupyter_server_config" {
   filename = "${path.module}/jupyter_server_config.py"
 }
 
+data "local_file" "update_users" {
+  filename = "${path.module}/update_users.sh"
+}
+
 # variables consistency checks
 locals {
   full_domain            = "${var.subdomain}.${var.domain}"
@@ -338,13 +342,14 @@ locals {
 }
 
 locals {
+  allowed_github_usernames = join(",", [for username in var.oauth_allowed_usernames : "${username}"])
   docker_compose_file = templatefile("${path.module}/docker-compose.yml.tftpl", {
     oauth_provider           = var.oauth_provider
     full_domain              = local.full_domain
     auth_regex               = "^https://auth\\\\.${replace(local.full_domain, ".", "\\\\.")}/(.*)"
     github_client_id         = var.oauth_app_client_id
     aws_region               = data.aws_region.current.name
-    allowed_github_usernames = join(",", [for username in var.oauth_allowed_usernames : "${username}"])
+    allowed_github_usernames = local.allowed_github_usernames
   })
   traefik_config_file = templatefile("${path.module}/traefik.yml.tftpl", {
     letsencrypt_notification_email = var.letsencrypt_email
@@ -356,7 +361,10 @@ locals {
   # In order to inject the file content with the correct 
   indent_count                   = 10
   indent_str                     = join("", [for i in range(local.indent_count) : " "])
-  cloud_init_indented            = join("\n${local.indent_str}", compact(split("\n", data.local_file.cloud_init.content)))
+  cloud_init_indented            = join("\n${local.indent_str}", compact(split("\n", templatefile("${path.module}/cloudinit.sh", {
+    allowed_github_usernames = local.allowed_github_usernames,
+    update_users_content = data.local_file.update_users.content
+  }))))
   docker_compose_indented        = join("\n${local.indent_str}", compact(split("\n", local.docker_compose_file)))
   dockerfile_jupyter_indented    = join("\n${local.indent_str}", compact(split("\n", data.local_file.dockerfile_jupyter.content)))
   jupyter_start_indented         = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_start.content)))
@@ -365,6 +373,7 @@ locals {
   traefik_config_indented        = join("\n${local.indent_str}", compact(split("\n", local.traefik_config_file)))
   pyproject_jupyter_indented     = join("\n${local.indent_str}", compact(split("\n", data.local_file.pyproject_jupyter.content)))
   jupyter_server_config_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_server_config.content)))
+  update_users_indented          = join("\n${local.indent_str}", compact(split("\n", data.local_file.update_users.content)))
 }
 
 locals {
@@ -426,6 +435,7 @@ DOC
     fileexists("${path.module}/jupyter-start.sh"),
     fileexists("${path.module}/jupyter-reset.sh"),
     fileexists("${path.module}/jupyter_server_config.py"),
+    fileexists("${path.module}/update_users.sh"),
   ])
 
   files_not_empty = alltrue([
@@ -435,6 +445,7 @@ DOC
     length(data.local_file.jupyter_start) > 0,
     length(data.local_file.jupyter_reset) > 0,
     length(data.local_file.jupyter_server_config) > 0,
+    length(data.local_file.update_users) > 0,
   ])
 
   docker_compose_valid = can(yamldecode(local.docker_compose_file))

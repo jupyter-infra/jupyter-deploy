@@ -18,6 +18,7 @@ EXPECTED_TEMPLATE_FILES = [
     "jupyter_server_config.py",
     "traefik.yml.tftpl",
     "variables.tf",
+    "update_users.sh"
 ]
 
 

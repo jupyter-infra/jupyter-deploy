@@ -72,6 +72,7 @@ tee /etc/sudoers.d/service-user << EOF
 service-user ALL=(ALL) NOPASSWD: /bin/systemctl start docker
 service-user ALL=(ALL) NOPASSWD: /bin/systemctl stop docker
 service-user ALL=(ALL) NOPASSWD: /bin/systemctl restart docker
+service-user ALL=(ALL) NOPASSWD: /usr/local/bin/update_users.sh
 EOF
 chmod 440 /etc/sudoers.d/service-user
 
@@ -111,12 +112,12 @@ CURRENT_SWAP_KB=$(free -k | awk '/^Swap:/{print $2}')
 NEEDED_SWAP_KB=$((SWAP_SIZE_MB * 1024))
 
 if [ $CURRENT_SWAP_KB -eq 0 ]; then
-    echo "Creating new swap file of ${SWAP_SIZE_MB}MB..."
-    sudo fallocate -l ${SWAP_SIZE_MB}M /swapfile
+    echo "Creating new swap file of $${SWAP_SIZE_MB}MB..."
+    sudo fallocate -l $${SWAP_SIZE_MB}M /swapfile
 elif [ $CURRENT_SWAP_KB -ne $NEEDED_SWAP_KB ]; then
-    echo "Resizing swap file from $((CURRENT_SWAP_KB/1024))MB to ${SWAP_SIZE_MB}MB..."
+    echo "Resizing swap file from $((CURRENT_SWAP_KB/1024))MB to $${SWAP_SIZE_MB}MB..."
     swapoff -a
-    fallocate -l ${SWAP_SIZE_MB}M /swapfile
+    fallocate -l $${SWAP_SIZE_MB}M /swapfile
 fi
 
 chmod 600 /swapfile
@@ -148,3 +149,18 @@ touch /var/log/services/oauth.log
 
 chmod 755 /var/log/services
 chown -R service-user:service-user /var/log/services
+
+# Create the AUTHED_USERS file in /etc/ with the initial allowed GitHub usernames
+ALLOWED_GITHUB_USERNAMES="${allowed_github_usernames}"
+echo "$${ALLOWED_GITHUB_USERNAMES}" > /etc/AUTHED_USERS
+chmod 644 /etc/AUTHED_USERS
+chown service-user:service-user /etc/AUTHED_USERS
+echo "Created AUTHED_USERS file in /etc/ with initial users: $${ALLOWED_GITHUB_USERNAMES}"
+
+# Copy the update_users.sh script to /usr/local/bin/ and make it executable
+cat > /usr/local/bin/update_users.sh << 'EOF'
+${update_users_content}
+EOF
+
+chmod 755 /usr/local/bin/update_users.sh
+echo "Installed update_users.sh script in /usr/local/bin/"
