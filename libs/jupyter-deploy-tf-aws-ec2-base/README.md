@@ -12,7 +12,7 @@ This project:
 - passes on the root volume of the AMI
 - adds an EBS volume which will mount on the Jupyter Server container
 - creates an SSM instance-startup script, which references several files:
-    - `cloudinit.sh` for the basic setup of the instance
+    - `cloudinit.sh.tftpl` for the basic setup of the instance
     - `docker-compose.yml.tftpl` for the docker services to run in the instance
     - `docker-startup.sh.tftpl` to run the docker-compose up cmd and post docker-start instructions
     - `traefik.yml.tftpl` traefik configuration file
@@ -21,6 +21,7 @@ This project:
     - `jupyter-reset.sh` as the fallback script if the Jupyter container fails to start
     - `pyproject.jupyter.toml` for Python dependencies of the base environment where the Jupyter server runs
     - `jupyter_server_config.py` for Jupyter server configuration
+    - `update_users.sh` as a utility script for updating the currently authenticated users
 - creates an SSM association, which runs the startup script on the instance
 - creates the Route 53 Hosted Zone for the domain unless it already exists
 - adds DNS records to the Route 53 Hosted Zone

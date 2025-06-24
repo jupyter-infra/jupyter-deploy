@@ -34,7 +34,7 @@ JUPYTER_MEM_RESERVATION_MB=$((JUPYTER_MEM_LIMIT_MB / 2))
 # Read the AUTHED_USERS file that TF created in /etc/
 if [ -f /etc/AUTHED_USERS ]; then
     AUTHED_USERS_CONTENT=$(cat /etc/AUTHED_USERS)
-    echo "Read authorized users from /etc/AUTHED_USERS: ${AUTHED_USERS_CONTENT}"
+    echo "Read authorized users from /etc/AUTHED_USERS: $${AUTHED_USERS_CONTENT}"
 else
     echo "Warning: /etc/AUTHED_USERS file not found"
     AUTHED_USERS_CONTENT=""

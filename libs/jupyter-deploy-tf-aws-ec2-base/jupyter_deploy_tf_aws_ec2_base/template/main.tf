@@ -294,10 +294,6 @@ resource "aws_route53_record" "jupyter" {
 }
 
 # Read the local files defining the instance and docker services setup
-data "local_file" "cloud_init" {
-  filename = "${path.module}/cloudinit.sh"
-}
-
 data "local_file" "dockerfile_jupyter" {
   filename = "${path.module}/dockerfile.jupyter"
 }
@@ -330,8 +326,11 @@ locals {
 
 locals {
   allowed_github_usernames = join(",", [for username in var.oauth_allowed_usernames : "${username}"])
+  cloud_init_file = templatefile("${path.module}/cloudinit.sh.tftpl", {
+    allowed_github_usernames = local.allowed_github_usernames
+  })
   docker_startup_file = templatefile(("${path.module}/docker-startup.sh.tftpl"), {
-    oauth_secret_arn = aws_secretsmanager_secret.oauth_github_client_secret.arn
+    oauth_secret_arn = aws_secretsmanager_secret.oauth_github_client_secret.arn,
   })
   docker_compose_file = templatefile("${path.module}/docker-compose.yml.tftpl", {
     oauth_provider           = var.oauth_provider
@@ -348,12 +347,9 @@ locals {
 # SSM into the instance and execute the start-up scripts
 locals {
   # In order to inject the file content with the correct 
-  indent_count = 10
-  indent_str   = join("", [for i in range(local.indent_count) : " "])
-  cloud_init_indented = join("\n${local.indent_str}", compact(split("\n", templatefile("${path.module}/cloudinit.sh", {
-    allowed_github_usernames = local.allowed_github_usernames,
-    update_users_content     = data.local_file.update_users.content
-  }))))
+  indent_count                   = 10
+  indent_str                     = join("", [for i in range(local.indent_count) : " "])
+  cloud_init_indented            = join("\n${local.indent_str}", compact(split("\n", local.cloud_init_file)))
   docker_compose_indented        = join("\n${local.indent_str}", compact(split("\n", local.docker_compose_file)))
   dockerfile_jupyter_indented    = join("\n${local.indent_str}", compact(split("\n", data.local_file.dockerfile_jupyter.content)))
   jupyter_start_indented         = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_start.content)))
@@ -406,6 +402,10 @@ mainSteps:
           tee /opt/docker/jupyter_server_config.py << 'EOF'
           ${local.jupyter_server_config_indented}
           EOF
+          tee /usr/local/bin/update_users.sh << 'EOF'
+          ${local.update_users_indented}
+          EOF
+          chmod 755 /usr/local/bin/update_users.sh
 
   - action: aws:runShellScript
     name: StartDockerServices
@@ -418,7 +418,6 @@ DOC
 
   # Additional validations
   has_required_files = alltrue([
-    fileexists("${path.module}/cloudinit.sh"),
     fileexists("${path.module}/dockerfile.jupyter"),
     fileexists("${path.module}/jupyter-start.sh"),
     fileexists("${path.module}/jupyter-reset.sh"),
@@ -427,7 +426,6 @@ DOC
   ])
 
   files_not_empty = alltrue([
-    length(data.local_file.cloud_init.content) > 0,
     length(data.local_file.dockerfile_jupyter) > 0,
     length(data.local_file.jupyter_start) > 0,
     length(data.local_file.jupyter_reset) > 0,
