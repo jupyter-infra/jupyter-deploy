@@ -348,11 +348,11 @@ locals {
 # SSM into the instance and execute the start-up scripts
 locals {
   # In order to inject the file content with the correct 
-  indent_count                   = 10
-  indent_str                     = join("", [for i in range(local.indent_count) : " "])
-  cloud_init_indented            = join("\n${local.indent_str}", compact(split("\n", templatefile("${path.module}/cloudinit.sh", {
+  indent_count = 10
+  indent_str   = join("", [for i in range(local.indent_count) : " "])
+  cloud_init_indented = join("\n${local.indent_str}", compact(split("\n", templatefile("${path.module}/cloudinit.sh", {
     allowed_github_usernames = local.allowed_github_usernames,
-    update_users_content = data.local_file.update_users.content
+    update_users_content     = data.local_file.update_users.content
   }))))
   docker_compose_indented        = join("\n${local.indent_str}", compact(split("\n", local.docker_compose_file)))
   dockerfile_jupyter_indented    = join("\n${local.indent_str}", compact(split("\n", data.local_file.dockerfile_jupyter.content)))
