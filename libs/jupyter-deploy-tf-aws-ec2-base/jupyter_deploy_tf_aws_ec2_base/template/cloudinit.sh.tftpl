@@ -155,8 +155,6 @@ ALLOWED_GITHUB_USERNAMES="${allowed_github_usernames}"
 echo "$${ALLOWED_GITHUB_USERNAMES}" > /etc/AUTHED_USERS
 chmod 644 /etc/AUTHED_USERS
 chown service-user:service-user /etc/AUTHED_USERS
-echo "Created AUTHED_USERS file in /etc/ with initial users: $${ALLOWED_GITHUB_USERNAMES}"
 
 # Ensure /usr/local/bin directory exists for update_user.sh upload
 mkdir -p /usr/local/bin
-echo "Checked for and/or created /usr/local/bin dir"

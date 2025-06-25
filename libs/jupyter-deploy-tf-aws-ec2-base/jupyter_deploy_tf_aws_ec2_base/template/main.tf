@@ -405,7 +405,7 @@ mainSteps:
           tee /usr/local/bin/update_users.sh << 'EOF'
           ${local.update_users_indented}
           EOF
-          chmod 755 /usr/local/bin/update_users.sh
+          chmod 644 /usr/local/bin/update_users.sh
 
   - action: aws:runShellScript
     name: StartDockerServices
