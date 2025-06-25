@@ -586,8 +586,8 @@ resource "null_resource" "wait_for_instance_ready" {
     # the instance ID might be preserved even on VM swap
     # add instance public IP.
     instance_ip    = aws_instance.ec2_jupyter_server.public_ip
-    ami = aws_instance.ec2_jupyter_server.ami
-    instance_type = aws_instance.ec2_jupyter_server.instance_type
+    ami            = aws_instance.ec2_jupyter_server.ami
+    instance_type  = aws_instance.ec2_jupyter_server.instance_type
     root_volume_id = aws_instance.ec2_jupyter_server.root_block_device[0].volume_id
     # Cloudinit parameters:
     association_id = aws_ssm_association.instance_startup_with_secret.id
@@ -596,8 +596,8 @@ resource "null_resource" "wait_for_instance_ready" {
     startup_doc_name    = aws_ssm_document.instance_startup_instructions.name
     startup_doc_version = aws_ssm_document.instance_startup_instructions.default_version
     # Inner status check parameters:
-    status_doc_name     = aws_ssm_document.instance_status_check.name
-    status_doc_version  = aws_ssm_document.instance_status_check.default_version
+    status_doc_name    = aws_ssm_document.instance_status_check.name
+    status_doc_version = aws_ssm_document.instance_status_check.default_version
   }
   provisioner "local-exec" {
     command = <<DOC
