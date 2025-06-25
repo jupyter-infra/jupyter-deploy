@@ -139,6 +139,8 @@ resource "aws_instance" "ec2_jupyter_server" {
 
   # IAM instance profile configuration
   iam_instance_profile = aws_iam_instance_profile.server_instance_profile.name
+
+  depends_on = [aws_ssm_document.instance_startup_instructions]
 }
 
 # Define the IAM role for the instance and add policies
@@ -317,6 +319,13 @@ data "local_file" "jupyter_server_config" {
 data "local_file" "update_users" {
   filename = "${path.module}/update_users.sh"
 }
+data "local_file" "check_status" {
+  filename = "${path.module}/check-status-internal.sh"
+}
+
+data "local_file" "get_status" {
+  filename = "${path.module}/get-status.sh"
+}
 
 # variables consistency checks
 locals {
@@ -359,6 +368,8 @@ locals {
   pyproject_jupyter_indented     = join("\n${local.indent_str}", compact(split("\n", data.local_file.pyproject_jupyter.content)))
   jupyter_server_config_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_server_config.content)))
   update_users_indented          = join("\n${local.indent_str}", compact(split("\n", data.local_file.update_users.content)))
+  check_status_indented          = join("\n${local.indent_str}", compact(split("\n", data.local_file.check_status.content)))
+  get_status_indented            = join("\n${local.indent_str}", compact(split("\n", data.local_file.get_status.content)))
 }
 
 locals {
@@ -406,6 +417,12 @@ mainSteps:
           ${local.update_users_indented}
           EOF
           chmod 644 /usr/local/bin/update_users.sh
+          tee /usr/local/bin/check-status-internal.sh << 'EOF'
+          ${local.check_status_indented}
+          EOF
+          tee /usr/local/bin/get-status.sh << 'EOF'
+          ${local.get_status_indented}
+          EOF
 
   - action: aws:runShellScript
     name: StartDockerServices
@@ -423,6 +440,8 @@ DOC
     fileexists("${path.module}/jupyter-reset.sh"),
     fileexists("${path.module}/jupyter_server_config.py"),
     fileexists("${path.module}/update_users.sh"),
+    fileexists("${path.module}/check-status-internal.sh"),
+    fileexists("${path.module}/get-status.sh"),
   ])
 
   files_not_empty = alltrue([
@@ -431,6 +450,8 @@ DOC
     length(data.local_file.jupyter_reset) > 0,
     length(data.local_file.jupyter_server_config) > 0,
     length(data.local_file.update_users) > 0,
+    length(data.local_file.check_status) > 0,
+    length(data.local_file.get_status) > 0,
   ])
 
   docker_compose_valid = can(yamldecode(local.docker_compose_file))
@@ -445,6 +466,7 @@ resource "aws_ssm_document" "instance_startup_instructions" {
 
   content = local.ssm_startup_content
   tags    = local.combined_tags
+
   lifecycle {
     precondition {
       condition     = local.github_usernames_valid
@@ -476,6 +498,31 @@ resource "aws_ssm_document" "instance_startup_instructions" {
     }
   }
 }
+
+locals {
+  ssm_status_check = <<DOC
+schemaVersion: '2.2'
+description: Check the status of the docker services and TLS certs in the instance
+mainSteps:
+  - action: aws:runShellScript
+    name: CheckStatus
+    inputs:
+      runCommand:
+        - |
+          sh /usr/local/bin/get-status.sh
+
+DOC
+}
+
+resource "aws_ssm_document" "instance_status_check" {
+  name            = "instance-status-check"
+  document_type   = "Command"
+  document_format = "YAML"
+
+  content = local.ssm_status_check
+  tags    = local.combined_tags
+}
+
 
 # Seed the AWS Secret with the OAuth GitHub client secret
 resource "null_resource" "store_oauth_github_client_secret" {
@@ -510,6 +557,48 @@ resource "aws_ssm_association" "instance_startup_with_secret" {
   tags                             = local.combined_tags
 
   depends_on = [
-    null_resource.store_oauth_github_client_secret
+    null_resource.store_oauth_github_client_secret,
+    aws_instance.ec2_jupyter_server
+  ]
+}
+
+locals {
+  await_server_file = templatefile("${path.module}/local-await-server.sh.tftpl", {
+    instance_id                = aws_instance.ec2_jupyter_server.id
+    association_id             = aws_ssm_association.instance_startup_with_secret.association_id
+    status_check_document_name = aws_ssm_document.instance_status_check.name
+    region                     = data.aws_region.current.region
+  })
+  await_indent_str      = join("", [for i in range(6) : " "])
+  await_server_indented = join("\n${local.await_indent_str}", compact(split("\n", local.await_server_file)))
+}
+
+# Poll the instance_status_check command until the instance is ready
+resource "null_resource" "wait_for_instance_ready" {
+  triggers = {
+    instance_id = aws_instance.ec2_jupyter_server.id
+    # the instance ID might be preserved even on VM swap
+    # add instance public IP.
+    instance_ip    = aws_instance.ec2_jupyter_server.public_ip
+    association_id = aws_ssm_association.instance_startup_with_secret.id
+    # the association ID should capture. the startup instructions doc name and versions
+    # consider removing after further testing
+    startup_doc_name    = aws_ssm_document.instance_startup_instructions.name
+    startup_doc_version = aws_ssm_document.instance_startup_instructions.default_version
+    status_doc_name     = aws_ssm_document.instance_status_check.name
+    status_doc_version  = aws_ssm_document.instance_status_check.default_version
+  }
+  provisioner "local-exec" {
+    command = <<DOC
+      ${local.await_server_indented}
+    DOC
+  }
+
+  depends_on = [
+    aws_ssm_association.instance_startup_with_secret,
+    aws_ssm_document.instance_status_check,
+    aws_ssm_document.instance_startup_instructions,
+    aws_instance.ec2_jupyter_server,
+    aws_route53_record.jupyter
   ]
 }

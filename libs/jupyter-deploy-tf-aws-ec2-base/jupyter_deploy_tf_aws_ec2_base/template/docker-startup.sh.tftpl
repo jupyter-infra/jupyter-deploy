@@ -62,3 +62,6 @@ fi
 echo "Starting docker-compose"
 docker-compose up -d
 echo "Docker-compose complete"
+
+touch /opt/docker/started.txt
+chmod 644 /opt/docker/started.txt
