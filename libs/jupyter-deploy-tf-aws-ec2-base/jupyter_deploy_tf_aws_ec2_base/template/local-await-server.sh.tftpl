@@ -40,7 +40,7 @@ wait_for_instance(){
 
     # After polling, check the final status
     if [ "$INSTANCE_STATE" = "running" ]; then
-        # sleep a little bit to give the SSM association time to trigger
+        # sleep to give the SSM association time to trigger
         sleep 30
         echo "Instance $INSTANCE_ID is ready."
         return 0
@@ -123,7 +123,7 @@ wait_for_cloudinit_execution() {
             return 1
         fi
         
-        echo "Execution $LATEST_EXECUTION_ID is still running (status: $LATEST_STATUS), waiting..."
+        echo "Cloudinit script is running (status: $LATEST_STATUS), waiting..."
         sleep $SLEEP_INTERVAL_SECONDS
         total_wait_seconds=$((total_wait_seconds + SLEEP_INTERVAL_SECONDS))
         

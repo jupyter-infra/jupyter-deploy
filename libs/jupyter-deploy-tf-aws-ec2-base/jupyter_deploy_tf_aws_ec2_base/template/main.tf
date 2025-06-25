@@ -263,8 +263,8 @@ data "aws_route53_zone" "existing" {
   private_zone = false
   count        = 1
 
-  # This will fail gracefully if the zone doesn't exist
-  # The count = 1 ensures it's only created once
+  # FIXME: this fails in the HZ does not exist
+  # issue: https://github.com/jupyter-ai-contrib/jupyter-deploy/issues/51
 }
 
 locals {
@@ -573,18 +573,29 @@ locals {
   await_server_indented = join("\n${local.await_indent_str}", compact(split("\n", local.await_server_file)))
 }
 
-# Poll the instance_status_check command until the instance is ready
+# This null resources ensures that `jd up` or `terraform apply` completes only when instance is ready to serve traffic.
+# - instance state is "running"
+# - dns records are up (otherwise letsencrypt DNS verification will fail)
+# - cloudinit script ran successfully
+# - docker services are up
+# - letsencrypt provided the TLS certs
 resource "null_resource" "wait_for_instance_ready" {
   triggers = {
+    # Instance parameters:
     instance_id = aws_instance.ec2_jupyter_server.id
     # the instance ID might be preserved even on VM swap
     # add instance public IP.
     instance_ip    = aws_instance.ec2_jupyter_server.public_ip
+    ami = aws_instance.ec2_jupyter_server.ami
+    instance_type = aws_instance.ec2_jupyter_server.instance_type
+    root_volume_id = aws_instance.ec2_jupyter_server.root_block_device[0].volume_id
+    # Cloudinit parameters:
     association_id = aws_ssm_association.instance_startup_with_secret.id
     # the association ID should capture. the startup instructions doc name and versions
     # consider removing after further testing
     startup_doc_name    = aws_ssm_document.instance_startup_instructions.name
     startup_doc_version = aws_ssm_document.instance_startup_instructions.default_version
+    # Inner status check parameters:
     status_doc_name     = aws_ssm_document.instance_status_check.name
     status_doc_version  = aws_ssm_document.instance_status_check.default_version
   }
@@ -599,6 +610,7 @@ resource "null_resource" "wait_for_instance_ready" {
     aws_ssm_document.instance_status_check,
     aws_ssm_document.instance_startup_instructions,
     aws_instance.ec2_jupyter_server,
-    aws_route53_record.jupyter
+    aws_route53_record.jupyter,
+    aws_ebs_volume.jupyter_data,
   ]
 }

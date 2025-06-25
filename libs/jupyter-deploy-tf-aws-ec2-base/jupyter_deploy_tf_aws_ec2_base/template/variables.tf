@@ -119,6 +119,21 @@ variable "domain" {
     Example: mydomain.com
   EOT
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9.-]*$", var.domain))
+    error_message = "The domain must only contain letters, numbers, dots, and hyphens."
+  }
+
+  validation {
+    condition     = !startswith(var.domain, ".") && !endswith(var.domain, ".")
+    error_message = "The domain must not start or end with a dot."
+  }
+
+  validation {
+    condition     = length(var.domain) > 0
+    error_message = "The domain must not be empty."
+  }
 }
 
 variable "subdomain" {
@@ -131,6 +146,16 @@ variable "subdomain" {
     Recommended: notebook1.notebooks
   EOT
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9.-]*$", var.subdomain))
+    error_message = "The subdomain must only contain letters, numbers, dots, and hyphens."
+  }
+
+  validation {
+    condition     = var.subdomain == "" || (!startswith(var.subdomain, ".") && !endswith(var.subdomain, "."))
+    error_message = "The subdomain must not start or end with a dot."
+  }
 }
 
 variable "oauth_provider" {
