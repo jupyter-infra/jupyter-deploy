@@ -3,14 +3,17 @@
 from jupyter_deploy_tf_aws_ec2_base.template import TEMPLATE_PATH
 
 EXPECTED_TEMPLATE_FILES = [
+    "check-status-internal.sh",
     "cloudinit.sh.tftpl",
     "defaults-all.tfvars",
     "defaults-base.tfvars",
     "docker-compose.yml.tftpl",
     "docker-startup.sh.tftpl",
     "dockerfile.jupyter",
+    "get-status.sh",
     "jupyter-start.sh",
     "jupyter-reset.sh",
+    "local-await-server.sh.tftpl",
     "main.tf",
     "manifest.yaml",
     "outputs.tf",

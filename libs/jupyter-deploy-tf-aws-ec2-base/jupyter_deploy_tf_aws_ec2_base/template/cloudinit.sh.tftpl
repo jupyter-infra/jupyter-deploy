@@ -27,6 +27,9 @@ if [[ "$OS" == "Amazon Linux" ]]; then
     curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
 
+    # Install jq
+    yum install -y jq
+
 elif [[ "$OS" == "Ubuntu" ]] || [[ "$OS" == "Debian" ]]; then
     # Update package list and install required packages
     apt-get update
@@ -34,7 +37,8 @@ elif [[ "$OS" == "Ubuntu" ]] || [[ "$OS" == "Debian" ]]; then
         apt-transport-https \
         ca-certificates \
         curl \
-        software-properties-common
+        software-properties-common \
+        jq
 
     # Add docker's official GPG key
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -

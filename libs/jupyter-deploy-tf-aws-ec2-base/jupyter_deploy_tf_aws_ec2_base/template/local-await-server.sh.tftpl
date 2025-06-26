@@ -1,0 +1,227 @@
+
+INSTANCE_ID=${instance_id}
+INSTANCE_STARTUP_ASSOCIATION_ID=${association_id}
+STATUS_CHECK_DOC_NAME=${status_check_document_name}
+REGION=${region}
+
+
+wait_for_instance(){
+    local MAX_WAIT_TIME_SECONDS=300
+    local SLEEP_INTERVAL_SECONDS=10
+    local total_wait_seconds=0
+
+    INSTANCE_STATE=$(aws ec2 describe-instance-status \
+        --instance-ids "$INSTANCE_ID" \
+        --query "InstanceStatuses[0].InstanceState.Name" \
+        --output text)
+
+    echo "Found instance: $INSTANCE_ID, initial state: $INSTANCE_STATE"
+
+    if [ "$INSTANCE_STATE" == "running" ]; then
+        # shorter sleep here: the instance may have been running for a while
+        sleep 15
+        return 0
+    fi
+
+    while [[ "$INSTANCE_STATE" == "pending" || "$INSTANCE_STATE" == "rebooting" ]]; do
+        if [ $total_wait_seconds -ge $MAX_WAIT_TIME_SECONDS ]; then
+            echo "Timed out waiting for instance $INSTANCE_ID to complete after $MAX_WAIT_TIME_SECONDS seconds"
+            return 1
+        fi
+
+        sleep $SLEEP_INTERVAL_SECONDS
+        total_wait_seconds=$((total_wait_seconds + SLEEP_INTERVAL_SECONDS))
+
+        INSTANCE_STATE=$(aws ec2 describe-instance-status \
+            --instance-ids "$INSTANCE_ID" \
+            --query "InstanceStatuses[0].InstanceState.Name" \
+            --output text)
+    done
+
+    # After polling, check the final status
+    if [ "$INSTANCE_STATE" = "running" ]; then
+        # sleep to give the SSM association time to trigger
+        sleep 30
+        echo "Instance $INSTANCE_ID is ready."
+        return 0
+    else
+        echo "Instance $INSTANCE_ID is not in a good state: $INSTANCE_STATE"
+        return 1
+    fi
+}
+
+wait_for_cloudinit_execution() {
+    # the SSM association may run twice, and fail the first time because the instance
+    # was not yet in state=running
+    # we look up the latest execution of the SSM association, and if we find one with state=Failed,
+    # we sleep, and recursively retry to capture the SSM association execution that worked.
+    # In order to avoid going into an infinite retry stack though, we track if this function 
+    # execution corresponds to a retry or not.
+    local retried=$${1:-false}  # Default to false if not provided
+    local MAX_WAIT_TIME_SECONDS=300
+    local SLEEP_INTERVAL_SECONDS=10
+    local total_wait_seconds=0
+
+    # Use jq to collect and process all executions across all pages
+    ALL_EXECUTIONS="[]"
+    NEXT_TOKEN=""
+
+    # Paginate describe-association-executions to find the latest one
+    # This is safer, although in most cases there will only be 2 executions
+    # and therefore 1 page.
+    while true; do
+        # Prepare the token parameter if we have one
+        TOKEN_PARAM=""
+        if [ -n "$NEXT_TOKEN" ] && [ "$NEXT_TOKEN" != "None" ]; then
+            TOKEN_PARAM="--starting-token $NEXT_TOKEN"
+        fi
+
+        # Get a page of executions
+        RESPONSE=$(aws ssm describe-association-executions \
+            --association-id "$INSTANCE_STARTUP_ASSOCIATION_ID" \
+            --region "$REGION" \
+            $TOKEN_PARAM \
+            --output json)
+
+        # Extract the AssociationExecutions from the response and combine with our accumulated list
+        PAGE_EXECUTIONS=$(echo "$RESPONSE" | jq '.AssociationExecutions')
+        ALL_EXECUTIONS=$(echo "$ALL_EXECUTIONS" "$PAGE_EXECUTIONS" | jq -s 'add')
+        
+        # Check if there is a next token
+        NEXT_TOKEN=$(echo "$RESPONSE" | jq -r '.NextToken // "None"')
+        
+        # If the next token is "None" or empty, we're done paginating
+        if [ "$NEXT_TOKEN" = "None" ] || [ -z "$NEXT_TOKEN" ]; then
+            break
+        fi
+    done
+
+    # Find the latest execution by sorting by CreatedTime
+    LATEST_EXECUTION_ID=$(echo "$ALL_EXECUTIONS" | jq -r 'sort_by(.CreatedTime) | reverse | .[0].ExecutionId')
+    LATEST_STATUS=$(echo "$ALL_EXECUTIONS" | jq -r 'sort_by(.CreatedTime) | reverse | .[0].Status')
+
+    # If we didn't find any execution, that's an error
+    if [ -z "$LATEST_EXECUTION_ID" ] || [ "$LATEST_EXECUTION_ID" = "null" ]; then
+        echo "No association executions found"
+        return 1
+    fi
+
+    echo "Found latest execution: $LATEST_EXECUTION_ID, initial status: $LATEST_STATUS"
+
+    # Check if the status is Failed and we haven't retried yet
+    if [ "$LATEST_STATUS" = "Failed" ] && [ "$retried" = "false" ]; then
+        echo "Latest execution failed, retrying once..."
+        sleep 30
+        wait_for_cloudinit_execution true  # Call self with retried=true to not retry anymore
+        return $?  # Return the result of the retry
+    fi
+
+    # If the status is InProgress or Pending, poll until completion
+    while [[ "$LATEST_STATUS" == "InProgress" || "$LATEST_STATUS" == "Pending" ]]; do
+        if [ $total_wait_seconds -ge $MAX_WAIT_TIME_SECONDS ]; then
+            echo "Timed out waiting for execution $LATEST_EXECUTION_ID to complete after $MAX_WAIT_TIME_SECONDS seconds"
+            return 1
+        fi
+        
+        echo "Cloudinit script is running (status: $LATEST_STATUS), waiting..."
+        sleep $SLEEP_INTERVAL_SECONDS
+        total_wait_seconds=$((total_wait_seconds + SLEEP_INTERVAL_SECONDS))
+        
+        # Get the updated status
+        LATEST_STATUS=$(aws ssm describe-association-executions \
+            --association-id "$INSTANCE_STARTUP_ASSOCIATION_ID" \
+            --filters Key=ExecutionId,Value="$LATEST_EXECUTION_ID",Type=EQUAL \
+            --region "$REGION" \
+            --query "AssociationExecutions[0].Status" \
+            --output text)
+    done
+
+    # After polling, check the final status
+    if [ "$LATEST_STATUS" = "Success" ]; then
+        # Get the detailed target status to confirm success
+        ASSOC_STATUS=$(aws ssm describe-association-execution-targets \
+            --association-id "$INSTANCE_STARTUP_ASSOCIATION_ID" \
+            --execution-id "$LATEST_EXECUTION_ID" \
+            --region "$REGION" \
+            --query "AssociationExecutionTargets[0].Status" \
+            --output text)
+
+        if [ "$ASSOC_STATUS" != "Success" ]; then
+            echo "Instance startup association did not complete successfully. Target status: $ASSOC_STATUS"
+            return 1
+        fi
+        
+        echo "Instance startup association completed successfully."
+        return 0
+    else
+        echo "Instance startup association failed with status: $LATEST_STATUS"
+        return 1
+    fi
+}
+
+get_status() {
+    # Run the status check command
+    COMMAND_ID=$(aws ssm send-command \
+        --document-name "$STATUS_CHECK_DOC_NAME" \
+        --targets "Key=InstanceIds,Values=$INSTANCE_ID" \
+        --region "$REGION" \
+        --output text \
+        --query "Command.CommandId")
+        
+    # Wait for command to complete
+    aws ssm wait command-executed \
+        --command-id "$COMMAND_ID" \
+        --instance-id "$INSTANCE_ID" \
+        --region "$REGION"
+        
+    # Get the command output
+    STATUS=$(aws ssm get-command-invocation \
+        --command-id "$COMMAND_ID" \
+        --instance-id "$INSTANCE_ID" \
+        --region "$REGION" \
+        --query "StandardOutputContent" \
+        --output text | tr -d '\n\r')
+
+    echo $STATUS
+    return 0
+}
+
+
+main(){
+    wait_for_instance
+    wait_for_cloudinit_execution
+
+    local MAX_ATTEMPTS=60
+    local attempts=0
+    local ready=false
+
+    while [ $attempts -lt $MAX_ATTEMPTS ] && [ "$ready" = "false" ]; do
+        echo "Checking instance status (attempt $attempts of $MAX_ATTEMPTS)..."
+
+        INNER_STATUS=$(get_status)
+
+        # Check if the status is either 0 (IN_SERVICE) or 40 (OUT_OF_SERVICE)
+        if [ "$INNER_STATUS" = "IN_SERVICE" ]; then
+            echo "Instance is ready!"
+            ready=true
+        elif [ "$INNER_STATUS" = "INITIALIZING" ]; then
+            echo "Instance still inializing..."
+            sleep 10
+            attempts=$((attempts+1))
+        elif [ "$INNER_STATUS" = "FETCHING_CERTIFICATES" ]; then
+            echo "Services are up, fetching TLS certificates..."
+            sleep 10
+            attempts=$((attempts+1))
+        else
+            echo "Instance was either stopped or became un-healthy; aborting."
+            exit 1
+        fi
+    done
+
+    if [ "$ready" = "false" ]; then
+        echo "Timed out waiting for instance to be ready."
+        exit 1
+    fi
+}
+
+main
