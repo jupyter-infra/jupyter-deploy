@@ -316,7 +316,7 @@ data "local_file" "jupyter_server_config" {
   filename = "${path.module}/jupyter_server_config.py"
 }
 
-data "local_file" "update-users" {
+data "local_file" "update_users" {
   filename = "${path.module}/update-users.sh"
 }
 data "local_file" "check_status" {
