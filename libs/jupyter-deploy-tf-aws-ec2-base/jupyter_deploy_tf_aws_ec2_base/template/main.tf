@@ -21,7 +21,7 @@ locals {
   default_tags = {
     Source   = "jupyter-deploy"
     Template = "tf-aws-ec2-base"
-    Version  = "0.1.0a1"
+    Version  = "0.1.0a2"
   }
 
   combined_tags = merge(
