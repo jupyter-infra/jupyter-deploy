@@ -314,8 +314,8 @@ data "local_file" "jupyter_server_config" {
   filename = "${path.module}/jupyter_server_config.py"
 }
 
-data "local_file" "update_users" {
-  filename = "${path.module}/update_users.sh"
+data "local_file" "update-users" {
+  filename = "${path.module}/update-users.sh"
 }
 
 data "local_file" "refresh_oauth_cookie" {
@@ -407,10 +407,10 @@ mainSteps:
           tee /opt/docker/jupyter_server_config.py << 'EOF'
           ${local.jupyter_server_config_indented}
           EOF
-          tee /usr/local/bin/update_users.sh << 'EOF'
+          tee /usr/local/bin/update-users.sh << 'EOF'
           ${local.update_users_indented}
           EOF
-          chmod 644 /usr/local/bin/update_users.sh
+          chmod 644 /usr/local/bin/update-users.sh
           tee /usr/local/bin/refresh-oauth-cookie.sh << 'EOF'
           ${local.refresh_oauth_cookie_indented}
           EOF
@@ -431,7 +431,7 @@ DOC
     fileexists("${path.module}/jupyter-start.sh"),
     fileexists("${path.module}/jupyter-reset.sh"),
     fileexists("${path.module}/jupyter_server_config.py"),
-    fileexists("${path.module}/update_users.sh"),
+    fileexists("${path.module}/update-users.sh"),
     fileexists("${path.module}/refresh-oauth-cookie.sh"),
   ])
 

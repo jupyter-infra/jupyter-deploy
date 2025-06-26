@@ -7,7 +7,7 @@ set -e
 #   sudo update_users.sh remove username1
 #   sudo update_users.sh overwrite username1,username2
 
-exec > >(tee -a /var/log/jupyter-deploy/update_users.log) 2>&1
+exec > >(tee -a /var/log/jupyter-deploy/update-users.log) 2>&1
 
 AUTHED_USERS_FILE="/etc/AUTHED_USERS"
 ACTION=$1
@@ -98,18 +98,15 @@ fi
 # Generate the final updated users list and write it back to the file
 (IFS=,; echo "${CURRENT_USERS_ARRAY[*]}") > "$AUTHED_USERS_FILE"
 
-# Update the AUTHED_USERS_CONTENT var in the Docker .env file
 AUTHED_USERS_CONTENT=$(cat "$AUTHED_USERS_FILE")
 sed -i "s/^AUTHED_USERS_CONTENT=.*/AUTHED_USERS_CONTENT=${AUTHED_USERS_CONTENT}/" /opt/docker/.env
-echo "Updated authorized users to: $AUTHED_USERS_CONTENT"
 
 # The oauth sidecar vends cookies that get stored on user's webbrowser and linked to a server-side session. 
 # Such cookies are opaque to the users, they are encrypted with a secret string. 
 # When we remove a user from the allowlist, we need to invalidate their cookie/session so that they loose access 
 # immediately. We do so by updating the cookie secret. Note that this action invalidates all sessions/cookies.
 if [ "$REFRESH_OAUTH_COOKIE" = true ]; then
-    echo "Refreshing OAuth cookie secret to invalidate old sessions..."
-    sh /usr/local/bin/refresh-oauth-cookie.sh
+    sh /usr/local/bin/refresh-oauth-cookie.sh >/dev/null
 fi
 
 echo "Recreating OAuth container to apply changes..."
