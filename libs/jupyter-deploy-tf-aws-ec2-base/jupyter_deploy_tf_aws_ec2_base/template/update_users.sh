@@ -7,6 +7,8 @@ set -e
 #   sudo update_users.sh remove username1
 #   sudo update_users.sh overwrite username1,username2
 
+exec > >(tee -a /var/log/jupyter-deploy/update_users.log) 2>&1
+
 AUTHED_USERS_FILE="/etc/AUTHED_USERS"
 ACTION=$1
 USERS=$2
@@ -26,13 +28,16 @@ fi
 # Ensure the file exists in case it was manually deleted
 touch "$AUTHED_USERS_FILE"
 
-# Create array w/current users
+IFS=',' read -ra INPUT_USERS <<< "$USERS"
 IFS=',' read -ra CURRENT_USERS <<< "$(cat "$AUTHED_USERS_FILE")"
+INPUT_USERS_SORTED=$(echo "$USERS" | tr ',' '\n' | sort)
 CURRENT_USERS_ARRAY=("${CURRENT_USERS[@]}")
+CURRENT_USERS_SORTED=$(cat "$AUTHED_USERS_FILE" | tr ',' '\n' | sort)
+
+REFRESH_OAUTH_COOKIE=false
 
 if [ "$ACTION" == "add" ]; then
-    IFS=',' read -ra NEW_USERS <<< "$USERS"
-    for user in "${NEW_USERS[@]}"; do
+    for user in "${INPUT_USERS[@]}"; do
         # Check if user already exists
         if ! echo "${CURRENT_USERS[@]}" | grep -q -w "$user"; then
             CURRENT_USERS_ARRAY+=("$user")
@@ -42,11 +47,10 @@ if [ "$ACTION" == "add" ]; then
         fi
     done
 elif [ "$ACTION" == "remove" ]; then
-    IFS=',' read -ra REMOVE_USERS <<< "$USERS"
     TEMP_ARRAY=()
     
     # Check for users absent in list already
-    for remove_user in "${REMOVE_USERS[@]}"; do
+    for remove_user in "${INPUT_USERS[@]}"; do
         USER_EXISTS=false
         for user in "${CURRENT_USERS_ARRAY[@]}"; do
             if [ "$user" == "$remove_user" ]; then
@@ -56,13 +60,15 @@ elif [ "$ACTION" == "remove" ]; then
         done
         if [ "$USER_EXISTS" == "false" ]; then
             echo "User does not exist: $remove_user"
+        else
+            REFRESH_OAUTH_COOKIE=true
         fi
     done
     
     # Removal
     for user in "${CURRENT_USERS_ARRAY[@]}"; do
         KEEP=true
-        for remove_user in "${REMOVE_USERS[@]}"; do
+        for remove_user in "${INPUT_USERS[@]}"; do
             if [ "$user" == "$remove_user" ]; then
                 KEEP=false
                 echo "Removed user: $user"
@@ -76,9 +82,15 @@ elif [ "$ACTION" == "remove" ]; then
     CURRENT_USERS_ARRAY=("${TEMP_ARRAY[@]}")
 else
     # Overwrite
+    for user in $CURRENT_USERS_SORTED; do
+        if ! echo "$INPUT_USERS_SORTED" | grep -q "^$user$"; then
+            REFRESH_OAUTH_COOKIE=true
+            break
+        fi
+    done
+
     CURRENT_USERS_ARRAY=()
-    IFS=',' read -ra NEW_USERS <<< "$USERS"
-    for user in "${NEW_USERS[@]}"; do
+    for user in "${INPUT_USERS[@]}"; do
         CURRENT_USERS_ARRAY+=("$user")
     done
 fi
@@ -89,13 +101,17 @@ fi
 # Update the AUTHED_USERS_CONTENT var in the Docker .env file
 AUTHED_USERS_CONTENT=$(cat "$AUTHED_USERS_FILE")
 sed -i "s/^AUTHED_USERS_CONTENT=.*/AUTHED_USERS_CONTENT=${AUTHED_USERS_CONTENT}/" /opt/docker/.env
-echo "Updated authorized users: $AUTHED_USERS_CONTENT"
+echo "Updated authorized users to: $AUTHED_USERS_CONTENT"
 
-# Refresh the OAuth secret
-echo "Refreshing OAuth cookie secret..."
-sh /usr/local/bin/refresh-oauth-cookie.sh
+# The oauth sidecar vends cookies that get stored on user's webbrowser and linked to a server-side session. 
+# Such cookies are opaque to the users, they are encrypted with a secret string. 
+# When we remove a user from the allowlist, we need to invalidate their cookie/session so that they loose access 
+# immediately. We do so by updating the cookie secret. Note that this action invalidates all sessions/cookies.
+if [ "$REFRESH_OAUTH_COOKIE" = true ]; then
+    echo "Refreshing OAuth cookie secret to invalidate old sessions..."
+    sh /usr/local/bin/refresh-oauth-cookie.sh
+fi
 
-# Recreate the OAuth container to apply changes
 echo "Recreating OAuth container to apply changes..."
 cd /opt/docker && docker-compose up -d oauth
 
