@@ -19,9 +19,6 @@ if [ -z "$GITHUB_CLIENT_SECRET" ]; then
     exit 1
 fi
 
-# oauth secret for secure cookie management in the local auth service
-OAUTH_SECRET=$(openssl rand -base64 32 | tr -- '+/' '-_')
-
 # memory management: attempt to allocate 95% of memory to jupyter
 # while keeping enough memory for other containers
 TOTAL_MEMORY_MB=$(free -m | awk '/^Mem:/{print $2}')
@@ -45,12 +42,14 @@ SERVICE_UID=$(id -u service-user)
 SERVICE_GID=$(id -g service-user)
 DOCKER_GID=$(getent group docker | cut -d: -f3)
 GITHUB_CLIENT_SECRET=$${GITHUB_CLIENT_SECRET}
-OAUTH_SECRET=$${OAUTH_SECRET}
 JUPYTER_MEM_LIMIT_MB=$${JUPYTER_MEM_LIMIT_MB}
 JUPYTER_MEM_RESERVATION_MB=$${JUPYTER_MEM_RESERVATION_MB}
 AUTHED_USERS_CONTENT=$${AUTHED_USERS_CONTENT}
 EOFENV
 echo "Saved environment file /opt/docker/.env"
+
+echo "Generating OAuth cookie secret..."
+sh /usr/local/bin/refresh-oauth-cookie.sh
 
 if ! docker-compose -f docker-compose.yml config > /dev/null; then
     echo "Invalid docker-compose configuration"

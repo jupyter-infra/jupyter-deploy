@@ -19,6 +19,7 @@ EXPECTED_TEMPLATE_FILES = [
     "traefik.yml.tftpl",
     "variables.tf",
     "update_users.sh",
+    "refresh-oauth-cookie.sh"
 ]
 
 

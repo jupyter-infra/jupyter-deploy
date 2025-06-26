@@ -318,6 +318,10 @@ data "local_file" "update_users" {
   filename = "${path.module}/update_users.sh"
 }
 
+data "local_file" "refresh_oauth_cookie" {
+  filename = "${path.module}/refresh-oauth-cookie.sh"
+}
+
 # variables consistency checks
 locals {
   full_domain            = "${var.subdomain}.${var.domain}"
@@ -359,6 +363,7 @@ locals {
   pyproject_jupyter_indented     = join("\n${local.indent_str}", compact(split("\n", data.local_file.pyproject_jupyter.content)))
   jupyter_server_config_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_server_config.content)))
   update_users_indented          = join("\n${local.indent_str}", compact(split("\n", data.local_file.update_users.content)))
+  refresh_oauth_cookie_indented  = join("\n${local.indent_str}", compact(split("\n", data.local_file.refresh_oauth_cookie.content)))
 }
 
 locals {
@@ -406,6 +411,10 @@ mainSteps:
           ${local.update_users_indented}
           EOF
           chmod 644 /usr/local/bin/update_users.sh
+          tee /usr/local/bin/refresh-oauth-cookie.sh << 'EOF'
+          ${local.refresh_oauth_cookie_indented}
+          EOF
+          chmod 644 /usr/local/bin/refresh-oauth-cookie.sh
 
   - action: aws:runShellScript
     name: StartDockerServices
@@ -423,6 +432,7 @@ DOC
     fileexists("${path.module}/jupyter-reset.sh"),
     fileexists("${path.module}/jupyter_server_config.py"),
     fileexists("${path.module}/update_users.sh"),
+    fileexists("${path.module}/refresh-oauth-cookie.sh"),
   ])
 
   files_not_empty = alltrue([
@@ -431,6 +441,7 @@ DOC
     length(data.local_file.jupyter_reset) > 0,
     length(data.local_file.jupyter_server_config) > 0,
     length(data.local_file.update_users) > 0,
+    length(data.local_file.refresh_oauth_cookie) > 0,
   ])
 
   docker_compose_valid = can(yamldecode(local.docker_compose_file))
@@ -495,6 +506,29 @@ resource "null_resource" "store_oauth_github_client_secret" {
   depends_on = [
     aws_secretsmanager_secret.oauth_github_client_secret
   ]
+}
+
+locals {
+  ssm_refresh_oauth_cookie = <<DOC
+schemaVersion: '2.2'
+description: Refresh the OAuth cookie secret used for secure session management.
+mainSteps:
+  - action: aws:runShellScript
+    name: RefreshOAuthSecret
+    inputs:
+      runCommand:
+        - |
+          sh /usr/local/bin/refresh-oauth-cookie.sh
+DOC
+}
+
+resource "aws_ssm_document" "refresh_oauth_cookie" {
+  name            = "refresh_oauth_cookie"
+  document_type   = "Command"
+  document_format = "YAML"
+
+  content = local.ssm_refresh_oauth_cookie
+  tags    = local.combined_tags
 }
 
 resource "aws_ssm_association" "instance_startup_with_secret" {

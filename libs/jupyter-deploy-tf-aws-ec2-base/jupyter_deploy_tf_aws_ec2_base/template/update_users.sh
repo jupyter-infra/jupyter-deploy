@@ -91,6 +91,10 @@ AUTHED_USERS_CONTENT=$(cat "$AUTHED_USERS_FILE")
 sed -i "s/^AUTHED_USERS_CONTENT=.*/AUTHED_USERS_CONTENT=${AUTHED_USERS_CONTENT}/" /opt/docker/.env
 echo "Updated authorized users: $AUTHED_USERS_CONTENT"
 
+# Refresh the OAuth secret
+echo "Refreshing OAuth cookie secret..."
+sh /usr/local/bin/refresh-oauth-cookie.sh
+
 # Recreate the OAuth container to apply changes
 echo "Recreating OAuth container to apply changes..."
 cd /opt/docker && docker-compose up -d oauth
