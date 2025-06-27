@@ -31,4 +31,4 @@ output "secret_arn" {
   value       = aws_secretsmanager_secret.oauth_github_client_secret.arn
 }
 
-
+# TODO: Add output displaying SSM document created by main.tf to run update-auth.sh
