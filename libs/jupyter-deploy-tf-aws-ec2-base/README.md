@@ -147,6 +147,3 @@ No modules.
 | `ami_id` | The Amazon Machine Image ID used by the EC2 instance |
 | `jupyter_server_public_ip` | The public IP assigned to the EC2 instance |
 | `secret_arn` | The ARN of the AWS Secret storing the OAuth client secret |
-| `authed_users` | The list of GitHub usernames that are authorized to access the Jupyter server |
-| `authed_org` | The GitHub organization whose members are authorized to access the Jupyter server |
-| `authed_teams` | The list of GitHub teams whose members are authorized to access the Jupyter server |
