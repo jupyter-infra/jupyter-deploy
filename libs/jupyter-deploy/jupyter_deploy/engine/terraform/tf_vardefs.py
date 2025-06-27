@@ -1,10 +1,10 @@
 import json
 from abc import ABC, abstractmethod
-from enum import Enum
 from typing import Generic, TypeVar  # noqa: UP035
 
 from pydantic import BaseModel, ConfigDict
 
+from jupyter_deploy.engine.terraform.tf_types import TerraformType
 from jupyter_deploy.engine.vardefs import (
     AnyNumericTemplateVariableDefinition,
     BoolTemplateVariableDefinition,
@@ -15,17 +15,6 @@ from jupyter_deploy.engine.vardefs import (
     StrTemplateVariableDefinition,
     TemplateVariableDefinition,
 )
-
-
-class TerraformType(str, Enum):
-    """The 'type' attribute in the variables.tf file as surfaced by python-hcl2."""
-
-    STRING = "string"
-    NUMBER = "number"
-    BOOL = "bool"
-    LIST_STR = "${list(string)}"
-    MAP_STR = "${map(string)}"
-
 
 V = TypeVar("V")
 

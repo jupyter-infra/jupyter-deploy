@@ -90,13 +90,11 @@ class TestDownHandler(unittest.TestCase):
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("pathlib.Path.cwd")
-    def test_init_raises_not_implemented_error_for_unsupported_engine(
-        self, mock_cwd: Mock, mock_retrieve_manifest: Mock
-    ) -> None:
+    def test_init_raises_value_error_for_unsupported_engine(self, mock_cwd: Mock, mock_retrieve_manifest: Mock) -> None:
         mock_cwd.return_value = Path("/mock/cwd")
         mock_manifest = self.mock_manifest
         mock_manifest.template.engine = "UNSUPPORTED_ENGINE"  # type: ignore
         mock_retrieve_manifest.return_value = mock_manifest
 
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(ValueError):
             DownHandler()

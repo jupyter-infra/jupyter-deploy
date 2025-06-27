@@ -3,3 +3,29 @@ template:
   name: "tf-aws-ec2-base"
   engine: "terraform"
   version: "0.1.0"
+requirements:
+  - name: "terraform"
+  - name: "awscli"
+  - name: "jq"
+values:
+  - name: "open_url"
+    source: "output"
+    source-key: "jupyter_url"
+  - name: "aws_region"
+    source: "output"
+    source-key: "region"
+commands:
+  - cmd: "server.status"
+    sequence:
+      - api-name: "aws.ssm.wait-command-no-param-sync"
+        arguments:
+          - api-attribute: "document_name"
+            source: "output"
+            source-key: "server_status_check_document"
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+    results:
+      - result-name: "jupyter_server_status"
+        source: "result"
+        source-key: "[0].StandardOutputContent"

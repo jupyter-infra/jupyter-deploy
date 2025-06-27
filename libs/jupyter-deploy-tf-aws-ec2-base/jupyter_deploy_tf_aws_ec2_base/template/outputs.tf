@@ -31,4 +31,14 @@ output "secret_arn" {
   value       = aws_secretsmanager_secret.oauth_github_client_secret.arn
 }
 
+# Declarative value for AWS SDK
+output "region" {
+  description = "Name of the AWS region where the resources are deployed."
+  value       = data.aws_region.current.id
+}
 
+# server.status CLI handling
+output "server_status_check_document" {
+  description = "Name of the SSM document to check the server status."
+  value       = aws_ssm_document.instance_status_check.name
+}

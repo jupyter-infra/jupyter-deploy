@@ -14,6 +14,7 @@ TF_DEFAULT_PLAN_FILENAME = "jdout-tfplan"
 TF_RECORDED_VARS_FILENAME = "jdinputs.auto.tfvars"
 TF_RECORDED_SECRETS_FILENAME = "jdinputs.secrets.auto.tfvars"
 TF_VARIABLES_FILENAME = "variables.tf"
+TF_OUTPUTS_FILENAME = "outputs.tf"
 
 
 def get_preset_filename(preset_name: str = "all") -> str:

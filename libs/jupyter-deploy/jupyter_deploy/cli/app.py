@@ -31,7 +31,7 @@ class JupyterDeployCliRunner:
             no_args_is_help=True,
         )
         self._setup_basic_commands()
-        self.app.add_typer(servers_app, name="servers")
+        self.app.add_typer(servers_app, name="server")
 
     def _setup_basic_commands(self) -> None:
         """Register the basic commands."""

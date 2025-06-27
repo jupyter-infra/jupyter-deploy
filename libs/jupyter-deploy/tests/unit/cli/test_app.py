@@ -21,9 +21,9 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
 
         self.assertIsNotNone(runner.app, "attribute app should be set")
 
-        # Check that the terraform and servers sub-commands are added
+        # Check that the terraform and server sub-commands are added
         self.assertGreaterEqual(len(runner.app.registered_groups), 1)
-        self.assertEqual(runner.app.registered_groups[0].name, "servers")
+        self.assertEqual(runner.app.registered_groups[0].name, "server")
 
     @patch("jupyter_deploy.cli.app.typer.Typer")
     def test_run(self, mock_typer: MagicMock) -> None:
@@ -46,7 +46,7 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         # Check that the command ran successfully
         self.assertEqual(result.exit_code, 0)
         self.assertTrue(result.stdout.index("Jupyter-deploy") >= 0)
-        self.assertTrue(result.stdout.index("servers") >= 0)
+        self.assertTrue(result.stdout.index("server") >= 0)
 
     def test_no_arg_defaults_to_help(self) -> None:
         runner = CliRunner()

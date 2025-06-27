@@ -5,7 +5,7 @@ description = "Monorepo for Jupyter deployment packages"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "jupyter-deploy",
+    "jupyter-deploy[aws]",
 ]
 
 [tool.uv.sources]
