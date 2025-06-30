@@ -1,0 +1,30 @@
+schema_version: 1
+template:
+  name: "some-template-name"
+  engine: "terraform"
+  version: "0.1.0"
+requirements:
+  - name: "terraform"
+  - name: "awscli"
+values:
+  - name: "open_url"
+    source: "output"
+    source-key: "url"
+  - name: "aws_region"
+    source: "output"
+    source-key: "region"
+commands:
+  - cmd: "server.status"
+    sequence:
+      - api-name: "aws.ssm.wait-command-no-param-sync"
+        arguments:
+          - api-attribute: "document_name"
+            source: "output"
+            source-key: "jd_cmd_doc_name"
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+    results:
+      - result-name: "jupyter_server_status"
+        source: "result"
+        source-key: "[0].StandardOutputContent"

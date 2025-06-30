@@ -4,13 +4,13 @@ from unittest.mock import Mock, patch
 
 from parameterized import parameterized  # type: ignore
 
+from jupyter_deploy.engine.terraform.tf_types import TerraformType
 from jupyter_deploy.engine.terraform.tf_vardefs import (
     TerraformBoolVariableDefinition,
     TerraformListOfStrVariableDefinition,
     TerraformMapOfStrVariableDefinition,
     TerraformNumberVariableDefinition,
     TerraformStrVariableDefinition,
-    TerraformType,
     create_tf_variable_definition,
     to_tf_var_option,
 )

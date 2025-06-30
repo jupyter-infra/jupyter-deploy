@@ -14,7 +14,7 @@ class UsersHandler(BaseProjectHandler):
         super().__init__()
 
         if self.engine == EngineType.TERRAFORM:
-            self._handler = tf_outputs.TerraformOutputsHandler(
+            self._output_handler = tf_outputs.TerraformOutputsHandler(
                 project_path=self.project_path, project_manifest=self.project_manifest
             )
         else:
