@@ -34,14 +34,9 @@ if [ -f /etc/AUTHED_ENTITIES ]; then
         local content=$(sed -n "/^\[$section\]$/,/^\[/p" /etc/AUTHED_ENTITIES | grep -v "^\[$section\]$" | grep -v "^\[" | tr -d '\n' | tr -d ' ')
         echo "$content"
     }
-
     AUTHED_USERS_CONTENT=$(get_section_content "users")
     AUTHED_ORG_CONTENT=$(get_section_content "org")
     AUTHED_TEAMS_CONTENT=$(get_section_content "teams")
-    
-    echo "Read authorized users from /etc/AUTHED_ENTITIES: $${AUTHED_USERS_CONTENT}"
-    echo "Read authorized org from /etc/AUTHED_ENTITIES: $${AUTHED_ORG_CONTENT}"
-    echo "Read authorized teams from /etc/AUTHED_ENTITIES: $${AUTHED_TEAMS_CONTENT}"
 else
     echo "Warning: /etc/AUTHED_ENTITIES file not found"
     AUTHED_USERS_CONTENT=""
