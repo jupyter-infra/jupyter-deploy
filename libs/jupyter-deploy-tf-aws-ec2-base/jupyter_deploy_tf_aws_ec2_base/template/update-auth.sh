@@ -77,8 +77,6 @@ if [ "$ENTITY_TYPE" == "org" ]; then
         fi
     elif [ -z "$ACTION" ]; then
         log_message "Error: Missing either GitHub organization name or remove action"
-        log_message "Usage: sudo ./update-auth.sh org organization_name"
-        log_message "       sudo ./update-auth.sh org remove"
         exit 1
     else
         CURRENT_ORG=$(get_section_content "org")
