@@ -335,6 +335,7 @@ data "local_file" "refresh_oauth_cookie" {
 locals {
   full_domain       = "${var.subdomain}.${var.domain}"
   github_auth_valid = var.oauth_provider != "github" || (var.oauth_allowed_usernames != null && length(var.oauth_allowed_usernames) > 0) || (var.oauth_allowed_org != null && length(var.oauth_allowed_org) > 0)
+  teams_have_org = var.oauth_allowed_teams == null || length(var.oauth_allowed_teams) == 0 || (var.oauth_allowed_org != null && length(var.oauth_allowed_org) > 0)
 }
 
 locals {
@@ -488,6 +489,10 @@ resource "aws_ssm_document" "instance_startup_instructions" {
     precondition {
       condition     = local.github_auth_valid
       error_message = "If you use github as oauth provider, provide at least 1 github username OR 1 github organization"
+    }
+    precondition {
+      condition     = local.teams_have_org
+      error_message = "GitHub teams require an organization. If you specify oauth_allowed_teams, you must also specify oauth_allowed_org"
     }
     precondition {
       condition     = local.has_required_files

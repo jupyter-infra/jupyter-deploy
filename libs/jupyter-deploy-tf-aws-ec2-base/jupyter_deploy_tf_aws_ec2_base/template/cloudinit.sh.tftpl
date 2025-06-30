@@ -155,7 +155,6 @@ chmod 755 /var/log/services
 chown -R service-user:service-user /var/log/services
 
 # Create the AUTHED_ENTITIES file with the initial GitHub org/teams/users
-touch /etc/AUTHED_ENTITIES
 echo "[org]" > /etc/AUTHED_ENTITIES
 echo "${allowed_github_org}" >> /etc/AUTHED_ENTITIES
 echo "" >> /etc/AUTHED_ENTITIES
@@ -164,7 +163,7 @@ echo "${allowed_github_teams}" >> /etc/AUTHED_ENTITIES
 echo "" >> /etc/AUTHED_ENTITIES
 echo "[users]" >> /etc/AUTHED_ENTITIES
 echo "${allowed_github_usernames}" >> /etc/AUTHED_ENTITIES
-chmod 644 /etc/AUTHED_ENTITIES
+chmod 600 /etc/AUTHED_ENTITIES
 chown service-user:service-user /etc/AUTHED_ENTITIES
 
 mkdir -p /usr/local/bin

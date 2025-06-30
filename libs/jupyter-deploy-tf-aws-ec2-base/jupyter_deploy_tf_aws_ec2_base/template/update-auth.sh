@@ -3,10 +3,10 @@ set -e
 
 # Script to update the file containing the list of authorized GitHub entities (users, teams, orgs)
 # Usage: 
-#   sudo update-auth.sh users [add|remove|overwrite] username1,username2
-#   sudo update-auth.sh teams [add|remove|overwrite] team1,team2
-#   sudo update-auth.sh org an_org
-#   sudo update-auth.sh org [remove]
+#   sudo sh update-auth.sh users [add|remove|overwrite] username1,username2
+#   sudo sh update-auth.sh teams [add|remove|overwrite] team1,team2
+#   sudo sh update-auth.sh org an_org
+#   sudo sh update-auth.sh org [remove]
 
 # File content follows format:
 
@@ -25,6 +25,11 @@ AUTHED_ENTITIES_FILE="/etc/AUTHED_ENTITIES"
 ENTITY_TYPE=$1
 ACTION=$2
 VALUES=$3
+
+log_message() {
+  local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+  echo "[$timestamp] $*"
+}
 
 # Ensure the file exists in case it was manually deleted
 touch "$AUTHED_ENTITIES_FILE"
@@ -66,14 +71,14 @@ if [ "$ENTITY_TYPE" == "org" ]; then
             REFRESH_OAUTH_COOKIE=true
             AUTH_CHANGED=true
             update_section "org" ""
-            echo "Removed organization: $CURRENT_ORG"
+            log_message "Removed organization: $CURRENT_ORG"
         else
-            echo "No organization is currently set"
+            log_message "No organization is currently set"
         fi
     elif [ -z "$ACTION" ]; then
-        echo "Error: Missing either GitHub organization name or remove action"
-        echo "Usage: sudo ./update-auth.sh org organization_name"
-        echo "       sudo ./update-auth.sh org remove"
+        log_message "Error: Missing either GitHub organization name or remove action"
+        log_message "Usage: sudo ./update-auth.sh org organization_name"
+        log_message "       sudo ./update-auth.sh org remove"
         exit 1
     else
         CURRENT_ORG=$(get_section_content "org")
@@ -84,19 +89,19 @@ if [ "$ENTITY_TYPE" == "org" ]; then
         fi
 
         update_section "org" "$ACTION"
-        echo "Set organization to: $ACTION"
+        log_message "Set organization to: $ACTION"
     fi
     
 elif [ "$ENTITY_TYPE" == "users" ] || [ "$ENTITY_TYPE" == "teams" ]; then
     if [ -z "$ACTION" ] || [ -z "$VALUES" ]; then
-        echo "Error: Missing required parameters"
-        echo "Usage: sudo ./update-auth.sh $ENTITY_TYPE [add|remove|overwrite] value1,value2,..."
+        log_message "Error: Missing required parameters"
+        log_message "Usage: sudo ./update-auth.sh $ENTITY_TYPE [add|remove|overwrite] value1,value2,..."
         exit 1
     fi
 
     if [ "$ACTION" != "add" ] && [ "$ACTION" != "remove" ] && [ "$ACTION" != "overwrite" ]; then
-        echo "Error: Invalid action. Use 'add', 'remove', or 'overwrite'"
-        echo "Usage: sudo ./update-auth.sh $ENTITY_TYPE [add|remove|overwrite] value1,value2,..."
+        log_message "Error: Invalid action. Use 'add', 'remove', or 'overwrite'"
+        log_message "Usage: sudo ./update-auth.sh $ENTITY_TYPE [add|remove|overwrite] value1,value2,..."
         exit 1
     fi
     
@@ -112,10 +117,10 @@ elif [ "$ENTITY_TYPE" == "users" ] || [ "$ENTITY_TYPE" == "teams" ]; then
         for value in "${INPUT_VALUES[@]}"; do
             if ! echo "${CURRENT_VALUES_ARRAY[@]}" | grep -q -w "$value"; then
                 CURRENT_VALUES_ARRAY+=("$value")
-                echo "Added $ENTITY_TYPE: $value"
+                log_message "Added $ENTITY_TYPE: $value"
                 AUTH_CHANGED=true
             else
-                echo "$ENTITY_TYPE already exists: $value"
+                log_message "$ENTITY_TYPE already exists: $value"
             fi
         done
     elif [ "$ACTION" == "remove" ]; then
@@ -130,7 +135,7 @@ elif [ "$ENTITY_TYPE" == "users" ] || [ "$ENTITY_TYPE" == "teams" ]; then
                 fi
             done
             if [ "$VALUE_EXISTS" == "false" ]; then
-                echo "$ENTITY_TYPE does not exist: $remove_value"
+                log_message "$ENTITY_TYPE does not exist: $remove_value"
             else
                 REFRESH_OAUTH_COOKIE=true
             fi
@@ -143,7 +148,7 @@ elif [ "$ENTITY_TYPE" == "users" ] || [ "$ENTITY_TYPE" == "teams" ]; then
                 if [ "$value" == "$remove_value" ]; then
                     KEEP=false
                     AUTH_CHANGED=true
-                    echo "Removed $ENTITY_TYPE: $value"
+                    log_message "Removed $ENTITY_TYPE: $value"
                     break
                 fi
             done
@@ -178,8 +183,8 @@ elif [ "$ENTITY_TYPE" == "users" ] || [ "$ENTITY_TYPE" == "teams" ]; then
     update_section "$ENTITY_TYPE" "$FINAL_VALUES"
     
 else
-    echo "Error: Invalid entity type. Use 'org', 'teams', or 'users'"
-    echo "Usage: sudo ./update-auth.sh [org|teams|users] ..."
+    log_message "Error: Invalid entity type. Use 'org', 'teams', or 'users'"
+    log_message "Usage: sudo ./update-auth.sh [org|teams|users] ..."
     exit 1
 fi
 
@@ -200,8 +205,8 @@ if [ "$REFRESH_OAUTH_COOKIE" = true ]; then
 fi
 
 if [ "$AUTH_CHANGED" = true ]; then
-    echo "Recreating OAuth container to apply changes..."
+    log_message "Recreating OAuth container to apply changes..."
     cd /opt/docker && docker-compose up -d oauth
+else
+    log_message "No changes detected, skipping OAuth container recreation."
 fi
-
-echo "Done!"

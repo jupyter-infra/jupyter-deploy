@@ -179,8 +179,8 @@ variable "oauth_allowed_org" {
 
     If specified, all members of this organization will be allowed access.
     
-    Please enter "" if you don't want to authorize by organization membership, 
-    but note that you will need to provide oauth_allowed_usernames if not.
+    Enter "" if you don't want to authorize by organization membership, 
+    but note that you must provide a value for oauth_allowed_usernames instead.
 
     Example: my-org
   EOT
@@ -192,10 +192,9 @@ variable "oauth_allowed_teams" {
   description = <<-EOT
     List of GitHub teams to allowlist under an org.
 
-    NOTE: This variable is only applicable if you have provided an 
-    oauth_allowed_org input.
+    Only use if you have passed a GitHub organization to 'oauth_allowed_org'.
 
-    Please enter [] if you don't want to authorize by specific team membership.
+    Enter [] if you don't want to authorize by specific team membership.
 
     Example: ["team1", "team2"]
   EOT
@@ -207,8 +206,8 @@ variable "oauth_allowed_usernames" {
   description = <<-EOT
     List of GitHub usernames to allowlist.
 
-    Please enter [] if you have already specified a oauth_allowed_org, and do 
-    not want to specify additional individual users.
+    Enter [] if you have already specified a oauth_allowed_org, and do 
+    not want to allow additional individual users.
 
     To find your username:
     1. Open GitHub: https://github.com/
