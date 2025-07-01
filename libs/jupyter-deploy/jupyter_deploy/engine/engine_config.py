@@ -3,16 +3,19 @@ from pathlib import Path
 
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
+from jupyter_deploy.manifest import JupyterDeployManifest
 
 
 class EngineConfigHandler(ABC):
     def __init__(
         self,
         project_path: Path,
+        project_manifest: JupyterDeployManifest,
         engine: EngineType,
     ) -> None:
         """Instantiate the base handler for `jd config` command."""
         self.project_path = project_path
+        self.project_manifest = project_manifest
         self.engine = engine
 
     @abstractmethod

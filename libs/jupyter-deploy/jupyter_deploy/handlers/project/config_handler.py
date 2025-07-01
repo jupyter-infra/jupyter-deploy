@@ -17,7 +17,9 @@ class ConfigHandler(BaseProjectHandler):
 
         if self.engine == EngineType.TERRAFORM:
             self._handler = tf_config.TerraformConfigHandler(
-                project_path=self.project_path, output_filename=output_filename
+                project_path=self.project_path,
+                project_manifest=self.project_manifest,
+                output_filename=output_filename,
             )
         else:
             raise NotImplementedError(f"ConfigHandler implementation not found for engine: {self.engine}")

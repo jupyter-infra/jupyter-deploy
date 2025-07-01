@@ -88,7 +88,9 @@ class TestConfigHandler(unittest.TestCase):
         mock_tf_handler.return_value = tf_mock_handler_instance
 
         self.assertIsNone(handler.preset_name)
-        mock_tf_handler.assert_called_once_with(project_path=path, output_filename=None)
+        mock_tf_handler.assert_called_once_with(
+            project_path=path, project_manifest=self.mock_manifest, output_filename=None
+        )
         tf_mock_verify.assert_not_called()
         tf_mock_configure.assert_not_called()
 

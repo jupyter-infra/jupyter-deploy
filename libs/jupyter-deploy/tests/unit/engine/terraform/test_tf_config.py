@@ -23,17 +23,20 @@ class TestTerraformConfigHandler(unittest.TestCase):
     def test_class_can_instantiate(self) -> None:
         # Arrange
         path = Path("/fake/path")
-        handler = TerraformConfigHandler(path)
+        manifest = Mock()
+        handler = TerraformConfigHandler(path, manifest)
 
         # Assert
         self.assertIsNotNone(handler)
         self.assertEqual(handler.plan_out_path, path / TF_DEFAULT_PLAN_FILENAME)
+        self.assertEqual(handler.project_manifest, manifest)
 
     def test_class_uses_custom_output_file_when_provided(self) -> None:
         # Arrange
         path = Path("/fake/path")
+        manifest = Mock()
         custom_output = "custom-output-file"
-        handler = TerraformConfigHandler(path, output_filename=custom_output)
+        handler = TerraformConfigHandler(path, manifest, output_filename=custom_output)
 
         # Assert
         self.assertIsNotNone(handler)
@@ -43,7 +46,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
     def test_verify_preset_exists_calls_fs_util(self, mock_file_exists: Mock) -> None:
         # Arrange
         path = Path("/fake/path")
-        handler = TerraformConfigHandler(path)
+        handler = TerraformConfigHandler(path, Mock())
 
         # Act
         handler.verify_preset_exists("all")
@@ -61,7 +64,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
 
         # Arrange
         path = Path("/fake/path")
-        handler = TerraformConfigHandler(path)
+        handler = TerraformConfigHandler(path, Mock())
 
         # Act
         presets = handler.list_presets()
@@ -79,7 +82,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
 
         # Arrange
         path = Path("/fake/path")
-        handler = TerraformConfigHandler(path)
+        handler = TerraformConfigHandler(path, Mock())
 
         # Act
         presets = handler.list_presets()
@@ -87,66 +90,39 @@ class TestTerraformConfigHandler(unittest.TestCase):
         # Assert
         self.assertEqual(["none"], presets)
 
-    @patch("jupyter_deploy.engine.terraform.tf_config.tf_verify.check_terraform_installation")
-    @patch("jupyter_deploy.provider.aws.aws_cli.check_aws_cli_installation")
-    def test_verify_requirements_checks_terraform_install(self, mock_aws_cli: Mock, mock_tf_verify: Mock) -> None:
+    @patch("jupyter_deploy.verify_utils.verify_tools_installation")
+    def test_verify_requirements_pulls_manifest_and_call_verify(self, mock_verify: Mock) -> None:
         # Arrange
         path = Path("/fake/path")
-        mock_tf_verify.return_value = True
-        mock_aws_cli.return_value = True
-        handler = TerraformConfigHandler(path)
+        mock_manifest = Mock()
+        mock_get_requirements = Mock()
+        mock_manifest.get_requirements = mock_get_requirements
 
-        # Act
-        handler.verify_requirements()
+        mock_req1 = Mock()
+        mock_req2 = Mock()
+        mock_get_requirements.return_value = [mock_req1, mock_req2]
 
-        # Assert
-        mock_tf_verify.assert_called_once()
+        mock_verify.return_value = True
 
-    @patch("jupyter_deploy.engine.terraform.tf_config.tf_verify.check_terraform_installation")
-    @patch("jupyter_deploy.provider.aws.aws_cli.check_aws_cli_installation")
-    def test_verify_requirements_return_true_if_all_installs_return_true(
-        self, mock_aws_cli: Mock, mock_tf_verify: Mock
-    ) -> None:
-        # Arrange
-        path = Path("/fake/path")
-        mock_tf_verify.return_value = True
-        mock_aws_cli.return_value = True
-        handler = TerraformConfigHandler(path)
+        handler = TerraformConfigHandler(path, mock_manifest)
 
         # Act
         result = handler.verify_requirements()
 
         # Assert
         self.assertTrue(result)
+        mock_get_requirements.assert_called_once()
+        mock_verify.assert_called_once_with([mock_req1, mock_req2])
 
-    @patch("jupyter_deploy.engine.terraform.tf_config.tf_verify.check_terraform_installation")
-    @patch("jupyter_deploy.provider.aws.aws_cli.check_aws_cli_installation")
-    def test_verify_requirements_return_false_if_either_install_returns_false(
-        self, mock_aws_cli: Mock, mock_tf_verify: Mock
-    ) -> None:
+    @patch("jupyter_deploy.verify_utils.verify_tools_installation")
+    def test_verify_requirements_raises_when_checks_raise(self, mock_verify: Mock) -> None:
         # Arrange
-        handler = TerraformConfigHandler(Path("/fake/path"))
+        mock_manifest = Mock()
+        mock_get_requirements = Mock()
+        mock_manifest.get_requirements = mock_get_requirements
+        mock_verify.side_effect = Exception("Terraform check failed")
 
-        # Test case 1: Terraform fails
-        mock_tf_verify.return_value = False
-        mock_aws_cli.return_value = True
-
-        # Act & Assert
-        self.assertFalse(handler.verify_requirements())
-
-        # Test case 2: AWS CLI fails
-        mock_tf_verify.return_value = True
-        mock_aws_cli.return_value = False
-
-        # Act & Assert
-        self.assertFalse(handler.verify_requirements())
-
-    @patch("jupyter_deploy.engine.terraform.tf_config.tf_verify.check_terraform_installation")
-    @patch("jupyter_deploy.provider.aws.aws_cli.check_aws_cli_installation")
-    def test_verify_requirements_raises_when_checks_raise(self, mock_aws_cli: Mock, mock_tf_verify: Mock) -> None:
-        # Arrange
-        mock_tf_verify.side_effect = Exception("Terraform check failed")
-        handler = TerraformConfigHandler(Path("/fake/path"))
+        handler = TerraformConfigHandler(Path("/fake/path"), mock_manifest)
 
         # Act & Assert
         with self.assertRaises(Exception) as e:
@@ -159,7 +135,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
 
         # Arrange
         path = Path("/fake/path")
-        handler = TerraformConfigHandler(path)
+        handler = TerraformConfigHandler(path, Mock())
 
         # Act
         handler.reset_recorded_variables()
@@ -180,7 +156,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
 
         # Arrange
         path = Path("/fake/path")
-        handler = TerraformConfigHandler(path)
+        handler = TerraformConfigHandler(path, Mock())
 
         # Act
         handler.reset_recorded_variables()
@@ -201,7 +177,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
 
         # Arrange
         path = Path("/fake/path")
-        handler = TerraformConfigHandler(path)
+        handler = TerraformConfigHandler(path, Mock())
 
         # Act
         handler.reset_recorded_secrets()
@@ -220,7 +196,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
 
         # Arrange
         path = Path("/fake/path")
-        handler = TerraformConfigHandler(path)
+        handler = TerraformConfigHandler(path, Mock())
 
         # Act
         handler.reset_recorded_secrets()
@@ -239,7 +215,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
     def test_configure_calls_tf_init(self, mock_run_cmd: Mock) -> None:
         # Arrange
         mock_run_cmd.return_value = (0, False)  # Return code 0, no timeout
-        handler = TerraformConfigHandler(Path("/fake/path"))
+        handler = TerraformConfigHandler(Path("/fake/path"), Mock())
 
         # Act
         handler.configure()
@@ -255,7 +231,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         # First call for init returns success
         # Second call for plan returns success
         mock_run_cmd.side_effect = [(0, False), (0, False)]
-        handler = TerraformConfigHandler(Path("/fake/path"))
+        handler = TerraformConfigHandler(Path("/fake/path"), Mock())
 
         # Act
         result = handler.configure()
@@ -277,7 +253,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         # Second call for plan returns success
         mock_run_cmd.side_effect = [(0, False), (0, False)]
         path = Path("/fake/path")
-        handler = TerraformConfigHandler(path)
+        handler = TerraformConfigHandler(path, Mock())
 
         # Act
         result = handler.configure(preset_name="all")
@@ -302,7 +278,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         # Second call for plan returns success
         mock_run_cmd.side_effect = [(0, False), (0, False)]
         path = Path("/fake/path")
-        handler = TerraformConfigHandler(path)
+        handler = TerraformConfigHandler(path, Mock())
 
         mock_var1 = Mock(spec=StrTemplateVariableDefinition)
         mock_var2 = Mock(spec=FloatTemplateVariableDefinition)
@@ -358,7 +334,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         mock_run_cmd.return_value = (1, False)  # Return code 1 (failure), no timeout
         mock_console_instance = Mock()
         mock_console.return_value = mock_console_instance
-        handler = TerraformConfigHandler(Path("/fake/path"))
+        handler = TerraformConfigHandler(Path("/fake/path"), Mock())
 
         # Act
         result = handler.configure()
@@ -376,7 +352,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         mock_run_cmd.return_value = (0, True)  # Return code 0, but timed out
         mock_console_instance = Mock()
         mock_console.return_value = mock_console_instance
-        handler = TerraformConfigHandler(Path("/fake/path"))
+        handler = TerraformConfigHandler(Path("/fake/path"), Mock())
 
         # Act
         result = handler.configure()
@@ -396,7 +372,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         mock_run_cmd.side_effect = [(0, False), (1, False)]
         mock_console_instance = Mock()
         mock_console.return_value = mock_console_instance
-        handler = TerraformConfigHandler(Path("/fake/path"))
+        handler = TerraformConfigHandler(Path("/fake/path"), Mock())
 
         # Act
         result = handler.configure()
@@ -418,7 +394,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         mock_run_cmd.side_effect = [(0, False), (0, True)]
         mock_console_instance = Mock()
         mock_console.return_value = mock_console_instance
-        handler = TerraformConfigHandler(Path("/fake/path"))
+        handler = TerraformConfigHandler(Path("/fake/path"), Mock())
 
         # Act
         result = handler.configure()
@@ -434,7 +410,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
     @patch("jupyter_deploy.cmd_utils.run_cmd_and_capture_output")
     def test_record_noop_when_both_flags_are_false(self, mock_capture: Mock) -> None:
         # Arrange
-        handler = TerraformConfigHandler(Path("/fake/path"))
+        handler = TerraformConfigHandler(Path("/fake/path"), Mock())
 
         # Act
         handler.record()
@@ -459,7 +435,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         mock_format.return_value = ["var1 = 1\n", 'var2 = "two"\n']
 
         path = Path("/fake/path")
-        handler = TerraformConfigHandler(path)
+        handler = TerraformConfigHandler(path, Mock())
 
         # Act
         handler.record(record_vars=True)
@@ -495,7 +471,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         mock_format.return_value = ['secret1 = "nuclear-codes"\n']
 
         path = Path("/fake/path")
-        handler = TerraformConfigHandler(path)
+        handler = TerraformConfigHandler(path, Mock())
 
         # Act
         handler.record(record_secrets=True)
@@ -527,7 +503,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         mock_format.side_effect = [["var1 = 1\n", 'var2 = "two"\n'], ['secret1 = "nuclear-codes"\n']]
 
         path = Path("/fake/path")
-        handler = TerraformConfigHandler(path)
+        handler = TerraformConfigHandler(path, Mock())
 
         # Act
         handler.record(record_vars=True, record_secrets=True)
@@ -558,7 +534,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         mock_capture.side_effect = subprocess.CalledProcessError(
             1, ["terraform", "show", "-json"], "something went wrong", None
         )
-        handler = TerraformConfigHandler(Path("/fake/path"))
+        handler = TerraformConfigHandler(Path("/fake/path"), Mock())
 
         # Act
         handler.record(record_vars=True)
@@ -577,7 +553,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
     ) -> None:
         # Arrange
         mock_extract.side_effect = ValidationError("some error", [])
-        handler = TerraformConfigHandler(Path("/fake/path"))
+        handler = TerraformConfigHandler(Path("/fake/path"), Mock())
 
         # Act
         handler.record(record_secrets=True)
@@ -598,7 +574,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         # Arrange
         mock_capture.return_value = "i-am-a-serialized-plan"
         mock_extract.side_effect = json.JSONDecodeError("Invalid JSON", "some-doc", 2)
-        handler = TerraformConfigHandler(Path("/fake/path"))
+        handler = TerraformConfigHandler(Path("/fake/path"), Mock())
 
         # Act
         handler.record(record_secrets=True)

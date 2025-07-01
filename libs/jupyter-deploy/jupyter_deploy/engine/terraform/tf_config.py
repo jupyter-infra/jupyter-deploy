@@ -6,10 +6,10 @@ from subprocess import CalledProcessError
 from pydantic import ValidationError
 from rich import console as rich_console
 
-from jupyter_deploy import cmd_utils, fs_utils
+from jupyter_deploy import cmd_utils, fs_utils, verify_utils
 from jupyter_deploy.engine.engine_config import EngineConfigHandler
 from jupyter_deploy.engine.enum import EngineType
-from jupyter_deploy.engine.terraform import tf_plan, tf_vardefs, tf_verify
+from jupyter_deploy.engine.terraform import tf_plan, tf_vardefs
 from jupyter_deploy.engine.terraform.tf_constants import (
     TF_DEFAULT_PLAN_FILENAME,
     TF_INIT_CMD,
@@ -20,15 +20,18 @@ from jupyter_deploy.engine.terraform.tf_constants import (
     get_preset_filename,
 )
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
-from jupyter_deploy.provider.aws import aws_cli
+from jupyter_deploy.manifest import JupyterDeployManifest
 
 
 class TerraformConfigHandler(EngineConfigHandler):
     """Config handler implementation for terraform projects."""
 
-    def __init__(self, project_path: Path, output_filename: str | None = None) -> None:
+    def __init__(
+        self, project_path: Path, project_manifest: JupyterDeployManifest, output_filename: str | None = None
+    ) -> None:
         super().__init__(
             project_path=project_path,
+            project_manifest=project_manifest,
             engine=EngineType.TERRAFORM,
         )
         self.plan_out_path = project_path / (output_filename or TF_DEFAULT_PLAN_FILENAME)
@@ -62,12 +65,9 @@ class TerraformConfigHandler(EngineConfigHandler):
         return sorted(presets)
 
     def verify_requirements(self) -> bool:
-        terraform_installed = tf_verify.check_terraform_installation()
-
-        # TODO: assert only when template manifest requires it
-        aws_cli_installed = aws_cli.check_aws_cli_installation()
-
-        return terraform_installed and aws_cli_installed
+        requirements = self.project_manifest.get_requirements()
+        all_installed = verify_utils.verify_tools_installation(requirements)
+        return all_installed
 
     def reset_recorded_variables(self) -> None:
         path = self._get_recorded_vars_filepath()

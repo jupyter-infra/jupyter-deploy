@@ -101,6 +101,10 @@ class JupyterDeployManifestV1(BaseModel):
             raise NotImplementedError(f"No implementation found for command: {cmd_name}")
         return command
 
+    def get_requirements(self) -> list[JupyterDeployRequirementV1]:
+        """Return the list of requirements as declared in the manifest."""
+        return self.requirements or []
+
 
 # Combined type using discriminated union
 JupyterDeployManifest = Annotated[JupyterDeployManifestV1, "schema_version"]
