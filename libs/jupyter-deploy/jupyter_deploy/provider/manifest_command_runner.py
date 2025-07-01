@@ -26,7 +26,7 @@ class ManifestCommandRunner:
         for instruction_idx, instruction in enumerate(cmd_def.sequence):
             api_name = instruction.api_name
             runner = InstructionRunnerFactory.get_provider_instruction_runner(api_name, self._output_handler)
-            output_defs = self._output_handler.get_full_project_outputs()
+            output_defs = self._output_handler.get_full_project_outputs()  # cached - okay to call in loop
 
             for arg_def in instruction.arguments:
                 arg_name = arg_def.api_attribute
@@ -34,6 +34,7 @@ class ManifestCommandRunner:
                 source_key = arg_def.source_key
 
                 # TODO: this should coalesce the result from previous commands
+                # address in subsequent PR
                 if arg_source_type != ValueSource.TEMPLATE_OUTPUT:
                     raise NotImplementedError(f"Argument source is not handled: {arg_source_type}")
                 resolved_argdefs[arg_name] = resolve_output_argdef(

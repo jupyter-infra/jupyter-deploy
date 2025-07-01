@@ -18,7 +18,7 @@ class InstructionRunnerFactory:
 
         Raises:
             NotImplementedError if the provider is not recognized.
-            ValueError if the provider requires optional arguments.
+            ValueError if the provider runner requires declared values that are missing in manifest.
         """
         provider = ProviderType.from_api_name(api_name)
         if provider_runner := InstructionRunnerFactory._provider_runner_map.get(provider):

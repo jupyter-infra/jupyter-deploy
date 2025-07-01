@@ -15,13 +15,18 @@ from jupyter_deploy.provider.resolved_resultdefs import ResolvedInstructionResul
 
 
 class AwsSsmInstruction(str, Enum):
+    """AWS SSM instructions accessible from manifest.commands[].sequence[].api-name."""
+
     SEND_CMD_AND_WAIT_SYNC = "wait-command-no-param-sync"
 
 
 class AwsSsmRunner(InstructionRunner):
+    """Runner class for AWS SSM service API instructions."""
+
     client: SSMClient
 
     def __init__(self, region_name: str | None) -> None:
+        """Instantiates the SSM boto3 client."""
         self.client: SSMClient = boto3.client("ssm", region_name=region_name)
 
     def _send_cmd_to_one_instance_and_wait_sync(

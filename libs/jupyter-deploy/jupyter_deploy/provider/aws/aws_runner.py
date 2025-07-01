@@ -9,6 +9,8 @@ from jupyter_deploy.provider.resolved_resultdefs import ResolvedInstructionResul
 
 
 class AwsService(str, Enum):
+    """AWS services mapped to jupyter-deploy instructions."""
+
     SSM = "ssm"
 
 
@@ -19,6 +21,7 @@ class AwsApiRunner(InstructionRunner):
     """
 
     def __init__(self, region_name: str | None) -> None:
+        """Instantiate the map of AWS services runner."""
         self.region_name = region_name
         self.service_runners: dict[str, InstructionRunner] = {}
 
@@ -26,7 +29,13 @@ class AwsApiRunner(InstructionRunner):
     def _get_service_and_sub_instruction_name(instruction_name: str) -> tuple[str, str]:
         """Return a tuple of service-name, instruction-name."""
         # expect aws.<service-name>.<instruction>
+
         parts = instruction_name.split(".")
+
+        if len(parts) < 2 or not parts[1] or not parts[2]:
+            raise ValueError(
+                f"Invalid instruction: {instruction_name}; should be of the form aws.service-name.instruction-name"
+            )
         return parts[1], ".".join(parts[2:])
 
     def _get_service_runner(self, service_name: str) -> InstructionRunner:
@@ -40,7 +49,7 @@ class AwsApiRunner(InstructionRunner):
             self.service_runners[service_name] = service_runner
             return service_runner
 
-        raise NotImplementedError()
+        raise NotImplementedError(f"Unrecognized AWS service name: {service_name}")
 
     def execute_instruction(
         self,
