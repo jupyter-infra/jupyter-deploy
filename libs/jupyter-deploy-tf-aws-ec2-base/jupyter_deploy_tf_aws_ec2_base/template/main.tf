@@ -316,8 +316,8 @@ data "local_file" "jupyter_server_config" {
   filename = "${path.module}/jupyter_server_config.py"
 }
 
-data "local_file" "update_users" {
-  filename = "${path.module}/update-users.sh"
+data "local_file" "update_auth" {
+  filename = "${path.module}/update-auth.sh"
 }
 data "local_file" "check_status" {
   filename = "${path.module}/check-status-internal.sh"
@@ -333,14 +333,19 @@ data "local_file" "refresh_oauth_cookie" {
 
 # variables consistency checks
 locals {
-  full_domain            = "${var.subdomain}.${var.domain}"
-  github_usernames_valid = var.oauth_provider != "github" || length(var.oauth_allowed_usernames) > 0
+  full_domain       = "${var.subdomain}.${var.domain}"
+  github_auth_valid = var.oauth_provider != "github" || (var.oauth_allowed_usernames != null && length(var.oauth_allowed_usernames) > 0) || (var.oauth_allowed_org != null && length(var.oauth_allowed_org) > 0)
+  teams_have_org    = var.oauth_allowed_teams == null || length(var.oauth_allowed_teams) == 0 || (var.oauth_allowed_org != null && length(var.oauth_allowed_org) > 0)
 }
 
 locals {
-  allowed_github_usernames = join(",", [for username in var.oauth_allowed_usernames : "${username}"])
+  allowed_github_usernames = var.oauth_allowed_usernames != null ? join(",", [for username in var.oauth_allowed_usernames : "${username}"]) : ""
+  allowed_github_org       = var.oauth_allowed_org != null ? var.oauth_allowed_org : ""
+  allowed_github_teams     = var.oauth_allowed_teams != null ? join(",", [for team in var.oauth_allowed_teams : "${team}"]) : ""
   cloud_init_file = templatefile("${path.module}/cloudinit.sh.tftpl", {
     allowed_github_usernames = local.allowed_github_usernames
+    allowed_github_org       = local.allowed_github_org
+    allowed_github_teams     = local.allowed_github_teams
   })
   docker_startup_file = templatefile(("${path.module}/docker-startup.sh.tftpl"), {
     oauth_secret_arn = aws_secretsmanager_secret.oauth_github_client_secret.arn,
@@ -351,6 +356,8 @@ locals {
     github_client_id         = var.oauth_app_client_id
     aws_region               = data.aws_region.current.region
     allowed_github_usernames = local.allowed_github_usernames
+    allowed_github_org       = local.allowed_github_org
+    allowed_github_teams     = local.allowed_github_teams
   })
   traefik_config_file = templatefile("${path.module}/traefik.yml.tftpl", {
     letsencrypt_notification_email = var.letsencrypt_email
@@ -371,7 +378,7 @@ locals {
   traefik_config_indented        = join("\n${local.indent_str}", compact(split("\n", local.traefik_config_file)))
   pyproject_jupyter_indented     = join("\n${local.indent_str}", compact(split("\n", data.local_file.pyproject_jupyter.content)))
   jupyter_server_config_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_server_config.content)))
-  update_users_indented          = join("\n${local.indent_str}", compact(split("\n", data.local_file.update_users.content)))
+  update_auth_indented           = join("\n${local.indent_str}", compact(split("\n", data.local_file.update_auth.content)))
   refresh_oauth_cookie_indented  = join("\n${local.indent_str}", compact(split("\n", data.local_file.refresh_oauth_cookie.content)))
   check_status_indented          = join("\n${local.indent_str}", compact(split("\n", data.local_file.check_status.content)))
   get_status_indented            = join("\n${local.indent_str}", compact(split("\n", data.local_file.get_status.content)))
@@ -418,10 +425,10 @@ mainSteps:
           tee /opt/docker/jupyter_server_config.py << 'EOF'
           ${local.jupyter_server_config_indented}
           EOF
-          tee /usr/local/bin/update-users.sh << 'EOF'
-          ${local.update_users_indented}
+          tee /usr/local/bin/update-auth.sh << 'EOF'
+          ${local.update_auth_indented}
           EOF
-          chmod 644 /usr/local/bin/update-users.sh
+          chmod 644 /usr/local/bin/update-auth.sh
           tee /usr/local/bin/refresh-oauth-cookie.sh << 'EOF'
           ${local.refresh_oauth_cookie_indented}
           EOF
@@ -448,7 +455,7 @@ DOC
     fileexists("${path.module}/jupyter-start.sh"),
     fileexists("${path.module}/jupyter-reset.sh"),
     fileexists("${path.module}/jupyter_server_config.py"),
-    fileexists("${path.module}/update-users.sh"),
+    fileexists("${path.module}/update-auth.sh"),
     fileexists("${path.module}/refresh-oauth-cookie.sh"),
     fileexists("${path.module}/check-status-internal.sh"),
     fileexists("${path.module}/get-status.sh"),
@@ -459,7 +466,7 @@ DOC
     length(data.local_file.jupyter_start) > 0,
     length(data.local_file.jupyter_reset) > 0,
     length(data.local_file.jupyter_server_config) > 0,
-    length(data.local_file.update_users) > 0,
+    length(data.local_file.update_auth) > 0,
     length(data.local_file.refresh_oauth_cookie) > 0,
     length(data.local_file.check_status) > 0,
     length(data.local_file.get_status) > 0,
@@ -480,8 +487,12 @@ resource "aws_ssm_document" "instance_startup_instructions" {
 
   lifecycle {
     precondition {
-      condition     = local.github_usernames_valid
-      error_message = "If you use github as oauth provider, provide at least 1 github username"
+      condition     = local.github_auth_valid
+      error_message = "If you use github as oauth provider, provide at least 1 github username OR 1 github organization"
+    }
+    precondition {
+      condition     = local.teams_have_org
+      error_message = "GitHub teams require an organization. If you specify oauth_allowed_teams, you must also specify oauth_allowed_org"
     }
     precondition {
       condition     = local.has_required_files

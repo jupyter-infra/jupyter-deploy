@@ -28,13 +28,20 @@ PERC_MEM_RESERVATION_MB=$((TOTAL_MEMORY_MB * 95 / 100))
 JUPYTER_MEM_LIMIT_MB=$(( PERC_MEM_RESERVATION_MB < MAX_MEM_RESERVATION_MB ? PERC_MEM_RESERVATION_MB : MAX_MEM_RESERVATION_MB ))
 JUPYTER_MEM_RESERVATION_MB=$((JUPYTER_MEM_LIMIT_MB / 2))
 
-# Read the AUTHED_USERS file that TF created in /etc/
-if [ -f /etc/AUTHED_USERS ]; then
-    AUTHED_USERS_CONTENT=$(cat /etc/AUTHED_USERS)
-    echo "Read authorized users from /etc/AUTHED_USERS: $${AUTHED_USERS_CONTENT}"
+if [ -f /etc/AUTHED_ENTITIES ]; then
+    get_section_content() {
+        local section=$1
+        local content=$(sed -n "/^\[$section\]$/,/^\[/p" /etc/AUTHED_ENTITIES | grep -v "^\[$section\]$" | grep -v "^\[" | tr -d '\n' | tr -d ' ')
+        echo "$content"
+    }
+    AUTHED_USERS_CONTENT=$(get_section_content "users")
+    AUTHED_ORG_CONTENT=$(get_section_content "org")
+    AUTHED_TEAMS_CONTENT=$(get_section_content "teams")
 else
-    echo "Warning: /etc/AUTHED_USERS file not found"
+    echo "Warning: /etc/AUTHED_ENTITIES file not found"
     AUTHED_USERS_CONTENT=""
+    AUTHED_ORG_CONTENT=""
+    AUTHED_TEAMS_CONTENT=""
 fi
 
 tee /opt/docker/.env >/dev/null << EOFENV
@@ -45,6 +52,8 @@ GITHUB_CLIENT_SECRET=$${GITHUB_CLIENT_SECRET}
 JUPYTER_MEM_LIMIT_MB=$${JUPYTER_MEM_LIMIT_MB}
 JUPYTER_MEM_RESERVATION_MB=$${JUPYTER_MEM_RESERVATION_MB}
 AUTHED_USERS_CONTENT=$${AUTHED_USERS_CONTENT}
+AUTHED_ORG_CONTENT=$${AUTHED_ORG_CONTENT}
+AUTHED_TEAMS_CONTENT=$${AUTHED_TEAMS_CONTENT}
 EOFENV
 echo "Saved environment file /opt/docker/.env"
 

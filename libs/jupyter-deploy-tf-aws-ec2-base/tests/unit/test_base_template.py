@@ -21,7 +21,7 @@ EXPECTED_TEMPLATE_FILES = [
     "jupyter_server_config.py",
     "traefik.yml.tftpl",
     "variables.tf",
-    "update-users.sh",
+    "update-auth.sh",
     "refresh-oauth-cookie.sh",
 ]
 

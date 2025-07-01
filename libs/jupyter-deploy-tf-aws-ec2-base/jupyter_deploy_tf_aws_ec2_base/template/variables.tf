@@ -173,9 +173,41 @@ variable "oauth_provider" {
   }
 }
 
+variable "oauth_allowed_org" {
+  description = <<-EOT
+    GitHub organization to allowlist.
+
+    If specified, all members of this organization will be allowed access.
+    
+    Enter "" if you don't want to authorize by organization membership, 
+    but note that you must provide a value for oauth_allowed_usernames instead.
+
+    Example: my-org
+  EOT
+  type        = string
+  nullable    = true
+}
+
+variable "oauth_allowed_teams" {
+  description = <<-EOT
+    List of GitHub teams to allowlist under an org.
+
+    Only use if you have passed a GitHub organization to 'oauth_allowed_org'.
+
+    Enter [] if you don't want to authorize by specific team membership.
+
+    Example: ["team1", "team2"]
+  EOT
+  type        = list(string)
+  nullable    = true
+}
+
 variable "oauth_allowed_usernames" {
   description = <<-EOT
     List of GitHub usernames to allowlist.
+
+    Enter [] if you have already specified a oauth_allowed_org, and do 
+    not want to allow additional individual users.
 
     To find your username:
     1. Open GitHub: https://github.com/
@@ -185,10 +217,7 @@ variable "oauth_allowed_usernames" {
     Example: ["alias1", "alias2"]
   EOT
   type        = list(string)
-  validation {
-    condition     = length(var.oauth_allowed_usernames) > 0
-    error_message = "Provide at least one username to authorize."
-  }
+  nullable    = true
 }
 
 variable "oauth_app_client_id" {

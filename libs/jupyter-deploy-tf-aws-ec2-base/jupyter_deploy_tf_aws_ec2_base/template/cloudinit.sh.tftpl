@@ -76,7 +76,7 @@ tee /etc/sudoers.d/service-user << EOF
 service-user ALL=(ALL) NOPASSWD: /bin/systemctl start docker
 service-user ALL=(ALL) NOPASSWD: /bin/systemctl stop docker
 service-user ALL=(ALL) NOPASSWD: /bin/systemctl restart docker
-service-user ALL=(ALL) NOPASSWD: /usr/local/bin/update_users.sh
+service-user ALL=(ALL) NOPASSWD: /usr/local/bin/update-auth.sh
 EOF
 chmod 440 /etc/sudoers.d/service-user
 
@@ -154,11 +154,16 @@ touch /var/log/services/oauth.log
 chmod 755 /var/log/services
 chown -R service-user:service-user /var/log/services
 
-# Create the AUTHED_USERS file in /etc/ with the initial allowed GitHub usernames
-ALLOWED_GITHUB_USERNAMES="${allowed_github_usernames}"
-echo "$${ALLOWED_GITHUB_USERNAMES}" > /etc/AUTHED_USERS
-chmod 644 /etc/AUTHED_USERS
-chown service-user:service-user /etc/AUTHED_USERS
+# Create the AUTHED_ENTITIES file with the initial GitHub org/teams/users
+echo "[org]" > /etc/AUTHED_ENTITIES
+echo "${allowed_github_org}" >> /etc/AUTHED_ENTITIES
+echo "" >> /etc/AUTHED_ENTITIES
+echo "[teams]" >> /etc/AUTHED_ENTITIES
+echo "${allowed_github_teams}" >> /etc/AUTHED_ENTITIES
+echo "" >> /etc/AUTHED_ENTITIES
+echo "[users]" >> /etc/AUTHED_ENTITIES
+echo "${allowed_github_usernames}" >> /etc/AUTHED_ENTITIES
+chmod 600 /etc/AUTHED_ENTITIES
+chown service-user:service-user /etc/AUTHED_ENTITIES
 
-# Ensure /usr/local/bin directory exists for update_user.sh upload
 mkdir -p /usr/local/bin

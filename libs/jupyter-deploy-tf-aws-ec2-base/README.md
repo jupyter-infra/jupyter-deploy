@@ -21,7 +21,7 @@ This project:
     - `jupyter-reset.sh` as the fallback script if the Jupyter container fails to start
     - `pyproject.jupyter.toml` for Python dependencies of the base environment where the Jupyter server runs
     - `jupyter_server_config.py` for Jupyter server configuration
-    - `update_users.sh` as a utility script for updating the currently authenticated users
+    - `update-auth.sh` as a utility script for updating the currently authenticated org, teams, and/or users
 - creates an SSM association, which runs the startup script on the instance
 - creates the Route 53 Hosted Zone for the domain unless it already exists
 - adds DNS records to the Route 53 Hosted Zone
@@ -37,7 +37,9 @@ This project:
 - a GitHub OAuth App
     - [instructions](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) to create a new app
     - you'll need the app client ID and client secret
-- a list of GitHub usernames to authorize
+- at least one of the following for GitHub authorization:
+    - a list of GitHub usernames to authorize
+    - the name of a GitHub organization to authorize the members of 
 
 ## Usage
 This terraform project is meant to be used with `jupyter-deploy`.
@@ -129,7 +131,9 @@ No modules.
 | domain | `string` | Required | A domain that you own |
 | subdomain | `string` | Required | A sub-domain of `domain` to add DNS records |
 | oauth_provider | `string` | `github` | The OAuth provider to use |
-| oauth_allowed_usernames | `list(string)` | Required | The list of GitHub usernames to allowlist |
+| oauth_allowed_org | `string` | `""` | The GitHub organization to allowlist |
+| oauth_allowed_teams | `list(string)` | `[]` | The list of GitHub teams to allowlist |
+| oauth_allowed_usernames | `list(string)` | `[]` | The list of GitHub usernames to allowlist |
 | oauth_app_client_id | `string` | Required | The client ID of the OAuth app |
 | oauth_app_client_secret | `string` | Required | The client secret of the OAuth app |
 | custom_tags | `map(string)` | `{}` | The custom tags to add to all the resources |
