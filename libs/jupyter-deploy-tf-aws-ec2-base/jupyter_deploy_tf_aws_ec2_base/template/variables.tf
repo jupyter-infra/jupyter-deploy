@@ -276,26 +276,6 @@ variable "traefik_logs_rotation_size" {
   }
 }
 
-variable "traefik_logs_rotation_interval" {
-  description = <<-EOT
-    The time interval at which to rotate Traefik log files.
-    
-    At each interval, the traefik.log file will be rotated (a new log file will be created
-    and the old one will be compressed and archived). Additional rotations may occur in the period 
-    between intervals if the current traefik.log file exceeds traefik_logs_rotation_size.
-
-    Valid values: hourly, daily, weekly, monthly, yearly
-
-    Recommended: daily
-  EOT
-  type        = string
-
-  validation {
-    condition     = contains(["hourly", "daily", "weekly", "monthly", "yearly"], var.traefik_logs_rotation_interval)
-    error_message = "The traefik_logs_rotation_interval value must be one of: hourly, daily, weekly, monthly, yearly"
-  }
-}
-
 variable "traefik_logs_max_count" {
   description = <<-EOT
     The maximum number of Traefik log files to retain at any given time.

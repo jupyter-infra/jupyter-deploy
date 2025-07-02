@@ -336,7 +336,6 @@ locals {
   full_domain                = "${var.subdomain}.${var.domain}"
   github_auth_valid          = var.oauth_provider != "github" || (var.oauth_allowed_usernames != null && length(var.oauth_allowed_usernames) > 0) || (var.oauth_allowed_org != null && length(var.oauth_allowed_org) > 0)
   teams_have_org             = var.oauth_allowed_teams == null || length(var.oauth_allowed_teams) == 0 || (var.oauth_allowed_org != null && length(var.oauth_allowed_org) > 0)
-  traefik_log_interval_valid = contains(["hourly", "daily", "weekly", "monthly", "yearly"], var.traefik_logs_rotation_interval)
 }
 
 locals {
@@ -360,7 +359,6 @@ locals {
     allowed_github_org             = local.allowed_github_org
     allowed_github_teams           = local.allowed_github_teams
     traefik_logs_rotation_size     = var.traefik_logs_rotation_size
-    traefik_logs_rotation_interval = var.traefik_logs_rotation_interval
     traefik_logs_max_count         = var.traefik_logs_max_count
     traefik_logs_max_age           = var.traefik_logs_max_age
   })
