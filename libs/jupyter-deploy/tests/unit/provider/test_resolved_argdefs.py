@@ -7,8 +7,12 @@ from jupyter_deploy.provider.resolved_argdefs import (
     ResolvedInstructionArgument,
     StrResolvedInstructionArgument,
     require_arg,
+    resolve_cliparam_argdef,
     resolve_output_argdef,
+    resolve_result_argdef,
 )
+from jupyter_deploy.provider.resolved_clidefs import ResolvedCliParameter, StrResolvedCliParameter
+from jupyter_deploy.provider.resolved_resultdefs import ResolvedInstructionResult, StrResolvedInstructionResult
 
 
 class CustomTemplateOutputDefinition(TemplateOutputDefinition):
@@ -16,6 +20,20 @@ class CustomTemplateOutputDefinition(TemplateOutputDefinition):
 
     def __init__(self, output_name: str, value: Any = None):
         super().__init__(output_name=output_name, value=value)
+
+
+class CustomResolvedInstructionResult(ResolvedInstructionResult):
+    """Custom result definition for testing NotImplementedError."""
+
+    def __init__(self, result_name: str, value: Any = None):
+        super().__init__(result_name=result_name, value=value)
+
+
+class CustomResolvedCliParameter(ResolvedCliParameter):
+    """Custom CLI parameter definition for testing NotImplementedError."""
+
+    def __init__(self, parameter_name: str, value: Any = None):
+        super().__init__(parameter_name=parameter_name, value=value)
 
 
 class TestResolveOutputArgDef(unittest.TestCase):
@@ -68,6 +86,86 @@ class TestResolveOutputArgDef(unittest.TestCase):
             resolve_output_argdef(outdefs, "test_arg", "unresolved_output")
 
         self.assertIn("unresolved_output", str(context.exception))
+
+
+class TestResolveResultArgDef(unittest.TestCase):
+    def test_resolves_existing_str_result(self) -> None:
+        # Arrange
+        resultdefs: dict[str, ResolvedInstructionResult] = {
+            "test_result": StrResolvedInstructionResult(result_name="test_result", value="test_value")
+        }
+
+        # Act
+        result = resolve_result_argdef(resultdefs=resultdefs, arg_name="test_arg", source_key="test_result")
+
+        # Assert
+        self.assertIsInstance(result, StrResolvedInstructionArgument)
+        self.assertEqual(result.argument_name, "test_arg")
+        self.assertEqual(result.value, "test_value")
+
+    def test_raises_key_error_if_result_is_not_found(self) -> None:
+        # Arrange
+        resultdefs: dict[str, ResolvedInstructionResult] = {
+            "existing_result": StrResolvedInstructionResult(result_name="existing_result", value="test_value")
+        }
+
+        # Act & Assert
+        with self.assertRaises(KeyError) as context:
+            resolve_result_argdef(resultdefs, "test_arg", "non_existing_result")
+
+        self.assertIn("non_existing_result", str(context.exception))
+
+    def test_raises_not_implemented_error_if_type_does_not_match(self) -> None:
+        # Arrange
+        resultdefs: dict[str, ResolvedInstructionResult] = {
+            "custom_result": CustomResolvedInstructionResult(result_name="custom_result", value="test_value")
+        }
+
+        # Act & Assert
+        with self.assertRaises(NotImplementedError) as context:
+            resolve_result_argdef(resultdefs=resultdefs, arg_name="test_arg", source_key="custom_result")
+
+        self.assertIn(CustomResolvedInstructionResult.__name__, str(context.exception))
+
+
+class TestResolveCliParamArgDef(unittest.TestCase):
+    def test_resolves_existing_str_param(self) -> None:
+        # Arrange
+        paramdefs: dict[str, ResolvedCliParameter] = {
+            "test_param": StrResolvedCliParameter(parameter_name="test_param", value="test_value")
+        }
+
+        # Act
+        result = resolve_cliparam_argdef(paramdefs=paramdefs, arg_name="test_arg", source_key="test_param")
+
+        # Assert
+        self.assertIsInstance(result, StrResolvedInstructionArgument)
+        self.assertEqual(result.argument_name, "test_arg")
+        self.assertEqual(result.value, "test_value")
+
+    def test_raises_key_error_if_param_is_not_found(self) -> None:
+        # Arrange
+        paramdefs: dict[str, ResolvedCliParameter] = {
+            "existing_param": StrResolvedCliParameter(parameter_name="existing_param", value="test_value")
+        }
+
+        # Act & Assert
+        with self.assertRaises(KeyError) as context:
+            resolve_cliparam_argdef(paramdefs, "test_arg", "non_existing_param")
+
+        self.assertIn("non_existing_param", str(context.exception))
+
+    def test_raises_not_implemented_error_if_type_does_not_match(self) -> None:
+        # Arrange
+        paramdefs: dict[str, ResolvedCliParameter] = {
+            "custom_param": CustomResolvedCliParameter(parameter_name="custom_param", value="test_value")
+        }
+
+        # Act & Assert
+        with self.assertRaises(NotImplementedError) as context:
+            resolve_cliparam_argdef(paramdefs=paramdefs, arg_name="test_arg", source_key="custom_param")
+
+        self.assertIn(CustomResolvedCliParameter.__name__, str(context.exception))
 
 
 class TestRequireArg(unittest.TestCase):

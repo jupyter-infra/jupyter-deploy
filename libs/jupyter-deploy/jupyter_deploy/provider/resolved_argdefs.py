@@ -3,6 +3,16 @@ from typing import Generic, TypeVar
 from pydantic import BaseModel, ConfigDict
 
 from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition, TemplateOutputDefinition
+from jupyter_deploy.provider.resolved_clidefs import (
+    ListStrResolvedCliParameter,
+    ResolvedCliParameter,
+    StrResolvedCliParameter,
+)
+from jupyter_deploy.provider.resolved_resultdefs import (
+    ListStrResolvedInstructionResult,
+    ResolvedInstructionResult,
+    StrResolvedInstructionResult,
+)
 
 S = TypeVar("S")
 
@@ -37,10 +47,16 @@ RIA = TypeVar("RIA", bound=ResolvedInstructionArgument)
 def resolve_output_argdef(
     outdefs: dict[str, TemplateOutputDefinition], arg_name: str, source_key: str
 ) -> ResolvedInstructionArgument:
-    """Instantiates the resolved argdef of the corresponding type."""
+    """Instantiates the resolved argdef of the corresponding type.
+
+    Raises:
+        KeyError if the argument cannot be matched by source_key
+        ValueError if the argument was not resolved
+        NotImplementedError if there is no matching argtype class
+    """
 
     if source_key not in outdefs:
-        raise KeyError(f"Output name not found in outputs: {source_key}")
+        raise KeyError(f"Output name '{source_key}' not found in outputs: {list(outdefs.keys())}")
     outdef = outdefs[source_key]
     if isinstance(outdef, StrTemplateOutputDefinition):
         val = outdef.value
@@ -48,7 +64,49 @@ def resolve_output_argdef(
             raise ValueError(f"Output name is not resolved: {source_key}")
         return StrResolvedInstructionArgument(argument_name=arg_name, value=val)
 
-    raise NotImplementedError(f"No resolved value mapping for type: {type(outdef).__name__}")
+    raise NotImplementedError(f"No resolved argument class for type: {type(outdef).__name__}")
+
+
+def resolve_result_argdef(
+    resultdefs: dict[str, ResolvedInstructionResult], arg_name: str, source_key: str
+) -> ResolvedInstructionArgument:
+    """Instantiates the resolved argdef of the corresponding type.
+
+    Raises:
+        KeyError if the argument cannot be matched by source_key
+        NotImplementedError if there is no matching argtype class
+    """
+
+    if source_key not in resultdefs:
+        raise KeyError(f"Output name '{source_key}' not found in previous results: {list(resultdefs.keys())}")
+    resultdef = resultdefs[source_key]
+    if isinstance(resultdef, StrResolvedInstructionResult):
+        return StrResolvedInstructionArgument(argument_name=arg_name, value=resultdef.value)
+    elif isinstance(resultdef, ListStrResolvedInstructionResult):
+        return ListStrResolvedInstructionArgument(argument_name=arg_name, value=resultdef.value)
+
+    raise NotImplementedError(f"No resolved argument class for type: {type(resultdef).__name__}")
+
+
+def resolve_cliparam_argdef(
+    paramdefs: dict[str, ResolvedCliParameter], arg_name: str, source_key: str
+) -> ResolvedInstructionArgument:
+    """Instantiates the resolved argdef of the corresponding type.
+
+    Raises:
+        KeyError if the argument cannot be matched by source_key
+        NotImplementedError if there is no matching argtype class
+    """
+
+    if source_key not in paramdefs:
+        raise KeyError(f"Output name '{source_key}' not found in CLI parameters: {list(paramdefs.keys())}")
+    paramdef = paramdefs[source_key]
+    if isinstance(paramdef, StrResolvedCliParameter):
+        return StrResolvedInstructionArgument(argument_name=arg_name, value=paramdef.value)
+    elif isinstance(paramdef, ListStrResolvedCliParameter):
+        return ListStrResolvedInstructionArgument(argument_name=arg_name, value=paramdef.value)
+
+    raise NotImplementedError(f"No resolved argument class for type: {type(paramdef).__name__}")
 
 
 def require_arg(resolved_args: dict[str, ResolvedInstructionArgument], arg_name: str, arg_type: type[RIA]) -> RIA:

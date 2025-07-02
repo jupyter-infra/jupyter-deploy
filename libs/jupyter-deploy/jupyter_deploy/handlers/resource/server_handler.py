@@ -42,7 +42,7 @@ class ServerHandler(BaseProjectHandler):
 
         console = self.get_console()
         runner = cmd_runner.ManifestCommandRunner(console=console, output_handler=self._output_handler)
-        resolved_resultdefs = runner.run_command_sequence(command)
+        resolved_resultdefs = runner.run_command_sequence(command, cli_paramdefs={})
 
         # extract result - we already checked the source
         cmd_result = resolved_resultdefs.get(cmd_result_def.source_key)

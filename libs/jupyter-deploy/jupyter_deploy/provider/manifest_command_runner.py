@@ -1,10 +1,16 @@
 from rich import console as rich_console
 
 from jupyter_deploy.engine.engine_outputs import EngineOutputsHandler
-from jupyter_deploy.enum import ValueSource
+from jupyter_deploy.enum import InstructionArgumentSource
 from jupyter_deploy.manifest import JupyterDeployCommandV1
 from jupyter_deploy.provider.instruction_runner_factory import InstructionRunnerFactory
-from jupyter_deploy.provider.resolved_argdefs import ResolvedInstructionArgument, resolve_output_argdef
+from jupyter_deploy.provider.resolved_argdefs import (
+    ResolvedInstructionArgument,
+    resolve_cliparam_argdef,
+    resolve_output_argdef,
+    resolve_result_argdef,
+)
+from jupyter_deploy.provider.resolved_clidefs import ResolvedCliParameter
 from jupyter_deploy.provider.resolved_resultdefs import ResolvedInstructionResult
 
 
@@ -16,7 +22,9 @@ class ManifestCommandRunner:
         self._console = console
         self._output_handler = output_handler
 
-    def run_command_sequence(self, cmd_def: JupyterDeployCommandV1) -> dict[str, ResolvedInstructionResult]:
+    def run_command_sequence(
+        self, cmd_def: JupyterDeployCommandV1, cli_paramdefs: dict[str, ResolvedCliParameter]
+    ) -> dict[str, ResolvedInstructionResult]:
         """Execute the cmd, return the resolved results."""
 
         # run all the instructions and collect results
@@ -33,13 +41,20 @@ class ManifestCommandRunner:
                 arg_source_type = arg_def.get_source_type()
                 source_key = arg_def.source_key
 
-                # TODO: this should coalesce the result from previous commands
-                # address in subsequent PR
-                if arg_source_type != ValueSource.TEMPLATE_OUTPUT:
+                if arg_source_type == InstructionArgumentSource.TEMPLATE_OUTPUT:
+                    resolved_argdefs[arg_name] = resolve_output_argdef(
+                        outdefs=output_defs, arg_name=arg_name, source_key=source_key
+                    )
+                elif arg_source_type == InstructionArgumentSource.INSTRUCTION_RESULT:
+                    resolved_argdefs[arg_name] = resolve_result_argdef(
+                        resultdefs=resolved_resultdefs, arg_name=arg_name, source_key=source_key
+                    )
+                elif arg_source_type == InstructionArgumentSource.CLI_ARGUMENT:
+                    resolved_argdefs[arg_name] = resolve_cliparam_argdef(
+                        paramdefs=cli_paramdefs, arg_name=arg_name, source_key=source_key
+                    )
+                else:
                     raise NotImplementedError(f"Argument source is not handled: {arg_source_type}")
-                resolved_argdefs[arg_name] = resolve_output_argdef(
-                    outdefs=output_defs, arg_name=arg_name, source_key=source_key
-                )
 
             instruction_results = runner.execute_instruction(
                 instruction_name=api_name,
