@@ -259,6 +259,73 @@ variable "oauth_app_client_secret" {
   sensitive   = true
 }
 
+variable "traefik_logs_rotation_size" {
+  description = <<-EOT
+    The size in megabytes at which to rotate Traefik log files.
+    
+    When the traefik.log file reaches this size, it will be rotated (a new log file will be created
+    and the old one will be compressed and archived).
+
+    Recommended: 50
+  EOT
+  type        = number
+  
+  validation {
+    condition     = var.traefik_logs_rotation_size > 0
+    error_message = "The traefik_logs_rotation_size value must be greater than 0."
+  }
+}
+
+variable "traefik_logs_rotation_interval" {
+  description = <<-EOT
+    The time interval at which to rotate Traefik log files.
+    
+    At each interval, the traefik.log file will be rotated (a new log file will be created
+    and the old one will be compressed and archived). Additional rotations may occur in the period 
+    between intervals if the current traefik.log file exceeds traefik_logs_rotation_size.
+
+    Valid values: hourly, daily, weekly, monthly, yearly
+
+    Recommended: daily
+  EOT
+  type        = string
+  
+  validation {
+    condition     = contains(["hourly", "daily", "weekly", "monthly", "yearly"], var.traefik_logs_rotation_interval)
+    error_message = "The traefik_logs_rotation_interval value must be one of: hourly, daily, weekly, monthly, yearly"
+  }
+}
+
+variable "traefik_logs_max_count" {
+  description = <<-EOT
+    The maximum number of Traefik log files to retain at any given time.
+    
+    When the retention limit has been reached, the current oldest Traefik logfile will be deleted.
+
+    Recommended: 180
+  EOT
+  type        = number
+  
+  validation {
+    condition     = var.traefik_logs_max_count > 0
+    error_message = "The traefik_logs_max_count must be greater than 0."
+  }
+}
+
+variable "traefik_logs_max_age" {
+  description = <<-EOT
+    Remove rotated Traefik log files older than the specified number of days.
+
+    Recommended: 180
+  EOT
+  type        = number
+  
+  validation {
+    condition     = var.traefik_logs_max_age > 0
+    error_message = "The traefik_logs_max_age value must be greater than 0."
+  }
+}
+
 variable "custom_tags" {
   description = <<-EOT
     Tags added to all the AWS resources this template will create in your AWS account.

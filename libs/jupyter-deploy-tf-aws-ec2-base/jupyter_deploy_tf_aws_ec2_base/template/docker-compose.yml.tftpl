@@ -89,9 +89,6 @@ services:
   traefik:
     image: traefik:v2.10
     container_name: traefik
-    user: "$${SERVICE_UID}:$${SERVICE_GID}"
-    group_add:
-      - "$${DOCKER_GID}"
     restart: unless-stopped
     mem_limit: "256M"
     mem_reservation: "128M"
@@ -111,9 +108,6 @@ services:
   log-writer:
     image: docker:cli
     container_name: log-writer
-    user: "$${SERVICE_UID}:$${SERVICE_GID}"
-    group_add:
-      - "$${DOCKER_GID}"
     restart: unless-stopped
     mem_limit: "128M"
     mem_reservation: "64M"
@@ -122,8 +116,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command: |
       sh -c '
+        mkdir -p /logs/traefik
         docker logs -f jupyter >> /logs/jupyter.log 2>&1 &
-        docker logs -f traefik >> /logs/traefik.log 2>&1 &
+        docker logs -f traefik >> /logs/traefik/traefik.log 2>&1 &
         docker logs -f oauth >> /logs/oauth.log 2>&1 &
         wait
       '
@@ -133,6 +128,29 @@ services:
       - jupyter
       - traefik
       - oauth
+  log-rotator:
+    image: blacklabelops/logrotate:latest
+    container_name: log-rotator
+    restart: unless-stopped
+    mem_limit: "128M"
+    mem_reservation: "64M"
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /var/log/services:/var/log/services
+    environment:
+      - LOGS_DIRECTORIES=/var/log/services/traefik
+      - LOG_FILE_ENDINGS=log
+      - LOGROTATE_MAXAGE=${traefik_logs_max_age}
+      - LOGROTATE_SIZE=${traefik_logs_rotation_size}M
+      - LOGROTATE_DATEFORMAT=-%Y-%m-%dT%H:%M:%S
+      - TZ=UTC
+      - LOGROTATE_COPIES=${traefik_logs_max_count}
+      - LOGROTATE_COMPRESSION=compress
+      - LOGROTATE_LOGFILE=/var/log/services/logrotate.log
+      - LOGROTATE_STATUSFILE=/var/log/services/logrotate.status
+      - LOGROTATE_PARAMETERS=v
+      - LOGROTATE_CRONSCHEDULE=*/10 * * * * *
 networks:
   web:
     name: web

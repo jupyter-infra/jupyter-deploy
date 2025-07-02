@@ -11,6 +11,7 @@ This project:
 - sets up an IAM role to enable SSM access
 - passes on the root volume of the AMI
 - adds an EBS volume which will mount on the Jupyter Server container
+- configures automatic rotation for Traefik logs with customizable settings
 - creates an SSM instance-startup script, which references several files:
     - `cloudinit.sh.tftpl` for the basic setup of the instance
     - `docker-compose.yml.tftpl` for the docker services to run in the instance
@@ -136,6 +137,10 @@ No modules.
 | oauth_allowed_usernames | `list(string)` | `[]` | The list of GitHub usernames to allowlist |
 | oauth_app_client_id | `string` | Required | The client ID of the OAuth app |
 | oauth_app_client_secret | `string` | Required | The client secret of the OAuth app |
+| traefik_logs_rotation_size | `number` | `100` | The size in megabytes at which to rotate Traefik log files |
+| traefik_logs_rotation_interval | `string` | `daily` | The time interval at which to rotate Traefik log files (valid values: hourly, daily, weekly, monthly, yearly) |
+| traefik_logs_max_count | `number` | `180` | The maximum amount of rotated Traefik log files to retain |
+| traefik_logs_max_age | `number` | `180` | The maximum number of days from creation to retain any logfile |
 | custom_tags | `map(string)` | `{}` | The custom tags to add to all the resources |
 
 ## Outputs
