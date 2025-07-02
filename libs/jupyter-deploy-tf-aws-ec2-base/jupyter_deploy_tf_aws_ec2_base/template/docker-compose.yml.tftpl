@@ -116,9 +116,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command: |
       sh -c '
-        mkdir -p /logs/traefik
         docker logs -f jupyter >> /logs/jupyter.log 2>&1 &
-        docker logs -f traefik >> /logs/traefik/traefik.log 2>&1 &
+        docker logs -f traefik >> /logs/traefik.log 2>&1 &
         docker logs -f oauth >> /logs/oauth.log 2>&1 &
         wait
       '
@@ -139,13 +138,13 @@ services:
     volumes:
       - /var/log/services:/var/log/services
     environment:
-      - LOGS_DIRECTORIES=/var/log/services/traefik
+      - LOGS_DIRECTORIES=/var/log/services
       - LOG_FILE_ENDINGS=log
-      - LOGROTATE_MAXAGE=${traefik_logs_max_age}
-      - LOGROTATE_SIZE=${traefik_logs_rotation_size}M
+      - LOGROTATE_MAXAGE=${log_files_retention_days}
+      - LOGROTATE_SIZE=${logs_rotation_size_mb}M
       - LOGROTATE_DATEFORMAT=-%Y-%m-%dT%H:%M:%S
       - TZ=UTC
-      - LOGROTATE_COPIES=${traefik_logs_max_count}
+      - LOGROTATE_COPIES=${max_log_files_count}
       - LOGROTATE_COMPRESSION=compress
       - LOGROTATE_LOGFILE=/var/log/services/logrotate.log
       - LOGROTATE_STATUSFILE=/var/log/services/logrotate.status

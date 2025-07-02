@@ -22,7 +22,7 @@ fi
 # memory management: attempt to allocate 95% of memory to jupyter
 # while keeping enough memory for other containers
 TOTAL_MEMORY_MB=$(free -m | awk '/^Mem:/{print $2}')
-MAX_MEM_RESERVATION_MB=$((TOTAL_MEMORY_MB - 320))
+MAX_MEM_RESERVATION_MB=$((TOTAL_MEMORY_MB - 384))
 PERC_MEM_RESERVATION_MB=$((TOTAL_MEMORY_MB * 95 / 100))
 
 JUPYTER_MEM_LIMIT_MB=$(( PERC_MEM_RESERVATION_MB < MAX_MEM_RESERVATION_MB ? PERC_MEM_RESERVATION_MB : MAX_MEM_RESERVATION_MB ))

@@ -259,11 +259,11 @@ variable "oauth_app_client_secret" {
   sensitive   = true
 }
 
-variable "traefik_logs_rotation_size" {
+variable "logs_rotation_size_mb" {
   description = <<-EOT
-    The size in megabytes at which to rotate Traefik log files.
+    The size in megabytes at which to rotate log files under /var/log/services/.
     
-    When the traefik.log file reaches this size, it will be rotated (a new log file will be created
+    When a log file reaches this size, it will be rotated (a new log file will be created
     and the old one will be compressed and archived).
 
     Recommended: 50
@@ -271,38 +271,38 @@ variable "traefik_logs_rotation_size" {
   type        = number
 
   validation {
-    condition     = var.traefik_logs_rotation_size > 0
-    error_message = "The traefik_logs_rotation_size value must be greater than 0."
+    condition     = var.logs_rotation_size_mb > 0
+    error_message = "The logs_rotation_size_mb value must be greater than 0."
   }
 }
 
-variable "traefik_logs_max_count" {
+variable "max_log_files_count" {
   description = <<-EOT
-    The maximum number of Traefik log files to retain at any given time.
+    The maximum number of log files to retain at any given time for each service.
     
-    When the retention limit has been reached, the current oldest Traefik logfile will be deleted.
+    When the retention limit has been reached, the current oldest logfile will be deleted.
 
     Recommended: 180
   EOT
   type        = number
 
   validation {
-    condition     = var.traefik_logs_max_count > 0
-    error_message = "The traefik_logs_max_count must be greater than 0."
+    condition     = var.max_log_files_count > 0
+    error_message = "The max_log_files_count must be greater than 0."
   }
 }
 
-variable "traefik_logs_max_age" {
+variable "log_files_retention_days" {
   description = <<-EOT
-    Remove rotated Traefik log files older than the specified number of days.
+    Remove rotated log files older than the specified number of days.
 
     Recommended: 180
   EOT
   type        = number
 
   validation {
-    condition     = var.traefik_logs_max_age > 0
-    error_message = "The traefik_logs_max_age value must be greater than 0."
+    condition     = var.log_files_retention_days > 0
+    error_message = "The log_files_retention_days value must be greater than 0."
   }
 }
 
