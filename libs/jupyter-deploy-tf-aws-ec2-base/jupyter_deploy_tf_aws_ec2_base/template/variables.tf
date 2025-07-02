@@ -269,7 +269,7 @@ variable "traefik_logs_rotation_size" {
     Recommended: 50
   EOT
   type        = number
-  
+
   validation {
     condition     = var.traefik_logs_rotation_size > 0
     error_message = "The traefik_logs_rotation_size value must be greater than 0."
@@ -289,7 +289,7 @@ variable "traefik_logs_rotation_interval" {
     Recommended: daily
   EOT
   type        = string
-  
+
   validation {
     condition     = contains(["hourly", "daily", "weekly", "monthly", "yearly"], var.traefik_logs_rotation_interval)
     error_message = "The traefik_logs_rotation_interval value must be one of: hourly, daily, weekly, monthly, yearly"
@@ -305,7 +305,7 @@ variable "traefik_logs_max_count" {
     Recommended: 180
   EOT
   type        = number
-  
+
   validation {
     condition     = var.traefik_logs_max_count > 0
     error_message = "The traefik_logs_max_count must be greater than 0."
@@ -319,7 +319,7 @@ variable "traefik_logs_max_age" {
     Recommended: 180
   EOT
   type        = number
-  
+
   validation {
     condition     = var.traefik_logs_max_age > 0
     error_message = "The traefik_logs_max_age value must be greater than 0."
