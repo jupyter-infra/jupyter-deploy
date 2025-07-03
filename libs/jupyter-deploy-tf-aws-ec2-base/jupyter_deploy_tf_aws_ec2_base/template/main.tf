@@ -316,6 +316,10 @@ data "local_file" "jupyter_server_config" {
   filename = "${path.module}/jupyter_server_config.py"
 }
 
+data "local_file" "dockerfile_logrotator" {
+  filename = "${path.module}/dockerfile.logrotator"
+}
+
 data "local_file" "update_auth" {
   filename = "${path.module}/update-auth.sh"
 }
@@ -358,12 +362,14 @@ locals {
     allowed_github_usernames = local.allowed_github_usernames
     allowed_github_org       = local.allowed_github_org
     allowed_github_teams     = local.allowed_github_teams
-    logs_rotation_size_mb    = var.logs_rotation_size_mb
-    max_log_files_count      = var.max_log_files_count
-    log_files_retention_days = var.log_files_retention_days
   })
   traefik_config_file = templatefile("${path.module}/traefik.yml.tftpl", {
     letsencrypt_notification_email = var.letsencrypt_email
+  })
+  logrotator_start_file = templatefile("${path.module}/logrotator-start.sh.tftpl", {
+    logrotate_size   = "${var.log_files_rotation_size_mb}M"
+    logrotate_copies = var.log_files_retention_count
+    logrotate_maxage = var.log_files_retention_days
   })
 }
 
@@ -381,6 +387,8 @@ locals {
   traefik_config_indented        = join("\n${local.indent_str}", compact(split("\n", local.traefik_config_file)))
   pyproject_jupyter_indented     = join("\n${local.indent_str}", compact(split("\n", data.local_file.pyproject_jupyter.content)))
   jupyter_server_config_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_server_config.content)))
+  dockerfile_logrotator_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.dockerfile_logrotator.content)))
+  logrotator_start_file_indented = join("\n${local.indent_str}", compact(split("\n", local.logrotator_start_file)))
   update_auth_indented           = join("\n${local.indent_str}", compact(split("\n", data.local_file.update_auth.content)))
   refresh_oauth_cookie_indented  = join("\n${local.indent_str}", compact(split("\n", data.local_file.refresh_oauth_cookie.content)))
   check_status_indented          = join("\n${local.indent_str}", compact(split("\n", data.local_file.check_status.content)))
@@ -428,6 +436,12 @@ mainSteps:
           tee /opt/docker/jupyter_server_config.py << 'EOF'
           ${local.jupyter_server_config_indented}
           EOF
+          tee /opt/docker/dockerfile.logrotator << 'EOF'
+          ${local.dockerfile_logrotator_indented}
+          EOF
+          tee /opt/docker/logrotator-start.sh << 'EOF'
+          ${local.logrotator_start_file_indented}
+          EOF
           tee /usr/local/bin/update-auth.sh << 'EOF'
           ${local.update_auth_indented}
           EOF
@@ -458,6 +472,7 @@ DOC
     fileexists("${path.module}/jupyter-start.sh"),
     fileexists("${path.module}/jupyter-reset.sh"),
     fileexists("${path.module}/jupyter_server_config.py"),
+    fileexists("${path.module}/dockerfile.logrotator"),
     fileexists("${path.module}/update-auth.sh"),
     fileexists("${path.module}/refresh-oauth-cookie.sh"),
     fileexists("${path.module}/check-status-internal.sh"),
@@ -469,6 +484,7 @@ DOC
     length(data.local_file.jupyter_start) > 0,
     length(data.local_file.jupyter_reset) > 0,
     length(data.local_file.jupyter_server_config) > 0,
+    length(data.local_file.dockerfile_logrotator) > 0,
     length(data.local_file.update_auth) > 0,
     length(data.local_file.refresh_oauth_cookie) > 0,
     length(data.local_file.check_status) > 0,

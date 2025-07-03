@@ -259,36 +259,36 @@ variable "oauth_app_client_secret" {
   sensitive   = true
 }
 
-variable "logs_rotation_size_mb" {
+variable "log_files_rotation_size_mb" {
   description = <<-EOT
-    The size in megabytes at which to rotate log files under /var/log/services/.
+    The size in megabytes at which to rotate log files.
     
-    When a log file reaches this size, it will be rotated (a new log file will be created
-    and the old one will be compressed and archived).
+    The log rotator sidecar container rotates log files that exceed this size.
+    The sidecar creates a new log file, compresses and archives the old one.
 
     Recommended: 50
   EOT
   type        = number
 
   validation {
-    condition     = var.logs_rotation_size_mb > 0
-    error_message = "The logs_rotation_size_mb value must be greater than 0."
+    condition     = var.log_files_rotation_size_mb > 0
+    error_message = "The log_files_rotation_size_mb value must be greater than 0."
   }
 }
 
-variable "max_log_files_count" {
+variable "log_files_retention_count" {
   description = <<-EOT
-    The maximum number of log files to retain at any given time for each service.
+    The maximum number of log files to retain at any given time for a log group.
     
-    When the retention limit has been reached, the current oldest logfile will be deleted.
+    When the retention limit is reached, the log rotator sidecar container deletes the oldest log file.
 
-    Recommended: 180
+    Recommended: 20
   EOT
   type        = number
 
   validation {
-    condition     = var.max_log_files_count > 0
-    error_message = "The max_log_files_count must be greater than 0."
+    condition     = var.log_files_retention_count > 1
+    error_message = "The log_files_retention_count must be greater than 1."
   }
 }
 

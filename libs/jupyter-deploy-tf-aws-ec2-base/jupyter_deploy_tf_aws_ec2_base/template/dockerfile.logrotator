@@ -1,0 +1,8 @@
+FROM alpine:latest
+
+RUN apk add --no-cache logrotate
+
+COPY logrotator-start.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/logrotator-start.sh
+
+ENTRYPOINT ["/usr/local/bin/logrotator-start.sh"]

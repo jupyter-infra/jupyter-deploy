@@ -22,6 +22,10 @@ This project:
     - `jupyter-reset.sh` as the fallback script if the Jupyter container fails to start
     - `pyproject.jupyter.toml` for Python dependencies of the base environment where the Jupyter server runs
     - `jupyter_server_config.py` for Jupyter server configuration
+    - `dockerfile.logrotator` for a sidecar container responsible to rotate logs
+    - `logrotator-start.sh.tftpl` to configure logrotate
+    - `check-status-internal.sh` as a utility script to verify that the services are up and the TLS certificates are available
+    - `get-status.sh` as utility script to translate the return code of `check-status` script to a human-readable status
     - `update-auth.sh` as a utility script for updating the currently authenticated org, teams, and/or users
 - creates an SSM association, which runs the startup script on the instance
 - creates the Route 53 Hosted Zone for the domain unless it already exists
@@ -137,9 +141,9 @@ No modules.
 | oauth_allowed_usernames | `list(string)` | `[]` | The list of GitHub usernames to allowlist |
 | oauth_app_client_id | `string` | Required | The client ID of the OAuth app |
 | oauth_app_client_secret | `string` | Required | The client secret of the OAuth app |
-| logs_rotation_size_mb | `number` | `50` | The size in megabytes at which to rotate log files under /var/log/services/ |
-| max_log_files_count | `number` | `180` | The maximum amount of rotated log files to retain for each service |
-| log_files_retention_days | `number` | `180` | The maximum number of days from creation to retain any logfile |
+| log_files_rotation_size_mb | `number` | `50` | The size in megabytes at which to rotate log files |
+| log_files_retention_count | `number` | `20` | The maximum amount of rotated log files to retain for a log group |
+| log_files_retention_days | `number` | `180` | The maximum number of log files to retain at any given time for a log group |
 | custom_tags | `map(string)` | `{}` | The custom tags to add to all the resources |
 
 ## Outputs

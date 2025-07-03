@@ -145,21 +145,8 @@ touch /opt/docker/acme.json
 chown service-user:service-user /opt/docker/acme.json
 chmod 600 /opt/docker/acme.json
 
-# Create the log dirs and files
+# Create the log dir
 mkdir -p /var/log/services
-touch /var/log/services/jupyter.log
-touch /var/log/services/traefik.log
-touch /var/log/services/oauth.log
-touch /var/log/services/logrotate.log
-touch /var/log/services/logrotate.status
-
-# Logrotate will not work unless the parent directory of the logfile is not world writable
-# and not writable by any non-root group
-chmod -R 755 /var/log/services
-chown -R root:root /var/log/services
-
-find /var/log/services -type f -name "*.log" -exec chmod 644 {} \;
-find /var/log/services -type f -name "*.status" -exec chmod 644 {} \;
 
 # Create the AUTHED_ENTITIES file with the initial GitHub org/teams/users
 echo "[org]" > /etc/AUTHED_ENTITIES
