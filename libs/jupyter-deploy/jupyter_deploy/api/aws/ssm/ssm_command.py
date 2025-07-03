@@ -4,7 +4,7 @@ import botocore
 import botocore.exceptions
 from mypy_boto3_ssm.client import SSMClient
 from mypy_boto3_ssm.literals import CommandInvocationStatusType
-from mypy_boto3_ssm.type_defs import GetCommandInvocationResultTypeDef
+from mypy_boto3_ssm.type_defs import GetCommandInvocationResultTypeDef, SendCommandRequestTypeDef
 
 TERMINAL_COMMAND_STATUS: list[CommandInvocationStatusType] = ["Cancelled", "Failed", "Success", "TimedOut"]
 
@@ -47,18 +47,25 @@ def poll_command(
 
 
 def send_cmd_to_one_instance_and_wait_sync(
-    client: SSMClient, document_name: str, instance_id: str, timeout_seconds: int = 30, wait_after_send_seconds: int = 2
+    client: SSMClient,
+    document_name: str,
+    instance_id: str,
+    timeout_seconds: int = 30,
+    wait_after_send_seconds: int = 2,
+    **parameters: list[str],
 ) -> GetCommandInvocationResultTypeDef:
     """Send the command, poll execution, return execution response."""
+    request: SendCommandRequestTypeDef = {
+        "DocumentName": document_name,
+        "InstanceIds": [instance_id],
+        "TimeoutSeconds": timeout_seconds,
+    }
+    if parameters:
+        request["Parameters"] = parameters
 
-    send_command_result = client.send_command(
-        DocumentName=document_name,
-        InstanceIds=[instance_id],
-        TimeoutSeconds=timeout_seconds,
-    )
+    send_command_result = client.send_command(**request)
 
     command_id = send_command_result["Command"].get("CommandId")
-
     if not command_id:
         raise RuntimeError("Command ID could not be retrieved.")
 

@@ -9,6 +9,8 @@ from rich.console import Console
 
 from jupyter_deploy import cmd_utils
 from jupyter_deploy.cli.servers_app import servers_app
+from jupyter_deploy.cli.teams_app import teams_app
+from jupyter_deploy.cli.users_app import users_app
 from jupyter_deploy.cli.variables_decorator import with_project_variables
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
@@ -32,6 +34,8 @@ class JupyterDeployCliRunner:
         )
         self._setup_basic_commands()
         self.app.add_typer(servers_app, name="server")
+        self.app.add_typer(users_app, name="users")
+        self.app.add_typer(teams_app, name="teams")
 
     def _setup_basic_commands(self) -> None:
         """Register the basic commands."""

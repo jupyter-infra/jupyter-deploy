@@ -6,13 +6,13 @@ from jupyter_deploy.provider import manifest_command_runner as cmd_runner
 from jupyter_deploy.provider.resolved_clidefs import StrResolvedCliParameter
 
 
-class UsersHandler(BaseProjectHandler):
-    """Handler class to manage user access to a jupyter app."""
+class TeamsHandler(BaseProjectHandler):
+    """Handler class to manage team access to a jupyter app."""
 
     _output_handler: EngineOutputsHandler
 
     def __init__(self) -> None:
-        """Instantiate the Users handler."""
+        """Instantiate the TeamsHandler."""
         super().__init__()
 
         if self.engine == EngineType.TERRAFORM:
@@ -22,36 +22,36 @@ class UsersHandler(BaseProjectHandler):
         else:
             raise NotImplementedError(f"OutputsHandler implementation not found for engine: {self.engine}")
 
-    def add_users(self, users: list[str]) -> None:
-        """Allowlist the users to access the Jupyter app."""
-        command = self.project_manifest.get_command("users.add")
+    def add_teams(self, teams: list[str]) -> None:
+        """Allowlist the teams to access the Jupyter app."""
+        command = self.project_manifest.get_command("teams.add")
         console = self.get_console()
         runner = cmd_runner.ManifestCommandRunner(console=console, output_handler=self._output_handler)
-        joined_users = ",".join(users)
 
+        joined_teams = ",".join(teams)
         runner.run_command_sequence(
             command,
             cli_paramdefs={
-                "users": StrResolvedCliParameter(parameter_name="users", value=joined_users),
+                "teams": StrResolvedCliParameter(parameter_name="teams", value=joined_teams),
                 "action": StrResolvedCliParameter(parameter_name="action", value="add"),
             },
         )
 
-    def remove_users(self, users: list[str]) -> None:
-        """Remove the users from the allowlist of the Jupyter app."""
-        command = self.project_manifest.get_command("users.remove")
+    def remove_teams(self, teams: list[str]) -> None:
+        """Remove the teams from the allowlist of the Jupyter app."""
+        command = self.project_manifest.get_command("teams.remove")
         console = self.get_console()
         runner = cmd_runner.ManifestCommandRunner(console=console, output_handler=self._output_handler)
-        joined_users = ",".join(users)
 
+        joined_teams = ",".join(teams)
         runner.run_command_sequence(
             command,
             cli_paramdefs={
-                "users": StrResolvedCliParameter(parameter_name="users", value=joined_users),
+                "teams": StrResolvedCliParameter(parameter_name="teams", value=joined_teams),
                 "action": StrResolvedCliParameter(parameter_name="action", value="remove"),
             },
         )
 
-    def list_users(self) -> list[str]:
-        """Return a list of users allowlisted to access the Jupyter app."""
+    def list_teams(self) -> list[str]:
+        """Return a list of teams allowlisted to access the Jupyter app."""
         return []

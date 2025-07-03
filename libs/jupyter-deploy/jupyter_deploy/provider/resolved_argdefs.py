@@ -1,14 +1,16 @@
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
 from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition, TemplateOutputDefinition
 from jupyter_deploy.provider.resolved_clidefs import (
+    IntResolvedCliParameter,
     ListStrResolvedCliParameter,
     ResolvedCliParameter,
     StrResolvedCliParameter,
 )
 from jupyter_deploy.provider.resolved_resultdefs import (
+    IntResolvedInstructionResult,
     ListStrResolvedInstructionResult,
     ResolvedInstructionResult,
     StrResolvedInstructionResult,
@@ -31,6 +33,12 @@ class ResolvedInstructionArgument(BaseModel, Generic[S]):
 
 class StrResolvedInstructionArgument(ResolvedInstructionArgument[str]):
     """Wrapper class for a resolved value of type str passed to instruction."""
+
+    pass
+
+
+class IntResolvedInstructionArgument(ResolvedInstructionArgument[int]):
+    """Wrapper class for a resolved value of type int passed to instruction."""
 
     pass
 
@@ -82,6 +90,8 @@ def resolve_result_argdef(
     resultdef = resultdefs[source_key]
     if isinstance(resultdef, StrResolvedInstructionResult):
         return StrResolvedInstructionArgument(argument_name=arg_name, value=resultdef.value)
+    elif isinstance(resultdef, IntResolvedInstructionResult):
+        return IntResolvedInstructionArgument(argument_name=arg_name, value=resultdef.value)
     elif isinstance(resultdef, ListStrResolvedInstructionResult):
         return ListStrResolvedInstructionArgument(argument_name=arg_name, value=resultdef.value)
 
@@ -103,6 +113,8 @@ def resolve_cliparam_argdef(
     paramdef = paramdefs[source_key]
     if isinstance(paramdef, StrResolvedCliParameter):
         return StrResolvedInstructionArgument(argument_name=arg_name, value=paramdef.value)
+    elif isinstance(paramdef, IntResolvedCliParameter):
+        return IntResolvedInstructionArgument(argument_name=arg_name, value=paramdef.value)
     elif isinstance(paramdef, ListStrResolvedCliParameter):
         return ListStrResolvedInstructionArgument(argument_name=arg_name, value=paramdef.value)
 
@@ -123,6 +135,30 @@ def require_arg(resolved_args: dict[str, ResolvedInstructionArgument], arg_name:
     """
     if arg_name not in resolved_args:
         raise KeyError(f"Required argument '{arg_name}' not found in resolved arguments")
+
+    arg = resolved_args[arg_name]
+
+    if not isinstance(arg, arg_type):
+        raise TypeError(f"Expected argument '{arg_name}' to be of type {arg_type.__name__}, got {type(arg).__name__}")
+
+    return arg
+
+
+def retrieve_optional_arg(
+    resolved_args: dict[str, ResolvedInstructionArgument], arg_name: str, arg_type: type[RIA], default_value: Any
+) -> RIA:
+    """Returns the resolved arg of the expected type from the args dict, or None if not found.
+
+    Args:
+        resolved_args: A dictionary of resolved arguments.
+        arg_name: The name of the argument to retrieve.
+        arg_type: The expected type of the argument, a subclass of ResolvedInstructionArgument.
+
+    Raises:
+        TypeError: If the argument is not of the expected type.
+    """
+    if arg_name not in resolved_args:
+        return arg_type(argument_name=arg_name, value=default_value)
 
     arg = resolved_args[arg_name]
 

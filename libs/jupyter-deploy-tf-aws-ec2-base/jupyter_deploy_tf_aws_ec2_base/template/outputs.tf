@@ -42,3 +42,33 @@ output "server_status_check_document" {
   description = "Name of the SSM document to check the server status."
   value       = aws_ssm_document.instance_status_check.name
 }
+
+# user.add and user.remove CLI handling
+output "auth_users_update_document" {
+  description = "Name of the SSM document to update the usernames allowlisted to access the app."
+  value       = aws_ssm_document.auth_users_update.name
+}
+
+# team.add and team.remove CLI handling
+output "auth_teams_update_document" {
+  description = "Name of the SSM document to update the teams allowlisted to access the app."
+  value       = aws_ssm_document.auth_teams_update.name
+}
+
+# organization.set CLI handling
+output "auth_org_allowlist_document" {
+  description = "Name of the SSM document to specify the organization whose users are authorized to access the app."
+  value       = aws_ssm_document.auth_org_allowlist.name
+}
+
+# organization.remove CLI handling
+output "auth_org_remove_document" {
+  description = "Name of the SSM document to remove the organization  whose users are authorized to access the app."
+  value       = aws_ssm_document.auth_org_remove.name
+}
+
+# cookies.invalidate CLI handling
+output "auth_cookies_invalidate_document" {
+  description = "Name of the SSM document to invalidate all the cookies that the app has issued to users."
+  value       = aws_ssm_document.auth_invalidate_cookies.name
+}

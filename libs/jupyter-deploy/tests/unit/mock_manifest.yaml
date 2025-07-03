@@ -16,7 +16,7 @@ values:
 commands:
   - cmd: "server.status"
     sequence:
-      - api-name: "aws.ssm.wait-command-no-param-sync"
+      - api-name: "aws.ssm.wait-command-sync"
         arguments:
           - api-attribute: "document_name"
             source: "output"

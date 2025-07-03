@@ -14,7 +14,13 @@ class ResolvedInstructionResult(BaseModel, Generic[S]):
 
 
 class StrResolvedInstructionResult(ResolvedInstructionResult[str]):
-    """Wrapper class for string value passed by a successful instruction."""
+    """Wrapper class for string value returned by a successful instruction."""
+
+    pass
+
+
+class IntResolvedInstructionResult(ResolvedInstructionResult[int]):
+    """Wrapper class for int value returned by a successful instruction."""
 
     pass
 

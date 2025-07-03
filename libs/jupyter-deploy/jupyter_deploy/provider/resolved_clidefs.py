@@ -19,6 +19,12 @@ class StrResolvedCliParameter(ResolvedCliParameter[str]):
     pass
 
 
+class IntResolvedCliParameter(ResolvedCliParameter[int]):
+    """Wrapper class for int value passed to a CLI command by the user."""
+
+    pass
+
+
 class ListStrResolvedCliParameter(ResolvedCliParameter[list[str]]):
     """Wrapper class for list of strings value passed to a CLI command by the user."""
 

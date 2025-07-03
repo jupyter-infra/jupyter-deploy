@@ -17,17 +17,25 @@ provider "github" {}
 data "aws_region" "current" {}
 data "aws_partition" "current" {}
 
+resource "random_id" "postfix" {
+  byte_length = 4
+}
 locals {
+  template_name    = "tf-aws-ec2-base"
+  template_version = "0.1.0a2"
+
   default_tags = {
     Source   = "jupyter-deploy"
-    Template = "tf-aws-ec2-base"
-    Version  = "0.1.0a2"
+    Template = local.template_name
+    Version  = local.template_version
   }
 
   combined_tags = merge(
     local.default_tags,
     var.custom_tags,
   )
+
+  doc_postfix = random_id.postfix.hex
 }
 
 # Retrieve or create the default VPC
@@ -56,7 +64,7 @@ data "aws_subnet" "first_subnet_of_default_vpc" {
 
 # Create security group for the EC2 instance
 resource "aws_security_group" "ec2_jupyter_server_sg" {
-  name        = "jupyter-deploy-base-sg"
+  name        = "jupyter-deploy-https-${local.doc_postfix}"
   description = "Security group for the EC2 instance serving the jupyter server"
   vpc_id      = aws_default_vpc.default.id
 
@@ -140,7 +148,7 @@ resource "aws_instance" "ec2_jupyter_server" {
   # IAM instance profile configuration
   iam_instance_profile = aws_iam_instance_profile.server_instance_profile.name
 
-  depends_on = [aws_ssm_document.instance_startup_instructions]
+  depends_on = [aws_ssm_document.instance_startup]
 }
 
 # Define the IAM role for the instance and add policies
@@ -496,8 +504,8 @@ DOC
   traefik_config_valid = can(yamldecode(local.traefik_config_file))
 }
 
-resource "aws_ssm_document" "instance_startup_instructions" {
-  name            = "instance-startup-instructions"
+resource "aws_ssm_document" "instance_startup" {
+  name            = "instance-startup-${local.doc_postfix}"
   document_type   = "Command"
   document_format = "YAML"
 
@@ -541,9 +549,9 @@ resource "aws_ssm_document" "instance_startup_instructions" {
 }
 
 locals {
-  ssm_status_check = <<DOC
+  ssm_status_check       = <<DOC
 schemaVersion: '2.2'
-description: Check the status of the docker services and TLS certs in the instance
+description: Check the status of the docker services and TLS certs in the instance.
 mainSteps:
   - action: aws:runShellScript
     name: CheckStatus
@@ -553,14 +561,144 @@ mainSteps:
           sh /usr/local/bin/get-status.sh
 
 DOC
+  ssm_users_update       = <<DOC
+schemaVersion: '2.2'
+description: Update allowlisted GitHub usernames
+parameters:
+  users:
+    type: String
+    description: "The user names (comma-separated) to add, remove or replace in the allowlist."
+  action:
+    type: String
+    description: "The type of action to perform."
+    default: add
+    allowedValues:
+      - add
+      - remove
+      - overwrite
+mainSteps:
+  - action: aws:runShellScript
+    name: UpdateAuthorizedUsers
+    inputs:
+      runCommand:
+        - |
+          sh /usr/local/bin/update-auth.sh users {{action}} {{users}}
+  DOC
+  ssm_teams_update       = <<DOC
+schemaVersion: '2.2'
+description: Update allowlisted GitHub teams; you must have allowlisted a GitHub organization.
+parameters:
+  teams:
+    type: String
+    description: "The team names (comma-separated) to add, remove or replace in the allowlist"
+  action:
+    type: String
+    description: "The type of action to perform."
+    default: add
+    allowedValues:
+      - add
+      - remove
+      - overwrite
+mainSteps:
+  - action: aws:runShellScript
+    name: UpdateAuthorizedTeams
+    inputs:
+      runCommand:
+        - "sh /usr/local/bin/update-auth.sh teams {{action}} {{teams}}"
+  DOC
+  ssm_org_allowlist      = <<DOC
+schemaVersion: '2.2'
+description: Allowlist the GitHub organization; only one organization may be allowlisted at a time.
+parameters:
+  organization:
+    type: String
+    description: "The name of the GitHub organization to allowlist."
+mainSteps:
+  - action: aws:runShellScript
+    name: AllowlistOrganization
+    inputs:
+      runCommand:
+        - "sh /usr/local/bin/update-auth.sh org {{organization}}"
+  DOC
+  ssm_org_remove         = <<DOC
+schemaVersion: '2.2'
+description: Remove the GitHub organization; rely exclusively on username allowlisting.
+mainSteps:
+  - action: aws:runShellScript
+    name: AllowlistOrganization
+    inputs:
+      runCommand:
+        - |
+          sh /usr/local/bin/update-auth.sh org remove  
+  DOC
+  ssm_invalidate_cookies = <<DOC
+schemaVersion: '2.2'
+description: Invalidate the existing client cookies.
+mainSteps:
+  - action: aws:runShellScript
+    name: InvalidateCookies
+    inputs:
+      runCommand:
+        - |
+          sh /usr/local/bin/refresh-oauth-cookie.sh
+DOC
+}
+
+locals {
+  smm_auth_users_update = can(yamldecode(local.ssm_users_update))
 }
 
 resource "aws_ssm_document" "instance_status_check" {
-  name            = "instance-status-check"
+  name            = "instance-status-check-${local.doc_postfix}"
   document_type   = "Command"
   document_format = "YAML"
 
   content = local.ssm_status_check
+  tags    = local.combined_tags
+}
+
+resource "aws_ssm_document" "auth_users_update" {
+  name            = "auth-users-update-${local.doc_postfix}"
+  document_type   = "Command"
+  document_format = "YAML"
+
+  content = local.ssm_users_update
+  tags    = local.combined_tags
+}
+
+resource "aws_ssm_document" "auth_teams_update" {
+  name            = "auth-teams-update-${local.doc_postfix}"
+  document_type   = "Command"
+  document_format = "YAML"
+
+  content = local.ssm_teams_update
+  tags    = local.combined_tags
+}
+
+resource "aws_ssm_document" "auth_org_allowlist" {
+  name            = "auth-org-allowlist-${local.doc_postfix}"
+  document_type   = "Command"
+  document_format = "YAML"
+
+  content = local.ssm_org_allowlist
+  tags    = local.combined_tags
+}
+
+resource "aws_ssm_document" "auth_org_remove" {
+  name            = "auth-org-remove-${local.doc_postfix}"
+  document_type   = "Command"
+  document_format = "YAML"
+
+  content = local.ssm_org_remove
+  tags    = local.combined_tags
+}
+
+resource "aws_ssm_document" "auth_invalidate_cookies" {
+  name            = "auth_invalidate_cookies-${local.doc_postfix}"
+  document_type   = "Command"
+  document_format = "YAML"
+
+  content = local.ssm_invalidate_cookies
   tags    = local.combined_tags
 }
 
@@ -585,31 +723,8 @@ resource "null_resource" "store_oauth_github_client_secret" {
   ]
 }
 
-locals {
-  ssm_refresh_oauth_cookie = <<DOC
-schemaVersion: '2.2'
-description: Refresh the OAuth cookie secret used for secure session management.
-mainSteps:
-  - action: aws:runShellScript
-    name: RefreshOAuthSecret
-    inputs:
-      runCommand:
-        - |
-          sh /usr/local/bin/refresh-oauth-cookie.sh
-DOC
-}
-
-resource "aws_ssm_document" "refresh_oauth_cookie" {
-  name            = "refresh_oauth_cookie"
-  document_type   = "Command"
-  document_format = "YAML"
-
-  content = local.ssm_refresh_oauth_cookie
-  tags    = local.combined_tags
-}
-
 resource "aws_ssm_association" "instance_startup_with_secret" {
-  name = aws_ssm_document.instance_startup_instructions.name
+  name = aws_ssm_document.instance_startup.name
   targets {
     key    = "InstanceIds"
     values = [aws_instance.ec2_jupyter_server.id]
@@ -657,8 +772,8 @@ resource "null_resource" "wait_for_instance_ready" {
     association_id = aws_ssm_association.instance_startup_with_secret.id
     # the association ID should capture. the startup instructions doc name and versions
     # consider removing after further testing
-    startup_doc_name    = aws_ssm_document.instance_startup_instructions.name
-    startup_doc_version = aws_ssm_document.instance_startup_instructions.default_version
+    startup_doc_name    = aws_ssm_document.instance_startup.name
+    startup_doc_version = aws_ssm_document.instance_startup.default_version
     # Inner status check parameters:
     status_doc_name    = aws_ssm_document.instance_status_check.name
     status_doc_version = aws_ssm_document.instance_status_check.default_version
@@ -672,7 +787,7 @@ resource "null_resource" "wait_for_instance_ready" {
   depends_on = [
     aws_ssm_association.instance_startup_with_secret,
     aws_ssm_document.instance_status_check,
-    aws_ssm_document.instance_startup_instructions,
+    aws_ssm_document.instance_startup,
     aws_instance.ec2_jupyter_server,
     aws_route53_record.jupyter,
     aws_ebs_volume.jupyter_data,

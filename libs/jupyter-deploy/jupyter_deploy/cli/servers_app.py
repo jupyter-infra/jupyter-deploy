@@ -6,7 +6,7 @@ from jupyter_deploy import cmd_utils
 from jupyter_deploy.handlers.resource import server_handler
 
 servers_app = typer.Typer(
-    help=("""Discover, start, stop or exec into server deployed to infrastructure controlled by your IaC templates."""),
+    help=("""Interact with the jupyter server running your app."""),
     no_args_is_help=True,
 )
 
@@ -35,12 +35,6 @@ def status(
 
 
 @servers_app.command()
-def list() -> None:
-    """List servers running Jupyter notebooks from various Cloud Providers."""
-    pass
-
-
-@servers_app.command()
-def describe() -> None:
-    """Describe a server running a Jupyter notebook process."""
+def info() -> None:
+    """Display information about the jupyter server running your app."""
     pass
