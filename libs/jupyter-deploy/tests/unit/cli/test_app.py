@@ -39,7 +39,6 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         mock_app.assert_called_once()
 
     def test_help(self) -> None:
-        """Test the help command."""
         runner = CliRunner()
         result = runner.invoke(app_runner.app, ["--help"])
 
@@ -47,6 +46,8 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertTrue(result.stdout.index("Jupyter-deploy") >= 0)
         self.assertTrue(result.stdout.index("server") >= 0)
+        self.assertTrue(result.stdout.index("users") >= 0)
+        self.assertTrue(result.stdout.index("teams") >= 0)
 
     def test_no_arg_defaults_to_help(self) -> None:
         runner = CliRunner()

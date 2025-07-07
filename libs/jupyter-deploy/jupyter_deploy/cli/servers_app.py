@@ -36,5 +36,5 @@ def status(
 
 @servers_app.command()
 def info() -> None:
-    """Display information about the jupyter server running your app."""
+    """Display information about the Jupyter server running your app."""
     pass

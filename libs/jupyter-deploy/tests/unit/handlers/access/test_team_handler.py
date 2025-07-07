@@ -2,12 +2,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from jupyter_deploy.handlers.access.user_handler import UsersHandler
+from jupyter_deploy.handlers.access.team_handler import TeamsHandler
 from jupyter_deploy.manifest import JupyterDeployManifestV1
 from jupyter_deploy.provider.resolved_clidefs import StrResolvedCliParameter
 
 
-class TestUsersHandler(unittest.TestCase):
+class TestTeamsHandler(unittest.TestCase):
     def get_mock_outputs_handler_and_fns(self) -> tuple[Mock, dict[str, Mock]]:
         """Return mock output handler with functions defined as mock."""
         mock_output_handler = Mock()
@@ -31,15 +31,15 @@ class TestUsersHandler(unittest.TestCase):
             },
             "commands": [
                 {
-                    "cmd": "users.add",
+                    "cmd": "teams.add",
                     "sequence": [
                         {
                             "api-name": "aws.ssm.send-command",
                             "arguments": [
                                 {
-                                    "api-attribute": "users",
+                                    "api-attribute": "teams",
                                     "source": "cli",
-                                    "source-key": "users",
+                                    "source-key": "teams",
                                 },
                                 {
                                     "api-attribute": "action",
@@ -51,15 +51,15 @@ class TestUsersHandler(unittest.TestCase):
                     ],
                 },
                 {
-                    "cmd": "users.remove",
+                    "cmd": "teams.remove",
                     "sequence": [
                         {
                             "api-name": "aws.ssm.send-command",
                             "arguments": [
                                 {
-                                    "api-attribute": "users",
+                                    "api-attribute": "teams",
                                     "source": "cli",
-                                    "source-key": "users",
+                                    "source-key": "teams",
                                 },
                                 {
                                     "api-attribute": "action",
@@ -88,7 +88,7 @@ class TestUsersHandler(unittest.TestCase):
         mock_tf_outputs_handler.return_value = mock_output_handler
         mock_retrieve_manifest.return_value = self.mock_manifest
 
-        handler = UsersHandler()
+        handler = TeamsHandler()
 
         mock_retrieve_manifest.assert_called_once()
         mock_tf_outputs_handler.assert_called_once_with(project_path=path, project_manifest=self.mock_manifest)
@@ -97,7 +97,7 @@ class TestUsersHandler(unittest.TestCase):
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
-    def test_add_users_raises_not_implemented_error_if_manifest_does_not_define_cmd(
+    def test_add_teams_raises_not_implemented_error_if_manifest_does_not_define_cmd(
         self, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock
     ) -> None:
         mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
@@ -114,16 +114,16 @@ class TestUsersHandler(unittest.TestCase):
             }
         )
         mock_retrieve_manifest.return_value = no_cmd_manifest
-        handler = UsersHandler()
+        handler = TeamsHandler()
 
         with self.assertRaises(NotImplementedError):
-            handler.add_users(["user1", "user2"])
+            handler.add_teams(["team1", "team2"])
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
     @patch("rich.console.Console")
-    def test_add_users_calls_run_command_sequence_with_correct_params(
+    def test_add_teams_calls_run_command_sequence_with_correct_params(
         self,
         mock_console_class: Mock,
         mock_cmd_runner_class: Mock,
@@ -141,8 +141,8 @@ class TestUsersHandler(unittest.TestCase):
         mock_console = mock_console_class.return_value
 
         # Execute
-        handler = UsersHandler()
-        handler.add_users(["user1", "user2"])
+        handler = TeamsHandler()
+        handler.add_teams(["team1", "team2"])
 
         # Verify the command runner was created with the right parameters
         mock_cmd_runner_class.assert_called_once()
@@ -155,20 +155,20 @@ class TestUsersHandler(unittest.TestCase):
         cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
 
         # Verify it's the expected command
-        self.assertEqual(passed_command.cmd, "users.add")
+        self.assertEqual(passed_command.cmd, "teams.add")
 
         # Verify cli_paramdefs contains the expected values
-        self.assertIn("users", cli_paramdefs)
+        self.assertIn("teams", cli_paramdefs)
         self.assertIn("action", cli_paramdefs)
-        self.assertIsInstance(cli_paramdefs["users"], StrResolvedCliParameter)
-        self.assertEqual(cli_paramdefs["users"].value, "user1,user2")
+        self.assertIsInstance(cli_paramdefs["teams"], StrResolvedCliParameter)
+        self.assertEqual(cli_paramdefs["teams"].value, "team1,team2")
         self.assertEqual(cli_paramdefs["action"].value, "add")
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
     @patch("rich.console.Console")
-    def test_remove_users_calls_run_command_sequence_with_correct_params(
+    def test_remove_teams_calls_run_command_sequence_with_correct_params(
         self,
         mock_console_class: Mock,
         mock_cmd_runner_class: Mock,
@@ -186,8 +186,8 @@ class TestUsersHandler(unittest.TestCase):
         mock_console = mock_console_class.return_value
 
         # Execute
-        handler = UsersHandler()
-        handler.remove_users(["user1", "user2"])
+        handler = TeamsHandler()
+        handler.remove_teams(["team1", "team2"])
 
         # Verify the command runner was created with the right parameters
         mock_cmd_runner_class.assert_called_once()
@@ -196,24 +196,22 @@ class TestUsersHandler(unittest.TestCase):
 
         # Verify run_command_sequence was called with the right parameters
         mock_cmd_runner_fns["run_command_sequence"].assert_called_once()
-
-        # Get the command and cli_paramdefs passed to run_command_sequence
         passed_command = mock_cmd_runner_fns["run_command_sequence"].call_args[0][0]
         cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
 
         # Verify it's the expected command
-        self.assertEqual(passed_command.cmd, "users.remove")
+        self.assertEqual(passed_command.cmd, "teams.remove")
 
         # Verify cli_paramdefs contains the expected values
-        self.assertIn("users", cli_paramdefs)
+        self.assertIn("teams", cli_paramdefs)
         self.assertIn("action", cli_paramdefs)
-        self.assertIsInstance(cli_paramdefs["users"], StrResolvedCliParameter)
-        self.assertEqual(cli_paramdefs["users"].value, "user1,user2")
+        self.assertIsInstance(cli_paramdefs["teams"], StrResolvedCliParameter)
+        self.assertEqual(cli_paramdefs["teams"].value, "team1,team2")
         self.assertEqual(cli_paramdefs["action"].value, "remove")
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
-    def test_remove_users_raises_not_implemented_error_if_manifest_does_not_define_cmd(
+    def test_remove_teams_raises_not_implemented_error_if_manifest_does_not_define_cmd(
         self, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock
     ) -> None:
         mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
@@ -230,18 +228,18 @@ class TestUsersHandler(unittest.TestCase):
             }
         )
         mock_retrieve_manifest.return_value = no_cmd_manifest
-        handler = UsersHandler()
+        handler = TeamsHandler()
 
         with self.assertRaises(NotImplementedError):
-            handler.remove_users(["user1", "user2"])
+            handler.remove_teams(["team1", "team2"])
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
-    def test_list_users_returns_empty_list(self, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock) -> None:
+    def test_list_teams_returns_empty_list(self, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock) -> None:
         mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
         mock_retrieve_manifest.return_value = self.mock_manifest
 
-        handler = UsersHandler()
-        result = handler.list_users()
+        handler = TeamsHandler()
+        result = handler.list_teams()
 
         self.assertEqual(result, [])

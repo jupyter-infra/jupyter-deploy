@@ -567,7 +567,7 @@ description: Update allowlisted GitHub usernames
 parameters:
   users:
     type: String
-    description: "The user names (comma-separated) to add, remove or replace in the allowlist."
+    description: "The user names (comma-separated) to add, remove or set in the allowlist."
   action:
     type: String
     description: "The type of action to perform."
@@ -575,7 +575,7 @@ parameters:
     allowedValues:
       - add
       - remove
-      - overwrite
+      - set
 mainSteps:
   - action: aws:runShellScript
     name: UpdateAuthorizedUsers
@@ -590,7 +590,7 @@ description: Update allowlisted GitHub teams; you must have allowlisted a GitHub
 parameters:
   teams:
     type: String
-    description: "The team names (comma-separated) to add, remove or replace in the allowlist"
+    description: "The team names (comma-separated) to add, remove or set in the allowlist"
   action:
     type: String
     description: "The type of action to perform."
@@ -598,7 +598,7 @@ parameters:
     allowedValues:
       - add
       - remove
-      - overwrite
+      - set
 mainSteps:
   - action: aws:runShellScript
     name: UpdateAuthorizedTeams
@@ -608,7 +608,7 @@ mainSteps:
   DOC
   ssm_org_allowlist      = <<DOC
 schemaVersion: '2.2'
-description: Allowlist the GitHub organization; only one organization may be allowlisted at a time.
+description: Set the GitHub organization to allowlist; only one organization may be allowlisted at a time.
 parameters:
   organization:
     type: String

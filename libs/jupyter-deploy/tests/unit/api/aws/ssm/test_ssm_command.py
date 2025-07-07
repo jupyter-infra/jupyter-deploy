@@ -149,6 +149,38 @@ class TestSendCmdToOneInstanceAndWaitSync(unittest.TestCase):
 
     @patch("jupyter_deploy.api.aws.ssm.ssm_command.poll_command")
     @patch("time.sleep")
+    def test_passes_parameters(self, mock_sleep: Mock, mock_poll_command: Mock) -> None:
+        # Setup
+        mock_client = Mock()
+        mock_client.send_command.return_value = {"Command": {"CommandId": "cmd-123"}}
+        mock_poll_command.return_value = {"Status": "Success"}
+
+        # Execute
+        result = send_cmd_to_one_instance_and_wait_sync(
+            mock_client,
+            "AWS-RunShellScript",
+            "i-123",
+            timeout_seconds=20,
+            wait_after_send_seconds=1,
+            ParamKey1=["users"],
+            ParamKey2=["username1", "username2"],
+        )
+
+        # Assert
+        mock_client.send_command.assert_called_once_with(
+            DocumentName="AWS-RunShellScript",
+            InstanceIds=["i-123"],
+            TimeoutSeconds=20,
+            Parameters={
+                "ParamKey1": ["users"],
+                "ParamKey2": ["username1", "username2"],
+            },
+        )
+        mock_sleep.assert_called_once_with(1)
+        self.assertEqual(result["Status"], "Success")
+
+    @patch("jupyter_deploy.api.aws.ssm.ssm_command.poll_command")
+    @patch("time.sleep")
     def test_sleeps_before_polling(self, mock_sleep: Mock, mock_poll_command: Mock) -> None:
         # Setup
         mock_client = Mock()

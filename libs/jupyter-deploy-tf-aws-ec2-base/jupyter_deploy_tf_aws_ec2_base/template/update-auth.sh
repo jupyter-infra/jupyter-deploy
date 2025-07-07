@@ -3,8 +3,8 @@ set -e
 
 # Script to update the file containing the list of authorized GitHub entities (users, teams, orgs)
 # Usage: 
-#   sudo sh update-auth.sh users [add|remove|overwrite] username1,username2
-#   sudo sh update-auth.sh teams [add|remove|overwrite] team1,team2
+#   sudo sh update-auth.sh users [add|remove|set] username1,username2
+#   sudo sh update-auth.sh teams [add|remove|set] team1,team2
 #   sudo sh update-auth.sh org an_org
 #   sudo sh update-auth.sh org [remove]
 
@@ -93,13 +93,13 @@ if [ "$ENTITY_TYPE" == "org" ]; then
 elif [ "$ENTITY_TYPE" == "users" ] || [ "$ENTITY_TYPE" == "teams" ]; then
     if [ -z "$ACTION" ] || [ -z "$VALUES" ]; then
         log_message "Error: Missing required parameters"
-        log_message "Usage: sudo ./update-auth.sh $ENTITY_TYPE [add|remove|overwrite] value1,value2,..."
+        log_message "Usage: sudo ./update-auth.sh $ENTITY_TYPE [add|remove|set] value1,value2,..."
         exit 1
     fi
 
-    if [ "$ACTION" != "add" ] && [ "$ACTION" != "remove" ] && [ "$ACTION" != "overwrite" ]; then
-        log_message "Error: Invalid action. Use 'add', 'remove', or 'overwrite'"
-        log_message "Usage: sudo ./update-auth.sh $ENTITY_TYPE [add|remove|overwrite] value1,value2,..."
+    if [ "$ACTION" != "add" ] && [ "$ACTION" != "remove" ] && [ "$ACTION" != "set" ]; then
+        log_message "Error: Invalid action. Use 'add', 'remove', or 'set'"
+        log_message "Usage: sudo ./update-auth.sh $ENTITY_TYPE [add|remove|set] value1,value2,..."
         exit 1
     fi
     

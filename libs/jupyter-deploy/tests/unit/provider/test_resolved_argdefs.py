@@ -3,6 +3,7 @@ from typing import Any
 
 from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition, TemplateOutputDefinition
 from jupyter_deploy.provider.resolved_argdefs import (
+    IntResolvedInstructionArgument,
     ListStrResolvedInstructionArgument,
     ResolvedInstructionArgument,
     StrResolvedInstructionArgument,
@@ -10,9 +11,20 @@ from jupyter_deploy.provider.resolved_argdefs import (
     resolve_cliparam_argdef,
     resolve_output_argdef,
     resolve_result_argdef,
+    retrieve_optional_arg,
 )
-from jupyter_deploy.provider.resolved_clidefs import ResolvedCliParameter, StrResolvedCliParameter
-from jupyter_deploy.provider.resolved_resultdefs import ResolvedInstructionResult, StrResolvedInstructionResult
+from jupyter_deploy.provider.resolved_clidefs import (
+    IntResolvedCliParameter,
+    ListStrResolvedCliParameter,
+    ResolvedCliParameter,
+    StrResolvedCliParameter,
+)
+from jupyter_deploy.provider.resolved_resultdefs import (
+    IntResolvedInstructionResult,
+    ListStrResolvedInstructionResult,
+    ResolvedInstructionResult,
+    StrResolvedInstructionResult,
+)
 
 
 class CustomTemplateOutputDefinition(TemplateOutputDefinition):
@@ -89,19 +101,35 @@ class TestResolveOutputArgDef(unittest.TestCase):
 
 
 class TestResolveResultArgDef(unittest.TestCase):
-    def test_resolves_existing_str_result(self) -> None:
+    def test_resolves_all_result_types(self) -> None:
         # Arrange
         resultdefs: dict[str, ResolvedInstructionResult] = {
-            "test_result": StrResolvedInstructionResult(result_name="test_result", value="test_value")
+            "str_result": StrResolvedInstructionResult(result_name="str_result", value="test_value"),
+            "int_result": IntResolvedInstructionResult(result_name="int_result", value=42),
+            "list_str_result": ListStrResolvedInstructionResult(
+                result_name="list_str_result", value=["value1", "value2"]
+            ),
         }
 
-        # Act
-        result = resolve_result_argdef(resultdefs=resultdefs, arg_name="test_arg", source_key="test_result")
+        # Act & Assert for string result
+        str_result = resolve_result_argdef(resultdefs=resultdefs, arg_name="str_arg", source_key="str_result")
+        self.assertIsInstance(str_result, StrResolvedInstructionArgument)
+        self.assertEqual(str_result.argument_name, "str_arg")
+        self.assertEqual(str_result.value, "test_value")
 
-        # Assert
-        self.assertIsInstance(result, StrResolvedInstructionArgument)
-        self.assertEqual(result.argument_name, "test_arg")
-        self.assertEqual(result.value, "test_value")
+        # Act & Assert for int result
+        int_result = resolve_result_argdef(resultdefs=resultdefs, arg_name="int_arg", source_key="int_result")
+        self.assertIsInstance(int_result, IntResolvedInstructionArgument)
+        self.assertEqual(int_result.argument_name, "int_arg")
+        self.assertEqual(int_result.value, 42)
+
+        # Act & Assert for list of strings result
+        list_str_result = resolve_result_argdef(
+            resultdefs=resultdefs, arg_name="list_str_arg", source_key="list_str_result"
+        )
+        self.assertIsInstance(list_str_result, ListStrResolvedInstructionArgument)
+        self.assertEqual(list_str_result.argument_name, "list_str_arg")
+        self.assertEqual(list_str_result.value, ["value1", "value2"])
 
     def test_raises_key_error_if_result_is_not_found(self) -> None:
         # Arrange
@@ -129,19 +157,33 @@ class TestResolveResultArgDef(unittest.TestCase):
 
 
 class TestResolveCliParamArgDef(unittest.TestCase):
-    def test_resolves_existing_str_param(self) -> None:
+    def test_resolves_all_cli_parameter_types(self) -> None:
         # Arrange
         paramdefs: dict[str, ResolvedCliParameter] = {
-            "test_param": StrResolvedCliParameter(parameter_name="test_param", value="test_value")
+            "str_param": StrResolvedCliParameter(parameter_name="str_param", value="test_value"),
+            "int_param": IntResolvedCliParameter(parameter_name="int_param", value=42),
+            "list_str_param": ListStrResolvedCliParameter(parameter_name="list_str_param", value=["value1", "value2"]),
         }
 
-        # Act
-        result = resolve_cliparam_argdef(paramdefs=paramdefs, arg_name="test_arg", source_key="test_param")
+        # Act & Assert for string parameter
+        str_result = resolve_cliparam_argdef(paramdefs=paramdefs, arg_name="str_arg", source_key="str_param")
+        self.assertIsInstance(str_result, StrResolvedInstructionArgument)
+        self.assertEqual(str_result.argument_name, "str_arg")
+        self.assertEqual(str_result.value, "test_value")
 
-        # Assert
-        self.assertIsInstance(result, StrResolvedInstructionArgument)
-        self.assertEqual(result.argument_name, "test_arg")
-        self.assertEqual(result.value, "test_value")
+        # Act & Assert for int parameter
+        int_result = resolve_cliparam_argdef(paramdefs=paramdefs, arg_name="int_arg", source_key="int_param")
+        self.assertIsInstance(int_result, IntResolvedInstructionArgument)
+        self.assertEqual(int_result.argument_name, "int_arg")
+        self.assertEqual(int_result.value, 42)
+
+        # Act & Assert for list of strings parameter
+        list_str_result = resolve_cliparam_argdef(
+            paramdefs=paramdefs, arg_name="list_str_arg", source_key="list_str_param"
+        )
+        self.assertIsInstance(list_str_result, ListStrResolvedInstructionArgument)
+        self.assertEqual(list_str_result.argument_name, "list_str_arg")
+        self.assertEqual(list_str_result.value, ["value1", "value2"])
 
     def test_raises_key_error_if_param_is_not_found(self) -> None:
         # Arrange
@@ -202,6 +244,65 @@ class TestRequireArg(unittest.TestCase):
         # Act & Assert
         with self.assertRaises(TypeError) as context:
             require_arg(resolved_args_dict, "str_arg", ListStrResolvedInstructionArgument)
+
+        self.assertIn(
+            ListStrResolvedInstructionArgument.__name__,
+            str(context.exception),
+        )
+        self.assertIn(
+            StrResolvedInstructionArgument.__name__,
+            str(context.exception),
+        )
+
+
+class TestRetrieveOptionalArg(unittest.TestCase):
+    def test_arg_found_return_value(self) -> None:
+        # Arrange
+        str_arg = StrResolvedInstructionArgument(argument_name="str_arg", value="test_value")
+        resolved_args: dict[str, ResolvedInstructionArgument] = {"str_arg": str_arg}
+
+        # Act
+        result = retrieve_optional_arg(
+            resolved_args=resolved_args,
+            arg_name="str_arg",
+            arg_type=StrResolvedInstructionArgument,
+            default_value="default_value",
+        )
+
+        # Assert
+        self.assertEqual(result, str_arg)
+        self.assertEqual(result.value, "test_value")
+
+    def test_arg_not_found_return_default(self) -> None:
+        # Arrange
+        resolved_args: dict[str, ResolvedInstructionArgument] = {}
+
+        # Act
+        result = retrieve_optional_arg(
+            resolved_args=resolved_args,
+            arg_name="non_existing_arg",
+            arg_type=StrResolvedInstructionArgument,
+            default_value="default_value",
+        )
+
+        # Assert
+        self.assertIsInstance(result, StrResolvedInstructionArgument)
+        self.assertEqual(result.argument_name, "non_existing_arg")
+        self.assertEqual(result.value, "default_value")
+
+    def test_raises_if_found_but_type_does_not_match(self) -> None:
+        # Arrange
+        str_arg = StrResolvedInstructionArgument(argument_name="str_arg", value="test_value")
+        resolved_args: dict[str, ResolvedInstructionArgument] = {"str_arg": str_arg}
+
+        # Act & Assert
+        with self.assertRaises(TypeError) as context:
+            retrieve_optional_arg(
+                resolved_args=resolved_args,
+                arg_name="str_arg",
+                arg_type=ListStrResolvedInstructionArgument,
+                default_value=["default", "value"],
+            )
 
         self.assertIn(
             ListStrResolvedInstructionArgument.__name__,
