@@ -12,6 +12,7 @@ from jupyter_deploy.handlers.base_project_handler import (
     BaseProjectHandler,
     NotADictError,
     retrieve_project_manifest,
+    retrieve_project_manifest_if_available,
 )
 
 
@@ -170,6 +171,61 @@ class TestBaseProjectHandler(unittest.TestCase):
         mock_console.print.assert_any_call(
             "Reason: the manifest file does not conform to the expected schema.", style="red"
         )
+
+
+class TestRetrieveProjectManifestIfAvailable(unittest.TestCase):
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    def test_returns_manifest_when_successful(self, mock_retrieve: Mock) -> None:
+        # Setup
+        project_path = Path("/fake/path")
+        mock_manifest = Mock()
+        mock_retrieve.return_value = mock_manifest
+
+        # Execute
+        result = retrieve_project_manifest_if_available(project_path)
+
+        # Assert
+        mock_retrieve.assert_called_once_with(project_path / BaseProjectHandler.MANIFEST_FILENAME)
+        self.assertEqual(result, mock_manifest)
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    def test_returns_none_when_filenotfound_error(self, mock_retrieve: Mock) -> None:
+        # Setup
+        project_path = Path("/fake/path")
+        mock_retrieve.side_effect = FileNotFoundError("Missing jupyter-deploy manifest.")
+
+        # Execute
+        result = retrieve_project_manifest_if_available(project_path)
+
+        # Assert
+        mock_retrieve.assert_called_once_with(project_path / BaseProjectHandler.MANIFEST_FILENAME)
+        self.assertIsNone(result)
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    def test_returns_none_when_notadict_error(self, mock_retrieve: Mock) -> None:
+        # Setup
+        project_path = Path("/fake/path")
+        mock_retrieve.side_effect = NotADictError("Invalid manifest: jupyter-deploy manifest is not a dict.")
+
+        # Execute
+        result = retrieve_project_manifest_if_available(project_path)
+
+        # Assert
+        mock_retrieve.assert_called_once_with(project_path / BaseProjectHandler.MANIFEST_FILENAME)
+        self.assertIsNone(result)
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    def test_returns_none_when_validation_error(self, mock_retrieve: Mock) -> None:
+        # Setup
+        project_path = Path("/fake/path")
+        mock_retrieve.side_effect = ValidationError("Invalid manifest schema", [])
+
+        # Execute
+        result = retrieve_project_manifest_if_available(project_path)
+
+        # Assert
+        mock_retrieve.assert_called_once_with(project_path / BaseProjectHandler.MANIFEST_FILENAME)
+        self.assertIsNone(result)
 
 
 class TestRetrieveProjectManifest(unittest.TestCase):

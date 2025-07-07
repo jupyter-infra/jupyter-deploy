@@ -2,7 +2,7 @@ from collections.abc import Callable
 from typing import Any, Generic, TypeVar, get_args
 
 import typer
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from jupyter_deploy import str_utils
 
@@ -34,6 +34,31 @@ class TemplateVariableDefinition(BaseModel, Generic[T]):
     def get_validator_callback(self) -> Callable | None:
         """Return a validator to be passed as callback attribute of the typer.Option()."""
         return None
+
+    def validate_value(self, value: Any) -> T:
+        """Verify type to be assigned, return the cast value.
+
+        The value must not be None.
+
+        Raises:
+            - ValueError if the value is None
+            - TypeError if the value is not of the right type.
+        """
+        if value is None:
+            raise ValueError(f"Attempted to set a None value for variable: {self.variable_name}")
+
+        try:
+            dict_val = self.model_dump()
+            del dict_val["assigned_value"]
+            instance = self.__class__(**dict_val, assigned_value=value)
+        except ValidationError as e:
+            raise TypeError(f"Invalid value for variable '{self.variable_name}': {value}") from e
+
+        assigned_value = instance.assigned_value
+
+        if assigned_value is None:
+            raise ValueError(f"Unexpected assigned value: {self.variable_name}")
+        return assigned_value
 
     @classmethod
     def get_type(cls) -> type:

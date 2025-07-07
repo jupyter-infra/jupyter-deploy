@@ -276,3 +276,34 @@ class TestTemplateVariableClasses(unittest.TestCase):
         instance: TemplateVariableDefinition = clz(variable_name="var", description="desc")
         converted_value = instance.convert_assigned_value(val)
         self.assertEqual(converted_value, expect)
+
+    @parameterized.parameterized.expand(
+        [
+            (StrTemplateVariableDefinition, "val", 2),
+            (IntTemplateVariableDefinition, 2, "two"),
+            (FloatTemplateVariableDefinition, 3.1459, "pi"),
+            (BoolTemplateVariableDefinition, True, 3),
+            (ListStrTemplateVariableDefinition, ["a", "b"], {}),
+            (DictStrTemplateVariableDefinition, {"key1": "val1", "key2": "val2"}, []),
+        ]
+    )
+    def test_validate_value(self, clz: type, valid_val: Any, invalid_val: Any) -> None:
+        instance: TemplateVariableDefinition = clz(variable_name="var", description="desc")
+
+        self.assertEqual(instance.validate_value(valid_val), valid_val)
+        with self.assertRaises(TypeError):
+            instance.validate_value(invalid_val)
+        with self.assertRaises(ValueError):
+            instance.validate_value(None)
+
+    @parameterized.parameterized.expand(
+        [
+            (IntTemplateVariableDefinition, "2", 2),
+            (FloatTemplateVariableDefinition, "3.1459", 3.1459),
+            (BoolTemplateVariableDefinition, "true", True),
+        ]
+    )
+    def test_validate_value_handles_conversion(self, clz: type, valid_val: Any, expect_val: Any) -> None:
+        instance: TemplateVariableDefinition = clz(variable_name="var", description="desc")
+
+        self.assertEqual(instance.validate_value(valid_val), expect_val)

@@ -92,5 +92,39 @@ def extract_variables_from_json_plan(
 
 
 def format_plan_variables(vars: dict[str, TerraformPlanVariableContent]) -> list[str]:
-    """Return a dict of terraform plan variable entries to a list to save to a .tfvars file."""
+    """Return a list of terraform plan variable entries to a list to save to a .tfvars file."""
     return [f"{name} = {format_terraform_value(var.value)}\n" for name, var in vars.items()]
+
+
+def get_updated_plan_variables(existing_content: str, newvars: dict[str, Any]) -> list[str]:
+    """Return an updated list of terraform variable entries to save to a .tfvars file."""
+    existing_lines = existing_content.split("\n")
+    updated_content: list[str] = []
+    matched_keys: set[str] = set()
+
+    if not newvars:
+        return [] if not existing_content else existing_lines
+
+    # first: insert the value in place
+    for line in existing_lines:
+        line_parts = line.split(" = ")
+        if len(line_parts) < 2:
+            updated_content.append(line)
+            continue
+        varname = line_parts[0].lstrip().rstrip()
+        newvarvalue = newvars.get(varname)
+
+        if not newvarvalue:
+            updated_content.append(line)
+            continue
+
+        updated_content.append(f"{line_parts[0]} = {format_terraform_value(newvarvalue)}")
+        matched_keys.add(varname)
+
+    # second: add if values were missing
+    for varname, varvalue in newvars.items():
+        if varname in matched_keys:
+            continue
+        updated_content.append(f"{varname} = {format_terraform_value(varvalue)}")
+
+    return updated_content

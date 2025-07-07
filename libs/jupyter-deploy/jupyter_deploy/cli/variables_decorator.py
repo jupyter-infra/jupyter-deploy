@@ -1,11 +1,13 @@
 import functools
 import inspect
 from collections.abc import Callable
+from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
+from jupyter_deploy.handlers import base_project_handler
 from jupyter_deploy.handlers.project import variables_handler
 
 
@@ -28,8 +30,13 @@ def with_project_variables() -> Callable:
     def decorator(wrapped_fn: Callable) -> Callable:
         # we retrieve the template information
         # this works by calling cwd(), and discovering the variable parameters
-        handler = variables_handler.VariablesHandler()
-        var_defs = handler.get_template_variables()
+        project_path = Path.cwd()
+        manifest = base_project_handler.retrieve_project_manifest_if_available(project_path)
+
+        var_defs: dict[str, TemplateVariableDefinition] = {}
+        if manifest:
+            handler = variables_handler.VariablesHandler(project_path=project_path, project_manifest=manifest)
+            var_defs = handler.get_template_variables()
 
         @functools.wraps(wrapped_fn)  # user wraps to preserves metadata including docstring
         def wrapper(*largs, **kwargs) -> None:  # type: ignore

@@ -105,3 +105,13 @@ def retrieve_project_manifest(manifest_path: Path) -> manifest.JupyterDeployMani
         raise NotADictError("Invalid manifest: jupyter-deploy manifest is not a dict.")
 
     return manifest.JupyterDeployManifest(**content)
+
+
+def retrieve_project_manifest_if_available(project_path: Path) -> manifest.JupyterDeployManifest | None:
+    """Lookup the project manifest, return it if found, None otherwise."""
+
+    manifest_path = project_path / BaseProjectHandler.MANIFEST_FILENAME
+    try:
+        return retrieve_project_manifest(manifest_path)
+    except (FileNotFoundError, NotADictError, ValidationError):
+        return None
