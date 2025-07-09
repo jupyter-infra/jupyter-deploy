@@ -43,32 +43,33 @@ output "server_status_check_document" {
   value       = aws_ssm_document.instance_status_check.name
 }
 
-# user.add and user.remove CLI handling
+# users.list, teams.list, organization.get CLI handling
+output "auth_check_document" {
+  description = "Name of the SSM document to check the authorized entitites."
+  value       = aws_ssm_document.auth_check.name
+}
+
+# users.add, users.remove and users.set CLI handling
 output "auth_users_update_document" {
   description = "Name of the SSM document to update the usernames allowlisted to access the app."
   value       = aws_ssm_document.auth_users_update.name
 }
 
-# team.add and team.remove CLI handling
+# teams.add, teams.remove, teams.set CLI handling
 output "auth_teams_update_document" {
   description = "Name of the SSM document to update the teams allowlisted to access the app."
   value       = aws_ssm_document.auth_teams_update.name
 }
 
 # organization.set CLI handling
-output "auth_org_allowlist_document" {
-  description = "Name of the SSM document to specify the organization whose users are authorized to access the app."
-  value       = aws_ssm_document.auth_org_allowlist.name
+output "auth_org_set_document" {
+  description = "Name of the SSM document to set the organization whose members or teams are authorized to access the app."
+  value       = aws_ssm_document.auth_org_set.name
 }
 
-# organization.remove CLI handling
-output "auth_org_remove_document" {
-  description = "Name of the SSM document to remove the organization  whose users are authorized to access the app."
-  value       = aws_ssm_document.auth_org_remove.name
+# organization.unset CLI handling
+output "auth_org_unset_document" {
+  description = "Name of the SSM document to unset the organization whose members or teams are authorized to access the app."
+  value       = aws_ssm_document.auth_org_unset.name
 }
 
-# cookies.invalidate CLI handling
-output "auth_cookies_invalidate_document" {
-  description = "Name of the SSM document to invalidate all the cookies that the app has issued to users."
-  value       = aws_ssm_document.auth_invalidate_cookies.name
-}

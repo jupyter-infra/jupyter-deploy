@@ -45,3 +45,12 @@ def get_trimmed_header(full_text: str, max_length: int = 120) -> str:
 
     split_trimmed_text = trimmed_text.split("\n")
     return split_trimmed_text[0]
+
+
+def to_list_str(concatenated_list: str, sep: str = ",") -> list[str]:
+    """Split the string by the separator, return result."""
+    if not concatenated_list:
+        return []
+
+    items = concatenated_list.split(sep)
+    return items

@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from jupyter_deploy.engine.enum import EngineType
-from jupyter_deploy.enum import InstructionArgumentSource, ResultSource, ValueSource
+from jupyter_deploy.enum import InstructionArgumentSource, ResultSource, TransformType, UpdateSource, ValueSource
 
 
 class JupyterDeployTemplateV1(BaseModel):
@@ -46,10 +46,31 @@ class JupyterDeployInstructionResultV1(BaseModel):
     result_name: str = Field(alias="result-name")
     source: str
     source_key: str = Field(alias="source-key")
+    transform: str | None = None
 
     def get_source_type(self) -> ResultSource:
         """Return the instruction argument source type."""
         return ResultSource.from_string(self.source)
+
+    def get_transform_type(self) -> TransformType:
+        """Return the transform type to apply to the source."""
+        return TransformType.from_string(self.transform)
+
+
+class JupyterDeployCommandUpdateV1(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    variable_name: str = Field(alias="variable-name")
+    source: str
+    source_key: str = Field(alias="source-key")
+    transform: str | None = None
+
+    def get_source_type(self) -> UpdateSource:
+        """Return the instruction argument source type."""
+        return UpdateSource.from_string(self.source)
+
+    def get_transform_type(self) -> TransformType:
+        """Return the transform type to apply to the source."""
+        return TransformType.from_string(self.transform)
 
 
 class JupyterDeployInstructionV1(BaseModel):
@@ -63,6 +84,7 @@ class JupyterDeployCommandV1(BaseModel):
     cmd: str
     sequence: list[JupyterDeployInstructionV1]
     results: list[JupyterDeployInstructionResultV1] | None = None
+    updates: list[JupyterDeployCommandUpdateV1] | None = None
 
 
 class JupyterDeployManifestV1(BaseModel):

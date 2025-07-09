@@ -11,6 +11,7 @@ EXPECTED_TEMPLATE_FILES = [
     "docker-startup.sh.tftpl",
     "dockerfile.jupyter",
     "dockerfile.logrotator",
+    "get-auth.sh",
     "get-status.sh",
     "jupyter-start.sh",
     "jupyter-reset.sh",

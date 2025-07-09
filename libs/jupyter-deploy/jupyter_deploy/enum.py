@@ -61,6 +61,58 @@ class ValueSource(str, Enum):
         raise ValueError(f"No ValueSource found for '{source_str}'")
 
 
+class UpdateSource(str, Enum):
+    """Enum to list the possible sources for an result."""
+
+    INSTRUCTION_RESULT = "result"
+
+    @classmethod
+    def from_string(cls, source_str: str) -> "UpdateSource":
+        """Return the enum value, ignoring case.
+
+        Raises:
+            ValueError: If no matching enum value is found.
+        """
+        source_lower = source_str.lower()
+        for source in cls:
+            if source.value.lower() == source_lower:
+                return source
+        raise ValueError(f"No UpdateSource found for '{source_str}'")
+
+
+class TransformType(str, Enum):
+    """List of transforms applicable to results value."""
+
+    NO_TRANSFORM = "no-transform"
+    COMMA_SEPARATED_STR_TO_LIST_STR = "comma-separated-str-to-list-str"
+
+    @classmethod
+    def from_string(cls, target_str: str | None) -> "TransformType":
+        """Return the enum value, ignoring case, dashes and underlines.
+
+        Raises:
+            ValueError: If no matching enum value is found.
+        """
+        if not target_str:
+            return cls.NO_TRANSFORM
+
+        target_lower = target_str.lower()
+
+        # first try to match lower case only
+        for transform in cls:
+            if transform.value.lower() == target_lower:
+                return transform
+
+        # then try to match without dashes or underlines
+        repl_target = target_lower.replace("-", "").replace("_", "")
+        for transform in cls:
+            repl_transform = transform.value.lower().replace("-", "").replace("_", "")
+            if repl_transform == repl_target:
+                return transform
+
+        raise ValueError(f"No transform found for '{target_str}'")
+
+
 class JupyterDeployTool(str, Enum):
     """List of tools verifiable by jupyter deploy."""
 

@@ -234,14 +234,3 @@ class TestUsersHandler(unittest.TestCase):
 
         with self.assertRaises(NotImplementedError):
             handler.remove_users(["user1", "user2"])
-
-    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
-    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
-    def test_list_users_returns_empty_list(self, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock) -> None:
-        mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
-        mock_retrieve_manifest.return_value = self.mock_manifest
-
-        handler = UsersHandler()
-        result = handler.list_users()
-
-        self.assertEqual(result, [])

@@ -1,7 +1,9 @@
+from typing import Any
+
 import hcl2
 from pydantic import ValidationError
 
-from jupyter_deploy.engine.terraform import tf_vardefs
+from jupyter_deploy.engine.terraform import tf_plan, tf_vardefs
 
 
 def parse_variables_dot_tf_content(content: str) -> dict[str, tf_vardefs.TerraformVariableDefinition]:
@@ -89,3 +91,16 @@ def parse_dot_tfvars_content_and_add_defaults(
         except ValidationError as e:
             print(f"Warning: invalid default in .tfvars file for '{varname}', ignoring: {e.errors()}")
             continue
+
+
+def parse_and_update_dot_tfvars_content(
+    content: str,
+    varvalues: dict[str, Any],
+) -> list[str]:
+    """Load a dot tfvars file, add the values to the dict, return the lines of the new content."""
+    if not content:
+        saved_values: dict[str, Any] = {}
+    else:
+        saved_values = hcl2.loads(content)
+    saved_values.update(varvalues)
+    return tf_plan.format_values_for_dot_tfvars(saved_values)

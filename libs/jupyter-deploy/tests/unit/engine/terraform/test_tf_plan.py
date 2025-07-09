@@ -3,7 +3,6 @@
 import json
 import unittest
 from pathlib import Path
-from typing import Any
 
 from pydantic import ValidationError
 
@@ -13,7 +12,7 @@ from jupyter_deploy.engine.terraform.tf_plan import (
     extract_variables_from_json_plan,
     format_plan_variables,
     format_terraform_value,
-    get_updated_plan_variables,
+    format_values_for_dot_tfvars,
 )
 
 
@@ -146,53 +145,34 @@ class TestFormatPlanVariables(unittest.TestCase):
         self.assertEqual(result, [])
 
 
-class TestGetUpdatedPlanVariables(unittest.TestCase):
-    def test_replace_values(self) -> None:
-        # Setup
-        existing_content = 'var1 = "old_value1"\nvar2 = 42\nvar3 = true\n'
-        newvars = {"var2": 99}
+class TestFormatValuesForDotTfvars(unittest.TestCase):
+    def test_happy_case(self) -> None:
+        vars = {
+            "var_str": "value1",
+            "var_int": 123,
+            "var_float": 3.1459,
+            "var_bool": True,
+            "var_null": None,
+            "var_empty_dict": {},
+            "var_dict": {"key1": "val1", "key2": "val2"},
+            "var_dict_int": {"key1": 10, "key2": 11},
+            "var_empty_list": [],
+            "var_list": ["a", "b"],
+        }
+        result = format_values_for_dot_tfvars(vars)
+        self.assertEqual(len(result), len(vars.keys()))
+        self.assertIn('var_str = "value1"\n', result)
+        self.assertIn("var_int = 123\n", result)
+        self.assertIn("var_float = 3.1459\n", result)
+        self.assertIn("var_bool = true\n", result)
+        self.assertIn("var_null = null\n", result)
+        self.assertIn("var_empty_dict = {}\n", result)
+        self.assertIn('var_dict = {\nkey1 = "val1"\nkey2 = "val2"\n}\n', result)
+        self.assertIn("var_dict_int = {\nkey1 = 10\nkey2 = 11\n}\n", result)
+        self.assertIn("var_empty_list = []\n", result)
+        self.assertIn('var_list = [\n"a",\n"b",\n]\n', result)
 
-        # Execute
-        result = get_updated_plan_variables(existing_content, newvars)
-
-        # Assert
-        self.assertEqual(len(result), 4)  # 3 lines + empty line at end
-        self.assertIn('var1 = "old_value1"', result)
-        self.assertIn("var2 = 99", result)
-        self.assertIn("var3 = true", result)
-
-    def test_add_not_found_values(self) -> None:
-        # Setup
-        existing_content = 'var1 = "old_value1"\nvar2 = 42\n'
-        newvars = {"var3": "new_value"}
-
-        # Execute
-        result = get_updated_plan_variables(existing_content, newvars)
-
-        # Assert
-        self.assertEqual(len(result), 4)  # 3 lines + empty line at end
-        self.assertIn('var1 = "old_value1"', result)
-        self.assertIn("var2 = 42", result)
-        self.assertIn('var3 = "new_value"', result)
-
-    def test_empty_newvars_return_content_split_by_line(self) -> None:
-        # Setup
-        existing_content = 'var1 = "value1"\nvar2 = 42\n'
-        newvars: dict[str, Any] = {}
-
-        # Execute
-        result = get_updated_plan_variables(existing_content, newvars)
-
-        # Assert
-        self.assertEqual(result, ['var1 = "value1"', "var2 = 42", ""])
-
-    def test_empty_existing_content_empty_new_vars_return_empty_list(self) -> None:
-        # Setup
-        existing_content = ""
-        newvars: dict[str, Any] = {}
-
-        # Execute
-        result = get_updated_plan_variables(existing_content, newvars)
-
-        # Assert
+    def test_empty_vars_return_empty_list(self) -> None:
+        vars: dict[str, TerraformPlanVariableContent] = {}
+        result = format_values_for_dot_tfvars(vars)
         self.assertEqual(result, [])

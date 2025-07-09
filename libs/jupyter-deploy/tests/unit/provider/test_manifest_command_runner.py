@@ -74,7 +74,9 @@ class TestManifestCommandRunner(unittest.TestCase):
         output_handler_mock = Mock()
 
         # Act
-        runner = ManifestCommandRunner(console=console_mock, output_handler=output_handler_mock)
+        runner = ManifestCommandRunner(
+            console=console_mock, output_handler=output_handler_mock, variable_handler=Mock()
+        )
 
         # Assert
         self.assertEqual(runner._console, console_mock)
@@ -105,7 +107,9 @@ class TestManifestCommandRunner(unittest.TestCase):
         mock_runner.execute_instruction.side_effect = [mock_result_1, mock_result_2]
 
         # Act
-        runner = ManifestCommandRunner(console=console_mock, output_handler=output_handler_mock)
+        runner = ManifestCommandRunner(
+            console=console_mock, output_handler=output_handler_mock, variable_handler=Mock()
+        )
         results = runner.run_command_sequence(cmd, mock_cliparam_defs)
 
         # Assert
@@ -138,7 +142,9 @@ class TestManifestCommandRunner(unittest.TestCase):
         mock_runner.execute_instruction.side_effect = [mock_result_1, mock_result_2]
 
         # Act
-        runner = ManifestCommandRunner(console=console_mock, output_handler=output_handler_mock)
+        runner = ManifestCommandRunner(
+            console=console_mock, output_handler=output_handler_mock, variable_handler=Mock()
+        )
         runner.run_command_sequence(cmd, mock_cliparam_defs)
 
         # Assert
@@ -190,7 +196,9 @@ class TestManifestCommandRunner(unittest.TestCase):
         mock_runner.execute_instruction.side_effect = [mock_result_1, mock_result_2]
 
         # Act
-        runner = ManifestCommandRunner(console=console_mock, output_handler=output_handler_mock)
+        runner = ManifestCommandRunner(
+            console=console_mock, output_handler=output_handler_mock, variable_handler=Mock()
+        )
         runner.run_command_sequence(cmd, mock_cliparam_defs)
 
         # Assert

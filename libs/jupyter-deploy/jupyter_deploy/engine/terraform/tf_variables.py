@@ -3,7 +3,7 @@ from typing import Any
 
 from jupyter_deploy import fs_utils
 from jupyter_deploy.engine.engine_variables import EngineVariablesHandler
-from jupyter_deploy.engine.terraform import tf_plan, tf_varfiles
+from jupyter_deploy.engine.terraform import tf_varfiles
 from jupyter_deploy.engine.terraform.tf_constants import (
     TF_RECORDED_VARS_FILENAME,
     TF_VARIABLES_FILENAME,
@@ -77,7 +77,7 @@ class TerraformVariablesHandler(EngineVariablesHandler):
         if fs_utils.file_exists(tfvars_path):
             previous_tfvars_content = fs_utils.read_short_file(tfvars_path)
 
-        updated_tfvars_lines = tf_plan.get_updated_plan_variables(previous_tfvars_content, updated_vals)
+        updated_tfvars_lines = tf_varfiles.parse_and_update_dot_tfvars_content(previous_tfvars_content, varvalues)
 
         if updated_tfvars_lines:
             fs_utils.write_inline_file_content(tfvars_path, updated_tfvars_lines)

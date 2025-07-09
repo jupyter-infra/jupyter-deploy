@@ -331,6 +331,10 @@ data "local_file" "dockerfile_logrotator" {
 data "local_file" "update_auth" {
   filename = "${path.module}/update-auth.sh"
 }
+
+data "local_file" "get_auth" {
+  filename = "${path.module}/get-auth.sh"
+}
 data "local_file" "check_status" {
   filename = "${path.module}/check-status-internal.sh"
 }
@@ -401,6 +405,7 @@ locals {
   refresh_oauth_cookie_indented  = join("\n${local.indent_str}", compact(split("\n", data.local_file.refresh_oauth_cookie.content)))
   check_status_indented          = join("\n${local.indent_str}", compact(split("\n", data.local_file.check_status.content)))
   get_status_indented            = join("\n${local.indent_str}", compact(split("\n", data.local_file.get_status.content)))
+  get_auth_indented              = join("\n${local.indent_str}", compact(split("\n", data.local_file.get_auth.content)))
 }
 
 locals {
@@ -464,6 +469,9 @@ mainSteps:
           tee /usr/local/bin/get-status.sh << 'EOF'
           ${local.get_status_indented}
           EOF
+          tee /usr/local/bin/get-auth.sh << 'EOF'
+          ${local.get_auth_indented}
+          EOF
 
   - action: aws:runShellScript
     name: StartDockerServices
@@ -485,6 +493,7 @@ DOC
     fileexists("${path.module}/refresh-oauth-cookie.sh"),
     fileexists("${path.module}/check-status-internal.sh"),
     fileexists("${path.module}/get-status.sh"),
+    fileexists("${path.module}/get-auth.sh"),
   ])
 
   files_not_empty = alltrue([
@@ -497,6 +506,7 @@ DOC
     length(data.local_file.refresh_oauth_cookie) > 0,
     length(data.local_file.check_status) > 0,
     length(data.local_file.get_status) > 0,
+    length(data.local_file.get_auth) > 0,
   ])
 
   docker_compose_valid = can(yamldecode(local.docker_compose_file))
@@ -561,6 +571,26 @@ mainSteps:
           sh /usr/local/bin/get-status.sh
 
 DOC
+  ssm_auth_check         = <<DOC
+schemaVersion: '2.2'
+description: Retrieve and print the auth settings.
+parameters:
+  category:
+    type: String
+    description: "The category of authorized entities to list."
+    default: users
+    allowedValues:
+      - users
+      - teams
+      - org
+mainSteps:
+  - action: aws:runShellScript
+    name: CheckAuth
+    inputs:
+      runCommand:
+        - |
+          sh /usr/local/bin/get-auth.sh {{category}}
+DOC
   ssm_users_update       = <<DOC
 schemaVersion: '2.2'
 description: Update allowlisted GitHub usernames
@@ -583,7 +613,7 @@ mainSteps:
       runCommand:
         - |
           sh /usr/local/bin/update-auth.sh users {{action}} {{users}}
-  DOC
+DOC
   ssm_teams_update       = <<DOC
 schemaVersion: '2.2'
 description: Update allowlisted GitHub teams; you must have allowlisted a GitHub organization.
@@ -605,8 +635,8 @@ mainSteps:
     inputs:
       runCommand:
         - "sh /usr/local/bin/update-auth.sh teams {{action}} {{teams}}"
-  DOC
-  ssm_org_allowlist      = <<DOC
+DOC
+  ssm_org_set            = <<DOC
 schemaVersion: '2.2'
 description: Set the GitHub organization to allowlist; only one organization may be allowlisted at a time.
 parameters:
@@ -615,32 +645,21 @@ parameters:
     description: "The name of the GitHub organization to allowlist."
 mainSteps:
   - action: aws:runShellScript
-    name: AllowlistOrganization
+    name: SetAllowlistedOrganization
     inputs:
       runCommand:
         - "sh /usr/local/bin/update-auth.sh org {{organization}}"
-  DOC
-  ssm_org_remove         = <<DOC
+DOC
+  ssm_org_unset          = <<DOC
 schemaVersion: '2.2'
 description: Remove the GitHub organization; rely exclusively on username allowlisting.
 mainSteps:
   - action: aws:runShellScript
-    name: AllowlistOrganization
+    name: UnsetAllowlistOrganization
     inputs:
       runCommand:
         - |
           sh /usr/local/bin/update-auth.sh org remove  
-  DOC
-  ssm_invalidate_cookies = <<DOC
-schemaVersion: '2.2'
-description: Invalidate the existing client cookies.
-mainSteps:
-  - action: aws:runShellScript
-    name: InvalidateCookies
-    inputs:
-      runCommand:
-        - |
-          sh /usr/local/bin/refresh-oauth-cookie.sh
 DOC
 }
 
@@ -654,6 +673,15 @@ resource "aws_ssm_document" "instance_status_check" {
   document_format = "YAML"
 
   content = local.ssm_status_check
+  tags    = local.combined_tags
+}
+
+resource "aws_ssm_document" "auth_check" {
+  name            = "auth-check-${local.doc_postfix}"
+  document_type   = "Command"
+  document_format = "YAML"
+
+  content = local.ssm_auth_check
   tags    = local.combined_tags
 }
 
@@ -675,30 +703,21 @@ resource "aws_ssm_document" "auth_teams_update" {
   tags    = local.combined_tags
 }
 
-resource "aws_ssm_document" "auth_org_allowlist" {
-  name            = "auth-org-allowlist-${local.doc_postfix}"
+resource "aws_ssm_document" "auth_org_set" {
+  name            = "auth-org-set-${local.doc_postfix}"
   document_type   = "Command"
   document_format = "YAML"
 
-  content = local.ssm_org_allowlist
+  content = local.ssm_org_set
   tags    = local.combined_tags
 }
 
-resource "aws_ssm_document" "auth_org_remove" {
-  name            = "auth-org-remove-${local.doc_postfix}"
+resource "aws_ssm_document" "auth_org_unset" {
+  name            = "auth-org-unset-${local.doc_postfix}"
   document_type   = "Command"
   document_format = "YAML"
 
-  content = local.ssm_org_remove
-  tags    = local.combined_tags
-}
-
-resource "aws_ssm_document" "auth_invalidate_cookies" {
-  name            = "auth_invalidate_cookies-${local.doc_postfix}"
-  document_type   = "Command"
-  document_format = "YAML"
-
-  content = local.ssm_invalidate_cookies
+  content = local.ssm_org_unset
   tags    = local.combined_tags
 }
 

@@ -75,8 +75,8 @@ class AwsSsmRunner(InstructionRunner):
             **parameters,
         )
         command_status = response["Status"]
-        command_stdout = response.get("StandardOutputContent", "")
-        command_stderr = response.get("StandardErrorContent", "")
+        command_stdout = response.get("StandardOutputContent", "").rstrip()
+        command_stderr = response.get("StandardErrorContent", "").rstrip()
 
         if command_status == "Failed":
             console.print(f":x: command {doc_name_arg.value} failed.", style="red")

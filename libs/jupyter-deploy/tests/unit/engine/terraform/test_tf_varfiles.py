@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock, patch
 
 from jupyter_deploy.engine.terraform import tf_vardefs, tf_varfiles
@@ -205,3 +206,38 @@ class TestParseDotTfvarsContentAndAddDefaults(unittest.TestCase):
 
         # Verify unrecognized variable from tfvars is not added
         self.assertNotIn("some_unrecognized_value", parsed_variable_defs)
+
+
+class TestParseAndUpdateDotTfvarsContent(unittest.TestCase):
+    tfvars_content: str
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        mock_tfvars_path = Path(__file__).parent / "mock_defaults.tfvars"
+        with open(mock_tfvars_path) as f:
+            cls.tfvars_content = f.read()
+
+    def test_can_parse_empty_content(self) -> None:
+        varvalues: dict[str, Any] = {}
+        result = tf_varfiles.parse_and_update_dot_tfvars_content("", varvalues)
+        self.assertEqual([], result)
+
+    @patch("hcl2.loads")
+    def test_calls_hcl2_loads(self, mock_loads: Mock) -> None:
+        mock_loads.return_value = {}
+        varvalues: dict[str, Any] = {}
+        tf_varfiles.parse_and_update_dot_tfvars_content(self.tfvars_content, varvalues)
+        mock_loads.assert_called_once_with(self.tfvars_content)
+
+    def test_parsing_actual_tfvars_works(self) -> None:
+        varvalues: dict[str, Any] = {"some_list_of_string": ["b", "c", "d"]}
+        result = tf_varfiles.parse_and_update_dot_tfvars_content(self.tfvars_content, varvalues)
+
+        self.assertIn('some_string_value = "t3.medium"\n', result)
+        self.assertIn("some_int_value = 30\n", result)
+        self.assertIn("some_float_value = 0.9\n", result)
+        self.assertIn("some_string_value_with_condition = null\n", result)
+        self.assertIn('some_list_of_string = [\n"b",\n"c",\n"d",\n]\n', result)
+        self.assertIn('some_secret = "i-should-not-be-here"\n', result)
+        self.assertIn("some_map_of_sring = {}\n", result)
+        self.assertIn('some_unrecognized_value = "manually-added"\n', result)

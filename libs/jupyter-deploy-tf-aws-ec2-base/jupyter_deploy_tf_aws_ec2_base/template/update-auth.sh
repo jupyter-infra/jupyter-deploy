@@ -9,17 +9,18 @@ set -e
 #   sudo sh update-auth.sh org [remove]
 
 # File content follows format:
-
 # [org]
-#  Org1
+# Org1
 #
 # [teams]
-#  Team1,Team2
+# Team1,Team2
 #
 # [users]
-#  User1,User2
+# User1,User2
 
-exec > >(tee -a /var/log/jupyter-deploy/update-auth.log) 2>&1
+LOG_FILE="/var/log/jupyter-deploy/update-auth.log"
+touch "$LOG_FILE"
+exec 2> >(tee -a "$LOG_FILE" >&2)
 
 AUTHED_ENTITIES_FILE="/etc/AUTHED_ENTITIES"
 ENTITY_TYPE=$1
@@ -28,7 +29,7 @@ VALUES=$3
 
 log_message() {
   local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
-  echo "[$timestamp] $*"
+  echo "[$timestamp] $*" >> "$LOG_FILE"
 }
 
 # Ensure the file exists in case it was manually deleted
@@ -76,7 +77,9 @@ if [ "$ENTITY_TYPE" == "org" ]; then
             log_message "No organization is currently set"
         fi
     elif [ -z "$ACTION" ]; then
-        log_message "Error: Missing either GitHub organization name or remove action"
+        ERROR="Error: Missing either GitHub organization name or remove action."
+        log_message "$ERROR"
+        echo "$ERROR"
         exit 1
     else
         CURRENT_ORG=$(get_section_content "org")
@@ -92,14 +95,18 @@ if [ "$ENTITY_TYPE" == "org" ]; then
     
 elif [ "$ENTITY_TYPE" == "users" ] || [ "$ENTITY_TYPE" == "teams" ]; then
     if [ -z "$ACTION" ] || [ -z "$VALUES" ]; then
-        log_message "Error: Missing required parameters"
-        log_message "Usage: sudo ./update-auth.sh $ENTITY_TYPE [add|remove|set] value1,value2,..."
+        ERROR="Error: Missing required parameters."
+        log_message "$ERROR"
+        echo $ERROR
+        echo "Usage: sudo update-auth.sh $ENTITY_TYPE [add|remove|set] value1,value2,..."
         exit 1
     fi
 
     if [ "$ACTION" != "add" ] && [ "$ACTION" != "remove" ] && [ "$ACTION" != "set" ]; then
-        log_message "Error: Invalid action. Use 'add', 'remove', or 'set'"
-        log_message "Usage: sudo ./update-auth.sh $ENTITY_TYPE [add|remove|set] value1,value2,..."
+        ERROR="Error: Invalid action."
+        log_message "$ERROR"
+        echo $ERROR
+        echo "Usage: sudo update-auth.sh $ENTITY_TYPE [add|remove|set] value1,value2,..."
         exit 1
     fi
     
@@ -159,7 +166,7 @@ elif [ "$ENTITY_TYPE" == "users" ] || [ "$ENTITY_TYPE" == "teams" ]; then
         # Overwrite
         if [ "$CURRENT_VALUES_SORTED" != "$INPUT_VALUES_SORTED" ]; then
             AUTH_CHANGED=true
-            for value in $CURRENT_VALUES_SORTED; do
+            for value in "$CURRENT_VALUES_SORTED"; do
                 if ! echo "$INPUT_VALUES_SORTED" | grep -q "^$value$"; then
                     REFRESH_OAUTH_COOKIE=true
                     break
@@ -181,8 +188,10 @@ elif [ "$ENTITY_TYPE" == "users" ] || [ "$ENTITY_TYPE" == "teams" ]; then
     update_section "$ENTITY_TYPE" "$FINAL_VALUES"
     
 else
-    log_message "Error: Invalid entity type. Use 'org', 'teams', or 'users'"
-    log_message "Usage: sudo ./update-auth.sh [org|teams|users] ..."
+    ERROR="Error: Invalid entity type."
+    log_message "$ERROR"
+    echo "$ERROR"
+    echo "Usage: sudo update-auth.sh [org|teams|users] ..."
     exit 1
 fi
 
@@ -199,12 +208,17 @@ sed -i "s/^AUTHED_TEAMS_CONTENT=.*/AUTHED_TEAMS_CONTENT=${AUTHED_TEAMS_CONTENT}/
 # When we remove a user from the allowlist, we need to invalidate their cookie/session so that they loose access 
 # immediately. We do so by updating the cookie secret. Note that this action invalidates all sessions/cookies.
 if [ "$REFRESH_OAUTH_COOKIE" = true ]; then
+    log_message "Update will result in removing access to some users: invalidating cookies..."
     sh /usr/local/bin/refresh-oauth-cookie.sh >/dev/null
+    log_message "Cookies invalidated."
 fi
 
 if [ "$AUTH_CHANGED" = true ]; then
     log_message "Recreating OAuth container to apply changes..."
-    cd /opt/docker && docker-compose up -d oauth
+    cd /opt/docker
+    OUTPUT=$(docker-compose up -d oauth 2>&1)
+    log_message "Docker compose output:"
+    log_message "$OUTPUT"
 else
     log_message "No changes detected, skipping OAuth container recreation."
 fi

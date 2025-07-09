@@ -31,7 +31,7 @@ def status(
         server_status = handler.get_server_status()
 
         console.line()
-        console.print(f"Jupyter server is [bold cyan]{server_status}[/]")
+        console.print(f"Jupyter server status: [bold cyan]{server_status}[/]")
 
 
 @servers_app.command()
