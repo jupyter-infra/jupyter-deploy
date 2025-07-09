@@ -559,7 +559,7 @@ resource "aws_ssm_document" "instance_startup" {
 }
 
 locals {
-  ssm_status_check       = <<DOC
+  ssm_status_check = <<DOC
 schemaVersion: '2.2'
 description: Check the status of the docker services and TLS certs in the instance.
 mainSteps:
@@ -571,7 +571,7 @@ mainSteps:
           sh /usr/local/bin/get-status.sh
 
 DOC
-  ssm_auth_check         = <<DOC
+  ssm_auth_check   = <<DOC
 schemaVersion: '2.2'
 description: Retrieve and print the auth settings.
 parameters:
@@ -591,7 +591,7 @@ mainSteps:
         - |
           sh /usr/local/bin/get-auth.sh {{category}}
 DOC
-  ssm_users_update       = <<DOC
+  ssm_users_update = <<DOC
 schemaVersion: '2.2'
 description: Update allowlisted GitHub usernames
 parameters:
@@ -614,7 +614,7 @@ mainSteps:
         - |
           sh /usr/local/bin/update-auth.sh users {{action}} {{users}}
 DOC
-  ssm_teams_update       = <<DOC
+  ssm_teams_update = <<DOC
 schemaVersion: '2.2'
 description: Update allowlisted GitHub teams; you must have allowlisted a GitHub organization.
 parameters:
@@ -636,7 +636,7 @@ mainSteps:
       runCommand:
         - "sh /usr/local/bin/update-auth.sh teams {{action}} {{teams}}"
 DOC
-  ssm_org_set            = <<DOC
+  ssm_org_set      = <<DOC
 schemaVersion: '2.2'
 description: Set the GitHub organization to allowlist; only one organization may be allowlisted at a time.
 parameters:
@@ -650,7 +650,7 @@ mainSteps:
       runCommand:
         - "sh /usr/local/bin/update-auth.sh org {{organization}}"
 DOC
-  ssm_org_unset          = <<DOC
+  ssm_org_unset    = <<DOC
 schemaVersion: '2.2'
 description: Remove the GitHub organization; rely exclusively on username allowlisting.
 mainSteps:

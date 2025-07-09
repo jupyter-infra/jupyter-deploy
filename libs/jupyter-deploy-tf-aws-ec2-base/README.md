@@ -18,15 +18,16 @@ This project:
     - `docker-startup.sh.tftpl` to run the docker-compose up cmd and post docker-start instructions
     - `traefik.yml.tftpl` traefik configuration file
     - `dockerfile.jupyter` for the Jupyter container
-    - `jupyter-start.sh` as the entrypoint script for the Jupyter container
-    - `jupyter-reset.sh` as the fallback script if the Jupyter container fails to start
+    - `jupyter-start.sh` the entrypoint script for the Jupyter container
+    - `jupyter-reset.sh` the fallback script if the Jupyter container fails to start
     - `pyproject.jupyter.toml` for Python dependencies of the base environment where the Jupyter server runs
     - `jupyter_server_config.py` for Jupyter server configuration
     - `dockerfile.logrotator` for a sidecar container responsible to rotate logs
     - `logrotator-start.sh.tftpl` to configure logrotate
     - `check-status-internal.sh` as a utility script to verify that the services are up and the TLS certificates are available
-    - `get-status.sh` as utility script to translate the return code of `check-status` script to a human-readable status
-    - `update-auth.sh` as a utility script for updating the currently authenticated org, teams, and/or users
+    - `get-status.sh` the utility script to translate the return code of `check-status` script to a human-readable status
+    - `update-auth.sh` the utility script to update the authorized org, teams, and/or users
+    - `get-auth.sh` the utility script to retrieve the authorized org, teams, and/or users
 - creates an SSM association, which runs the startup script on the instance
 - creates the Route 53 Hosted Zone for the domain unless it already exists
 - adds DNS records to the Route 53 Hosted Zone
@@ -124,7 +125,7 @@ No modules.
 ## Inputs
 | Name | Type | Default | Description |
 |---|---|---|---|
-| region | `string` | `us-west-2` | AWS region where the resources should be created |
+| region | `string` | `us-west-2` | The AWS region where the resources should be created |
 | instance_type | `string` | `t3.medium` | The type of instance to start |
 | key_pair_name | `string` | `null` | The name of key pair |
 | ami_id | `string` | `null` | The ID of the AMI to use for the instance |
@@ -155,3 +156,10 @@ No modules.
 | `ami_id` | The Amazon Machine Image ID used by the EC2 instance |
 | `jupyter_server_public_ip` | The public IP assigned to the EC2 instance |
 | `secret_arn` | The ARN of the AWS Secret storing the OAuth client secret |
+| `region` | The AWS region where the resources were created |
+| `server_status_check_document` | Name of the SSM document to verify if the server is ready to serve traffic |
+| `auth_check_document` | Name of the SSM document to view authorized users, teams and organization |
+| `auth_users_update_document` | Name of the SSM document to change the authorized users |
+| `auth_teams_update_document` | Name of the SSM document to change the authorized teams |
+| `auth_org_set_document` | Name of the SSM document to allowlist an organization |
+| `auth_org_unset_document` | Name of the SSM document to remove the allowlisted organization |
