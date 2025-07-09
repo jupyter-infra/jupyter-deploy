@@ -99,4 +99,4 @@ class TeamsHandler(BaseProjectHandler):
                 "category": StrResolvedCliParameter(parameter_name="category", value="teams"),
             },
         )
-        return runner.get_result_value(command, "authorized-teams", list[str])
+        return runner.get_result_value(command, "teams.list", list[str])

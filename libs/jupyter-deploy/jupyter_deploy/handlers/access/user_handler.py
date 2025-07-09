@@ -97,4 +97,4 @@ class UsersHandler(BaseProjectHandler):
                 "category": StrResolvedCliParameter(parameter_name="category", value="users"),
             },
         )
-        return runner.get_result_value(command, "authorized-users", list[str])
+        return runner.get_result_value(command, "users.list", list[str])

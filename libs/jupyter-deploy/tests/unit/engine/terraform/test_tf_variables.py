@@ -174,7 +174,7 @@ class TestUpdateVariablesRecord(unittest.TestCase):
     @patch("jupyter_deploy.fs_utils.file_exists")
     @patch("jupyter_deploy.fs_utils.read_short_file")
     @patch("jupyter_deploy.fs_utils.write_inline_file_content")
-    @patch("jupyter_deploy.engine.terraform.tf_plan.get_updated_plan_variables")
+    @patch("jupyter_deploy.engine.terraform.tf_varfiles.parse_and_update_dot_tfvars_content")
     def test_happy_case_when_tfvars_exists(
         self, mock_get_updated_vars: Mock, mock_write_file: Mock, mock_read_file: Mock, mock_file_exists: Mock
     ) -> None:
@@ -211,7 +211,7 @@ class TestUpdateVariablesRecord(unittest.TestCase):
     @patch("jupyter_deploy.fs_utils.file_exists")
     @patch("jupyter_deploy.fs_utils.read_short_file")
     @patch("jupyter_deploy.fs_utils.write_inline_file_content")
-    @patch("jupyter_deploy.engine.terraform.tf_plan.get_updated_plan_variables")
+    @patch("jupyter_deploy.engine.terraform.tf_varfiles.parse_and_update_dot_tfvars_content")
     def test_happy_case_when_tfvars_does_not_exist(
         self, mock_get_updated_vars: Mock, mock_write_file: Mock, mock_read_file: Mock, mock_file_exists: Mock
     ) -> None:
@@ -300,7 +300,7 @@ class TestUpdateVariablesRecord(unittest.TestCase):
     @patch("jupyter_deploy.fs_utils.file_exists")
     @patch("jupyter_deploy.fs_utils.read_short_file")
     @patch("jupyter_deploy.fs_utils.write_inline_file_content")
-    @patch("jupyter_deploy.engine.terraform.tf_plan.get_updated_plan_variables")
+    @patch("jupyter_deploy.engine.terraform.tf_varfiles.parse_and_update_dot_tfvars_content")
     def test_raises_if_write_file_raises(
         self, mock_get_updated_vars: Mock, mock_write_file: Mock, mock_read_file: Mock, mock_file_exists: Mock
     ) -> None:

@@ -32,4 +32,4 @@ class ServerHandler(BaseProjectHandler):
             console=console, output_handler=self._output_handler, variable_handler=self._variable_handler
         )
         runner.run_command_sequence(command, cli_paramdefs={})
-        return runner.get_result_value(command, "server-status", str)
+        return runner.get_result_value(command, "server.status", str)

@@ -26,7 +26,7 @@ commands:
             source: "output"
             source-key: "instance_id"
     results:
-      - result-name: "server-status"
+      - result-name: "server.status"
         source: "result"
         source-key: "[0].StandardOutputContent"
   - cmd: "users.add"
@@ -139,7 +139,7 @@ commands:
             source: "cli"
             source-key: "category"
     results:
-      - result-name: "authorized-users"
+      - result-name: "users.list"
         source: "result"
         source-key: "[0].StandardOutputContent"
         transform: "comma-separated-str-to-list-str"
@@ -253,7 +253,7 @@ commands:
             source: "cli"
             source-key: "category"
     results:
-      - result-name: "authorized-teams"
+      - result-name: "teams.list"
         source: "result"
         source-key: "[0].StandardOutputContent"
         transform: "comma-separated-str-to-list-str"
@@ -324,6 +324,6 @@ commands:
             source: "cli"
             source-key: "category"
     results:
-      - result-name: "authorized-organization"
+      - result-name: "organization.get"
         source: "result"
         source-key: "[0].StandardOutputContent"

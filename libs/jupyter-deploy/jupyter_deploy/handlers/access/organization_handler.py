@@ -72,4 +72,4 @@ class OrganizationHandler(BaseProjectHandler):
                 "category": StrResolvedCliParameter(parameter_name="category", value="org"),
             },
         )
-        return runner.get_result_value(command, "authorized-organization", str)
+        return runner.get_result_value(command, "organization.get", str)
