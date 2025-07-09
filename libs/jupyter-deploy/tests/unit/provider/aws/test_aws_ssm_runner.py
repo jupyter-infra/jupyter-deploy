@@ -196,8 +196,8 @@ class TestSendCmdToOneInstanceAndWaitSync(unittest.TestCase):
         # Setup mock to return failed status with stdout and stderr content
         mock_send_cmd.return_value = {
             "Status": "Failed",  # Failed status
-            "StandardOutputContent": "Some output before failure",
-            "StandardErrorContent": "Error: Command not found",
+            "StandardOutputContent": "Some output before failure  \n\n",
+            "StandardErrorContent": "Error: Command not found \n",
         }
 
         resolved_arguments: dict[str, ResolvedInstructionArgument] = {

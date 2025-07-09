@@ -5,10 +5,16 @@ from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition, TemplateO
 from jupyter_deploy.manifest import JupyterDeployCommandV1
 from jupyter_deploy.provider.manifest_command_runner import ManifestCommandRunner
 from jupyter_deploy.provider.resolved_clidefs import ResolvedCliParameter, StrResolvedCliParameter
-from jupyter_deploy.provider.resolved_resultdefs import ResolvedInstructionResult, StrResolvedInstructionResult
+from jupyter_deploy.provider.resolved_resultdefs import (
+    ListStrResolvedInstructionResult,
+    ResolvedInstructionResult,
+    StrResolvedInstructionResult,
+)
 
 
 class TestManifestCommandRunner(unittest.TestCase):
+    """Tests for ManifestCommandRunner."""
+
     def get_cmd_def(self) -> JupyterDeployCommandV1:
         return JupyterDeployCommandV1(
             **{
@@ -33,7 +39,24 @@ class TestManifestCommandRunner(unittest.TestCase):
                 ],
                 "results": [
                     {"result-name": "hours-of-hangover", "source": "result", "source-key": "[1].side_effect"},
-                    {"result-name": "released-count", "source": "result", "source-key": "[0].rsu_released"},
+                    {"result-name": "remaining-rsus", "source": "result", "source-key": "[0].rsus_left"},
+                    {"result-name": "party", "source": "result", "source-key": "[1].full_party"},
+                    {
+                        "result-name": "karaoke-winners",
+                        "source": "result",
+                        "source-key": "[1].winners",
+                        "transform": "comma-separated-str-to-list-str",
+                    },
+                ],
+                "updates": [
+                    {"variable-name": "available_rsus", "source": "result", "source-key": "[0].rsus_left"},
+                    {"variable-name": "party_gang", "source": "result", "source-key": "[1].full_party"},
+                    {
+                        "variable-name": "karaoke_title_holders",
+                        "source": "result",
+                        "source-key": "[1].winners",
+                        "transform": "comma-separated-str-to-list-str",
+                    },
                 ],
             }  # type: ignore
         )
@@ -61,12 +84,46 @@ class TestManifestCommandRunner(unittest.TestCase):
 
     def get_mocked_first_instruction_results(self) -> dict[str, ResolvedInstructionResult]:
         return {
-            "rsu_released": StrResolvedInstructionResult(result_name="rsu_released", value="100"),
+            "rsus_left": StrResolvedInstructionResult(result_name="rsus_left", value="300"),
             "rsu_value": StrResolvedInstructionResult(result_name="rsu_value", value="2000"),
         }
 
     def get_mocked_second_instruction_results(self) -> dict[str, ResolvedInstructionResult]:
-        return {"side_effect": StrResolvedInstructionResult(result_name="side_effect", value="24")}
+        return {
+            "side_effect": StrResolvedInstructionResult(result_name="side_effect", value="24"),
+            "full_party": ListStrResolvedInstructionResult(
+                result_name="full_party", value=["Ross", "Rachel", "Monika", "Phoebe", "Joey", "Chandler", "You"]
+            ),
+            "winners": StrResolvedInstructionResult(result_name="winners", value="Ross,Rachel"),
+        }
+
+    def run_command_sequence_setup(self) -> tuple[JupyterDeployCommandV1, Mock, Mock, Mock]:
+        """Setup common test fixtures for command sequence execution."""
+        cmd = self.get_cmd_def()
+        mock_output_defs = self.get_project_outputs()
+        mock_cliparam_defs = self.get_cli_inputs()
+
+        console_mock = Mock()
+        output_handler_mock = Mock()
+        variable_handler_mock = Mock()
+        output_handler_mock.get_full_project_outputs.return_value = mock_output_defs
+
+        mock_result_1 = self.get_mocked_first_instruction_results()
+        mock_result_2 = self.get_mocked_second_instruction_results()
+
+        mock_runner = Mock()
+        mock_runner.execute_instruction.side_effect = [mock_result_1, mock_result_2]
+
+        with patch(
+            "jupyter_deploy.provider.instruction_runner_factory.InstructionRunnerFactory.get_provider_instruction_runner",
+            return_value=mock_runner,
+        ):
+            runner = ManifestCommandRunner(
+                console=console_mock, output_handler=output_handler_mock, variable_handler=variable_handler_mock
+            )
+            runner.run_command_sequence(cmd, mock_cliparam_defs)
+
+        return cmd, console_mock, output_handler_mock, variable_handler_mock
 
     def test_init_should_not_instantiate_any_provider_runner(self) -> None:
         # Arrange
@@ -117,8 +174,12 @@ class TestManifestCommandRunner(unittest.TestCase):
         self.assertEqual(mock_runner.execute_instruction.call_count, 2)
 
         # Check that the results were properly indexed and returned
-        self.assertEqual(results["[0].rsu_released"].value, "100")
+        self.assertEqual(results["[0].rsus_left"].value, "300")
+        self.assertEqual(results["[0].rsu_value"].value, "2000")
         self.assertEqual(results["[1].side_effect"].value, "24")
+        self.assertEqual(
+            results["[1].full_party"].value, ["Ross", "Rachel", "Monika", "Phoebe", "Joey", "Chandler", "You"]
+        )
 
     @patch(
         "jupyter_deploy.provider.instruction_runner_factory.InstructionRunnerFactory.get_provider_instruction_runner"
@@ -206,3 +267,212 @@ class TestManifestCommandRunner(unittest.TestCase):
         mock_get_provider_instruction_runner.assert_any_call("hr.questions.ask-nicely", output_handler_mock)
         mock_get_provider_instruction_runner.assert_any_call("life.celebration.create-event", output_handler_mock)
         self.assertEqual(mock_get_provider_instruction_runner.call_count, 2)
+
+    @patch(
+        "jupyter_deploy.provider.instruction_runner_factory.InstructionRunnerFactory.get_provider_instruction_runner"
+    )
+    def test_get_result_value_returns_transformed_result(self, mock_get_provider_instruction_runner: Mock) -> None:
+        # Arrange
+        cmd = self.get_cmd_def()
+        mock_output_defs = self.get_project_outputs()
+        mock_cliparam_defs = self.get_cli_inputs()
+
+        console_mock = Mock()
+        output_handler_mock = Mock()
+        output_handler_mock.get_full_project_outputs.return_value = mock_output_defs
+
+        mock_result_1 = self.get_mocked_first_instruction_results()
+        mock_result_2 = self.get_mocked_second_instruction_results()
+        mock_runner = Mock()
+        mock_get_provider_instruction_runner.return_value = mock_runner
+        mock_runner.execute_instruction.side_effect = [mock_result_1, mock_result_2]
+
+        # Act
+        runner = ManifestCommandRunner(
+            console=console_mock, output_handler=output_handler_mock, variable_handler=Mock()
+        )
+        results = runner.run_command_sequence(cmd, mock_cliparam_defs)
+
+        # Verify results are available
+        self.assertEqual(results["[0].rsus_left"].value, "300")
+
+        # Test get_result_value with string result
+        hours_of_hangover = runner.get_result_value(cmd, "hours-of-hangover", str)
+        self.assertEqual(hours_of_hangover, "24")
+
+        # Test get_result_value with list str result
+        party = runner.get_result_value(cmd, "party", list[str])
+        self.assertEqual(party, ["Ross", "Rachel", "Monika", "Phoebe", "Joey", "Chandler", "You"])
+        winners = runner.get_result_value(cmd, "karaoke-winners", list[str])
+        self.assertEqual(winners, ["Ross", "Rachel"])
+
+        # Test with different expected type
+        with self.assertRaises(TypeError):
+            runner.get_result_value(cmd, "hours-of-hangover", list)
+        with self.assertRaises(TypeError):
+            runner.get_result_value(cmd, "party", dict)
+        with self.assertRaises(TypeError):
+            runner.get_result_value(cmd, "karaoke-winners", int)
+
+    @patch(
+        "jupyter_deploy.provider.instruction_runner_factory.InstructionRunnerFactory.get_provider_instruction_runner"
+    )
+    def test_get_result_value_raises_error_for_invalid_result(self, mock_get_provider_instruction_runner: Mock) -> None:
+        # Arrange
+        cmd = self.get_cmd_def()
+        mock_output_defs = self.get_project_outputs()
+        mock_cliparam_defs = self.get_cli_inputs()
+
+        console_mock = Mock()
+        output_handler_mock = Mock()
+        output_handler_mock.get_full_project_outputs.return_value = mock_output_defs
+
+        mock_result_1 = self.get_mocked_first_instruction_results()
+        mock_result_2 = self.get_mocked_second_instruction_results()
+        mock_runner = Mock()
+        mock_get_provider_instruction_runner.return_value = mock_runner
+        mock_runner.execute_instruction.side_effect = [mock_result_1, mock_result_2]
+
+        # Act
+        runner = ManifestCommandRunner(
+            console=console_mock, output_handler=output_handler_mock, variable_handler=Mock()
+        )
+        runner.run_command_sequence(cmd, mock_cliparam_defs)
+
+        # Test with non-existent result name
+        with self.assertRaises(StopIteration):
+            runner.get_result_value(cmd, "non-existent-result", str)
+
+        # Create a modified command with invalid source key
+        modified_cmd = self.get_cmd_def()
+        invalid_result = JupyterDeployCommandV1.model_validate(
+            {
+                "cmd": "test",
+                "sequence": [],
+                "results": [{"result-name": "invalid-result", "source": "result", "source-key": "[99].invalid"}],
+            }
+        ).results[0]  # type: ignore
+
+        if modified_cmd.results is None:
+            modified_cmd.results = [invalid_result]
+        else:
+            modified_cmd.results.append(invalid_result)
+
+        # Test with invalid source key
+        with self.assertRaises(KeyError):
+            runner.get_result_value(modified_cmd, "invalid-result", str)
+
+    @patch(
+        "jupyter_deploy.provider.instruction_runner_factory.InstructionRunnerFactory.get_provider_instruction_runner"
+    )
+    def test_update_variables_correctly_sets_values(self, mock_get_provider_instruction_runner: Mock) -> None:
+        # Arrange
+        cmd = self.get_cmd_def()
+        mock_output_defs = self.get_project_outputs()
+        mock_cliparam_defs = self.get_cli_inputs()
+
+        console_mock = Mock()
+        output_handler_mock = Mock()
+        variable_handler_mock = Mock()
+        output_handler_mock.get_full_project_outputs.return_value = mock_output_defs
+
+        mock_result_1 = self.get_mocked_first_instruction_results()
+        mock_result_2 = self.get_mocked_second_instruction_results()
+        mock_runner = Mock()
+        mock_get_provider_instruction_runner.return_value = mock_runner
+        mock_runner.execute_instruction.side_effect = [mock_result_1, mock_result_2]
+
+        # Act
+        runner = ManifestCommandRunner(
+            console=console_mock, output_handler=output_handler_mock, variable_handler=variable_handler_mock
+        )
+        runner.run_command_sequence(cmd, mock_cliparam_defs)
+        runner.update_variables(cmd)
+
+        # Assert
+        # Verify that variable_handler.update_variable_records was called with expected values
+        expected_values = {
+            "available_rsus": "300",
+            "party_gang": ["Ross", "Rachel", "Monika", "Phoebe", "Joey", "Chandler", "You"],
+            "karaoke_title_holders": ["Ross", "Rachel"],
+        }
+        variable_handler_mock.update_variable_records.assert_called_once_with(expected_values)
+
+    @patch(
+        "jupyter_deploy.provider.instruction_runner_factory.InstructionRunnerFactory.get_provider_instruction_runner"
+    )
+    def test_update_variables_with_no_updates(self, mock_get_provider_instruction_runner: Mock) -> None:
+        # Arrange
+        cmd = self.get_cmd_def()
+        cmd.updates = None  # Remove updates from the command
+
+        mock_output_defs = self.get_project_outputs()
+        mock_cliparam_defs = self.get_cli_inputs()
+
+        console_mock = Mock()
+        output_handler_mock = Mock()
+        variable_handler_mock = Mock()
+        output_handler_mock.get_full_project_outputs.return_value = mock_output_defs
+
+        mock_result_1 = self.get_mocked_first_instruction_results()
+        mock_result_2 = self.get_mocked_second_instruction_results()
+        mock_runner = Mock()
+        mock_get_provider_instruction_runner.return_value = mock_runner
+        mock_runner.execute_instruction.side_effect = [mock_result_1, mock_result_2]
+
+        # Act
+        runner = ManifestCommandRunner(
+            console=console_mock, output_handler=output_handler_mock, variable_handler=variable_handler_mock
+        )
+        runner.run_command_sequence(cmd, mock_cliparam_defs)
+        runner.update_variables(cmd)
+
+        # Assert - variable_handler.update_variable_records should not be called
+        variable_handler_mock.update_variable_records.assert_not_called()
+
+    @patch(
+        "jupyter_deploy.provider.instruction_runner_factory.InstructionRunnerFactory.get_provider_instruction_runner"
+    )
+    def test_update_variables_raises_error_for_invalid_source_key(
+        self, mock_get_provider_instruction_runner: Mock
+    ) -> None:
+        """Test that update_variables raises an error for invalid source keys."""
+        # Arrange
+        cmd = self.get_cmd_def()
+        # Modify the command to include an update with an invalid source key
+        invalid_update = JupyterDeployCommandV1.model_validate(
+            {
+                "cmd": "test",
+                "sequence": [],
+                "updates": [{"variable-name": "invalid_var", "source": "result", "source-key": "[99].invalid"}],
+            }
+        ).updates[0]  # type: ignore
+
+        if cmd.updates is None:
+            cmd.updates = [invalid_update]
+        else:
+            cmd.updates.append(invalid_update)
+
+        mock_output_defs = self.get_project_outputs()
+        mock_cliparam_defs = self.get_cli_inputs()
+
+        console_mock = Mock()
+        output_handler_mock = Mock()
+        variable_handler_mock = Mock()
+        output_handler_mock.get_full_project_outputs.return_value = mock_output_defs
+
+        mock_result_1 = self.get_mocked_first_instruction_results()
+        mock_result_2 = self.get_mocked_second_instruction_results()
+        mock_runner = Mock()
+        mock_get_provider_instruction_runner.return_value = mock_runner
+        mock_runner.execute_instruction.side_effect = [mock_result_1, mock_result_2]
+
+        # Act
+        runner = ManifestCommandRunner(
+            console=console_mock, output_handler=output_handler_mock, variable_handler=variable_handler_mock
+        )
+        runner.run_command_sequence(cmd, mock_cliparam_defs)
+
+        # Assert - should raise KeyError for invalid source key
+        with self.assertRaises(KeyError):
+            runner.update_variables(cmd)

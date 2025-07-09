@@ -21,9 +21,13 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
 
         self.assertIsNotNone(runner.app, "attribute app should be set")
 
-        # Check that the terraform and server sub-commands are added
-        self.assertGreaterEqual(len(runner.app.registered_groups), 1)
-        self.assertEqual(runner.app.registered_groups[0].name, "server")
+        # Check that sub-commands are added
+        self.assertGreaterEqual(len(runner.app.registered_groups), 4)  # At least server, users, teams, organization
+        registered_group_names = [group.name for group in runner.app.registered_groups]
+        self.assertIn("server", registered_group_names)
+        self.assertIn("users", registered_group_names)
+        self.assertIn("teams", registered_group_names)
+        self.assertIn("organization", registered_group_names)
 
     @patch("jupyter_deploy.cli.app.typer.Typer")
     def test_run(self, mock_typer: MagicMock) -> None:
@@ -48,6 +52,7 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         self.assertTrue(result.stdout.index("server") >= 0)
         self.assertTrue(result.stdout.index("users") >= 0)
         self.assertTrue(result.stdout.index("teams") >= 0)
+        self.assertTrue(result.stdout.index("organization") >= 0)
 
     def test_no_arg_defaults_to_help(self) -> None:
         runner = CliRunner()

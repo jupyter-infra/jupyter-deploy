@@ -2,7 +2,7 @@ import unittest
 
 from parameterized import parameterized  # type: ignore
 
-from jupyter_deploy.str_utils import get_trimmed_header, to_cli_option_name
+from jupyter_deploy.str_utils import get_trimmed_header, to_cli_option_name, to_list_str
 
 
 class TestToCliOptionName(unittest.TestCase):
@@ -93,3 +93,26 @@ class TestTrimmedHeader(unittest.TestCase):
     def test_trimmed_values(self, input_str: str, max_length: int, expect_str: str) -> None:
         result = get_trimmed_header(input_str, max_length)
         self.assertEqual(result, expect_str)
+
+
+class TestToListStr(unittest.TestCase):
+    def test_empty_str_returns_empty_list(self) -> None:
+        self.assertEqual(to_list_str(""), [])
+        self.assertEqual(to_list_str("", sep="|"), [])
+
+    @parameterized.expand(
+        [
+            ("a,b,c", None, ["a", "b", "c"]),
+            ("a,b,c", ",", ["a", "b", "c"]),
+            ("a,b,c", ";", ["a,b,c"]),
+            ("a,b;c", ";", ["a,b", "c"]),
+            ("abc", None, ["abc"]),
+            ("abc", ",", ["abc"]),
+            ("ab|b", "|", ["ab", "b"]),
+        ]
+    )
+    def test_values(self, input_str: str, sep: str | None, expect_list: list[str]) -> None:
+        if sep:
+            self.assertEqual(to_list_str(input_str, sep=sep), expect_list)
+        else:
+            self.assertEqual(to_list_str(input_str), expect_list)
