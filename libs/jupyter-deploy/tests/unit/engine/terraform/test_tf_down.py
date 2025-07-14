@@ -18,6 +18,7 @@ class TestTerraformDownHandler(unittest.TestCase):
     @patch("jupyter_deploy.engine.terraform.tf_down.rich_console")
     def test_destroy_success(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
         project_path = Path("/mock/project")
+        engine_path = project_path / "engine"
         handler = TerraformDownHandler(project_path=project_path)
 
         mock_console_instance = Mock()
@@ -27,7 +28,9 @@ class TestTerraformDownHandler(unittest.TestCase):
 
         handler.destroy()
 
-        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "destroy"])
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(
+            ["terraform", "destroy"], exec_dir=engine_path
+        )
         mock_console_instance.print.assert_called_once()
         self.assertTrue(mock_console_instance.print.call_args[0][0].lower().find("success") >= 0)
 
@@ -35,6 +38,7 @@ class TestTerraformDownHandler(unittest.TestCase):
     @patch("jupyter_deploy.engine.terraform.tf_down.rich_console")
     def test_destroy_handles_error(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
         project_path = Path("/mock/project")
+        engine_path = project_path / "engine"
         handler = TerraformDownHandler(project_path=project_path)
 
         mock_console_instance = Mock()
@@ -44,7 +48,9 @@ class TestTerraformDownHandler(unittest.TestCase):
 
         handler.destroy()
 
-        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "destroy"])
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(
+            ["terraform", "destroy"], exec_dir=engine_path
+        )
         mock_console_instance.print.assert_called_once()
         self.assertTrue(mock_console_instance.print.call_args[0][0].lower().find("error") >= 0)
 
@@ -52,6 +58,7 @@ class TestTerraformDownHandler(unittest.TestCase):
     @patch("jupyter_deploy.engine.terraform.tf_down.rich_console")
     def test_destroy_handles_timeout(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
         project_path = Path("/mock/project")
+        engine_path = project_path / "engine"
         handler = TerraformDownHandler(project_path=project_path)
 
         mock_console_instance = Mock()
@@ -61,7 +68,9 @@ class TestTerraformDownHandler(unittest.TestCase):
 
         handler.destroy()
 
-        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "destroy"])
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(
+            ["terraform", "destroy"], exec_dir=engine_path
+        )
         mock_console_instance.print.assert_called_once()
         self.assertTrue(mock_console_instance.print.call_args[0][0].lower().find("error") >= 0)
 

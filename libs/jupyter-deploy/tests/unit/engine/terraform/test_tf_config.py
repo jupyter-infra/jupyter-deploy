@@ -28,7 +28,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
 
         # Assert
         self.assertIsNotNone(handler)
-        self.assertEqual(handler.plan_out_path, path / TF_DEFAULT_PLAN_FILENAME)
+        self.assertEqual(handler.plan_out_path, path / "engine" / TF_DEFAULT_PLAN_FILENAME)
         self.assertEqual(handler.project_manifest, manifest)
 
     def test_class_uses_custom_output_file_when_provided(self) -> None:
@@ -40,7 +40,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
 
         # Assert
         self.assertIsNotNone(handler)
-        self.assertEqual(handler.plan_out_path, path / custom_output)
+        self.assertEqual(handler.plan_out_path, path / "engine" / custom_output)
 
     @patch("jupyter_deploy.fs_utils.file_exists")
     def test_verify_preset_exists_calls_fs_util(self, mock_file_exists: Mock) -> None:
@@ -52,7 +52,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         handler.verify_preset_exists("all")
 
         # Assert
-        mock_file_exists.assert_called_once_with(file_path=path / "defaults-all.tfvars")
+        mock_file_exists.assert_called_once_with(file_path=path / "engine" / "presets" / "defaults-all.tfvars")
 
     @patch("jupyter_deploy.fs_utils.find_matching_filenames")
     def test_list_presets_calls_fs_util(self, mock_find: Mock) -> None:
@@ -72,7 +72,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         # Assert
         self.assertEqual(["all", "all-except-instance", "base", "none"], presets)
         mock_find.assert_called_once_with(
-            dir_path=path,
+            dir_path=path / "engine" / "presets",
             file_pattern="defaults-*.tfvars",
         )
 

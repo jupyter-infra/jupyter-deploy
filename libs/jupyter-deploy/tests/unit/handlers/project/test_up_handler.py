@@ -29,6 +29,7 @@ class TestUpHandler(unittest.TestCase):
         mock_retrieve_manifest.return_value = self.mock_manifest
         mock_tf_handler = Mock()
         mock_tf_handler_cls.return_value = mock_tf_handler
+        mock_tf_handler.engine_dir_path = Path("/mock/cwd/engine")
 
         handler = UpHandler()
 
@@ -46,6 +47,7 @@ class TestUpHandler(unittest.TestCase):
         mock_retrieve_manifest.return_value = self.mock_manifest
         mock_tf_handler = Mock()
         mock_tf_handler_cls.return_value = mock_tf_handler
+        mock_tf_handler.engine_dir_path = Path("/mock/cwd/engine")
 
         handler = UpHandler()
         handler.apply(path, auto_approve=False)
@@ -63,6 +65,7 @@ class TestUpHandler(unittest.TestCase):
         mock_retrieve_manifest.return_value = self.mock_manifest
         mock_tf_handler = Mock()
         mock_tf_handler.apply.side_effect = Exception("Apply failed")
+        mock_tf_handler.engine_dir_path = Path("/mock/cwd/engine")
         mock_tf_handler_cls.return_value = mock_tf_handler
 
         handler = UpHandler()
@@ -82,6 +85,7 @@ class TestUpHandler(unittest.TestCase):
         mock_cwd.return_value = Path("/mock/cwd")
         mock_retrieve_manifest.return_value = self.mock_manifest
         mock_tf_handler = Mock()
+        mock_tf_handler.engine_dir_path = Path("/mock/cwd/engine")
         mock_tf_handler.get_default_config_filename.return_value = "jdout-tfplan"
         mock_tf_handler_cls.return_value = mock_tf_handler
 
@@ -104,7 +108,6 @@ class TestUpHandler(unittest.TestCase):
             UpHandler()
 
     @patch("jupyter_deploy.engine.terraform.tf_up.TerraformUpHandler")
-    @patch("pathlib.Path")
     @patch("jupyter_deploy.handlers.project.up_handler.Console")
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("pathlib.Path.cwd")
@@ -113,14 +116,12 @@ class TestUpHandler(unittest.TestCase):
         mock_cwd: Mock,
         mock_retrieve_manifest: Mock,
         mock_console_cls: Mock,
-        mock_path_cls: Mock,
         mock_tf_handler_cls: Mock,
     ) -> None:
         mock_cwd.return_value = Path("/mock/cwd")
         mock_retrieve_manifest.return_value = self.mock_manifest
-        config_path = Path("/mock/cwd/test-config")
-        mock_path_cls.return_value = config_path
         mock_tf_handler = Mock()
+        mock_tf_handler.engine_dir_path = Path("/mock/cwd/engine")
         mock_tf_handler.get_default_config_filename.return_value = "jdout-tfplan"
         mock_tf_handler_cls.return_value = mock_tf_handler
 
@@ -128,7 +129,7 @@ class TestUpHandler(unittest.TestCase):
             handler = UpHandler()
             result = handler.get_config_file_path("test-config")
 
-        self.assertEqual(result, str(config_path))
+        self.assertEqual(result, Path("/mock/cwd/engine/test-config"))
 
     @patch("jupyter_deploy.engine.terraform.tf_up.TerraformUpHandler")
     @patch("pathlib.Path")
@@ -149,6 +150,7 @@ class TestUpHandler(unittest.TestCase):
 
         mock_path_cls.return_value = config_path
         mock_tf_handler = Mock()
+        mock_tf_handler.engine_dir_path = Path("/mock/cwd/engine")
         mock_tf_handler.get_default_config_filename.return_value = "jdout-tfplan"
         mock_tf_handler_cls.return_value = mock_tf_handler
         mock_console_instance = Mock()
@@ -158,5 +160,5 @@ class TestUpHandler(unittest.TestCase):
             handler = UpHandler()
             result = handler.get_config_file_path("test-config")
 
-        self.assertEqual(result, "")
+        self.assertEqual(result, Path("/mock/cwd"))
         mock_console_instance.print.assert_called_once()

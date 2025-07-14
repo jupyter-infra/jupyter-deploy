@@ -29,6 +29,7 @@ class TestTerraformUpHandler(unittest.TestCase):
     def test_apply_success(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
         path = Path("/mock/path")
         project_path = Path("/mock/project")
+        engine_path = project_path / "engine"
         handler = TerraformUpHandler(project_path=project_path)
 
         mock_console_instance = Mock()
@@ -38,7 +39,9 @@ class TestTerraformUpHandler(unittest.TestCase):
 
         handler.apply(path)
 
-        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "apply", "/mock/path"])
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(
+            ["terraform", "apply", "/mock/path"], exec_dir=engine_path
+        )
         mock_console_instance.print.assert_called_once()
         self.assertTrue(mock_console_instance.print.call_args[0][0].lower().find("success") >= 0)
 
@@ -47,6 +50,7 @@ class TestTerraformUpHandler(unittest.TestCase):
     def test_apply_handles_error(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
         path = Path("/mock/path")
         project_path = Path("/mock/project")
+        engine_path = project_path / "engine"
         handler = TerraformUpHandler(project_path=project_path)
 
         mock_console_instance = Mock()
@@ -56,7 +60,9 @@ class TestTerraformUpHandler(unittest.TestCase):
 
         handler.apply(path)
 
-        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "apply", "/mock/path"])
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(
+            ["terraform", "apply", "/mock/path"], exec_dir=engine_path
+        )
         mock_console_instance.print.assert_called_once()
         self.assertTrue(mock_console_instance.print.call_args[0][0].lower().find("error") >= 0)
 
@@ -65,6 +71,7 @@ class TestTerraformUpHandler(unittest.TestCase):
     def test_apply_handles_timeout(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
         path = Path("/mock/path")
         project_path = Path("/mock/project")
+        engine_path = project_path / "engine"
         handler = TerraformUpHandler(project_path=project_path)
 
         mock_console_instance = Mock()
@@ -74,7 +81,9 @@ class TestTerraformUpHandler(unittest.TestCase):
 
         handler.apply(path)
 
-        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "apply", "/mock/path"])
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(
+            ["terraform", "apply", "/mock/path"], exec_dir=engine_path
+        )
         mock_console_instance.print.assert_called_once()
         self.assertTrue(mock_console_instance.print.call_args[0][0].lower().find("error") >= 0)
 

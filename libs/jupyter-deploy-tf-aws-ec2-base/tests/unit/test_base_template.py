@@ -1,31 +1,35 @@
 """Tests for the template module."""
 
+import os
+from pathlib import Path
+
 from jupyter_deploy_tf_aws_ec2_base.template import TEMPLATE_PATH
 
-EXPECTED_TEMPLATE_FILES = [
-    "check-status-internal.sh",
-    "cloudinit.sh.tftpl",
-    "defaults-all.tfvars",
-    "defaults-base.tfvars",
-    "docker-compose.yml.tftpl",
-    "docker-startup.sh.tftpl",
-    "dockerfile.jupyter",
-    "dockerfile.logrotator",
-    "get-auth.sh",
-    "get-status.sh",
-    "jupyter-start.sh",
-    "jupyter-reset.sh",
-    "local-await-server.sh.tftpl",
-    "logrotator-start.sh.tftpl",
-    "main.tf",
+EXPECTED_TEMPLATE_STRPATHS: list[str] = [
     "manifest.yaml",
-    "outputs.tf",
-    "pyproject.jupyter.toml",
-    "jupyter_server_config.py",
-    "traefik.yml.tftpl",
-    "variables.tf",
-    "update-auth.sh",
-    "refresh-oauth-cookie.sh",
+    "variables.yaml",
+    "engine/presets/defaults-all.tfvars",
+    "engine/presets/defaults-base.tfvars",
+    "engine/local-await-server.sh.tftpl",
+    "engine/main.tf",
+    "engine/outputs.tf",
+    "engine/variables.tf",
+    "services/commands/check-status-internal.sh",
+    "services/commands/get-auth.sh",
+    "services/commands/get-status.sh",
+    "services/commands/refresh-oauth-cookie.sh",
+    "services/commands/update-auth.sh",
+    "services/jupyter/dockerfile.jupyter",
+    "services/jupyter/jupyter_server_config.py",
+    "services/jupyter/jupyter-reset.sh",
+    "services/jupyter/jupyter-start.sh",
+    "services/jupyter/pyproject.jupyter.toml",
+    "services/logrotator/dockerfile.logrotator",
+    "services/logrotator/logrotator-start.sh.tftpl",
+    "services/traefik/traefik.yml.tftpl",
+    "services/cloudinit.sh.tftpl",
+    "services/docker-compose.yml.tftpl",
+    "services/docker-startup.sh.tftpl",
 ]
 
 
@@ -37,13 +41,27 @@ def test_template_path_exists() -> None:
 
 def test_template_files_exist() -> None:
     """Test that the correct template files exist."""
-    for file in EXPECTED_TEMPLATE_FILES:
-        assert (TEMPLATE_PATH / file).exists()
-        assert (TEMPLATE_PATH / file).is_file()
+    for file_str_path in EXPECTED_TEMPLATE_STRPATHS:
+        relative_path = Path(*file_str_path.split("/"))
+        full_path = TEMPLATE_PATH / relative_path
+
+        assert (full_path).exists(), f"missing file: {relative_path.absolute()}"
+        assert (full_path).is_file(), f"missing file: {relative_path.absolute()}"
 
 
 def test_no_extra_template_files() -> None:
     """Test that there are no extra files in the templates directory."""
-    actual_files = [f.name for f in TEMPLATE_PATH.iterdir() if f.is_file()]
-    unexpected_files = set(actual_files) - set(EXPECTED_TEMPLATE_FILES)
+    expected_files = set()
+    for file_str_path in EXPECTED_TEMPLATE_STRPATHS:
+        relative_path = Path(*file_str_path.split("/"))
+        expected_files.add(str(TEMPLATE_PATH / relative_path))
+
+    actual_files = set()
+    for dirpath, _dirnames, filenames in os.walk(TEMPLATE_PATH):
+        for filename in filenames:
+            file_path = Path(dirpath) / filename
+            actual_files.add(str(file_path))
+
+    # Check no unexpected files
+    unexpected_files = actual_files - expected_files
     assert not unexpected_files, f"Unexpected files found: {unexpected_files}"

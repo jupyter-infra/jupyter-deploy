@@ -24,7 +24,7 @@ class TestIsTemplateDir(unittest.TestCase):
 
         result = handler.is_template_directory()
         self.assertTrue(result)
-        mock_file_exists.assert_called_once_with(project_path / "variables.tf")
+        mock_file_exists.assert_called_once_with(project_path / "engine" / "variables.tf")
 
     @patch("jupyter_deploy.fs_utils.file_exists")
     def test_return_false_when_variables_dot_tf_does_not_exists(self, mock_file_exists: Mock) -> None:
@@ -35,7 +35,7 @@ class TestIsTemplateDir(unittest.TestCase):
 
         result = handler.is_template_directory()
         self.assertFalse(result)
-        mock_file_exists.assert_called_once_with(project_path / "variables.tf")
+        mock_file_exists.assert_called_once_with(project_path / "engine" / "variables.tf")
 
 
 class TestGetTemplateVariables(unittest.TestCase):
@@ -85,8 +85,10 @@ class TestGetTemplateVariables(unittest.TestCase):
 
         # should have read both vars.tf and .tfvars files
         self.assertEqual(mock_read_short_file.call_count, 2)
-        self.assertEqual(mock_read_short_file.mock_calls[0][1][0], project_path / "variables.tf")
-        self.assertEqual(mock_read_short_file.mock_calls[1][1][0], project_path / "defaults-all.tfvars")
+        self.assertEqual(mock_read_short_file.mock_calls[0][1][0], project_path / "engine" / "variables.tf")
+        self.assertEqual(
+            mock_read_short_file.mock_calls[1][1][0], project_path / "engine" / "presets" / "defaults-all.tfvars"
+        )
 
         # should have parsed with the appropriate content
         mock_parse_variables.assert_called_once_with("content-1")
@@ -197,12 +199,12 @@ class TestUpdateVariablesRecord(unittest.TestCase):
         handler.update_variable_records({"var1": "value1", "var2": "value2"})
 
         # Assert
-        mock_file_exists.assert_called_once_with(project_path / "jdinputs.auto.tfvars")
-        mock_read_file.assert_called_once_with(project_path / "jdinputs.auto.tfvars")
+        mock_file_exists.assert_called_once_with(project_path / "engine" / "jdinputs.auto.tfvars")
+        mock_read_file.assert_called_once_with(project_path / "engine" / "jdinputs.auto.tfvars")
 
         mock_get_updated_vars.assert_called_once()
         mock_write_file.assert_called_once_with(
-            project_path / "jdinputs.auto.tfvars", ["updated_line1", "updated_line2"]
+            project_path / "engine" / "jdinputs.auto.tfvars", ["updated_line1", "updated_line2"]
         )
 
         mock_validate1.assert_called_once_with("value1")
@@ -231,10 +233,10 @@ class TestUpdateVariablesRecord(unittest.TestCase):
         handler.update_variable_records({"var1": "new_value"})
 
         # Assert
-        mock_file_exists.assert_called_once_with(project_path / "jdinputs.auto.tfvars")
+        mock_file_exists.assert_called_once_with(project_path / "engine" / "jdinputs.auto.tfvars")
 
         mock_get_updated_vars.assert_called_once()
-        mock_write_file.assert_called_once_with(project_path / "jdinputs.auto.tfvars", ["line1", "line2"])
+        mock_write_file.assert_called_once_with(project_path / "engine" / "jdinputs.auto.tfvars", ["line1", "line2"])
         mock_validate.assert_called_once_with("new_value")
         mock_read_file.assert_not_called()
 

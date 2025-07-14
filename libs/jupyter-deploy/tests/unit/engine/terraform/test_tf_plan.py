@@ -127,7 +127,7 @@ class TestFormatPlanVariables(unittest.TestCase):
             "var_list": TerraformPlanVariableContent(value=["a", "b"]),
         }
         result = format_plan_variables(vars)
-        self.assertEqual(len(result), len(vars.keys()))
+        self.assertGreaterEqual(len(result), len(vars.keys()))  # allow for top-level comments
         self.assertIn('var_str = "value1"\n', result)
         self.assertIn("var_int = 123\n", result)
         self.assertIn("var_float = 3.1459\n", result)
@@ -160,7 +160,7 @@ class TestFormatValuesForDotTfvars(unittest.TestCase):
             "var_list": ["a", "b"],
         }
         result = format_values_for_dot_tfvars(vars)
-        self.assertEqual(len(result), len(vars.keys()))
+        self.assertGreaterEqual(len(result), len(vars.keys()))  # allow for include comments
         self.assertIn('var_str = "value1"\n', result)
         self.assertIn("var_int = 123\n", result)
         self.assertIn("var_float = 3.1459\n", result)
