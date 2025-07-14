@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from yaml.parser import ParserError
 from yaml.scanner import ScannerError
 
+from jupyter_deploy.constants import MANIFEST_FILENAME
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.handlers.base_project_handler import (
     BaseProjectHandler,
@@ -185,7 +186,7 @@ class TestRetrieveProjectManifestIfAvailable(unittest.TestCase):
         result = retrieve_project_manifest_if_available(project_path)
 
         # Assert
-        mock_retrieve.assert_called_once_with(project_path / BaseProjectHandler.MANIFEST_FILENAME)
+        mock_retrieve.assert_called_once_with(project_path / MANIFEST_FILENAME)
         self.assertEqual(result, mock_manifest)
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
@@ -198,7 +199,7 @@ class TestRetrieveProjectManifestIfAvailable(unittest.TestCase):
         result = retrieve_project_manifest_if_available(project_path)
 
         # Assert
-        mock_retrieve.assert_called_once_with(project_path / BaseProjectHandler.MANIFEST_FILENAME)
+        mock_retrieve.assert_called_once_with(project_path / MANIFEST_FILENAME)
         self.assertIsNone(result)
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
@@ -211,7 +212,7 @@ class TestRetrieveProjectManifestIfAvailable(unittest.TestCase):
         result = retrieve_project_manifest_if_available(project_path)
 
         # Assert
-        mock_retrieve.assert_called_once_with(project_path / BaseProjectHandler.MANIFEST_FILENAME)
+        mock_retrieve.assert_called_once_with(project_path / MANIFEST_FILENAME)
         self.assertIsNone(result)
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
@@ -224,7 +225,7 @@ class TestRetrieveProjectManifestIfAvailable(unittest.TestCase):
         result = retrieve_project_manifest_if_available(project_path)
 
         # Assert
-        mock_retrieve.assert_called_once_with(project_path / BaseProjectHandler.MANIFEST_FILENAME)
+        mock_retrieve.assert_called_once_with(project_path / MANIFEST_FILENAME)
         self.assertIsNone(result)
 
 

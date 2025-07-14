@@ -7,7 +7,7 @@ from rich import console as rich_console
 from yaml.parser import ParserError
 from yaml.scanner import ScannerError
 
-from jupyter_deploy import fs_utils, manifest
+from jupyter_deploy import constants, fs_utils, manifest, variables_config
 
 
 class NotADictError(ValueError):
@@ -21,13 +21,11 @@ class BaseProjectHandler:
     otherwise this class will raise a typer.Exit().
     """
 
-    MANIFEST_FILENAME = "manifest.yaml"
-
     def __init__(self) -> None:
         """Attempts to identify the engine associated with the project."""
         self._console: rich_console.Console | None = None
         self.project_path = Path.cwd()
-        manifest_path = self.project_path / BaseProjectHandler.MANIFEST_FILENAME
+        manifest_path = self.project_path / constants.MANIFEST_FILENAME
 
         try:
             project_manifest = retrieve_project_manifest(manifest_path)
@@ -94,7 +92,7 @@ class BaseProjectHandler:
 
 
 def retrieve_project_manifest(manifest_path: Path) -> manifest.JupyterDeployManifest:
-    """Retrieve the type of project, verify basic requirements, return engine."""
+    """Read the manifest file on disk, parse, validate and return it."""
     if not fs_utils.file_exists(manifest_path):
         raise FileNotFoundError("Missing jupyter-deploy manifest.")
 
@@ -108,11 +106,29 @@ def retrieve_project_manifest(manifest_path: Path) -> manifest.JupyterDeployMani
 
 
 def retrieve_project_manifest_if_available(project_path: Path) -> manifest.JupyterDeployManifest | None:
-    """Lookup the project manifest, return it if found, None otherwise."""
+    """Attempts to read the manifest file on disk, parse, and return.
 
-    manifest_path = project_path / BaseProjectHandler.MANIFEST_FILENAME
+    Return None if the file is not found, cannot be parsed or fails any of the validation.
+    """
+
+    manifest_path = project_path / constants.MANIFEST_FILENAME
     try:
         return retrieve_project_manifest(manifest_path)
     except (FileNotFoundError, NotADictError, ValidationError) as e:
         print(e)
         return None
+
+
+def retrieve_variables_config(variables_config_path: Path) -> variables_config.JupyterDeployVariablesConfig:
+    """Read the variables confign file on disk, parse, validate and return it."""
+
+    if not fs_utils.file_exists(variables_config_path):
+        raise FileNotFoundError("Missing jupyter-deploy variables config file.")
+
+    with open(variables_config_path) as variables_manifest_file:
+        content = yaml.safe_load(variables_manifest_file)
+
+    if not isinstance(content, dict):
+        raise NotADictError("Invalid variables config file: jupyter-deploy variables config is not a dict.")
+
+    return variables_config.JupyterDeployVariablesConfig(**content)

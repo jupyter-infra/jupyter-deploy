@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from rich.console import Console
 
 from jupyter_deploy.engine.engine_up import EngineUpHandler
@@ -22,14 +24,14 @@ class UpHandler(BaseProjectHandler):
         """Get the default config file name for the current engine."""
         return self._handler.get_default_config_filename()
 
-    def get_config_file_path(self, config_filename: str | None = None) -> str:
+    def get_config_file_path(self, config_filename: str | None = None) -> Path:
         """Get the full path to the config file."""
         console = Console()
 
         if config_filename is None:
             config_filename = self.get_default_config_filename()
 
-        config_file_path = self.project_path / config_filename
+        config_file_path = self._handler.engine_dir_path / config_filename
 
         if not config_file_path.exists():
             console.print(
@@ -38,11 +40,11 @@ class UpHandler(BaseProjectHandler):
                 f'please run "jd config" from the project directory first.',
                 style="red",
             )
-            return ""
+            return Path.cwd()
 
-        return str(config_file_path)
+        return config_file_path
 
-    def apply(self, config_file_path: str, auto_approve: bool = False) -> None:
+    def apply(self, config_file_path: Path, auto_approve: bool = False) -> None:
         """Apply the infrastructure changes defined in the config file.
 
         Args:

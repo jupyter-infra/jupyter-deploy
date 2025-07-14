@@ -5,9 +5,10 @@ from jupyter_deploy.engine.enum import EngineType
 
 
 class EngineUpHandler(ABC):
-    def __init__(self, project_path: Path, engine: EngineType) -> None:
+    def __init__(self, project_path: Path, engine: EngineType, engine_dir_path: Path) -> None:
         """Instantiate the base handler for `jd up` command."""
         self.project_path = project_path
+        self.engine_dir_path = engine_dir_path
         self.engine = engine
 
     @abstractmethod
@@ -15,5 +16,5 @@ class EngineUpHandler(ABC):
         pass
 
     @abstractmethod
-    def apply(self, config_file_path: str, auto_approve: bool = False) -> None:
+    def apply(self, config_file_path: Path, auto_approve: bool = False) -> None:
         pass

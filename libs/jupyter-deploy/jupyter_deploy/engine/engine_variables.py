@@ -2,8 +2,18 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
+from jupyter_deploy import constants, fs_utils
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
+from jupyter_deploy.handlers import base_project_handler
 from jupyter_deploy.manifest import JupyterDeployManifest
+from jupyter_deploy.variables_config import (
+    VARIABLES_CONFIG_V1_COMMENTS,
+    VARIABLES_CONFIG_V1_KEYS_ORDER,
+    JupyterDeployVariablesConfig,
+    JupyterDeployVariablesConfigV1,
+)
 
 
 class EngineVariablesHandler(ABC):
@@ -11,6 +21,43 @@ class EngineVariablesHandler(ABC):
         """Instantiate the base handler for the decorator."""
         self.project_path = project_path
         self.project_manifest = project_manifest
+        self._variables_config: JupyterDeployVariablesConfig | None = None
+
+    def get_variables_config_path(self) -> Path:
+        return self.project_path / constants.VARIABLES_FILENAME
+
+    def _get_reset_variables_config(self) -> JupyterDeployVariablesConfig:
+        """Retrieve the template variables, return reset variables config."""
+        vardefs = self.get_template_variables()
+
+        required: dict[str, Any] = {k: None for k, v in vardefs.items() if not v.has_default and not v.sensitive}
+        sensitive: dict[str, Any] = {k: None for k, v in vardefs.items() if v.sensitive}
+        defaults: dict[str, Any] = {k: v.default for k, v in vardefs.items() if v.has_default}
+        return JupyterDeployVariablesConfigV1(
+            schema_version=1,
+            required=required,
+            required_sensitive=sensitive,
+            overrides={},
+            defaults=defaults,
+        )
+
+    @property
+    def variables_config(self) -> JupyterDeployVariablesConfig:
+        if self._variables_config:
+            return self._variables_config
+
+        variables_config_path = self.project_path / constants.VARIABLES_FILENAME
+        try:
+            variables_config = base_project_handler.retrieve_variables_config(variables_config_path)
+            self._variables_config = variables_config
+            return variables_config
+        except (FileNotFoundError, ValidationError, base_project_handler.NotADictError):
+            # the user has either corrupted or deleted their variables.yaml
+            # reset to a fallback;
+            # TODO display a warning here
+            reset_variables_config = self._get_reset_variables_config()
+            self._variables_config = reset_variables_config
+            return self._variables_config
 
     @abstractmethod
     def is_template_directory(self) -> bool:
@@ -27,7 +74,7 @@ class EngineVariablesHandler(ABC):
         pass
 
     @abstractmethod
-    def update_variable_records(self, varvalues: dict[str, Any]) -> None:
+    def update_variable_records(self, varvalues: dict[str, Any], sensitive: bool = False) -> None:
         """Update the recorded values of all variables passed.
 
         Raises:
@@ -35,3 +82,103 @@ class EngineVariablesHandler(ABC):
             TypeError if the any of the variable definition is not of the right type.
         """
         pass
+
+    def sync_engine_varfiles_with_project_variables_config(self) -> None:
+        """Update engine specific variable files from the variables config.
+
+        Bypass all variables set to Null.
+        """
+
+        required = self.variables_config.required
+        sensitive = self.variables_config.required_sensitive
+        overrides = self.variables_config.overrides
+        varvalues: dict[str, Any] = {}
+        sensitive_varvalues: dict[str, Any] = {}
+
+        for var_name, var_value in required.items():
+            if var_value is None:
+                continue
+            varvalues[var_name] = var_value
+
+        for var_name, var_value in overrides.items():
+            if var_value is None:
+                continue
+            varvalues[var_name] = var_value
+
+        for sensitive_var_name, sensitive_var_value in sensitive.items():
+            if sensitive_var_value is None:
+                continue
+            sensitive_varvalues[sensitive_var_name] = sensitive_var_value
+
+        self.update_variable_records(varvalues)
+        self.update_variable_records(sensitive_varvalues, sensitive=True)
+
+    def sync_project_variables_config(self, updated_values: dict[str, Any]) -> None:
+        """Update the project variables.yaml to match the values."""
+
+        curr_vars = self.variables_config
+        new_required_dict = curr_vars.required.copy()
+        new_sensitive_dict = curr_vars.required_sensitive.copy()
+        new_overrides_dict = curr_vars.overrides.copy()
+
+        for var_name, var_value in updated_values.items():
+            if var_name in new_required_dict:
+                new_required_dict[var_name] = var_value
+            elif var_name in new_sensitive_dict:
+                new_sensitive_dict[var_name] = var_value
+            elif var_value is not None:  # only pass non-None values for overrides
+                new_overrides_dict[var_name] = var_value
+
+        new_variables_config = JupyterDeployVariablesConfigV1(
+            schema_version=1,
+            required=new_required_dict,
+            required_sensitive=new_sensitive_dict,
+            overrides=new_overrides_dict,
+            defaults=curr_vars.defaults,
+        )
+
+        variables_config_path = self.project_path / constants.VARIABLES_FILENAME
+        fs_utils.write_yaml_file_with_comments(
+            variables_config_path,
+            new_variables_config.model_dump(),
+            key_order=VARIABLES_CONFIG_V1_KEYS_ORDER,
+            comments=VARIABLES_CONFIG_V1_COMMENTS,
+        )
+        self._variables_config = new_variables_config
+
+    def reset_recorded_variables(self) -> None:
+        """Reset non-sensitive variables to their original values."""
+        new_variables_config = JupyterDeployVariablesConfigV1(
+            schema_version=1,
+            required={k: None for k in self.variables_config.required},
+            required_sensitive={k: None for k in self.variables_config.required_sensitive},
+            overrides={},
+        )
+
+        variables_config_path = self.project_path / constants.VARIABLES_FILENAME
+        fs_utils.write_yaml_file_with_comments(
+            variables_config_path,
+            new_variables_config.model_dump(),
+            key_order=VARIABLES_CONFIG_V1_KEYS_ORDER,
+            comments=VARIABLES_CONFIG_V1_COMMENTS,
+        )
+        self._variables_config = new_variables_config
+
+    def reset_recorded_secrets(self) -> None:
+        """Reset sensitive variables to their original values."""
+        variables_config = self.variables_config
+        new_variables_config = JupyterDeployVariablesConfigV1(
+            schema_version=1,
+            required=variables_config.required,
+            required_sensitive={k: None for k in variables_config.required_sensitive},
+            overrides=variables_config.overrides,
+        )
+
+        variables_config_path = self.project_path / constants.VARIABLES_FILENAME
+        fs_utils.write_yaml_file_with_comments(
+            variables_config_path,
+            new_variables_config.model_dump(),
+            key_order=VARIABLES_CONFIG_V1_KEYS_ORDER,
+            comments=VARIABLES_CONFIG_V1_COMMENTS,
+        )
+        self._variables_config = new_variables_config

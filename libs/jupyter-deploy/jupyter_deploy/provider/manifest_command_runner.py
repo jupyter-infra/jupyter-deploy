@@ -135,3 +135,4 @@ class ManifestCommandRunner:
             varvalues[variable_name] = value
 
         self._variable_handler.update_variable_records(varvalues)
+        self._variable_handler.sync_project_variables_config(varvalues)

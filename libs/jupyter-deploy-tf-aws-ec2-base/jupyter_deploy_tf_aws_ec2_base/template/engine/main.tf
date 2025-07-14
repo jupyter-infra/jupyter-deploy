@@ -305,46 +305,46 @@ resource "aws_route53_record" "jupyter" {
 
 # Read the local files defining the instance and docker services setup
 data "local_file" "dockerfile_jupyter" {
-  filename = "${path.module}/dockerfile.jupyter"
+  filename = "${path.module}/../services/jupyter/dockerfile.jupyter"
 }
 
 data "local_file" "jupyter_start" {
-  filename = "${path.module}/jupyter-start.sh"
+  filename = "${path.module}/../services/jupyter/jupyter-start.sh"
 }
 
 data "local_file" "jupyter_reset" {
-  filename = "${path.module}/jupyter-reset.sh"
+  filename = "${path.module}/../services/jupyter/jupyter-reset.sh"
 }
 
 data "local_file" "pyproject_jupyter" {
-  filename = "${path.module}/pyproject.jupyter.toml"
+  filename = "${path.module}/../services/jupyter/pyproject.jupyter.toml"
 }
 
 data "local_file" "jupyter_server_config" {
-  filename = "${path.module}/jupyter_server_config.py"
+  filename = "${path.module}/../services/jupyter/jupyter_server_config.py"
 }
 
 data "local_file" "dockerfile_logrotator" {
-  filename = "${path.module}/dockerfile.logrotator"
+  filename = "${path.module}/../services/logrotator/dockerfile.logrotator"
 }
 
 data "local_file" "update_auth" {
-  filename = "${path.module}/update-auth.sh"
+  filename = "${path.module}/../services/commands/update-auth.sh"
 }
 
 data "local_file" "get_auth" {
-  filename = "${path.module}/get-auth.sh"
+  filename = "${path.module}/../services/commands/get-auth.sh"
 }
 data "local_file" "check_status" {
-  filename = "${path.module}/check-status-internal.sh"
+  filename = "${path.module}/../services/commands/check-status-internal.sh"
 }
 
 data "local_file" "get_status" {
-  filename = "${path.module}/get-status.sh"
+  filename = "${path.module}/../services/commands/get-status.sh"
 }
 
 data "local_file" "refresh_oauth_cookie" {
-  filename = "${path.module}/refresh-oauth-cookie.sh"
+  filename = "${path.module}/../services/commands/refresh-oauth-cookie.sh"
 }
 
 # variables consistency checks
@@ -358,15 +358,15 @@ locals {
   allowed_github_usernames = var.oauth_allowed_usernames != null ? join(",", [for username in var.oauth_allowed_usernames : "${username}"]) : ""
   allowed_github_org       = var.oauth_allowed_org != null ? var.oauth_allowed_org : ""
   allowed_github_teams     = var.oauth_allowed_teams != null ? join(",", [for team in var.oauth_allowed_teams : "${team}"]) : ""
-  cloud_init_file = templatefile("${path.module}/cloudinit.sh.tftpl", {
+  cloud_init_file = templatefile("${path.module}/../services/cloudinit.sh.tftpl", {
     allowed_github_usernames = local.allowed_github_usernames
     allowed_github_org       = local.allowed_github_org
     allowed_github_teams     = local.allowed_github_teams
   })
-  docker_startup_file = templatefile(("${path.module}/docker-startup.sh.tftpl"), {
+  docker_startup_file = templatefile("${path.module}/../services/docker-startup.sh.tftpl", {
     oauth_secret_arn = aws_secretsmanager_secret.oauth_github_client_secret.arn,
   })
-  docker_compose_file = templatefile("${path.module}/docker-compose.yml.tftpl", {
+  docker_compose_file = templatefile("${path.module}/../services/docker-compose.yml.tftpl", {
     oauth_provider           = var.oauth_provider
     full_domain              = local.full_domain
     github_client_id         = var.oauth_app_client_id
@@ -375,10 +375,10 @@ locals {
     allowed_github_org       = local.allowed_github_org
     allowed_github_teams     = local.allowed_github_teams
   })
-  traefik_config_file = templatefile("${path.module}/traefik.yml.tftpl", {
+  traefik_config_file = templatefile("${path.module}/../services/traefik/traefik.yml.tftpl", {
     letsencrypt_notification_email = var.letsencrypt_email
   })
-  logrotator_start_file = templatefile("${path.module}/logrotator-start.sh.tftpl", {
+  logrotator_start_file = templatefile("${path.module}/../services/logrotator/logrotator-start.sh.tftpl", {
     logrotate_size   = "${var.log_files_rotation_size_mb}M"
     logrotate_copies = var.log_files_retention_count
     logrotate_maxage = var.log_files_retention_days
@@ -484,16 +484,16 @@ DOC
 
   # Additional validations
   has_required_files = alltrue([
-    fileexists("${path.module}/dockerfile.jupyter"),
-    fileexists("${path.module}/jupyter-start.sh"),
-    fileexists("${path.module}/jupyter-reset.sh"),
-    fileexists("${path.module}/jupyter_server_config.py"),
-    fileexists("${path.module}/dockerfile.logrotator"),
-    fileexists("${path.module}/update-auth.sh"),
-    fileexists("${path.module}/refresh-oauth-cookie.sh"),
-    fileexists("${path.module}/check-status-internal.sh"),
-    fileexists("${path.module}/get-status.sh"),
-    fileexists("${path.module}/get-auth.sh"),
+    fileexists("${path.module}/../services/jupyter/dockerfile.jupyter"),
+    fileexists("${path.module}/../services/jupyter/jupyter-start.sh"),
+    fileexists("${path.module}/../services/jupyter/jupyter-reset.sh"),
+    fileexists("${path.module}/../services/jupyter/jupyter_server_config.py"),
+    fileexists("${path.module}/../services/logrotator/dockerfile.logrotator"),
+    fileexists("${path.module}/../services/commands/update-auth.sh"),
+    fileexists("${path.module}/../services/commands/refresh-oauth-cookie.sh"),
+    fileexists("${path.module}/../services/commands/check-status-internal.sh"),
+    fileexists("${path.module}/../services/commands/get-status.sh"),
+    fileexists("${path.module}/../services/commands/get-auth.sh"),
   ])
 
   files_not_empty = alltrue([

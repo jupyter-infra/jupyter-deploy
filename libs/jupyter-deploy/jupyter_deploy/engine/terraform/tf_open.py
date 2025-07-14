@@ -5,7 +5,7 @@ from rich import console as rich_console
 
 from jupyter_deploy import cmd_utils
 from jupyter_deploy.engine.engine_open import EngineOpenHandler
-from jupyter_deploy.engine.terraform.tf_constants import TF_OUTPUT_CMD
+from jupyter_deploy.engine.terraform.tf_constants import TF_ENGINE_DIR, TF_OUTPUT_CMD
 
 
 class TerraformOpenHandler(EngineOpenHandler):
@@ -13,18 +13,19 @@ class TerraformOpenHandler(EngineOpenHandler):
 
     def __init__(self, project_path: Path) -> None:
         self.project_path = project_path
+        self.engine_dir_path = project_path / TF_ENGINE_DIR
 
     def get_url(self) -> str:
         console = rich_console.Console()
 
         output_cmd = TF_OUTPUT_CMD.copy()
 
-        output = cmd_utils.run_cmd_and_capture_output(output_cmd)
+        output = cmd_utils.run_cmd_and_capture_output(output_cmd, exec_dir=self.engine_dir_path)
         output_dict = json.loads(output)
 
         if not output_dict:
             console.print(
-                f":x: Terraform state file either has no outputs, or could not be found in {self.project_path}. "
+                f":x: Terraform state file either has no outputs, or could not be found in {self.engine_dir_path}. "
                 f"Have you run `jd up` from the project directory?",
                 style="red",
             )

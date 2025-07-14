@@ -1,10 +1,15 @@
 from pathlib import Path
 from typing import Any
 
+from rich import console as rich_console
+
 from jupyter_deploy import fs_utils
 from jupyter_deploy.engine.engine_variables import EngineVariablesHandler
 from jupyter_deploy.engine.terraform import tf_varfiles
 from jupyter_deploy.engine.terraform.tf_constants import (
+    TF_ENGINE_DIR,
+    TF_PRESETS_DIR,
+    TF_RECORDED_SECRETS_FILENAME,
     TF_RECORDED_VARS_FILENAME,
     TF_VARIABLES_FILENAME,
     get_preset_filename,
@@ -19,9 +24,16 @@ class TerraformVariablesHandler(EngineVariablesHandler):
     def __init__(self, project_path: Path, project_manifest: JupyterDeployManifest) -> None:
         super().__init__(project_path=project_path, project_manifest=project_manifest)
         self._template_vars: dict[str, TemplateVariableDefinition] | None = None
+        self.engine_dir_path = project_path / TF_ENGINE_DIR
+
+    def get_recorded_variables_filepath(self) -> Path:
+        return self.engine_dir_path / TF_RECORDED_VARS_FILENAME
+
+    def get_recorded_secrets_filepath(self) -> Path:
+        return self.engine_dir_path / TF_RECORDED_SECRETS_FILENAME
 
     def is_template_directory(self) -> bool:
-        return fs_utils.file_exists(self.project_path / TF_VARIABLES_FILENAME)
+        return fs_utils.file_exists(self.engine_dir_path / TF_VARIABLES_FILENAME)
 
     def get_template_variables(self) -> dict[str, TemplateVariableDefinition]:
         # cache handling to avoid the expensive fs operation necessary
@@ -30,12 +42,12 @@ class TerraformVariablesHandler(EngineVariablesHandler):
             return self._template_vars
 
         # read the variables.tf, retrieve the description, sensitive
-        variables_dot_tf_path = self.project_path / TF_VARIABLES_FILENAME
+        variables_dot_tf_path = self.engine_dir_path / TF_VARIABLES_FILENAME
         variables_dot_tf_content = fs_utils.read_short_file(variables_dot_tf_path)
         variable_defs = tf_varfiles.parse_variables_dot_tf_content(variables_dot_tf_content)
 
         # read the template .tfvars with the defaults
-        all_defaults_tfvars_path = self.project_path / get_preset_filename()
+        all_defaults_tfvars_path = self.engine_dir_path / TF_PRESETS_DIR / get_preset_filename()
         variables_tfvars_content = fs_utils.read_short_file(all_defaults_tfvars_path)
 
         # combine
@@ -46,7 +58,7 @@ class TerraformVariablesHandler(EngineVariablesHandler):
         self._template_vars = template_vars
         return template_vars
 
-    def update_variable_records(self, varvalues: dict[str, Any]) -> None:
+    def update_variable_records(self, varvalues: dict[str, Any], sensitive: bool = False) -> None:
         if not varvalues:
             return
 
@@ -72,7 +84,8 @@ class TerraformVariablesHandler(EngineVariablesHandler):
             existing_vardef.assigned_value = updated_vals[varname]
 
         # update the .tfvars file, or create a new one if it doesn't exist.
-        tfvars_path = self.project_path / TF_RECORDED_VARS_FILENAME
+        file_name = TF_RECORDED_VARS_FILENAME if not sensitive else TF_RECORDED_SECRETS_FILENAME
+        tfvars_path = self.engine_dir_path / file_name
         previous_tfvars_content: str = ""
         if fs_utils.file_exists(tfvars_path):
             previous_tfvars_content = fs_utils.read_short_file(tfvars_path)
@@ -81,3 +94,23 @@ class TerraformVariablesHandler(EngineVariablesHandler):
 
         if updated_tfvars_lines:
             fs_utils.write_inline_file_content(tfvars_path, updated_tfvars_lines)
+
+    def reset_recorded_variables(self) -> None:
+        super().reset_recorded_variables()
+
+        path = self.get_recorded_variables_filepath()
+        deleted = fs_utils.delete_file_if_exists(path)
+
+        if deleted:
+            console = rich_console.Console()
+            console.print(f":wastebasket: Deleted previously recorded inputs at: {path.name}")
+
+    def reset_recorded_secrets(self) -> None:
+        super().reset_recorded_secrets()
+
+        path = self.get_recorded_secrets_filepath()
+        deleted = fs_utils.delete_file_if_exists(path)
+
+        if deleted:
+            console = rich_console.Console()
+            console.print(f":wastebasket: Deleted previously recorded secrets at: {path.name}")

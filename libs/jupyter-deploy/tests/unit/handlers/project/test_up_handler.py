@@ -41,15 +41,16 @@ class TestUpHandler(unittest.TestCase):
     def test_apply_delegates_to_handler(
         self, mock_cwd: Mock, mock_retrieve_manifest: Mock, mock_tf_handler_cls: Mock
     ) -> None:
+        path = Path("/mock/path")
         mock_cwd.return_value = Path("/mock/cwd")
         mock_retrieve_manifest.return_value = self.mock_manifest
         mock_tf_handler = Mock()
         mock_tf_handler_cls.return_value = mock_tf_handler
 
         handler = UpHandler()
-        handler.apply("test-plan", auto_approve=False)
+        handler.apply(path, auto_approve=False)
 
-        mock_tf_handler.apply.assert_called_once_with("test-plan", False)
+        mock_tf_handler.apply.assert_called_once_with(path, False)
 
     @patch("jupyter_deploy.engine.terraform.tf_up.TerraformUpHandler")
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
@@ -57,6 +58,7 @@ class TestUpHandler(unittest.TestCase):
     def test_apply_propagates_exceptions(
         self, mock_cwd: Mock, mock_retrieve_manifest: Mock, mock_tf_handler_cls: Mock
     ) -> None:
+        path = Path("/mock/path")
         mock_cwd.return_value = Path("/mock/cwd")
         mock_retrieve_manifest.return_value = self.mock_manifest
         mock_tf_handler = Mock()
@@ -66,7 +68,7 @@ class TestUpHandler(unittest.TestCase):
         handler = UpHandler()
 
         with self.assertRaises(Exception) as context:
-            handler.apply("test-plan")
+            handler.apply(path)
 
         self.assertEqual(str(context.exception), "Apply failed")
         mock_tf_handler.apply.assert_called_once()

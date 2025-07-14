@@ -86,7 +86,9 @@ def parse_dot_tfvars_content_and_add_defaults(
             continue
 
         try:
-            updated_var_def = tf_vardefs.create_tf_variable_definition({**var_def.model_dump(), "default": var_default})
+            updated_var_def = tf_vardefs.create_tf_variable_definition(
+                {**var_def.model_dump(), "default": var_default, "has_default": True}
+            )
             variable_defs[varname] = updated_var_def
         except ValidationError as e:
             print(f"Warning: invalid default in .tfvars file for '{varname}', ignoring: {e.errors()}")

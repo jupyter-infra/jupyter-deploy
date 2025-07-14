@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from jupyter_deploy.engine.engine_variables import EngineVariablesHandler
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
 from jupyter_deploy.manifest import JupyterDeployManifest
@@ -12,11 +13,13 @@ class EngineConfigHandler(ABC):
         project_path: Path,
         project_manifest: JupyterDeployManifest,
         engine: EngineType,
+        variables_handler: EngineVariablesHandler,
     ) -> None:
         """Instantiate the base handler for `jd config` command."""
         self.project_path = project_path
         self.project_manifest = project_manifest
         self.engine = engine
+        self.variables_handler = variables_handler
 
     @abstractmethod
     def has_recorded_variables(self) -> bool:

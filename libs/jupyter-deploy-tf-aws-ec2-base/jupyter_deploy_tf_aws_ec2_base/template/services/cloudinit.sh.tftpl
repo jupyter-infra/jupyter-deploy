@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set +e
 
 # Records logs
 mkdir -p /var/log/jupyter-deploy
@@ -117,7 +117,7 @@ NEEDED_SWAP_KB=$((SWAP_SIZE_MB * 1024))
 
 if [ $CURRENT_SWAP_KB -eq 0 ]; then
     echo "Creating new swap file of $${SWAP_SIZE_MB}MB..."
-    sudo fallocate -l $${SWAP_SIZE_MB}M /swapfile
+    fallocate -l $${SWAP_SIZE_MB}M /swapfile
 elif [ $CURRENT_SWAP_KB -ne $NEEDED_SWAP_KB ]; then
     echo "Resizing swap file from $((CURRENT_SWAP_KB/1024))MB to $${SWAP_SIZE_MB}MB..."
     swapoff -a

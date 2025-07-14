@@ -1,0 +1,40 @@
+schema_version: 1
+required:
+  # either assign values below
+  # or run 'jd config' to use the interactive experience
+  domain: null
+  letsencrypt_email: null
+  oauth_app_client_id: null
+  oauth_allowed_org: null
+  oauth_allowed_teams: null
+  oauth_allowed_usernames: null
+  subdomain: null
+required_sensitive:
+  # either assign values below
+  # or run 'jd config -s' to use the interactive experience
+  oauth_app_client_secret: null
+overrides:
+  # set variable values as <variable-name>: <variable-value>
+  # delete or comment out a line to use the default
+  # instance_type: "t3.large"
+defaults:
+  # read-only: do not modify this section
+  # instead add overrides in the override section
+  ami_id: null
+  custom_tags: {}
+  iam_role_prefix: "Jupyter-deploy-ec2-base"
+  instance_type: "t3.medium"
+  key_pair_name: null
+  log_files_retention_count: 20
+  log_files_retention_days: 180
+  log_files_rotation_size_mb: 50
+  oauth_provider: "github"
+  oauth_app_secret_prefix: "Jupyter-deploy-ec2-base"
+  region: "us-west-2"
+  volume_size_gb: 30
+  volume_type: "gp3"
+
+  
+  
+  
+  

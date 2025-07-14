@@ -9,6 +9,10 @@ TF_OUTPUT_CMD = ["terraform", "output", "-json"]
 TF_PARSE_PLAN_CMD = ["terraform", "show", "-json"]
 TF_AUTO_APPROVE_CMD_OPTION = "-auto-approve"
 
+# Directory constants
+TF_ENGINE_DIR = "engine"
+TF_PRESETS_DIR = "presets"
+
 # File constants
 TF_DEFAULT_PLAN_FILENAME = "jdout-tfplan"
 TF_RECORDED_VARS_FILENAME = "jdinputs.auto.tfvars"

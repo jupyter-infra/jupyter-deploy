@@ -93,9 +93,19 @@ def extract_variables_from_json_plan(
 
 def format_plan_variables(vars: dict[str, TerraformPlanVariableContent]) -> list[str]:
     """Return a list of terraform plan variable entries to save to a .tfvars file."""
-    return [f"{name} = {format_terraform_value(var.value)}\n" for name, var in vars.items()]
+    out: list[str] = [
+        "# do not modify manually: this file is managed by jupyter-deploy\n",
+        "# edit variables.yaml instead.\n",
+    ]
+    out.extend([f"{name} = {format_terraform_value(var.value)}\n" for name, var in vars.items()])
+    return out
 
 
 def format_values_for_dot_tfvars(vars: dict[str, Any]) -> list[str]:
     """Return a list of terraform plan variable entries to save as a .tfvars file."""
-    return [f"{name} = {format_terraform_value(value)}\n" for name, value in vars.items()]
+    out: list[str] = [
+        "# do not modify manually: this file is managed by jupyter-deploy\n",
+        "# edit variables.yaml instead.\n",
+    ]
+    out.extend([f"{name} = {format_terraform_value(value)}\n" for name, value in vars.items()])
+    return out

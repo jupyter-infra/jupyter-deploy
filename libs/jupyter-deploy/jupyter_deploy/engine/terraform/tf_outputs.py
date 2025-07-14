@@ -4,7 +4,7 @@ from jupyter_deploy import cmd_utils, fs_utils
 from jupyter_deploy.engine.engine_outputs import EngineOutputsHandler
 from jupyter_deploy.engine.outdefs import TemplateOutputDefinition
 from jupyter_deploy.engine.terraform import tf_outdefs, tf_outfiles
-from jupyter_deploy.engine.terraform.tf_constants import TF_OUTPUT_CMD, TF_OUTPUTS_FILENAME
+from jupyter_deploy.engine.terraform.tf_constants import TF_ENGINE_DIR, TF_OUTPUT_CMD, TF_OUTPUTS_FILENAME
 from jupyter_deploy.manifest import JupyterDeployManifest
 
 
@@ -15,6 +15,7 @@ class TerraformOutputsHandler(EngineOutputsHandler):
         self.project_path = project_path
         self.project_manifest = project_manifest
         self._full_template_outputs: dict[str, TemplateOutputDefinition] | None = None
+        self.engine_dir_path = project_path / TF_ENGINE_DIR
 
     def get_full_project_outputs(self) -> dict[str, TemplateOutputDefinition]:
         # cache handling to avoid the expensive fs operation necessary
@@ -24,11 +25,11 @@ class TerraformOutputsHandler(EngineOutputsHandler):
 
         # execute the terraform output command
         output_cmd = TF_OUTPUT_CMD.copy()
-        output_content = cmd_utils.run_cmd_and_capture_output(output_cmd)
+        output_content = cmd_utils.run_cmd_and_capture_output(output_cmd, exec_dir=self.engine_dir_path)
         output_defs_from_cmd = tf_outdefs.parse_output_cmd_result(output_content)
 
         # read the outputs.tf, retrieve the description
-        outputs_dot_tf_path = self.project_path / TF_OUTPUTS_FILENAME
+        outputs_dot_tf_path = self.engine_dir_path / TF_OUTPUTS_FILENAME
         output_dot_tf_content = fs_utils.read_short_file(outputs_dot_tf_path)
         description_from_outputs_dot_tf = tf_outfiles.extract_description_from_dot_tf_content(output_dot_tf_content)
 

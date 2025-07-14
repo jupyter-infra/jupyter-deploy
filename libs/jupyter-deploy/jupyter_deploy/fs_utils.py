@@ -4,6 +4,8 @@ import shutil
 import stat
 from pathlib import Path
 
+import yaml
+
 DEFAULT_IGNORE_PATTERNS: list[str] = []
 
 # Calculate permissions: 0o755 (rwxr-xr-x)
@@ -142,3 +144,41 @@ def read_short_file(file_path: Path, max_size_mb: float = 1.0) -> str:
 
     with file_path.open("r") as f:
         return f.read()
+
+
+def write_yaml_file_with_comments(
+    file_path: Path, content: dict, key_order: list[str] | None = None, comments: dict[str, list[str]] | None = None
+) -> None:
+    """Write dict content to disk."""
+    ordered_dict: dict = {}
+
+    # First add keys in specified order
+    if key_order:
+        for key in key_order:
+            if key in content:
+                ordered_dict[key] = content[key]
+
+    # Add any remaining keys not specified in order
+    for key in content:
+        if key not in ordered_dict:
+            ordered_dict[key] = content[key]
+
+    # write to file
+    with open(file_path, "w+") as f:
+        yaml.dump(ordered_dict, f, indent=2, sort_keys=False, default_flow_style=False)
+
+    # add back comments if any
+    if comments:
+        with open(file_path) as f:
+            lines = f.readlines()
+
+        modified_lines: list[str] = []
+        for line in lines:
+            modified_lines.append(line)
+            for key, comment_lines in comments.items():
+                if line.strip() == f"{key}:":
+                    for comment in comment_lines:
+                        modified_lines.append(f"{comment}\n")
+
+        with open(file_path, "w") as f:
+            f.writelines(modified_lines)

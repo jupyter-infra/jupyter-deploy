@@ -18,6 +18,7 @@ class TemplateVariableDefinition(BaseModel, Generic[T]):
     sensitive: bool = False
     default: T | None = None
     assigned_value: T | None = None
+    has_default: bool = False
 
     def get_cli_var_name(self) -> str:
         """Return variable name using the kebab-case format."""

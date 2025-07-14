@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from subprocess import CalledProcessError
+from typing import Any
 
 from pydantic import ValidationError
 from rich import console as rich_console
@@ -9,14 +10,14 @@ from rich import console as rich_console
 from jupyter_deploy import cmd_utils, fs_utils, verify_utils
 from jupyter_deploy.engine.engine_config import EngineConfigHandler
 from jupyter_deploy.engine.enum import EngineType
-from jupyter_deploy.engine.terraform import tf_plan, tf_vardefs
+from jupyter_deploy.engine.terraform import tf_plan, tf_vardefs, tf_variables
 from jupyter_deploy.engine.terraform.tf_constants import (
     TF_DEFAULT_PLAN_FILENAME,
+    TF_ENGINE_DIR,
     TF_INIT_CMD,
     TF_PARSE_PLAN_CMD,
     TF_PLAN_CMD,
-    TF_RECORDED_SECRETS_FILENAME,
-    TF_RECORDED_VARS_FILENAME,
+    TF_PRESETS_DIR,
     get_preset_filename,
 )
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
@@ -27,26 +28,31 @@ class TerraformConfigHandler(EngineConfigHandler):
     """Config handler implementation for terraform projects."""
 
     def __init__(
-        self, project_path: Path, project_manifest: JupyterDeployManifest, output_filename: str | None = None
+        self,
+        project_path: Path,
+        project_manifest: JupyterDeployManifest,
+        output_filename: str | None = None,
     ) -> None:
+        variables_handler = tf_variables.TerraformVariablesHandler(
+            project_path=project_path, project_manifest=project_manifest
+        )
         super().__init__(
             project_path=project_path,
             project_manifest=project_manifest,
+            variables_handler=variables_handler,
             engine=EngineType.TERRAFORM,
         )
-        self.plan_out_path = project_path / (output_filename or TF_DEFAULT_PLAN_FILENAME)
+        self.engine_dir_path = project_path / TF_ENGINE_DIR
+        self.plan_out_path = self.engine_dir_path / (output_filename or TF_DEFAULT_PLAN_FILENAME)
+
+        # use a different name from parent attribute to not confuse mypy
+        self.tf_variables_handler = variables_handler
 
     def _get_preset_path(self, preset_name: str) -> Path:
-        return self.project_path / get_preset_filename(preset_name)
-
-    def _get_recorded_vars_filepath(self) -> Path:
-        return self.project_path / TF_RECORDED_VARS_FILENAME
-
-    def _get_recorded_secrets_filepath(self) -> Path:
-        return self.project_path / TF_RECORDED_SECRETS_FILENAME
+        return self.engine_dir_path / TF_PRESETS_DIR / get_preset_filename(preset_name)
 
     def has_recorded_variables(self) -> bool:
-        file_path = self._get_recorded_vars_filepath()
+        file_path = self.tf_variables_handler.get_recorded_variables_filepath()
         return fs_utils.file_exists(file_path=file_path)
 
     def verify_preset_exists(self, preset_name: str) -> bool:
@@ -70,20 +76,10 @@ class TerraformConfigHandler(EngineConfigHandler):
         return all_installed
 
     def reset_recorded_variables(self) -> None:
-        path = self._get_recorded_vars_filepath()
-        deleted = fs_utils.delete_file_if_exists(path)
-
-        if deleted:
-            console = rich_console.Console()
-            console.print(f":wastebasket:  Deleted previously recorded inputs at: {path.name}")
+        self.variables_handler.reset_recorded_variables()
 
     def reset_recorded_secrets(self) -> None:
-        path = self._get_recorded_secrets_filepath()
-        deleted = fs_utils.delete_file_if_exists(path)
-
-        if deleted:
-            console = rich_console.Console()
-            console.print(f":wastebasket:  Deleted previously recorded secrets at: {path.name}")
+        self.variables_handler.reset_recorded_secrets()
 
     def configure(
         self, preset_name: str | None = None, variable_overrides: dict[str, TemplateVariableDefinition] | None = None
@@ -97,6 +93,7 @@ class TerraformConfigHandler(EngineConfigHandler):
         # state.
         init_retcode, init_timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(
             TF_INIT_CMD.copy(),
+            exec_dir=self.engine_dir_path,
         )
         if init_retcode != 0 or init_timed_out:
             console.print(":x: Error initializing Terraform project.", style="red")
@@ -108,20 +105,23 @@ class TerraformConfigHandler(EngineConfigHandler):
         # 2.1/ output plan to disk
         plan_cmds.append(f"-out={self.plan_out_path.absolute()}")
 
-        # 2.2/ using preset
+        # 2.2/ sync variables.yaml -> tfvars
+        self.variables_handler.sync_engine_varfiles_with_project_variables_config()
+
+        # 2.3/ using preset
         if preset_name:
             # here we assume the preset path was verified earlier
             preset_path = self._get_preset_path(preset_name)
             plan_cmds.append(f"-var-file={preset_path.absolute()}")
 
-        # 2.3/ pass variable overrides
+        # 2.4/ pass variable overrides
         if variable_overrides:
             for var_def in variable_overrides.values():
                 var_option = tf_vardefs.to_tf_var_option(var_def)
                 plan_cmds.extend(var_option)
 
-        # 2.4/ call terraform plan
-        plan_retcode, plan_timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(plan_cmds)
+        # 2.5/ call terraform plan
+        plan_retcode, plan_timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(plan_cmds, exec_dir=self.engine_dir_path)
 
         if plan_retcode != 0 or plan_timed_out:
             console.line()
@@ -139,7 +139,7 @@ class TerraformConfigHandler(EngineConfigHandler):
         cmds = TF_PARSE_PLAN_CMD + [f"{self.plan_out_path.absolute()}"]
 
         try:
-            plan_content_str = cmd_utils.run_cmd_and_capture_output(cmds)
+            plan_content_str = cmd_utils.run_cmd_and_capture_output(cmds, exec_dir=self.engine_dir_path)
         except CalledProcessError as e:
             console.print(f":x: Failed to retrieve plan at: {self.plan_out_path.name}")
             console.print(e.stdout)
@@ -149,23 +149,33 @@ class TerraformConfigHandler(EngineConfigHandler):
         try:
             variables, secrets = tf_plan.extract_variables_from_json_plan(plan_content_str)
         except (ValueError, ValidationError):  # noqa: B904
-            # TODO: log the error
             console.print(f":x: invalid plan at: {self.plan_out_path.name}")
             return
 
+        vardefs: dict[str, Any] = {}
+
         if record_vars:
-            vars_file_path = self._get_recorded_vars_filepath()
+            vars_file_path = self.tf_variables_handler.get_recorded_variables_filepath()
             vars_file_lines = ["# generated by jupyter-deploy config command\n"]
             vars_file_lines.extend(tf_plan.format_plan_variables(variables))
             fs_utils.write_inline_file_content(vars_file_path, vars_file_lines)
             console.print(f":floppy_disk: Recorded variables: {vars_file_path.name}")
 
+            vardefs.update({k: v.value for k, v in variables.items()})
+
         if record_secrets:
-            secrets_file_path = self._get_recorded_secrets_filepath()
+            secrets_file_path = self.tf_variables_handler.get_recorded_secrets_filepath()
             secrets_file_lines = ["# generated by jupyter-deploy config command\n"]
             secrets_file_lines.append("# do NOT commit this file\n")
             secrets_file_lines.extend(tf_plan.format_plan_variables(secrets))
             fs_utils.write_inline_file_content(secrets_file_path, secrets_file_lines)
             console.print(f":floppy_disk: Recorded secrets: {secrets_file_path.name}")
-            console.line()
             console.print(f":warning: Do [bold]not[/] commit the secret file: {secrets_file_path.name}", style="yellow")
+
+            vardefs.update({k: v.value for k, v in secrets.items()})
+
+        if record_vars:
+            self.variables_handler.sync_project_variables_config(vardefs)
+            variables_config_path = self.variables_handler.get_variables_config_path()
+            console.line()
+            console.print(f":floppy_disk: Recorded variables config: {variables_config_path.name}")

@@ -27,6 +27,7 @@ class TestTerraformUpHandler(unittest.TestCase):
     @patch("jupyter_deploy.engine.terraform.tf_up.cmd_utils")
     @patch("jupyter_deploy.engine.terraform.tf_up.rich_console")
     def test_apply_success(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
+        path = Path("/mock/path")
         project_path = Path("/mock/project")
         handler = TerraformUpHandler(project_path=project_path)
 
@@ -35,15 +36,16 @@ class TestTerraformUpHandler(unittest.TestCase):
 
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (0, False)
 
-        handler.apply("test-plan")
+        handler.apply(path)
 
-        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "apply", "test-plan"])
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "apply", "/mock/path"])
         mock_console_instance.print.assert_called_once()
         self.assertTrue(mock_console_instance.print.call_args[0][0].lower().find("success") >= 0)
 
     @patch("jupyter_deploy.engine.terraform.tf_up.cmd_utils")
     @patch("jupyter_deploy.engine.terraform.tf_up.rich_console")
     def test_apply_handles_error(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
+        path = Path("/mock/path")
         project_path = Path("/mock/project")
         handler = TerraformUpHandler(project_path=project_path)
 
@@ -52,15 +54,16 @@ class TestTerraformUpHandler(unittest.TestCase):
 
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (1, False)
 
-        handler.apply("test-plan")
+        handler.apply(path)
 
-        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "apply", "test-plan"])
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "apply", "/mock/path"])
         mock_console_instance.print.assert_called_once()
         self.assertTrue(mock_console_instance.print.call_args[0][0].lower().find("error") >= 0)
 
     @patch("jupyter_deploy.engine.terraform.tf_up.cmd_utils")
     @patch("jupyter_deploy.engine.terraform.tf_up.rich_console")
     def test_apply_handles_timeout(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
+        path = Path("/mock/path")
         project_path = Path("/mock/project")
         handler = TerraformUpHandler(project_path=project_path)
 
@@ -69,21 +72,22 @@ class TestTerraformUpHandler(unittest.TestCase):
 
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (0, True)
 
-        handler.apply("test-plan")
+        handler.apply(path)
 
-        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "apply", "test-plan"])
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(["terraform", "apply", "/mock/path"])
         mock_console_instance.print.assert_called_once()
         self.assertTrue(mock_console_instance.print.call_args[0][0].lower().find("error") >= 0)
 
     @patch("jupyter_deploy.engine.terraform.tf_up.cmd_utils")
     def test_apply_propagates_exceptions(self, mock_cmd_utils: Mock) -> None:
+        path = Path("/mock/path")
         project_path = Path("/mock/project")
         handler = TerraformUpHandler(project_path=project_path)
 
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.side_effect = Exception("Command failed")
 
         with self.assertRaises(Exception) as context:
-            handler.apply("test-plan")
+            handler.apply(path)
 
         self.assertEqual(str(context.exception), "Command failed")
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once()
@@ -92,6 +96,7 @@ class TestTerraformUpHandler(unittest.TestCase):
     @patch("jupyter_deploy.engine.terraform.tf_up.rich_console")
     def test_apply_with_auto_approve(self, mock_console: Mock, mock_cmd_utils: Mock) -> None:
         """Test that auto_approve flag is properly passed to terraform command."""
+        path = Path("/mock/path")
         project_path = Path("/mock/project")
         handler = TerraformUpHandler(project_path=project_path)
 
@@ -99,7 +104,7 @@ class TestTerraformUpHandler(unittest.TestCase):
         mock_console.Console.return_value = mock_console_instance
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (0, False)
 
-        handler.apply("test-plan", auto_approve=True)
+        handler.apply(path, auto_approve=True)
 
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once()
         cmd_args = mock_cmd_utils.run_cmd_and_pipe_to_terminal.call_args[0][0]
