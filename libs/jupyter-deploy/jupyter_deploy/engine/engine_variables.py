@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
+from rich import console as rich_console
 
 from jupyter_deploy import constants, fs_utils
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
@@ -22,6 +23,14 @@ class EngineVariablesHandler(ABC):
         self.project_path = project_path
         self.project_manifest = project_manifest
         self._variables_config: JupyterDeployVariablesConfig | None = None
+        self._console: rich_console.Console | None = None
+
+    def get_console(self) -> rich_console.Console:
+        """Return the instance's rich console."""
+        if self._console:
+            return self._console
+        self._console = rich_console.Console()
+        return self._console
 
     def get_variables_config_path(self) -> Path:
         return self.project_path / constants.VARIABLES_FILENAME
@@ -153,6 +162,7 @@ class EngineVariablesHandler(ABC):
             required={k: None for k in self.variables_config.required},
             required_sensitive={k: None for k in self.variables_config.required_sensitive},
             overrides={},
+            defaults=self.variables_config.defaults,
         )
 
         variables_config_path = self.project_path / constants.VARIABLES_FILENAME
@@ -172,6 +182,7 @@ class EngineVariablesHandler(ABC):
             required=variables_config.required,
             required_sensitive={k: None for k in variables_config.required_sensitive},
             overrides=variables_config.overrides,
+            defaults=variables_config.defaults,
         )
 
         variables_config_path = self.project_path / constants.VARIABLES_FILENAME

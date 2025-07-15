@@ -13,6 +13,7 @@ from jupyter_deploy.cmd_utils import (
     project_dir,
     run_cmd_and_capture_output,
     run_cmd_and_pipe_to_terminal,
+    switch_dir,
 )
 
 
@@ -178,6 +179,24 @@ class TestRunCmdAndCaptureOutput(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             run_cmd_and_capture_output(["curl", "http://the-dark-web.html"])
 
+    @patch("subprocess.run")
+    @patch("jupyter_deploy.cmd_utils.switch_dir")
+    def test_uses_switch_dir_with_exec_dir(self, mock_switch_dir: Mock, mock_run: Mock) -> None:
+        """Test that run_cmd_and_capture_output uses switch_dir with the specified directory."""
+        mock_dir = Path("/test/directory")
+        run_cmd_and_capture_output(["ls", "-la"], exec_dir=mock_dir)
+
+        # Verify switch_dir was called with the correct directory
+        mock_switch_dir.assert_called_once_with(mock_dir)
+
+        # Verify subprocess.run was called with correct arguments
+        mock_run.assert_called_once_with(
+            ["ls", "-la"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
 
 class TestRunCmdAndPipeToTerminal(unittest.TestCase):
     """Test cases for run_cmd_and_pipe_to_terminal function."""
@@ -207,6 +226,30 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
             universal_newlines=True,
             bufsize=0,
         )
+
+    @patch("subprocess.Popen")
+    @patch("jupyter_deploy.cmd_utils.switch_dir")
+    def test_uses_switch_dir_with_exec_dir(self, mock_switch_dir: Mock, mock_popen: Mock) -> None:
+        """Test that run_cmd_and_pipe_to_terminal uses switch_dir with the specified directory."""
+        # Setup mock
+        mock_process = Mock()
+        mock_process.poll.return_value = None
+        mock_process.wait.return_value = 0
+        mock_process.stdout.read.return_value = ""
+        mock_process.stderr.readline.return_value = ""
+        mock_popen.return_value = mock_process
+
+        # Call the function with exec_dir
+        mock_dir = Path("/test/directory")
+        retcode, is_timedout = run_cmd_and_pipe_to_terminal(["ls", "-la"], exec_dir=mock_dir)
+
+        # Verify switch_dir was called with the correct directory
+        mock_switch_dir.assert_called_once_with(mock_dir)
+
+        # Verify other behaviors are correct
+        self.assertEqual(retcode, 0)
+        self.assertFalse(is_timedout)
+        mock_popen.assert_called_once()
 
     @patch("subprocess.Popen")
     def test_starts_subprocess_and_return_failure(self, mock_popen: Mock) -> None:
@@ -525,6 +568,114 @@ class TestRunCmdAndPipeToTerminal(unittest.TestCase):
         mock_popen.assert_called_once()
         mock_terminate.assert_called_once()
         mock_print.assert_any_call("Command timed out after 1 second(s).")
+
+
+class TestSwitchDirContextManager(unittest.TestCase):
+    """Test cases for switch_dir context manager."""
+
+    @patch("os.getcwd")
+    @patch("os.chdir")
+    def test_no_op_on_none_path(self, mock_chdir: Mock, mock_getcwd: Mock) -> None:
+        """Test that when None is passed, no directory change occurs."""
+        # Call the context manager with None
+        with switch_dir(None):
+            pass
+
+        # Verify no directory changes were made
+        mock_getcwd.assert_not_called()
+        mock_chdir.assert_not_called()
+
+    @patch("os.getcwd")
+    @patch("os.chdir")
+    @patch("pathlib.Path.exists")
+    @patch("pathlib.Path.is_dir")
+    def test_change_dir_and_change_back(
+        self, mock_is_dir: Mock, mock_exists: Mock, mock_chdir: Mock, mock_getcwd: Mock
+    ) -> None:
+        """Test that directory is changed and then restored after context exit."""
+
+        # Setup mocks
+        mock_getcwd.return_value = "/original/dir"
+        mock_exists.return_value = True
+        mock_is_dir.return_value = True
+        target_dir = Path("/target/dir")
+
+        # Call the context manager with a valid directory
+        with switch_dir(target_dir):
+            # Verify directory was changed to target
+            pass
+
+        self.assertEqual(mock_chdir.call_count, 2)
+        self.assertEqual(mock_chdir.mock_calls[0][1], (target_dir,))
+        self.assertEqual(mock_chdir.mock_calls[1][1], (Path("/original/dir"),))
+
+    @patch("os.getcwd")
+    @patch("os.chdir")
+    @patch("pathlib.Path.exists")
+    @patch("pathlib.Path.is_dir")
+    def test_change_back_on_inner_exception(
+        self, mock_is_dir: Mock, mock_exists: Mock, mock_chdir: Mock, mock_getcwd: Mock
+    ) -> None:
+        """Test that directory is restored even when an exception occurs inside the context."""
+        # Setup mocks
+        mock_getcwd.return_value = "/original/dir"
+        mock_exists.return_value = True
+        mock_is_dir.return_value = True
+        target_dir = Path("/target/dir")
+
+        # Call the context manager with a valid directory and raise an exception inside
+        with self.assertRaises(ValueError):  # noqa: SIM117
+            with switch_dir(target_dir):
+                raise ValueError("Test exception")
+
+        # Verify directory was changed back to original despite the exception
+        self.assertEqual(mock_chdir.call_count, 2)
+        self.assertEqual(mock_chdir.mock_calls[0][1], (target_dir,))
+        self.assertEqual(mock_chdir.mock_calls[1][1], (Path("/original/dir"),))
+
+    @patch("os.getcwd")
+    @patch("pathlib.Path.exists")
+    @patch("pathlib.Path.absolute")
+    def test_raise_value_error_when_path_does_not_exist(
+        self, mock_absolute: Mock, mock_exists: Mock, mock_getcwd: Mock
+    ) -> None:
+        """Test that ValueError is raised when the specified path doesn't exist."""
+        # Setup mocks
+        mock_getcwd.return_value = "/original/dir"
+        mock_exists.return_value = False
+        mock_absolute.return_value = "/nonexistent/dir"
+        target_dir = Path("/nonexistent/dir")
+
+        # Call the context manager with a non-existent directory
+        with self.assertRaises(ValueError) as context:  # noqa: SIM117
+            with switch_dir(target_dir):
+                pass
+
+        # Verify the correct error message
+        self.assertEqual(str(context.exception), "Target path not found: /nonexistent/dir")
+
+    @patch("os.getcwd")
+    @patch("pathlib.Path.exists")
+    @patch("pathlib.Path.is_dir")
+    @patch("pathlib.Path.absolute")
+    def test_raise_value_error_when_path_not_a_dir(
+        self, mock_absolute: Mock, mock_is_dir: Mock, mock_exists: Mock, mock_getcwd: Mock
+    ) -> None:
+        """Test that ValueError is raised when the specified path is not a directory."""
+        # Setup mocks
+        mock_getcwd.return_value = "/original/dir"
+        mock_exists.return_value = True
+        mock_is_dir.return_value = False
+        mock_absolute.return_value = "/path/to/file.txt"
+        target_dir = Path("/path/to/file.txt")
+
+        # Call the context manager with a path that's not a directory
+        with self.assertRaises(ValueError) as context:  # noqa: SIM117
+            with switch_dir(target_dir):
+                pass
+
+        # Verify the correct error message
+        self.assertEqual(str(context.exception), "Target path is not a directory: /path/to/file.txt")
 
 
 class TestProjectManagerDirContextManager(unittest.TestCase):

@@ -33,6 +33,7 @@ class TerraformVariableDefinition(BaseModel, Generic[V], ABC):
     description: str = ""
     default: V | None = None
     sensitive: bool = False
+    has_default: bool = False
 
     @abstractmethod
     def to_template_definition(self) -> TemplateVariableDefinition:

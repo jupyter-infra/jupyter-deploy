@@ -1,6 +1,9 @@
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import ANY, MagicMock, Mock, mock_open, patch
+
+import yaml
 
 from jupyter_deploy.fs_utils import (
     DEFAULT_IGNORE_PATTERNS,
@@ -14,6 +17,7 @@ from jupyter_deploy.fs_utils import (
     safe_clean_directory,
     safe_copy_tree,
     write_inline_file_content,
+    write_yaml_file_with_comments,
 )
 
 
@@ -614,3 +618,151 @@ class TestReadShortFile(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             read_short_file(file_path)
+
+
+class TestWriteYamlFileWithComments(unittest.TestCase):
+    """Test cases for the write_yaml_file_with_comments function."""
+
+    def test_write_yaml_file_with_key_order(self) -> None:
+        """Test that write_yaml_file_with_comments respects key ordering."""
+        # Setup
+        with tempfile.NamedTemporaryFile() as temp_file:
+            file_path = Path(temp_file.name)
+            content = {
+                "defaults": {"key1": "value1"},
+                "schema_version": 1,
+                "required": {"key2": "value2"},
+                "overrides": {"key3": "value3"},
+            }
+            key_order = ["schema_version", "required", "overrides", "defaults"]
+
+            # Execute
+            write_yaml_file_with_comments(file_path, content, key_order=key_order)
+
+            # Assert - read the file back and check order
+            with open(file_path) as f:
+                file_content = f.read()
+
+            # Check that keys appear in the specified order
+            schema_pos = file_content.find("schema_version")
+            required_pos = file_content.find("required")
+            overrides_pos = file_content.find("overrides")
+            defaults_pos = file_content.find("defaults")
+
+            self.assertGreater(required_pos, schema_pos)
+            self.assertGreater(overrides_pos, required_pos)
+            self.assertGreater(defaults_pos, overrides_pos)
+
+    def test_write_yaml_file_with_comments(self) -> None:
+        """Test that write_yaml_file_with_comments adds comments after keys."""
+        # Setup
+        with tempfile.NamedTemporaryFile() as temp_file:
+            file_path = Path(temp_file.name)
+            content = {
+                "schema_version": 1,
+                "required": {"region": "us-west-2"},
+                "required_sensitive": {"aws_access_key": "dummy-key"},
+                "overrides": {"deployment_type": "t3.large"},
+                "defaults": {"deployment_type": "t3.medium"},
+            }
+            comments = {
+                "required": [
+                    "  # either assign values below",
+                    "  # or run 'jd config' to use the interactive experience",
+                ],
+                "required_sensitive": [
+                    "  # either assign values below",
+                    "  # or run 'jd config -s' to use the interactive experience",
+                ],
+                "overrides": [
+                    "  # set variable values as <variable-name>: <variable-value>",
+                    "  # delete or comment out a line to use the default",
+                ],
+                "defaults": [
+                    "  # read-only: do not modify this section",
+                    "  # instead add overrides in the override section",
+                ],
+            }
+
+            # Execute
+            write_yaml_file_with_comments(file_path, content, comments=comments)
+
+            # Assert - check that comments are present
+            with open(file_path) as f:
+                file_content = f.read()
+
+            # Check that each comment is in the file
+            for _section, comment_lines in comments.items():
+                for comment in comment_lines:
+                    self.assertIn(comment, file_content)
+
+    def test_write_yaml_file_with_key_order_and_comments(self) -> None:
+        """Test that write_yaml_file_with_comments handles both key ordering and comments."""
+        # Setup
+        with tempfile.NamedTemporaryFile() as temp_file:
+            file_path = Path(temp_file.name)
+            content = {
+                "defaults": {"key1": "value1"},
+                "schema_version": 1,
+                "required": {"key2": "value2"},
+                "overrides": {"key3": "value3"},
+            }
+            key_order = ["schema_version", "required", "overrides", "defaults"]
+            comments = {
+                "required": ["  # comment for required"],
+                "overrides": ["  # comment for overrides"],
+            }
+
+            # Execute
+            write_yaml_file_with_comments(file_path, content, key_order=key_order, comments=comments)
+
+            # Assert - check order and comments
+            with open(file_path) as f:
+                file_content = f.read()
+
+            # Check key order
+            schema_pos = file_content.find("schema_version")
+            required_pos = file_content.find("required")
+            overrides_pos = file_content.find("overrides")
+            defaults_pos = file_content.find("defaults")
+
+            self.assertGreater(required_pos, schema_pos)
+            self.assertGreater(overrides_pos, required_pos)
+            self.assertGreater(defaults_pos, overrides_pos)
+
+            # Check comments are present
+            self.assertIn("# comment for required", file_content)
+            self.assertIn("# comment for overrides", file_content)
+
+    def test_write_yaml_preserves_null_values(self) -> None:
+        """Test that null values in the YAML file are preserved."""
+        # Setup
+        with tempfile.NamedTemporaryFile() as temp_file:
+            file_path = Path(temp_file.name)
+            content = {
+                "schema_version": 1,
+                "required": {"region": "us-west-2", "bucket_name": None},
+                "required_sensitive": {"aws_access_key": "dummy-key", "aws_secret_key": None},
+            }
+
+            # Execute
+            write_yaml_file_with_comments(file_path, content)
+
+            # Assert - check that null values are preserved
+            with open(file_path) as f:
+                yaml_content = yaml.safe_load(f)
+
+            self.assertIsNone(yaml_content["required"]["bucket_name"])
+            self.assertIsNone(yaml_content["required_sensitive"]["aws_secret_key"])
+
+    @patch("builtins.open")
+    def test_write_yaml_file_raises_os_error(self, mock_open_func: Mock) -> None:
+        """Test that write_yaml_file_with_comments raises OSError if open raises OSError."""
+        # Setup
+        file_path = Path("/test/file.yaml")
+        content = {"key": "value"}
+        mock_open_func.side_effect = OSError("Permission denied")
+
+        # Execute and Assert
+        with self.assertRaises(OSError):
+            write_yaml_file_with_comments(file_path, content)

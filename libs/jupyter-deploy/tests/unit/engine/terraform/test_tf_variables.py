@@ -13,6 +13,28 @@ class TestTerraformVariablesHandler(unittest.TestCase):
         self.assertEqual(handler.project_path, project_path)
         self.assertEqual(handler.project_manifest, manifest)
 
+    def test_get_recorded_variables_filepath(self) -> None:
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = TerraformVariablesHandler(project_path=project_path, project_manifest=manifest)
+
+        # Get the filepath and verify it's correct
+        result = handler.get_recorded_variables_filepath()
+
+        # Should be project_path/engine/jdinputs.auto.tfvars
+        self.assertEqual(result, project_path / "engine" / "jdinputs.auto.tfvars")
+
+    def test_get_recorded_secrets_filepath(self) -> None:
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = TerraformVariablesHandler(project_path=project_path, project_manifest=manifest)
+
+        # Get the filepath and verify it's correct
+        result = handler.get_recorded_secrets_filepath()
+
+        # Should be project_path/engine/jdinputs.secrets.auto.tfvars
+        self.assertEqual(result, project_path / "engine" / "jdinputs.secrets.auto.tfvars")
+
 
 class TestIsTemplateDir(unittest.TestCase):
     @patch("jupyter_deploy.fs_utils.file_exists")
@@ -336,3 +358,123 @@ class TestUpdateVariablesRecord(unittest.TestCase):
 
         # Assert - get_template_variables should not be called
         handler.get_template_variables.assert_not_called()
+
+
+class TestResetRecordedVariables(unittest.TestCase):
+    @patch("jupyter_deploy.engine.engine_variables.EngineVariablesHandler.reset_recorded_variables")
+    @patch("jupyter_deploy.fs_utils.delete_file_if_exists")
+    def test_calls_parent_method_and_delete(self, mock_delete_file: Mock, mock_parent_reset: Mock) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = TerraformVariablesHandler(project_path=project_path, project_manifest=manifest)
+        mock_delete_file.return_value = False  # File wasn't deleted
+
+        # Execute
+        handler.reset_recorded_variables()
+
+        # Assert parent method was called and delete_file was called with correct path
+        mock_parent_reset.assert_called_once()
+        mock_delete_file.assert_called_once_with(project_path / "engine" / "jdinputs.auto.tfvars")
+
+    @patch("rich.console.Console")
+    @patch("jupyter_deploy.engine.engine_variables.EngineVariablesHandler.reset_recorded_variables")
+    @patch("jupyter_deploy.fs_utils.delete_file_if_exists")
+    def test_calls_console_and_print_on_actual_deletion(
+        self, mock_delete_file: Mock, mock_parent_reset: Mock, mock_console_cls: Mock
+    ) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = TerraformVariablesHandler(project_path=project_path, project_manifest=manifest)
+        mock_delete_file.return_value = True  # File was deleted
+        mock_console = Mock()
+        mock_console_cls.return_value = mock_console
+
+        # Execute
+        handler.reset_recorded_variables()
+
+        # Assert
+        mock_parent_reset.assert_called_once()
+        mock_delete_file.assert_called_once()
+        mock_console.print.assert_called_once()
+        # Check that the console message contains the filename
+        self.assertIn("jdinputs.auto.tfvars", mock_console.print.call_args[0][0])
+
+    @patch("jupyter_deploy.engine.engine_variables.EngineVariablesHandler.reset_recorded_variables")
+    @patch("jupyter_deploy.fs_utils.delete_file_if_exists")
+    def test_raises_os_error_when_delete_file_raises_os_error(
+        self, mock_delete_file: Mock, mock_parent_reset: Mock
+    ) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = TerraformVariablesHandler(project_path=project_path, project_manifest=manifest)
+        mock_delete_file.side_effect = OSError("Permission denied")
+
+        # Execute & Assert
+        with self.assertRaises(OSError):
+            handler.reset_recorded_variables()
+
+        mock_parent_reset.assert_called_once()
+        mock_delete_file.assert_called_once()
+
+
+class TestResetRecordedSecrets(unittest.TestCase):
+    @patch("jupyter_deploy.engine.engine_variables.EngineVariablesHandler.reset_recorded_secrets")
+    @patch("jupyter_deploy.fs_utils.delete_file_if_exists")
+    def test_calls_parent_method_and_delete(self, mock_delete_file: Mock, mock_parent_reset: Mock) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = TerraformVariablesHandler(project_path=project_path, project_manifest=manifest)
+        mock_delete_file.return_value = False  # File wasn't deleted
+
+        # Execute
+        handler.reset_recorded_secrets()
+
+        # Assert parent method was called and delete_file was called with correct path
+        mock_parent_reset.assert_called_once()
+        mock_delete_file.assert_called_once_with(project_path / "engine" / "jdinputs.secrets.auto.tfvars")
+
+    @patch("rich.console.Console")
+    @patch("jupyter_deploy.engine.engine_variables.EngineVariablesHandler.reset_recorded_secrets")
+    @patch("jupyter_deploy.fs_utils.delete_file_if_exists")
+    def test_calls_console_and_print_on_actual_deletion(
+        self, mock_delete_file: Mock, mock_parent_reset: Mock, mock_console_cls: Mock
+    ) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = TerraformVariablesHandler(project_path=project_path, project_manifest=manifest)
+        mock_delete_file.return_value = True  # File was deleted
+        mock_console = Mock()
+        mock_console_cls.return_value = mock_console
+
+        # Execute
+        handler.reset_recorded_secrets()
+
+        # Assert
+        mock_parent_reset.assert_called_once()
+        mock_delete_file.assert_called_once()
+        mock_console.print.assert_called_once()
+        # Check that the console message contains the filename
+        self.assertIn("jdinputs.secrets.auto.tfvars", mock_console.print.call_args[0][0])
+
+    @patch("jupyter_deploy.engine.engine_variables.EngineVariablesHandler.reset_recorded_secrets")
+    @patch("jupyter_deploy.fs_utils.delete_file_if_exists")
+    def test_raises_os_error_when_delete_file_raises_os_error(
+        self, mock_delete_file: Mock, mock_parent_reset: Mock
+    ) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = TerraformVariablesHandler(project_path=project_path, project_manifest=manifest)
+        mock_delete_file.side_effect = OSError("Permission denied")
+
+        # Execute & Assert
+        with self.assertRaises(OSError):
+            handler.reset_recorded_secrets()
+
+        mock_parent_reset.assert_called_once()
+        mock_delete_file.assert_called_once()

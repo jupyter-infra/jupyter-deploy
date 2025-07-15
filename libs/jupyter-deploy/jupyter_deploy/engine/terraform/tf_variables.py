@@ -1,8 +1,6 @@
 from pathlib import Path
 from typing import Any
 
-from rich import console as rich_console
-
 from jupyter_deploy import fs_utils
 from jupyter_deploy.engine.engine_variables import EngineVariablesHandler
 from jupyter_deploy.engine.terraform import tf_varfiles
@@ -102,7 +100,7 @@ class TerraformVariablesHandler(EngineVariablesHandler):
         deleted = fs_utils.delete_file_if_exists(path)
 
         if deleted:
-            console = rich_console.Console()
+            console = self.get_console()
             console.print(f":wastebasket: Deleted previously recorded inputs at: {path.name}")
 
     def reset_recorded_secrets(self) -> None:
@@ -112,5 +110,5 @@ class TerraformVariablesHandler(EngineVariablesHandler):
         deleted = fs_utils.delete_file_if_exists(path)
 
         if deleted:
-            console = rich_console.Console()
+            console = self.get_console()
             console.print(f":wastebasket: Deleted previously recorded secrets at: {path.name}")

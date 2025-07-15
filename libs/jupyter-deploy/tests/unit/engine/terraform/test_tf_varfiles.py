@@ -128,10 +128,14 @@ class TestParseDotTfvarsContentAndAddDefaults(unittest.TestCase):
         int_var_def = tf_vardefs.TerraformNumberVariableDefinition(
             variable_name="some_int_value", description="An int variable"
         )
+        unreferenced_var_def = tf_vardefs.TerraformStrVariableDefinition(
+            variable_name="unref_value", description="Another string variable"
+        )
 
         variable_defs: dict[str, tf_vardefs.TerraformVariableDefinition] = {
             "some_string_value": string_var_def,
             "some_int_value": int_var_def,
+            "unref_value": unreferenced_var_def,
         }
 
         # Create mock tfvars content
@@ -143,6 +147,10 @@ class TestParseDotTfvarsContentAndAddDefaults(unittest.TestCase):
         # Verify defaults were added to the variable definitions
         self.assertEqual("t3.medium", variable_defs["some_string_value"].default)
         self.assertEqual(30, variable_defs["some_int_value"].default)
+        self.assertIsNone(variable_defs["unref_value"].default)
+        self.assertTrue(variable_defs["some_string_value"].has_default)
+        self.assertTrue(variable_defs["some_int_value"].has_default)
+        self.assertFalse(variable_defs["unref_value"].has_default)
 
     @patch("hcl2.loads")
     def test_skips_vars_not_found_in_variables_tf(self, mock_loads: Mock) -> None:

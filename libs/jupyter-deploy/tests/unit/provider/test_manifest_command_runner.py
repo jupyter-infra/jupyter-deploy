@@ -397,6 +397,7 @@ class TestManifestCommandRunner(unittest.TestCase):
             "karaoke_title_holders": ["Ross", "Rachel"],
         }
         variable_handler_mock.update_variable_records.assert_called_once_with(expected_values)
+        variable_handler_mock.sync_project_variables_config.assert_called_once_with(expected_values)
 
     @patch(
         "jupyter_deploy.provider.instruction_runner_factory.InstructionRunnerFactory.get_provider_instruction_runner"
@@ -429,6 +430,7 @@ class TestManifestCommandRunner(unittest.TestCase):
 
         # Assert - variable_handler.update_variable_records should not be called
         variable_handler_mock.update_variable_records.assert_not_called()
+        variable_handler_mock.sync_project_variables_config.assert_not_called()
 
     @patch(
         "jupyter_deploy.provider.instruction_runner_factory.InstructionRunnerFactory.get_provider_instruction_runner"
