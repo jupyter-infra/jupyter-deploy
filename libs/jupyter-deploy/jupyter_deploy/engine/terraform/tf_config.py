@@ -64,7 +64,7 @@ class TerraformConfigHandler(EngineConfigHandler):
 
         # Get all files matching the pattern
         matching_filenames = fs_utils.find_matching_filenames(
-            dir_path=self.project_path,
+            dir_path=self.engine_dir_path / TF_PRESETS_DIR,
             file_pattern="defaults-*.tfvars",
         )
         presets.extend([n[len("defaults-") : -len(".tfvars")] for n in matching_filenames])
@@ -174,7 +174,7 @@ class TerraformConfigHandler(EngineConfigHandler):
 
             vardefs.update({k: v.value for k, v in secrets.items()})
 
-        if record_vars:
+        if record_vars or record_secrets:
             self.variables_handler.sync_project_variables_config(vardefs)
             variables_config_path = self.variables_handler.get_variables_config_path()
             console.line()
