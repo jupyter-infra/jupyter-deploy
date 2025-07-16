@@ -17,7 +17,10 @@ class OpenHandler(BaseProjectHandler):
         self.console = Console()
 
         if self.engine == EngineType.TERRAFORM:
-            self._handler = tf_open.TerraformOpenHandler(project_path=self.project_path)
+            self._handler = tf_open.TerraformOpenHandler(
+                project_path=self.project_path,
+                project_manifest=self.project_manifest,
+            )
         else:
             raise NotImplementedError(f"OpenHandler implementation not found for engine: {self.engine}")
 
