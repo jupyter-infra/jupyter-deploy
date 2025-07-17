@@ -1,18 +1,11 @@
 # Terraform provider configuration
 terraform {
-  required_providers {
-    github = {
-      source  = "integrations/github"
-      version = "~> 6.0"
-    }
-  }
+  required_providers {}
 }
 
 provider "aws" {
   region = var.region
 }
-
-provider "github" {}
 
 data "aws_region" "current" {}
 data "aws_partition" "current" {}
@@ -22,7 +15,7 @@ resource "random_id" "postfix" {
 }
 locals {
   template_name    = "tf-aws-ec2-base"
-  template_version = "0.1.0a2"
+  template_version = "0.1.0a3"
 
   default_tags = {
     Source   = "jupyter-deploy"
