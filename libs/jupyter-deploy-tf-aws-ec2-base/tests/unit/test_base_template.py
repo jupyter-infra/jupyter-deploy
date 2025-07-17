@@ -19,6 +19,8 @@ EXPECTED_TEMPLATE_STRPATHS: list[str] = [
     "services/commands/get-status.sh",
     "services/commands/refresh-oauth-cookie.sh",
     "services/commands/update-auth.sh",
+    "services/fluent-bit/fluent-bit.conf",
+    "services/fluent-bit/parsers.conf",
     "services/jupyter/dockerfile.jupyter",
     "services/jupyter/jupyter_server_config.py",
     "services/jupyter/jupyter-reset.sh",

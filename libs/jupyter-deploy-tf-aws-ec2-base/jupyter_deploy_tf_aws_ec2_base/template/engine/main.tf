@@ -328,6 +328,15 @@ data "local_file" "dockerfile_logrotator" {
   filename = "${path.module}/../services/logrotator/dockerfile.logrotator"
 }
 
+data "local_file" "fluent_bit_conf" {
+  filename = "${path.module}/../services/fluent-bit/fluent-bit.conf"
+}
+
+data "local_file" "parsers_conf" {
+  filename = "${path.module}/../services/fluent-bit/parsers.conf"
+}
+
+
 data "local_file" "update_auth" {
   filename = "${path.module}/../services/commands/update-auth.sh"
 }
@@ -335,6 +344,7 @@ data "local_file" "update_auth" {
 data "local_file" "get_auth" {
   filename = "${path.module}/../services/commands/get-auth.sh"
 }
+
 data "local_file" "check_status" {
   filename = "${path.module}/../services/commands/check-status-internal.sh"
 }
@@ -400,6 +410,8 @@ locals {
   pyproject_jupyter_indented     = join("\n${local.indent_str}", compact(split("\n", data.local_file.pyproject_jupyter.content)))
   jupyter_server_config_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_server_config.content)))
   dockerfile_logrotator_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.dockerfile_logrotator.content)))
+  fluent_bit_conf_indented       = join("\n${local.indent_str}", compact(split("\n", data.local_file.fluent_bit_conf.content)))
+  parsers_conf_indented          = join("\n${local.indent_str}", compact(split("\n", data.local_file.parsers_conf.content)))
   logrotator_start_file_indented = join("\n${local.indent_str}", compact(split("\n", local.logrotator_start_file)))
   update_auth_indented           = join("\n${local.indent_str}", compact(split("\n", data.local_file.update_auth.content)))
   refresh_oauth_cookie_indented  = join("\n${local.indent_str}", compact(split("\n", data.local_file.refresh_oauth_cookie.content)))
@@ -454,6 +466,12 @@ mainSteps:
           EOF
           tee /opt/docker/logrotator-start.sh << 'EOF'
           ${local.logrotator_start_file_indented}
+          EOF
+          tee /opt/docker/fluent-bit.conf << 'EOF'
+          ${local.fluent_bit_conf_indented}
+          EOF
+          tee /opt/docker/parsers.conf << 'EOF'
+          ${local.parsers_conf_indented}
           EOF
           tee /usr/local/bin/update-auth.sh << 'EOF'
           ${local.update_auth_indented}

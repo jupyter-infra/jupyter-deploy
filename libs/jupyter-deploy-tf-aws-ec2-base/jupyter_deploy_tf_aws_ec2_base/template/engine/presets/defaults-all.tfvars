@@ -9,6 +9,6 @@ iam_role_prefix            = "Jupyter-deploy-ec2-base"
 oauth_provider             = "github"
 oauth_app_secret_prefix    = "Jupyter-deploy-ec2-base"
 log_files_rotation_size_mb = 50
-log_files_retention_count  = 20
+log_files_retention_count  = 10
 log_files_retention_days   = 180
 custom_tags                = {}

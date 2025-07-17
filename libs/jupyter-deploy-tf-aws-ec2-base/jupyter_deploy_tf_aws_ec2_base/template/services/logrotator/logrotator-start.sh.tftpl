@@ -28,9 +28,9 @@ cat > /etc/logrotate.d/services << EOCONFIG
 }
 EOCONFIG
 
-# Run logrotate every 2 minutes
+# Run logrotate every 60 minutes
 while true; do
     echo "Running logrotate at $(date)"
     logrotate -v -s /var/log/services/logrotate.status /etc/logrotate.d/services
-    sleep 120
+    sleep 3600
 done

@@ -16,10 +16,17 @@ services:
     mem_reservation: "$${JUPYTER_MEM_RESERVATION_MB}M"
     security_opt:
       - no-new-privileges:true
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.jupyter"
     networks:
       - web
     environment:
       - AWS_REGION=${aws_region}
+    depends_on:
+      - fluent-bit
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.jupyter.rule=Host(`${full_domain}`)"
@@ -39,6 +46,13 @@ services:
     mem_reservation: "128M"
     security_opt:
       - no-new-privileges:true
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.oauth"
+    depends_on:
+      - fluent-bit
     labels:
       - "traefik.enable=true"
       # Main service definition
@@ -94,6 +108,13 @@ services:
     mem_reservation: "128M"
     security_opt:
       - no-new-privileges:true
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.traefik"
+    depends_on:
+      - fluent-bit
     ports:
       - "443:8443"
     volumes:
@@ -105,30 +126,27 @@ services:
       - web
     environment:
       - AWS_REGION=${aws_region}
-  log-writer:
-    image: docker:cli
-    container_name: log-writer
+  fluent-bit:
+    image: fluent/fluent-bit:latest
+    container_name: fluent-bit
     restart: unless-stopped
     mem_limit: "128M"
     mem_reservation: "64M"
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
     volumes:
       - /var/log/services:/logs
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: |
-      sh -c '
-        docker logs -f jupyter >> /logs/jupyter.log 2>&1 &
-        docker logs -f traefik >> /logs/traefik.log 2>&1 &
-        docker logs -f oauth >> /logs/oauth.log 2>&1 &
-        docker logs -f log-rotator >> /logs/log-rotator.log 2>&1 &
-        wait
-      '
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - web
-    depends_on:
-      - jupyter
-      - traefik
-      - oauth
-      - log-rotator
   log-rotator:
     build:
       context: .
@@ -137,6 +155,13 @@ services:
     restart: unless-stopped
     mem_limit: "128M"
     mem_reservation: "64M"
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.log-rotator"
+    depends_on:
+      - fluent-bit
     volumes:
       - /var/log/services:/var/log/services
       - /var/log/jupyter-deploy:/var/log/jupyter-deploy

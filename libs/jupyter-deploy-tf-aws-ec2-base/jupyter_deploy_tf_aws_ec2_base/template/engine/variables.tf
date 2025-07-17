@@ -282,7 +282,7 @@ variable "log_files_retention_count" {
     
     When the retention limit is reached, the log rotator sidecar container deletes the oldest log file.
 
-    Recommended: 20
+    Recommended: 10
   EOT
   type        = number
 
