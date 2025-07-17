@@ -136,6 +136,7 @@ resource "aws_instance" "ec2_jupyter_server" {
     volume_size = local.root_block_device.ebs.volume_size
     volume_type = try(local.root_block_device.ebs.volume_type, "gp3")
     encrypted   = try(local.root_block_device.ebs.encrypted, true)
+    tags        = local.combined_tags
   }
 
   # IAM instance profile configuration

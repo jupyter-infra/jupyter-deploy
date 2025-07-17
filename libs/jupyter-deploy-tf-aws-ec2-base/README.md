@@ -1,6 +1,6 @@
-# AWS EC2 instance running a Jupyter Server using a Traefik proxy
+# AWS EC2 instance running a Jupyter Server with GitHub OAuth access
 ------
-This terraform project creates an EC2 instance in the default VPC and route 53 records in a domain you own.
+This terraform project creates an EC2 instance in the default VPC and a route 53 record in a domain you own.
 Within the EC2 instance, it runs a `jupyter` service, a `traefik` service for proxy and an `oauth` sidecar for authentication and authorization.
 
 The instance is configured so that you can access it using [AWS SSM](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html).
@@ -11,30 +11,35 @@ This project:
 - sets up an IAM role to enable SSM access
 - passes on the root volume of the AMI
 - adds an EBS volume which will mount on the Jupyter Server container
-- configures automatic rotation for all log files under /var/log/services/ with customizable settings
+- writes docker service logs to disk at /var/log/services using `fluent-bit`
+- configures automatic rotation for all log files using `logrotate`
 - creates an SSM instance-startup script, which references several files:
-    - `cloudinit.sh.tftpl` for the basic setup of the instance
-    - `docker-compose.yml.tftpl` for the docker services to run in the instance
-    - `docker-startup.sh.tftpl` to run the docker-compose up cmd and post docker-start instructions
-    - `traefik.yml.tftpl` traefik configuration file
-    - `dockerfile.jupyter` for the Jupyter container
-    - `jupyter-start.sh` the entrypoint script for the Jupyter container
-    - `jupyter-reset.sh` the fallback script if the Jupyter container fails to start
-    - `pyproject.jupyter.toml` for Python dependencies of the base environment where the Jupyter server runs
-    - `jupyter_server_config.py` for Jupyter server configuration
-    - `dockerfile.logrotator` for a sidecar container responsible to rotate logs
+    - `cloudinit.sh.tftpl` to configure the EC2 instance
+    - `docker-compose.yml.tftpl` to configure the docker services
+    - `docker-startup.sh.tftpl` to start the docker services
+    - `traefik.yml.tftpl` to configure traefik
+    - `dockerfile.jupyter` to build the Jupyter container
+    - `jupyter-start.sh` to provide entrypoint script for the Jupyter container
+    - `jupyter-reset.sh` to provide a fallback if the Jupyter container fails to start
+    - `pyproject.jupyter.toml` to configure the Python dependencies of the base environment where the Jupyter server runs
+    - `jupyter_server_config.py` to configure Jupyter server
+    - `dockerfile.logrotator` to configure the sidecar container rotating log files on disk
     - `logrotator-start.sh.tftpl` to configure logrotate
-    - `check-status-internal.sh` as a utility script to verify that the services are up and the TLS certificates are available
-    - `get-status.sh` the utility script to translate the return code of `check-status` script to a human-readable status
-    - `update-auth.sh` the utility script to update the authorized org, teams, and/or users
-    - `get-auth.sh` the utility script to retrieve the authorized org, teams, and/or users
+    - `fluent-bit.conf` to configure the fluent-bit service writing docker service logs to /var/log/services
+    - `parsers.conf` to configure the fluent-bit docker parsers
+    - `check-status-internal.sh` to verify that the services are up and the TLS certificates are available
+    - `get-status.sh` to translate the return code of `check-status` script to a human-readable status
+    - `update-auth.sh` to update the authorized org, teams, and/or users
+    - `get-auth.sh` to retrieve the authorized org, teams, and/or users
+    - `refresh-oauth-cookie.sh` to rotate the oauth cookie secret and invalidate all issued cookies
 - creates an SSM association, which runs the startup script on the instance
 - creates the Route 53 Hosted Zone for the domain unless it already exists
-- adds DNS records to the Route 53 Hosted Zone
+- adds the DNS record to the Route 53 Hosted Zone
 - creates an AWS Secret to store the OAuth App client secret
 - provides two presets default values for the template variables:
     - `defaults-all.tfvars` comprehensive preset with all the recommended values
     - `defaults-base.tfvars` more limited preset; it will prompt user to select the instance type and volume size
+- creates AWS SSM documents for jupyter-deploy commands
 
 ## Prerequisites
 - a domain that you own verifiable by route 53
@@ -45,7 +50,7 @@ This project:
     - you'll need the app client ID and client secret
 - at least one of the following for GitHub authorization:
     - a list of GitHub usernames to authorize
-    - the name of a GitHub organization to authorize the members of 
+    - the name of a GitHub organization whose members to authorize; optionally restrict further by GitHub teams
 
 ## Usage
 This terraform project is meant to be used with `jupyter-deploy`.
@@ -79,18 +84,29 @@ jd up
 jd open
 ```
 
+### Manage access
+```bash
+jd users list
+jd users add USERNAME1 USERNAME2
+jd users remove USERNAME1
+```
+
+### Take down the infrastructure
+```bash
+jd down
+```
+
+
 ## Requirements
 | Name | Version |
 |---|---|
 | terraform | >= 1.0 |
 | aws | >= 4.66 |
-| github | ~> 6.0 |
 
 ## Providers
 | Name | Version |
 |---|---|
 | aws | >= 4.66 |
-| github | ~> 6.0 |
 
 ## Modules
 No modules.
@@ -125,14 +141,14 @@ No modules.
 ## Inputs
 | Name | Type | Default | Description |
 |---|---|---|---|
-| region | `string` | `us-west-2` | The AWS region where the resources should be created |
+| region | `string` | `us-west-2` | The AWS region where to create the resources |
 | instance_type | `string` | `t3.medium` | The type of instance to start |
 | key_pair_name | `string` | `null` | The name of key pair |
 | ami_id | `string` | `null` | The ID of the AMI to use for the instance |
 | volume_size_gb | `number` | `30` | The size in GB of the EBS volume the Jupyter Server has access to |
 | volume_type | `string` | `gp3` | The type of EBS volume the Jupyter Server will has access to |
 | iam_role_prefix | `string` | `Jupyter-deploy-ec2-base` | The prefix for the name of the IAM role for the instance |
-| oauth_app_secret_prefix | `string` | `Jupyter-deploy-ec2-base` | The prefix for the name of the AWS secret where to store your OAuth app client secret |
+| oauth_app_secret_prefix | `string` | `Jupyter-deploy-ec2-base` | The prefix for the name of the AWS secret to store your OAuth app client secret |
 | letsencrypt_email | `string` | Required | An email for letsencrypt to notify about certificate expirations |
 | domain | `string` | Required | A domain that you own |
 | subdomain | `string` | Required | A sub-domain of `domain` to add DNS records |
@@ -143,8 +159,8 @@ No modules.
 | oauth_app_client_id | `string` | Required | The client ID of the OAuth app |
 | oauth_app_client_secret | `string` | Required | The client secret of the OAuth app |
 | log_files_rotation_size_mb | `number` | `50` | The size in megabytes at which to rotate log files |
-| log_files_retention_count | `number` | `10` | The maximum amount of rotated log files to retain for a log group |
-| log_files_retention_days | `number` | `180` | The maximum number of log files to retain at any given time for a log group |
+| log_files_retention_count | `number` | `10` | The maximum number of rotated log files to retain for a log group |
+| log_files_retention_days | `number` | `180` | The maximum number of days to retain any log files |
 | custom_tags | `map(string)` | `{}` | The custom tags to add to all the resources |
 
 ## Outputs
