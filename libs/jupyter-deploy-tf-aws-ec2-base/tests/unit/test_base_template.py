@@ -14,6 +14,7 @@ EXPECTED_TEMPLATE_STRPATHS: list[str] = [
     "engine/main.tf",
     "engine/outputs.tf",
     "engine/variables.tf",
+    "engine/volumes.tf",
     "services/commands/check-status-internal.sh",
     "services/commands/get-auth.sh",
     "services/commands/get-status.sh",
@@ -30,6 +31,7 @@ EXPECTED_TEMPLATE_STRPATHS: list[str] = [
     "services/logrotator/logrotator-start.sh.tftpl",
     "services/traefik/traefik.yml.tftpl",
     "services/cloudinit.sh.tftpl",
+    "services/cloudinit_volumes.sh.tftpl",
     "services/docker-compose.yml.tftpl",
     "services/docker-startup.sh.tftpl",
 ]

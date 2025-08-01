@@ -165,7 +165,6 @@ variable "oauth_provider" {
     Use: github
   EOT
   type        = string
-  default     = "github"
 
   validation {
     condition     = contains(["github"], var.oauth_provider)
@@ -316,4 +315,160 @@ variable "custom_tags" {
     Recommended: {}
   EOT
   type        = map(string)
+}
+
+# Variables for additional EBS volumes
+variable "additional_ebs_mounts" {
+  description = <<-EOT
+    Elastic block stores to mount on the notebook home directory; keys: name or id, mount_point, type, size_gb.
+  
+    Each volume is defined by a map with the following keys:
+      - name: (optional) If specified, create/manage lifecycle of the volume.
+      - id: (optional) If specified, reference an existing volume by ID.
+      - mount_point: (required) Directory name under the home directory of the notebook.
+      - type: (optional) EBS volume type (default: "gp3").
+      - size_gb: (optional) Size in GB (default: "30").
+    
+    Note: Either 'name' or 'id' must be specified, but not both.
+    Maximum of 5 EBS mounts allowed.
+    
+    Example: [
+      {
+        name = "data-volume",
+        mount_point = "data",
+        type = "gp3",
+        size_gb = "50"
+      },
+      {
+        id = "vol-0123456789abcdef0",
+        mount_point = "datasets"
+      }
+    ]
+  EOT
+  type        = list(map(string))
+
+  validation {
+    condition = alltrue([
+      for v in var.additional_ebs_mounts :
+      (lookup(v, "name", null) != null && lookup(v, "id", null) == null) || (lookup(v, "id", null) != null && lookup(v, "name", null) == null)
+    ])
+    error_message = "For each EBS mount, either 'name' or 'id' must be specified, but not both."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.additional_ebs_mounts : can(regex("^[a-zA-Z0-9_-]+$", lookup(v, "mount_point", "")))
+    ])
+    error_message = "The 'mount_point' value must only contain alphanumeric characters, underscores, and hyphens."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.additional_ebs_mounts :
+      lookup(v, "size_gb", "30") == "30" || tonumber(lookup(v, "size_gb", "30")) > 0
+    ])
+    error_message = "The 'size_gb' value must be greater than 0."
+  }
+
+  # Validate that names are unique if specified
+  validation {
+    condition = length(var.additional_ebs_mounts) == 0 || length(
+      distinct([for v in var.additional_ebs_mounts : lookup(v, "name", "") if lookup(v, "name", null) != null])
+    ) == length([for v in var.additional_ebs_mounts : lookup(v, "name", "") if lookup(v, "name", null) != null])
+    error_message = "Each EBS 'name' must be unique."
+  }
+
+  # Validate that ids are unique if specified
+  validation {
+    condition = length(var.additional_ebs_mounts) == 0 || length(
+      distinct([for v in var.additional_ebs_mounts : lookup(v, "id", "") if lookup(v, "id", null) != null])
+    ) == length([for v in var.additional_ebs_mounts : lookup(v, "id", "") if lookup(v, "id", null) != null])
+    error_message = "Each EBS 'id' must be unique."
+  }
+
+  # Validate that mount_points are unique
+  validation {
+    condition = length(var.additional_ebs_mounts) == 0 || length(
+      distinct([for v in var.additional_ebs_mounts : lookup(v, "mount_point", "")])
+    ) == length(var.additional_ebs_mounts)
+    error_message = "Each EBS 'mount_point' must be unique."
+  }
+
+  # Validate that there are no more than 5 EBS mounts
+  validation {
+    condition     = length(var.additional_ebs_mounts) <= 5
+    error_message = "Maximum of 5 EBS mounts allowed."
+  }
+}
+
+# Variables for additional EFS volumes
+variable "additional_efs_mounts" {
+  description = <<-EOT
+    Elastic file systems to mount on the notebook home directory; keys: name or id, mount_point.
+    
+    Each volume is defined by a map with the following keys:
+      - name: (optional) If specified, create/manage lifecycle of the volume.
+      - id: (optional) If specified, reference an existing file system by ID.
+      - mount_point: (required) Directory name under the home directory of the notebook.
+    
+    Note: Either 'name' or 'id' must be specified, but not both.
+    Maximum of 5 EFS mounts allowed.
+    
+    Example: [
+      {
+        name = "shared-data",
+        mount_point = "shared"
+      },
+      {
+        id = "fs-0123456789abcdef0",
+        mount_point = "external"
+      }
+    ]
+  EOT
+  type        = list(map(string))
+
+  validation {
+    condition = alltrue([
+      for v in var.additional_efs_mounts :
+      (lookup(v, "name", null) != null && lookup(v, "id", null) == null) || (lookup(v, "id", null) != null && lookup(v, "name", null) == null)
+    ])
+    error_message = "For each EFS mount, either 'name' or 'id' must be specified, but not both."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.additional_efs_mounts : can(regex("^[a-zA-Z0-9_-]+$", lookup(v, "mount_point", "")))
+    ])
+    error_message = "The 'mount_point' value must only contain alphanumeric characters, underscores, and hyphens."
+  }
+
+  # Validate that names are unique if specified
+  validation {
+    condition = length(var.additional_efs_mounts) == 0 || length(
+      distinct([for v in var.additional_efs_mounts : lookup(v, "name", "") if lookup(v, "name", null) != null])
+    ) == length([for v in var.additional_efs_mounts : lookup(v, "name", "") if lookup(v, "name", null) != null])
+    error_message = "Each EFS 'name' must be unique."
+  }
+
+  # Validate that ids are unique if specified
+  validation {
+    condition = length(var.additional_efs_mounts) == 0 || length(
+      distinct([for v in var.additional_efs_mounts : lookup(v, "id", "") if lookup(v, "id", null) != null])
+    ) == length([for v in var.additional_efs_mounts : lookup(v, "id", "") if lookup(v, "id", null) != null])
+    error_message = "Each EFS 'id' must be unique."
+  }
+
+  # Validate that mount_points are unique
+  validation {
+    condition = length(var.additional_efs_mounts) == 0 || length(
+      distinct([for v in var.additional_efs_mounts : lookup(v, "mount_point", "")])
+    ) == length(var.additional_efs_mounts)
+    error_message = "Each EFS 'mount' mount_point must be unique."
+  }
+
+  # Validate that there are no more than 5 EFS mounts
+  validation {
+    condition     = length(var.additional_efs_mounts) <= 5
+    error_message = "Maximum of 5 EFS mounts allowed."
+  }
 }

@@ -105,14 +105,20 @@ class TerraformConfigHandler(EngineConfigHandler):
         # 2.1/ output plan to disk
         plan_cmds.append(f"-out={self.plan_out_path.absolute()}")
 
-        # 2.2/ sync variables.yaml -> tfvars
+        # 2.2/ sync variables.yaml -> tfvars and create the .tfvars files if necessary
         self.variables_handler.sync_engine_varfiles_with_project_variables_config()
 
         # 2.3/ using preset
         if preset_name:
             # here we assume the preset path was verified earlier
-            preset_path = self._get_preset_path(preset_name)
-            plan_cmds.append(f"-var-file={preset_path.absolute()}")
+            base_preset_path = self._get_preset_path(preset_name)
+
+            # if a user i/ runs `jd init`, ii/ set values in variables.yaml,
+            # iii/ calls `jd config`, then the `jdinputs.auto.tfvars` file
+            # then the preset values may take precedence over the values specified
+            # in variables.yaml, which is not desirable.
+            filtered_preset_path = self.tf_variables_handler.create_filtered_preset_file(base_preset_path)
+            plan_cmds.append(f"-var-file={filtered_preset_path.absolute()}")
 
         # 2.4/ pass variable overrides
         if variable_overrides:

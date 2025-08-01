@@ -1,0 +1,89 @@
+#!/bin/bash
+set -e
+
+echo "Initializing additional volumes..."
+
+# Create logs directory
+mkdir -p /var/log/jupyter-deploy
+exec > >(tee /var/log/jupyter-deploy/volumes-init.log) 2>&1
+
+# EBS volumes
+%{ if length(ebs_volumes) > 0 ~}
+setup_ebs() {
+    local mount_point="$1"
+    local device_name="$2"
+    
+    echo "Initializing EBS volume for $mount_point..."
+    FULL_MOUNT_POINT="/home/jovyan/$mount_point"
+    
+    mkdir -p "$FULL_MOUNT_POINT"
+    
+    # Check if device exists and is a block device
+    if [ -b "$device_name" ]; then
+        if ! blkid "$device_name" > /dev/null; then
+            echo "Formatting $device_name with ext4..."
+            mkfs -t ext4 "$device_name"
+        else
+            echo "Device $device_name already formatted"
+        fi
+
+        echo "Adding to fstab: $device_name $FULL_MOUNT_POINT ext4 defaults 0 2"
+        echo "$device_name $FULL_MOUNT_POINT ext4 defaults,nofail 0 2" | tee -a /etc/fstab
+        
+        echo "Mounting $device_name to $FULL_MOUNT_POINT"
+        mount "$FULL_MOUNT_POINT"
+        
+        echo "Setting permissions on $FULL_MOUNT_POINT"
+        chown -R service-user:service-user "$FULL_MOUNT_POINT"
+        echo "EBS volume for $mount_point initialization complete"
+    else
+        echo "Error: Device $device_name not found for mounting to $FULL_MOUNT_POINT"
+    fi
+}
+%{ for ebs in ebs_volumes ~}
+setup_ebs "${ebs.mount_point}" "${ebs.device_name}"
+%{ endfor ~}
+%{ endif ~}
+
+# EFS volumes
+%{ if length(efs_volumes) > 0 ~}
+install_efs_utils() {
+    echo "Installing amazon-efs-utils..."
+    yum install -y amazon-efs-utils
+}
+    
+setup_efs() {
+    local mount_point="$1"
+    local efs_id="$2"
+
+    echo "Initializing EFS volume for $mount_point..."
+    FULL_MOUNT_POINT="/home/jovyan/$mount_point"
+
+    mkdir -p "$FULL_MOUNT_POINT"
+
+    # Add entry to fstab for persistent mounting
+    echo "Adding to fstab: $efs_id:/ $FULL_MOUNT_POINT efs _netdev,tls,iam 0 0"
+    echo "$efs_id:/ $FULL_MOUNT_POINT efs _netdev,tls,iam 0 0" | tee -a /etc/fstab
+
+    # Mount the volume
+    echo "Mounting $efs_id to $FULL_MOUNT_POINT"
+    mount "$FULL_MOUNT_POINT"
+
+    # Set permissions
+    echo "Setting permissions on $FULL_MOUNT_POINT"
+    chown -R service-user:service-user "$FULL_MOUNT_POINT"
+    echo "EFS volume for $mount_point initialization complete"
+}
+
+install_efs_utils
+
+%{ for efs in efs_volumes ~}
+setup_efs "${efs.mount_point}" "${efs.file_system_id}"
+%{ endfor ~}
+%{ endif ~}
+
+%{ if length(ebs_volumes) == 0 && length(efs_volumes) == 0 ~}
+echo "No additional volumes required."
+%{ else ~}
+echo "Additional volumes initialization completed."
+%{ endif ~}

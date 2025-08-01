@@ -23,6 +23,7 @@ from jupyter_deploy.engine.vardefs import (
 
 
 class TestTerraformConfigHandler(unittest.TestCase):
+    MOCK_OVERRIDE_PRESET_PATH = Path("/mock/path/engine/jdinputs.preset.override.tfvars")
     MOCK_RECORD_VARS_PATH = Path("/mock/path/engine/jdinputs.auto.tfvars")
     MOCK_RECORD_SECRETS_PATH = Path("/mock/path/engine/jdinputs.secrets.auto.tfvars")
 
@@ -36,6 +37,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         mock_sync_variables_config = Mock()
         mock_get_template_variables = Mock()
         mock_update_variable_records = Mock()
+        mock_create_filtered_preset_file = Mock()
 
         mock_handler.get_recorded_variables_filepath = mock_get_recorded_variables_filepath
         mock_handler.get_recorded_secrets_filepath = mock_get_recorded_secrets_filepath
@@ -45,9 +47,11 @@ class TestTerraformConfigHandler(unittest.TestCase):
         mock_handler.sync_project_variables_config = mock_sync_variables_config
         mock_handler.get_template_variables = mock_get_template_variables
         mock_handler.update_variable_records = mock_update_variable_records
+        mock_handler.create_filtered_preset_file = mock_create_filtered_preset_file
 
         mock_get_recorded_variables_filepath.return_value = TestTerraformConfigHandler.MOCK_RECORD_VARS_PATH
         mock_get_recorded_secrets_filepath.return_value = TestTerraformConfigHandler.MOCK_RECORD_SECRETS_PATH
+        mock_create_filtered_preset_file.return_value = TestTerraformConfigHandler.MOCK_OVERRIDE_PRESET_PATH
 
         return mock_handler, {
             "get_recorded_variables_filepath": mock_get_recorded_variables_filepath,
@@ -58,6 +62,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
             "sync_project_variables_config": mock_sync_variables_config,
             "get_template_variables": mock_get_template_variables,
             "update_variables_record": mock_update_variable_records,
+            "create_filtered_preset_file": mock_create_filtered_preset_file,
         }
 
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
@@ -311,9 +316,11 @@ class TestTerraformConfigHandler(unittest.TestCase):
         self.assertIn("-out=", plan_cmds[2])
         self.assertEqual(plan_kwargs, {"exec_dir": Path("/fake/path/engine")})
 
-        expect_path = path / TF_ENGINE_DIR / TF_PRESETS_DIR / "defaults-all.tfvars"
+        expect_called_path = path / TF_ENGINE_DIR / TF_PRESETS_DIR / "defaults-all.tfvars"
+        expect_path = TestTerraformConfigHandler.MOCK_OVERRIDE_PRESET_PATH
         self.assertEqual(f"-var-file={expect_path.absolute()}", plan_cmds[3])
         mock_vars_fns["sync_engine_varfiles_with_project_variables_config"].assert_called_once()
+        mock_vars_fns["create_filtered_preset_file"].assert_called_once_with(expect_called_path)
 
     @patch("jupyter_deploy.cmd_utils.run_cmd_and_pipe_to_terminal")
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
@@ -354,9 +361,10 @@ class TestTerraformConfigHandler(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(mock_run_cmd.call_count, 2)
         mock_vars_fns["sync_engine_varfiles_with_project_variables_config"].assert_called_once()
+        mock_vars_fns["create_filtered_preset_file"].assert_called_once()
         plan_cmds = mock_run_cmd.mock_calls[1][1][0]
 
-        expect_path = path / TF_ENGINE_DIR / TF_PRESETS_DIR / "defaults-all.tfvars"
+        expect_path = TestTerraformConfigHandler.MOCK_OVERRIDE_PRESET_PATH
         self.assertEqual(f"-var-file={expect_path.absolute()}", plan_cmds[3])
 
         plan_cmds_len = len(plan_cmds)

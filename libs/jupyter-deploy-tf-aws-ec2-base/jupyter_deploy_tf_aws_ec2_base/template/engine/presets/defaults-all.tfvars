@@ -12,3 +12,5 @@ log_files_rotation_size_mb = 50
 log_files_retention_count  = 10
 log_files_retention_days   = 180
 custom_tags                = {}
+additional_ebs_mounts      = []
+additional_efs_mounts      = []

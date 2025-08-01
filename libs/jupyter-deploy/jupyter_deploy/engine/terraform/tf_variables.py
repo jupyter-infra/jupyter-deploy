@@ -5,6 +5,7 @@ from jupyter_deploy import fs_utils
 from jupyter_deploy.engine.engine_variables import EngineVariablesHandler
 from jupyter_deploy.engine.terraform import tf_varfiles
 from jupyter_deploy.engine.terraform.tf_constants import (
+    TF_CUSTOM_PRESET_FILENAME,
     TF_ENGINE_DIR,
     TF_PRESETS_DIR,
     TF_RECORDED_SECRETS_FILENAME,
@@ -92,6 +93,21 @@ class TerraformVariablesHandler(EngineVariablesHandler):
 
         if updated_tfvars_lines:
             fs_utils.write_inline_file_content(tfvars_path, updated_tfvars_lines)
+
+    def create_filtered_preset_file(self, base_preset_path: Path) -> Path:
+        """Read the base preset, override values, write in a new preset file and return its path."""
+        filtered_tfvars_file_path = self.project_path / TF_ENGINE_DIR / TF_CUSTOM_PRESET_FILENAME
+
+        base_preset_content = fs_utils.read_short_file(base_preset_path)
+        assigned_variable_names = self.get_variable_names_assigned_in_config()
+        updated_tfvars_lines = tf_varfiles.parse_and_remove_overridden_variables_from_content(
+            base_preset_content, assigned_variable_names
+        )
+
+        if updated_tfvars_lines:
+            fs_utils.write_inline_file_content(filtered_tfvars_file_path, updated_tfvars_lines)
+
+        return filtered_tfvars_file_path
 
     def reset_recorded_variables(self) -> None:
         super().reset_recorded_variables()

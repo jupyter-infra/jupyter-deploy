@@ -120,6 +120,78 @@ class ListStrTemplateVariableDefinition(TemplateVariableDefinition[list[str]]):
     pass
 
 
+class ListMapStrTemplateVariableDefinition(TemplateVariableDefinition[list[dict[str, str]]]):
+    """Wrapper class for user-inputable list of maps with string keys and values."""
+
+    def get_cli_description(self) -> str:
+        trimmed_description = str_utils.get_trimmed_header(self.description)
+        cli_name = self.get_cli_var_name()
+        hint = (
+            "Pass each entry separately, and use comma to separate key=value pairs; "
+            f"e.g. --{cli_name} <key1=val1,key2=value2> --{cli_name} <key1=val1,key2=value2>"
+        )
+        return f"{trimmed_description}\n{hint}"
+
+    def get_validator_callback(self) -> Callable | None:
+        def cb(entries: list[str] | None) -> list[str] | None:
+            if not entries:
+                return []
+
+            for idx, entry in enumerate(entries):
+                if not entry:
+                    raise typer.BadParameter(f"Empty value at index {idx}")
+
+                key_value_pairs = entry.split(",")
+                if not key_value_pairs:
+                    raise typer.BadParameter(f"Value at index {idx} must have at least one key=value")
+                for key_idx, key_value_pair in enumerate(key_value_pairs):
+                    if not isinstance(key_value_pair, str):
+                        continue
+                    key_value_parts = key_value_pair.split("=")
+
+                    if len(key_value_parts) != 2 or not key_value_parts[0] or not key_value_parts[1]:
+                        raise typer.BadParameter(
+                            f"Invalid key=value pair for entry {idx} at index {key_idx}, must be of the form key=val"
+                        )
+
+                    if not isinstance(key_value_parts[0], str) or not isinstance(key_value_parts[1], str):
+                        raise typer.BadParameter(
+                            f"Invalid key=value pair for entry {idx} at index {key_idx}, "
+                            f"both key and value must be non-empty string"
+                        )
+            return entries
+
+        return cb
+
+    @classmethod
+    def get_type(cls) -> type:
+        # this is not a typo!
+        # we tell typer that the value is list[str] even though it's a list[dict[str,str]],
+        # then we expect user to pass --var-name key1=val1,key2=val2 --var-name key1=val1,key2=val2
+        # which we combine afterwards
+        return list[str]
+
+    @classmethod
+    def convert_assigned_value(cls, assigned_value: Any | None) -> list[dict[str, str]] | None:
+        if assigned_value is None:
+            return None
+        if isinstance(assigned_value, list):
+            out: list[dict[str, str]] = []
+            for v in assigned_value:  # guaranteed by typer, but keep to mypy happy
+                if not isinstance(v, str):
+                    continue
+                entry: dict[str, str] = {}
+                key_value_pairs = v.split(",")
+
+                for key_value_pair in key_value_pairs:
+                    key_value_parts = key_value_pair.split("=")
+                    entry.update({key_value_parts[0]: key_value_parts[1]})
+
+                out.append(entry)
+            return out
+        raise ValueError(f"Invalid value: {assigned_value}")
+
+
 class DictStrTemplateVariableDefinition(TemplateVariableDefinition[dict[str, str]]):
     """Wrapper class for user-inputable dict value whose keys and values are string in a template."""
 
@@ -138,7 +210,6 @@ class DictStrTemplateVariableDefinition(TemplateVariableDefinition[dict[str, str
                 if not v:
                     raise typer.BadParameter(f"Empty value at index {idx}, must be of the form key=val")
                 parts = v.split("=")
-                print(parts)
                 if len(parts) != 2 or not parts[0] or not parts[1]:
                     raise typer.BadParameter(f"Invalid value at index {idx}, must be of the form key=val")
             return entries

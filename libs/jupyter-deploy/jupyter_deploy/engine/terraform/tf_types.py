@@ -9,3 +9,4 @@ class TerraformType(str, Enum):
     BOOL = "bool"
     LIST_STR = "${list(string)}"
     MAP_STR = "${map(string)}"
+    LIST_MAP_STR = "${list(map(string))}"

@@ -11,6 +11,7 @@ from jupyter_deploy.engine.vardefs import (
     DictStrTemplateVariableDefinition,
     FloatTemplateVariableDefinition,
     IntTemplateVariableDefinition,
+    ListMapStrTemplateVariableDefinition,
     ListStrTemplateVariableDefinition,
     StrTemplateVariableDefinition,
     TemplateVariableDefinition,
@@ -93,6 +94,15 @@ class TerraformMapOfStrVariableDefinition(TerraformVariableDefinition[dict[str, 
         return DictStrTemplateVariableDefinition(**self.model_dump())
 
 
+class TerraformListOfMapStrVariableDefinition(TerraformVariableDefinition[list[dict[str, str]]]):
+    """Terraform wrapper class for variable definition of type 'list(map(string))'."""
+
+    tf_type: TerraformType = TerraformType.LIST_MAP_STR
+
+    def to_template_definition(self) -> TemplateVariableDefinition:
+        return ListMapStrTemplateVariableDefinition(**self.model_dump())
+
+
 def create_tf_variable_definition(parsed_config: dict) -> TerraformVariableDefinition:
     """Return an instance of the corresponding TerraformVariable class."""
     tf_type = parsed_config.get("tf_type")
@@ -106,6 +116,8 @@ def create_tf_variable_definition(parsed_config: dict) -> TerraformVariableDefin
         return TerraformListOfStrVariableDefinition(**parsed_config)
     elif tf_type == TerraformType.MAP_STR:
         return TerraformMapOfStrVariableDefinition(**parsed_config)
+    elif tf_type == TerraformType.LIST_MAP_STR:
+        return TerraformListOfMapStrVariableDefinition(**parsed_config)
     raise NotImplementedError(f"No terraform class found for type: {tf_type}.")
 
 
@@ -125,6 +137,10 @@ def to_tf_var_option(var_def: TemplateVariableDefinition) -> list[str]:
         return ["-var", f"{var_def.variable_name}={str_out}"]
 
     if isinstance(var_def, DictStrTemplateVariableDefinition):
+        str_out = json.dumps(var_def.assigned_value)
+        return ["-var", f"{var_def.variable_name}={str_out}"]
+
+    if isinstance(var_def, ListMapStrTemplateVariableDefinition):
         str_out = json.dumps(var_def.assigned_value)
         return ["-var", f"{var_def.variable_name}={str_out}"]
 

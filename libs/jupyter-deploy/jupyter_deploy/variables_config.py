@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 VARIABLES_CONFIG_V1_KEYS_ORDER = [
     "schema_version",
@@ -34,6 +34,11 @@ class JupyterDeployVariablesConfigV1(BaseModel):
     required_sensitive: dict[str, Any] = Field(default_factory=dict)
     overrides: dict[str, Any] = Field(default_factory=dict)
     defaults: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("required", "required_sensitive", "overrides", "defaults", mode="before")
+    @classmethod
+    def ensure_dict(cls, v: Any) -> dict[str, Any]:
+        return {} if v is None else v
 
     @model_validator(mode="after")
     def check_overrides_exist(self) -> "JupyterDeployVariablesConfigV1":

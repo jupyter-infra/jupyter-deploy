@@ -158,6 +158,9 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# claude helpers
+claude-test-*.yaml
+
 # local files
 /tmp
 /sandbox*

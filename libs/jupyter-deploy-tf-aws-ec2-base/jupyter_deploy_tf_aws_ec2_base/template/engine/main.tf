@@ -232,7 +232,6 @@ resource "aws_secretsmanager_secret" "oauth_github_client_secret" {
   name_prefix = "${var.oauth_app_secret_prefix}-"
   tags        = local.combined_tags
 }
-
 data "aws_iam_policy_document" "oauth_github_client_secret" {
   statement {
     sid = "SecretsManagerReadGitHubAppClientSecret"
@@ -412,6 +411,7 @@ locals {
   check_status_indented          = join("\n${local.indent_str}", compact(split("\n", data.local_file.check_status.content)))
   get_status_indented            = join("\n${local.indent_str}", compact(split("\n", data.local_file.get_status.content)))
   get_auth_indented              = join("\n${local.indent_str}", compact(split("\n", data.local_file.get_auth.content)))
+  cloudinit_volumes_indented     = join("\n${local.indent_str}", compact(split("\n", local.cloudinit_volumes_script)))
 }
 
 locals {
@@ -425,6 +425,13 @@ mainSteps:
       runCommand:
         - |
           ${local.cloud_init_indented}
+
+  - action: aws:runShellScript
+    name: MountAdditionalVolumes
+    inputs:
+      runCommand:
+        - |
+          ${local.cloudinit_volumes_indented}
 
   - action: aws:runShellScript
     name: SaveDockerFiles

@@ -60,10 +60,36 @@ class EngineVariablesHandler(ABC):
             variables_config = base_project_handler.retrieve_variables_config(variables_config_path)
             self._variables_config = variables_config
             return variables_config
-        except (FileNotFoundError, ValidationError, base_project_handler.NotADictError):
-            # the user has either corrupted or deleted their variables.yaml
-            # reset to a fallback;
-            # TODO display a warning here
+        except FileNotFoundError:
+            # the user has deleted their variables.yaml, reset it to a fallback
+            console = self.get_console()
+            console.rule("Invalid variables.yaml", style="red")
+            console.print(
+                f":warning: variables config not found at: {variables_config_path.absolute()}", style="yellow"
+            )
+            console.line()
+            console.rule(style="red")
+            reset_variables_config = self._get_reset_variables_config()
+            self._variables_config = reset_variables_config
+            return self._variables_config
+        except base_project_handler.NotADictError:
+            # the user has corrupted their variables.yaml, reset to a fallback
+            console = self.get_console()
+            console.rule("Invalid variables.yaml", style="red")
+            console.print(":warning: variables config was not a dict, resetting...", style="yellow")
+            console.line()
+            console.rule(style="red")
+            reset_variables_config = self._get_reset_variables_config()
+            self._variables_config = reset_variables_config
+            return self._variables_config
+        except ValidationError as e:
+            # the user has corrupted their variables.yaml, reset to a fallback;
+            console = self.get_console()
+            console.rule("Invalid variables.yaml")
+            console.print(":warning: variables config is invalid, resetting...", style="yellow")
+            console.line()
+            console.print(e, style="red")
+            console.rule(style="red")
             reset_variables_config = self._get_reset_variables_config()
             self._variables_config = reset_variables_config
             return self._variables_config
@@ -95,7 +121,7 @@ class EngineVariablesHandler(ABC):
     def sync_engine_varfiles_with_project_variables_config(self) -> None:
         """Update engine specific variable files from the variables config.
 
-        Bypass all variables set to Null.
+        Bypass all variables set to `null`.
         """
 
         required = self.variables_config.required
@@ -121,6 +147,17 @@ class EngineVariablesHandler(ABC):
 
         self.update_variable_records(varvalues)
         self.update_variable_records(sensitive_varvalues, sensitive=True)
+
+    def get_variable_names_assigned_in_config(self) -> list[str]:
+        """Return the variable names for which the user specified a value in `variables.yaml`."""
+        assigned_variable_names: list[str] = []
+        assigned_variable_names.extend([k for k, v in self.variables_config.required.items() if v is not None])
+        assigned_variable_names.extend(
+            [k for k, v in self.variables_config.required_sensitive.items() if v is not None]
+        )
+        assigned_variable_names.extend([k for k, v in self.variables_config.overrides.items() if v is not None])
+
+        return assigned_variable_names
 
     def sync_project_variables_config(self, updated_values: dict[str, Any]) -> None:
         """Update the project variables.yaml to match the values."""
