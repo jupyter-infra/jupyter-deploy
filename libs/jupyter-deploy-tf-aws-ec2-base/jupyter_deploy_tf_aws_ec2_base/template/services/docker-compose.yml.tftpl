@@ -37,6 +37,16 @@ services:
     volumes:
       - /mnt/jupyter-data:/home/jovyan
       - /var/run/docker.sock:/var/run/docker.sock
+%{ if length(ebs_mounts) > 0 ~}
+%{ for ebs in ebs_mounts ~}
+      - /home/jovyan/${ebs.mount_point}:/home/jovyan/${ebs.mount_point}
+%{ endfor ~}
+%{ endif ~}
+%{ if length(efs_mounts) > 0 ~}
+%{ for efs in efs_mounts ~}
+      - /home/jovyan/${efs.mount_point}:/home/jovyan/${efs.mount_point}
+%{ endfor ~}
+%{ endif ~}
   oauth:
     image: quay.io/oauth2-proxy/oauth2-proxy:latest
     container_name: oauth

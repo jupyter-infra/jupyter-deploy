@@ -377,6 +377,8 @@ locals {
     allowed_github_usernames = local.allowed_github_usernames
     allowed_github_org       = local.allowed_github_org
     allowed_github_teams     = local.allowed_github_teams
+    ebs_mounts               = local.resolved_ebs_mounts
+    efs_mounts               = local.resolved_efs_mounts
   })
   traefik_config_file = templatefile("${path.module}/../services/traefik/traefik.yml.tftpl", {
     letsencrypt_notification_email = var.letsencrypt_email
@@ -417,7 +419,7 @@ locals {
 locals {
   ssm_startup_content = <<DOC
 schemaVersion: '2.2'
-description: Setup docker, mount volume, copy docker-compose, start docker services
+description: Setup docker, mount volumes, copy docker-compose, start docker services
 mainSteps:
   - action: aws:runShellScript
     name: CloudInit

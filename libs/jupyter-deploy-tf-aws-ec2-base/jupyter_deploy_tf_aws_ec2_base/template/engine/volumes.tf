@@ -9,14 +9,14 @@ resource "aws_ebs_volume" "additional_volumes" {
   }
 
   availability_zone = aws_instance.ec2_jupyter_server.availability_zone
-  size              = try(tonumber(each.value["size_gb"]), 30)
+  size              = try(tonumber(lookup(each.value, "size_gb", "30")), 30)
   type              = lookup(each.value, "type", "gp3")
   encrypted         = true
 
   tags = merge(
     local.combined_tags,
     {
-      Name = "${each.key}-${local.doc_postfix}"
+      Name = "${lookup(each.value, "name", "")}-${local.doc_postfix}"
     }
   )
 }
@@ -63,7 +63,7 @@ resource "aws_efs_file_system" "additional_file_systems" {
   tags = merge(
     local.combined_tags,
     {
-      Name = "${each.key}-${local.doc_postfix}"
+      Name = "${lookup(each.value, "name", "")}-${local.doc_postfix}"
     }
   )
 }
@@ -117,19 +117,22 @@ resource "aws_security_group" "efs_security_group" {
 }
 
 locals {
+  resolved_ebs_mounts = [
+    for idx, ebs_mount in var.additional_ebs_mounts : {
+      mount_point = ebs_mount["mount_point"]
+      device_name = "/dev/sd${substr("ghijklmnopqrstuvwxyz", idx, 1)}"
+    }
+  ]
+  resolved_efs_mounts = [
+    for idx, efs_mount in var.additional_efs_mounts : {
+      mount_point    = efs_mount["mount_point"]
+      file_system_id = lookup(efs_mount, "id", null) != null ? efs_mount["id"] : aws_efs_file_system.additional_file_systems[idx].id
+    }
+  ]
+
   # Generate the volumes init script
   cloudinit_volumes_script = templatefile("${path.module}/../services/cloudinit_volumes.sh.tftpl", {
-    ebs_volumes = [
-      for idx, ebs_mount in var.additional_ebs_mounts : {
-        mount_point = ebs_mount["mount_point"]
-        device_name = "/dev/sd${substr("ghijklmnopqrstuvwxyz", idx, 1)}"
-      }
-    ]
-    efs_volumes = [
-      for idx, efs_mount in var.additional_efs_mounts : {
-        mount_point    = efs_mount["mount_point"]
-        file_system_id = lookup(efs_mount, "id", null) != null ? efs_mount["id"] : aws_efs_file_system.additional_file_systems[idx].id
-      }
-    ]
+    ebs_volumes = resolved_ebs_mounts
+    efs_volumes = resolved_efs_mounts
   })
 }

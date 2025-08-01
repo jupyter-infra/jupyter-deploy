@@ -35,6 +35,7 @@ setup_ebs() {
         
         echo "Setting permissions on $FULL_MOUNT_POINT"
         chown -R service-user:service-user "$FULL_MOUNT_POINT"
+        chmod 750 "$FULL_MOUNT_POINT"
         echo "EBS volume for $mount_point initialization complete"
     else
         echo "Error: Device $device_name not found for mounting to $FULL_MOUNT_POINT"
@@ -72,6 +73,7 @@ setup_efs() {
     # Set permissions
     echo "Setting permissions on $FULL_MOUNT_POINT"
     chown -R service-user:service-user "$FULL_MOUNT_POINT"
+    chmod 750 "$FULL_MOUNT_POINT"
     echo "EFS volume for $mount_point initialization complete"
 }
 
