@@ -31,7 +31,7 @@ EXPECTED_TEMPLATE_STRPATHS: list[str] = [
     "services/logrotator/logrotator-start.sh.tftpl",
     "services/traefik/traefik.yml.tftpl",
     "services/cloudinit.sh.tftpl",
-    "services/cloudinit_volumes.sh.tftpl",
+    "services/cloudinit-volumes.sh.tftpl",
     "services/docker-compose.yml.tftpl",
     "services/docker-startup.sh.tftpl",
 ]

@@ -51,6 +51,12 @@ setup_ebs "${ebs.mount_point}" "${ebs.device_name}"
 install_efs_utils() {
     echo "Installing amazon-efs-utils..."
     yum install -y amazon-efs-utils
+    dnf install -y python3 python3-pip
+    pip3 install botocore boto3
+    
+    # Wait for IAM role to propagate
+    echo "Waiting for IAM role credentials to be available..."
+    sleep 10
 }
     
 setup_efs() {
@@ -62,15 +68,20 @@ setup_efs() {
 
     mkdir -p "$FULL_MOUNT_POINT"
 
-    # Add entry to fstab for persistent mounting
-    echo "Adding to fstab: $efs_id:/ $FULL_MOUNT_POINT efs _netdev,tls,iam 0 0"
-    echo "$efs_id:/ $FULL_MOUNT_POINT efs _netdev,tls,iam 0 0" | tee -a /etc/fstab
+    # Add entry to fstab for persistent mounting with explicit region
+    echo "Using AWS region: ${aws_region}"
+    
+    echo "Adding to fstab: $efs_id:/ $FULL_MOUNT_POINT efs _netdev,tls,iam,region=${aws_region} 0 0"
+    echo "$efs_id:/ $FULL_MOUNT_POINT efs _netdev,tls,iam,region=${aws_region} 0 0" | tee -a /etc/fstab
 
-    # Mount the volume
+    # Mount the volume with more verbose output
     echo "Mounting $efs_id to $FULL_MOUNT_POINT"
-    mount "$FULL_MOUNT_POINT"
+    mount -v "$FULL_MOUNT_POINT" || {
+        echo "Mount failed. Attempting direct mount with region."
+        mount -t efs -o tls,iam,region=${aws_region} $efs_id:/ $FULL_MOUNT_POINT
+    }
 
-    # Set permissions
+    # Set permissions - EFS mounts need to be more permissive for the container user
     echo "Setting permissions on $FULL_MOUNT_POINT"
     chown -R service-user:service-user "$FULL_MOUNT_POINT"
     chmod 750 "$FULL_MOUNT_POINT"

@@ -8,7 +8,7 @@ The instance is configured so that you can access it using [AWS SSM](https://doc
 This project:
 - places the instance in the first subnet of the default VPC
 - select the latest AL 2023 AMI for `x86_64` architecture
-- sets up an IAM role to enable SSM access
+- sets up an IAM role to enable SSM, route53 and (optionally) EFS access
 - passes on the root volume of the AMI
 - adds an EBS volume which will mount on the Jupyter Server container
 - writes docker service logs to disk at /var/log/services using `fluent-bit`
@@ -17,6 +17,7 @@ This project:
     - `cloudinit.sh.tftpl` to configure the EC2 instance
     - `docker-compose.yml.tftpl` to configure the docker services
     - `docker-startup.sh.tftpl` to start the docker services
+    - `cloudinit-volumes.sh.tftpl` to optionally mount additional elastic block store (EBS) or elastic file systems (EFS)
     - `traefik.yml.tftpl` to configure traefik
     - `dockerfile.jupyter` to build the Jupyter container
     - `jupyter-start.sh` to provide entrypoint script for the Jupyter container
@@ -36,6 +37,7 @@ This project:
 - creates the Route 53 Hosted Zone for the domain unless it already exists
 - adds the DNS record to the Route 53 Hosted Zone
 - creates an AWS Secret to store the OAuth App client secret
+- optionally creates or references EBS volumes or EFS and mount them to the home directory of the jupyter app
 - provides two presets default values for the template variables:
     - `defaults-all.tfvars` comprehensive preset with all the recommended values
     - `defaults-base.tfvars` more limited preset; it will prompt user to select the instance type and volume size
@@ -130,10 +132,15 @@ No modules.
 | [aws_ssm_parameter](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [null_resource](https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource) | resource |
 | [aws_default_vpc](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/default_vpc) | resource |
+| [aws_ebs_volume](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ebs_volume)| resource |
+| [aws_efs_file_system](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_file_system)| resource |
+| [aws_efs_mount_target](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_mount_target) | resource |
 | [aws_subnets](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnets) | data source |
 | [aws_subnet](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnet) | data source |
 | [aws_ami](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ami) | data source |
 | [aws_route53_zone](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/route53_zone) | data source |
+| [aws_ebs_volume](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ebs_volume) | data source |
+| [aws_efs_file_system](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/efs_file_system) | data source |
 | [aws_iam_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy) | data source |
 | [aws_iam_policy_document](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [local_file](https://registry.terraform.io/providers/hashicorp/local/latest/docs/data-sources/file) | data source |
@@ -162,6 +169,8 @@ No modules.
 | log_files_retention_count | `number` | `10` | The maximum number of rotated log files to retain for a log group |
 | log_files_retention_days | `number` | `180` | The maximum number of days to retain any log files |
 | custom_tags | `map(string)` | `{}` | The custom tags to add to all the resources |
+| additional_ebs_mounts | `list(map(string))` | `[]` | Elastic block stores to mount on the notebook home directory |
+| additional_efs_mounts | `list(map(string))` | `[]` | Elastic file systems to mount on the notebook home directory |
 
 ## Outputs
 | Name | Description |
