@@ -11,6 +11,7 @@ from jupyter_deploy.engine.vardefs import (
     DictStrTemplateVariableDefinition,
     FloatTemplateVariableDefinition,
     IntTemplateVariableDefinition,
+    ListMapStrTemplateVariableDefinition,
     ListStrTemplateVariableDefinition,
     StrTemplateVariableDefinition,
     TemplateVariableDefinition,
@@ -74,10 +75,14 @@ class TestTemplateVariableClasses(unittest.TestCase):
         var_def2 = DictStrTemplateVariableDefinition(
             variable_name="map_var", description="Map description", default={"Key": "Value"}
         )
+        var_def3 = ListMapStrTemplateVariableDefinition(
+            variable_name="list_map_var", description="List of map description", default=[{"key": "value"}]
+        )
 
         # Execute
         result1 = var_def1.get_cli_description()
         result2 = var_def2.get_cli_description()
+        result3 = var_def3.get_cli_description()
 
         # Assert
         self.assertNotIn("[preset: ", result1)
@@ -87,6 +92,10 @@ class TestTemplateVariableClasses(unittest.TestCase):
         self.assertNotIn("[preset: ", result2)
         self.assertIn("Map description", result2)
         self.assertIn("--map-var", result2)
+
+        self.assertNotIn("[preset: ", result3)
+        self.assertIn("List of map description", result3)
+        self.assertIn("--list-map-var", result3)
 
     @patch("jupyter_deploy.engine.vardefs.str_utils.get_trimmed_header")
     def test_description_should_call_str_util_to_trim(self, mock_get_trimmed_header: Mock) -> None:
@@ -226,6 +235,26 @@ class TestTemplateVariableClasses(unittest.TestCase):
         # with a fake type for typer
         self.assertEqual(DictStrTemplateVariableDefinition.get_type(), list[str])
 
+    def test_should_instantiate_a_list_dict_str_template_var_instance(self) -> None:
+        # Setup
+        default_value = [{"key1": "val1"}, {"key1": "value1", "key2": "value2"}]
+        assigned_value = [{"key1": "val1"}, {"key3": "value3", "key4": "value4"}]
+        var_def = ListMapStrTemplateVariableDefinition(
+            variable_name="test_var",
+            description="Test description",
+            default=default_value,
+            assigned_value=assigned_value,
+        )
+
+        # Assert
+        self.assertEqual(var_def.variable_name, "test_var")
+        self.assertEqual(var_def.description, "Test description")
+        self.assertEqual(var_def.default, default_value)
+        self.assertEqual(var_def.assigned_value, assigned_value)
+
+        # with a fake type for typer
+        self.assertEqual(ListMapStrTemplateVariableDefinition.get_type(), list[str])
+
     @parameterized.parameterized.expand(
         [
             (StrTemplateVariableDefinition, True),
@@ -234,6 +263,7 @@ class TestTemplateVariableClasses(unittest.TestCase):
             (BoolTemplateVariableDefinition, True),
             (ListStrTemplateVariableDefinition, True),
             (DictStrTemplateVariableDefinition, False),
+            (ListMapStrTemplateVariableDefinition, False),
         ]
     )
     def test_get_validator_callback_is_set(self, clz: type, expect_none: bool) -> None:
@@ -242,6 +272,25 @@ class TestTemplateVariableClasses(unittest.TestCase):
             self.assertIsNone(instance.get_validator_callback())
         else:
             self.assertIsNotNone(instance.get_validator_callback())
+
+    def test_list_map_str_validator_callback(self) -> None:
+        instance = ListMapStrTemplateVariableDefinition(variable_name="var", description="desc")
+        cb = instance.get_validator_callback()
+
+        if not cb:
+            raise ValueError("to keep mypy happy")
+
+        self.assertEqual([], cb([]))
+        self.assertEqual(["k1=v1,k2=v2", "k3=v3"], cb(["k1=v1,k2=v2", "k3=v3"]))
+
+        with self.assertRaises(typer.BadParameter):
+            cb({"key1": "key2"})
+        with self.assertRaises(typer.BadParameter):
+            cb(["key1:val1"])
+        with self.assertRaises(typer.BadParameter):
+            cb(["key1=val1", "key1val1"])
+        with self.assertRaises(typer.BadParameter):
+            cb(["key1=val1", ""])
 
     def test_map_str_validator_callback(self) -> None:
         instance = DictStrTemplateVariableDefinition(variable_name="var", description="desc")
@@ -270,6 +319,11 @@ class TestTemplateVariableClasses(unittest.TestCase):
             (BoolTemplateVariableDefinition, True, True),
             (ListStrTemplateVariableDefinition, ["a", "b"], ["a", "b"]),
             (DictStrTemplateVariableDefinition, ["key1=val1", "key2=val2"], {"key1": "val1", "key2": "val2"}),
+            (
+                ListMapStrTemplateVariableDefinition,
+                ["key1=val1,key2=val2", "k1=v1,k2=v2"],
+                [{"key1": "val1", "key2": "val2"}, {"k1": "v1", "k2": "v2"}],
+            ),
         ]
     )
     def test_convert_assigned_value(self, clz: type, val: Any, expect: Any) -> None:
@@ -285,6 +339,7 @@ class TestTemplateVariableClasses(unittest.TestCase):
             (BoolTemplateVariableDefinition, True, 3),
             (ListStrTemplateVariableDefinition, ["a", "b"], {}),
             (DictStrTemplateVariableDefinition, {"key1": "val1", "key2": "val2"}, []),
+            (ListMapStrTemplateVariableDefinition, [{"k1": "v1", "k2": "v2"}, {"k1": "v2"}], {}),
         ]
     )
     def test_validate_value(self, clz: type, valid_val: Any, invalid_val: Any) -> None:

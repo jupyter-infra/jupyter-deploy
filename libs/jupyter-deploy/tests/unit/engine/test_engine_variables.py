@@ -243,6 +243,106 @@ class TestSyncEngineVarfilesWithProjectVariablesConfig(unittest.TestCase):
                 handler.sync_engine_varfiles_with_project_variables_config()
 
 
+class TestGetVariableNamesAssignedInConfig(unittest.TestCase):
+    def test_returns_combined_non_none_required_required_sensitive_and_overrides(self) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = DummyVariablesHandler(project_path=project_path, project_manifest=manifest)
+
+        # Create a mock variables_config with a mix of None and non-None values
+        mock_config = Mock(spec=JupyterDeployVariablesConfig)
+        mock_config.required = {"var1": "value1", "var2": None}
+        mock_config.required_sensitive = {"var3": "value3", "var4": None}
+        mock_config.overrides = {"var5": "value5", "var6": None}
+
+        # Patch the variables_config property to return our mock
+        handler._variables_config = mock_config
+
+        # Execute
+        result = handler.get_variable_names_assigned_in_config()
+
+        # Verify - only non-None values should be included
+        self.assertEqual(len(result), 3)  # Only 3 non-None values
+        self.assertIn("var1", result)  # From required
+        self.assertIn("var3", result)  # From required_sensitive
+        self.assertIn("var5", result)  # From overrides
+
+        # Verify - None values should NOT be included
+        self.assertNotIn("var2", result)  # None in required
+        self.assertNotIn("var4", result)  # None in required_sensitive
+        self.assertNotIn("var6", result)  # None in overrides
+
+    def test_handles_empty_values_in_variables_config(self) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = DummyVariablesHandler(project_path=project_path, project_manifest=manifest)
+
+        # Create a mock variables_config with empty dictionaries
+        mock_config = Mock(spec=JupyterDeployVariablesConfig)
+        mock_config.required = {}
+        mock_config.required_sensitive = {}
+        mock_config.overrides = {}
+
+        # Patch the variables_config property to return our mock
+        handler._variables_config = mock_config
+
+        # Execute
+        result = handler.get_variable_names_assigned_in_config()
+
+        # Verify - should return an empty list
+        self.assertEqual(result, [])
+
+    def test_none_values_are_filtered_out(self) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = DummyVariablesHandler(project_path=project_path, project_manifest=manifest)
+
+        # Create a mock variables_config with all None values
+        mock_config = Mock(spec=JupyterDeployVariablesConfig)
+        mock_config.required = {"var1": None, "var2": None}
+        mock_config.required_sensitive = {"var3": None, "var4": None}
+        mock_config.overrides = {"var5": None, "var6": None}
+
+        # Patch the variables_config property to return our mock
+        handler._variables_config = mock_config
+
+        # Execute
+        result = handler.get_variable_names_assigned_in_config()
+
+        # Verify - should return an empty list since all values are None
+        self.assertEqual(result, [])
+
+    def test_defaults_are_ignored_even_when_not_none(self) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = DummyVariablesHandler(project_path=project_path, project_manifest=manifest)
+
+        # Create a mock variables_config with defaults that have non-None values
+        mock_config = Mock(spec=JupyterDeployVariablesConfig)
+        mock_config.required = {"var1": None}
+        mock_config.required_sensitive = {"var2": None}
+        mock_config.overrides = {"var3": "value3"}
+        mock_config.defaults = {"var4": "default4", "var5": "default5"}
+
+        # Patch the variables_config property to return our mock
+        handler._variables_config = mock_config
+
+        # Execute
+        result = handler.get_variable_names_assigned_in_config()
+
+        # Verify - only non-None from required, required_sensitive and overrides should be included
+        self.assertEqual(len(result), 1)  # Only 1 non-None value from the tracked sections
+        self.assertIn("var3", result)  # From overrides
+
+        # Verify - default values should be completely ignored, even though they're non-None
+        self.assertNotIn("var4", result)
+        self.assertNotIn("var5", result)
+
+
 class TestSyncProjectVariablesConfig(unittest.TestCase):
     @patch("jupyter_deploy.fs_utils.write_yaml_file_with_comments")
     def test_handles_required_sensitive_overrides_and_defaults(self, mock_write: Mock) -> None:

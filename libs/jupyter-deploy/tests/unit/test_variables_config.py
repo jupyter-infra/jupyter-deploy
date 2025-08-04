@@ -12,7 +12,6 @@ from jupyter_deploy.variables_config import (
 
 
 # Create a test version of the class without the validators for testing
-# Create a simple model that doesn't do validation instead of extending
 class TestVariablesConfigV1NoValidators(BaseModel):
     model_config = ConfigDict(extra="allow")
     schema_version: int = 1  # Using Literal[1] would make sense here but int is fine for tests
@@ -25,6 +24,8 @@ class TestVariablesConfigV1NoValidators(BaseModel):
 class TestJupyterDeployVariablesConfigV1(unittest.TestCase):
     variables_v1_content: str
     variables_v1_parsed_content: Any
+    variables_initial_v1_content: str
+    variables_initial_v1_parsed_content: Any
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -33,8 +34,13 @@ class TestJupyterDeployVariablesConfigV1(unittest.TestCase):
             cls.variables_v1_content = f.read()
         cls.variables_v1_parsed_content = yaml.safe_load(cls.variables_v1_content)
 
+        mock_variables_initial_path = Path(__file__).parent / "mock_variables_initial.yaml"
+        with open(mock_variables_initial_path) as f:
+            cls.variables_initial_v1_content = f.read()
+        cls.variables_initial_v1_parsed_content = yaml.safe_load(cls.variables_initial_v1_content)
+
     def test_can_parse_variables_v1(self) -> None:
-        TestVariablesConfigV1NoValidators(
+        JupyterDeployVariablesConfigV1(
             **self.variables_v1_parsed_content  # type: ignore
         )
 
@@ -43,6 +49,12 @@ class TestJupyterDeployVariablesConfigV1(unittest.TestCase):
             **self.variables_v1_parsed_content  # type: ignore
         )
         self.assertEqual(variables.schema_version, 1)
+
+    def test_can_parse_variables_initial_v1(self) -> None:
+        # here we ensure that we can parse when override has no key (hence set to None)
+        JupyterDeployVariablesConfigV1(
+            **self.variables_initial_v1_parsed_content  # type: ignore
+        )
 
     def test_variables_v1_required(self) -> None:
         variables = TestVariablesConfigV1NoValidators(

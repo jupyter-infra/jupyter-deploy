@@ -7,6 +7,7 @@ from parameterized import parameterized  # type: ignore
 from jupyter_deploy.engine.terraform.tf_types import TerraformType
 from jupyter_deploy.engine.terraform.tf_vardefs import (
     TerraformBoolVariableDefinition,
+    TerraformListOfMapStrVariableDefinition,
     TerraformListOfStrVariableDefinition,
     TerraformMapOfStrVariableDefinition,
     TerraformNumberVariableDefinition,
@@ -20,6 +21,7 @@ from jupyter_deploy.engine.vardefs import (
     DictStrTemplateVariableDefinition,
     FloatTemplateVariableDefinition,
     IntTemplateVariableDefinition,
+    ListMapStrTemplateVariableDefinition,
     ListStrTemplateVariableDefinition,
     StrTemplateVariableDefinition,
 )
@@ -138,6 +140,11 @@ class TestTerraformTemplateVariableClasses(unittest.TestCase):
                 {"variable_name": "map_var", "tf_type": TerraformType.MAP_STR},
                 TerraformMapOfStrVariableDefinition,
             ),
+            (
+                "list_map_str_type",
+                {"variable_name": "list_map_var", "tf_type": TerraformType.LIST_MAP_STR},
+                TerraformListOfMapStrVariableDefinition,
+            ),
         ]
     )
     def test_create_tf_variable_definition_maps_to_the_right_class(
@@ -187,6 +194,12 @@ class TestTerraformTemplateVariableClasses(unittest.TestCase):
                 {"key1": "val1", "key2": "val2"},
                 DictStrTemplateVariableDefinition,
                 ["-var", 'dict_value={"key1": "val1", "key2": "val2"}'],
+            ),
+            (
+                "list_dict_str_value",
+                [{"k1": "v1", "k2": "v2"}, {"k3": "v3"}],
+                ListMapStrTemplateVariableDefinition,
+                ["-var", 'list_dict_str_value=[{"k1": "v1", "k2": "v2"}, {"k3": "v3"}]'],
             ),
         ]
     )

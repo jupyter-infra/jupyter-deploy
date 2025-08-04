@@ -360,6 +360,122 @@ class TestUpdateVariablesRecord(unittest.TestCase):
         handler.get_template_variables.assert_not_called()
 
 
+class TestCreateFilteredPresetFile(unittest.TestCase):
+    @patch("jupyter_deploy.fs_utils.read_short_file")
+    @patch("jupyter_deploy.fs_utils.write_inline_file_content")
+    @patch("jupyter_deploy.engine.terraform.tf_varfiles.parse_and_remove_overridden_variables_from_content")
+    def test_read_preset_retrieve_variables_filter_write_and_return_new_path(
+        self, mock_parse_and_remove: Mock, mock_write_file: Mock, mock_read_file: Mock
+    ) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = TerraformVariablesHandler(project_path=project_path, project_manifest=manifest)
+
+        # Mock the retrieved variable names
+        handler.get_variable_names_assigned_in_config = Mock(return_value=["var1", "var2"])  # type: ignore
+
+        # Mock the file read and parsing
+        mock_read_file.return_value = "preset_content"
+        mock_parse_and_remove.return_value = ["filtered_line1", "filtered_line2"]
+
+        # Execute
+        base_preset_path = Path("/mock/project/presets/example.tfvars")
+        result = handler.create_filtered_preset_file(base_preset_path)
+
+        # Assert
+        mock_read_file.assert_called_once_with(base_preset_path)
+        mock_parse_and_remove.assert_called_once_with("preset_content", ["var1", "var2"])
+        mock_write_file.assert_called_once_with(
+            project_path / "engine" / "jdinputs.preset.override.tfvars", ["filtered_line1", "filtered_line2"]
+        )
+        self.assertEqual(result, project_path / "engine" / "jdinputs.preset.override.tfvars")
+
+    @patch("jupyter_deploy.fs_utils.read_short_file")
+    @patch("jupyter_deploy.fs_utils.write_inline_file_content")
+    @patch("jupyter_deploy.engine.terraform.tf_varfiles.parse_and_remove_overridden_variables_from_content")
+    def test_does_not_write_when_all_content_gets_filtered_out(
+        self, mock_parse_and_remove: Mock, mock_write_file: Mock, mock_read_file: Mock
+    ) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = TerraformVariablesHandler(project_path=project_path, project_manifest=manifest)
+
+        # Mock the retrieved variable names
+        handler.get_variable_names_assigned_in_config = Mock(return_value=["var1", "var2"])  # type: ignore
+
+        # Mock the file read and parsing to return empty list (all filtered out)
+        mock_read_file.return_value = "preset_content"
+        mock_parse_and_remove.return_value = []
+
+        # Execute
+        base_preset_path = Path("/mock/project/presets/example.tfvars")
+        result = handler.create_filtered_preset_file(base_preset_path)
+
+        # Assert
+        mock_read_file.assert_called_once_with(base_preset_path)
+        mock_parse_and_remove.assert_called_once_with("preset_content", ["var1", "var2"])
+        mock_write_file.assert_not_called()  # This is the key assertion - file shouldn't be written
+        self.assertEqual(result, project_path / "engine" / "jdinputs.preset.override.tfvars")
+
+    @patch("jupyter_deploy.fs_utils.read_short_file")
+    def test_raises_when_preset_does_not_exist(self, mock_read_file: Mock) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = TerraformVariablesHandler(project_path=project_path, project_manifest=manifest)
+
+        # Mock file read to raise FileNotFoundError
+        mock_read_file.side_effect = FileNotFoundError("File not found")
+
+        # Execute & Assert
+        base_preset_path = Path("/mock/project/presets/nonexistent.tfvars")
+        with self.assertRaises(FileNotFoundError):
+            handler.create_filtered_preset_file(base_preset_path)
+
+    @patch("jupyter_deploy.fs_utils.read_short_file")
+    def test_raises_when_preset_read_raises(self, mock_read_file: Mock) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = TerraformVariablesHandler(project_path=project_path, project_manifest=manifest)
+
+        # Mock file read to raise some other error
+        mock_read_file.side_effect = RuntimeError("Error reading file")
+
+        # Execute & Assert
+        base_preset_path = Path("/mock/project/presets/example.tfvars")
+        with self.assertRaises(RuntimeError):
+            handler.create_filtered_preset_file(base_preset_path)
+
+    @patch("jupyter_deploy.fs_utils.read_short_file")
+    @patch("jupyter_deploy.fs_utils.write_inline_file_content")
+    @patch("jupyter_deploy.engine.terraform.tf_varfiles.parse_and_remove_overridden_variables_from_content")
+    def test_raises_when_file_write_raises(
+        self, mock_parse_and_remove: Mock, mock_write_file: Mock, mock_read_file: Mock
+    ) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        manifest = Mock()
+        handler = TerraformVariablesHandler(project_path=project_path, project_manifest=manifest)
+
+        # Mock the retrieved variable names
+        handler.get_variable_names_assigned_in_config = Mock(return_value=["var1"])  # type: ignore
+
+        # Mock the file read and parsing
+        mock_read_file.return_value = "preset_content"
+        mock_parse_and_remove.return_value = ["filtered_line"]
+
+        # Mock write to raise an error
+        mock_write_file.side_effect = OSError("Permission denied")
+
+        # Execute & Assert
+        base_preset_path = Path("/mock/project/presets/example.tfvars")
+        with self.assertRaises(OSError):
+            handler.create_filtered_preset_file(base_preset_path)
+
+
 class TestResetRecordedVariables(unittest.TestCase):
     @patch("jupyter_deploy.engine.engine_variables.EngineVariablesHandler.reset_recorded_variables")
     @patch("jupyter_deploy.fs_utils.delete_file_if_exists")

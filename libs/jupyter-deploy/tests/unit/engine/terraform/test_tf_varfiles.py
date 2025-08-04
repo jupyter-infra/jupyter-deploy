@@ -249,3 +249,79 @@ class TestParseAndUpdateDotTfvarsContent(unittest.TestCase):
         self.assertIn('some_secret = "i-should-not-be-here"\n', result)
         self.assertIn("some_map_of_sring = {}\n", result)
         self.assertIn('some_unrecognized_value = "manually-added"\n', result)
+
+
+class TestParseAndRemoveOverriddenVariablesFromContent(unittest.TestCase):
+    tfvars_content: str
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        mock_tfvars_path = Path(__file__).parent / "mock_defaults.tfvars"
+        with open(mock_tfvars_path) as f:
+            cls.tfvars_content = f.read()
+
+    def test_can_parse_empty_content(self) -> None:
+        varnames_to_remove: list[str] = ["some_var"]
+        result = tf_varfiles.parse_and_remove_overridden_variables_from_content("", varnames_to_remove)
+        self.assertEqual([], result)
+
+    @patch("hcl2.loads")
+    @patch("jupyter_deploy.engine.terraform.tf_plan.format_values_for_dot_tfvars")
+    def test_calls_hcl2_loads_remove_match_variables(self, mock_format: Mock, mock_loads: Mock) -> None:
+        # Mock return values
+        mock_loads.return_value = {"var1": "value1", "var2": "value2", "var3": "value3"}
+        mock_format.return_value = ["formatted_line1", "formatted_line2"]
+
+        # Variables to remove
+        varnames_to_remove = ["var1", "var3"]
+
+        # Call the function
+        result = tf_varfiles.parse_and_remove_overridden_variables_from_content(self.tfvars_content, varnames_to_remove)
+
+        # Verify hcl2.loads was called with the content
+        mock_loads.assert_called_once_with(self.tfvars_content)
+
+        # Verify the specified variables were removed from the dict
+        mock_format.assert_called_once_with({"var2": "value2"})
+
+        # Verify the result is what was returned by format_values_for_dot_tfvars
+        self.assertEqual(["formatted_line1", "formatted_line2"], result)
+
+    def test_parsing_actual_tfvars_and_removing_variables(self) -> None:
+        # Variables to remove
+        varnames_to_remove = ["some_string_value", "some_int_value", "some_secret"]
+
+        # Call the function with actual tfvars content
+        result = tf_varfiles.parse_and_remove_overridden_variables_from_content(self.tfvars_content, varnames_to_remove)
+
+        # Verify the result does not contain the removed variables
+        result_content = "\n".join(result)
+        self.assertNotIn('some_string_value = "t3.medium"', result_content)
+        self.assertNotIn("some_int_value = 30", result_content)
+        self.assertNotIn('some_secret = "i-should-not-be-here"', result_content)
+
+        # Verify the result still contains other variables
+        self.assertIn("some_float_value", result_content)
+        self.assertIn("some_string_value_with_condition", result_content)
+        self.assertIn("some_list_of_string", result_content)
+        self.assertIn("some_map_of_sring", result_content)
+        self.assertIn("some_unrecognized_value", result_content)
+
+    @patch("hcl2.loads")
+    @patch("jupyter_deploy.engine.terraform.tf_plan.format_values_for_dot_tfvars")
+    def test_ignore_set_variables_not_found_in_tfvars(self, mock_format: Mock, mock_loads: Mock) -> None:
+        # Mock return values
+        mock_loads.return_value = {"var1": "value1", "var2": "value2"}
+        mock_format.return_value = ["formatted_line1", "formatted_line2"]
+
+        # Variables to remove, including some not in the tfvars
+        varnames_to_remove = ["var1", "non_existent_var1", "non_existent_var2"]
+
+        # Call the function
+        result = tf_varfiles.parse_and_remove_overridden_variables_from_content(self.tfvars_content, varnames_to_remove)
+
+        # Verify the non-existent variables were silently ignored
+        mock_format.assert_called_once_with({"var2": "value2"})
+
+        # Verify the result is what was returned by format_values_for_dot_tfvars
+        self.assertEqual(["formatted_line1", "formatted_line2"], result)
