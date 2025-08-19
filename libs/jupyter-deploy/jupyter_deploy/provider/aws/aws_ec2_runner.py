@@ -5,7 +5,7 @@ from mypy_boto3_ec2.client import EC2Client
 from rich import console as rich_console
 
 from jupyter_deploy.api.aws.ec2 import ec2_instance
-from jupyter_deploy.provider.instruction_runner import InstructionRunner
+from jupyter_deploy.provider.instruction_runner import InstructionRunner, InterruptInstructionError
 from jupyter_deploy.provider.resolved_argdefs import (
     ResolvedInstructionArgument,
     StrResolvedInstructionArgument,
@@ -72,26 +72,26 @@ class AwsEc2Runner(InstructionRunner):
             console.print(f":warning: Instance [bold]{instance_id}[/] is already starting...", style="yellow")
             console.line()
             console.print("Wait for instance to come online.")
-            return {}
+            raise InterruptInstructionError
         elif state == ec2_instance.Ec2InstanceState.RUNNING:
             console.print(f":white_check_mark: Instance [bold]{instance_id}[/] is already running.", style="green")
             console.line()
-            return {}
+            raise InterruptInstructionError
         elif state == ec2_instance.Ec2InstanceState.SHUTTING_DOWN:
             console.print(f":x: Cannot start instance [bold]{instance_id}[/], it is being terminated.", style="red")
             console.line()
-            return {}
+            raise InterruptInstructionError
         elif state == ec2_instance.Ec2InstanceState.TERMINATED:
             console.print(f":x: Cannot start terminated instance [bold]{instance_id}[/].", style="red")
             console.line()
-            return {}
+            raise InterruptInstructionError
         elif state == ec2_instance.Ec2InstanceState.STOPPING:
             console.print(f":x: Cannot start stopping instance [bold]{instance_id}[/]...", style="red")
             console.line()
             console.print("Wait for instance to fully stop.")
-            return {}
+            raise InterruptInstructionError
         elif not state.is_startable():
-            raise ValueError(f"Unhandled instance state: {state}")
+            raise ValueError(f"Unhandled instance state: '{state.value}'")
 
         ec2_instance.start_instance(
             self.client,
@@ -117,26 +117,26 @@ class AwsEc2Runner(InstructionRunner):
             console.print(f":x: Instance [bold]{instance_id}[/] is starting...", style="yellow")
             console.line()
             console.print("Wait for instance to come online.")
-            return {}
+            raise InterruptInstructionError
         elif state == ec2_instance.Ec2InstanceState.SHUTTING_DOWN:
             console.print(f":x: Cannot stop instance [bold]{instance_id}[/], it is being terminated.", style="red")
             console.line()
-            return {}
+            raise InterruptInstructionError
         elif state == ec2_instance.Ec2InstanceState.TERMINATED:
             console.print(f":x: Cannot stop terminated instance [bold]{instance_id}[/].", style="red")
             console.line()
-            return {}
+            raise InterruptInstructionError
         elif state == ec2_instance.Ec2InstanceState.STOPPING:
             console.print(f":warning: Instance [bold]{instance_id}[/] is already stopping...", style="yellow")
             console.line()
             console.print("Wait for instance to fully stop.")
-            return {}
+            raise InterruptInstructionError
         elif state == ec2_instance.Ec2InstanceState.STOPPED:
             console.print(f":white_check_mark:: instance [bold]{instance_id}[/] is already stopped.", style="green")
             console.line()
-            return {}
+            raise InterruptInstructionError
         elif not state.is_stoppable():
-            raise ValueError(f"Unhandled instance state: {state}")
+            raise ValueError(f"Unhandled instance state: '{state.value}'")
 
         ec2_instance.stop_instance(
             self.client,
@@ -161,28 +161,28 @@ class AwsEc2Runner(InstructionRunner):
         if state == ec2_instance.Ec2InstanceState.PENDING:
             console.print(f":x: Cannot reboot instance [bold]{instance_id}[/], it is still starting...", style="red")
             console.line()
-            console.print("Wait for instance to come online.")
-            return {}
+            console.print("Wait for the instance to come online.")
+            raise InterruptInstructionError
         elif state == ec2_instance.Ec2InstanceState.SHUTTING_DOWN:
             console.print(f":x: Cannot reboot instance [bold]{instance_id}[/], it is being terminated.", style="red")
             console.line()
-            return {}
+            raise InterruptInstructionError
         elif state == ec2_instance.Ec2InstanceState.TERMINATED:
             console.print(f":x: Cannot reboot terminated instance [bold]{instance_id}[/].", style="red")
             console.line()
-            return {}
+            raise InterruptInstructionError
         elif state == ec2_instance.Ec2InstanceState.STOPPING:
             console.print(f":Instance [bold]{instance_id}[/] is already stopping...", style="red")
             console.line()
             console.print("Wait for instance to fully stop.")
-            return {}
+            raise InterruptInstructionError
         elif state == ec2_instance.Ec2InstanceState.STOPPED:
             console.print(f":x: Cannot reboot stopped instance [bold]{instance_id}[/].", style="red")
             console.line()
             console.print("Run the start command instead.")
-            return {}
+            raise InterruptInstructionError
         elif not state.is_stoppable():
-            raise ValueError(f"Unhandled instance state: {state}")
+            raise ValueError(f"Unhandled instance state: '{state.value}'")
 
         ec2_instance.restart_instance(
             self.client,
@@ -197,6 +197,7 @@ class AwsEc2Runner(InstructionRunner):
         resolved_arguments: dict[str, ResolvedInstructionArgument],
         console: rich_console.Console,
         desired_state: ec2_instance.Ec2InstanceState,
+        timeout_seconds: int = 60,
     ) -> dict[str, ResolvedInstructionResult]:
         instance_id_arg = require_arg(resolved_arguments, "instance_id", StrResolvedInstructionArgument)
         instance_id = instance_id_arg.value
@@ -205,6 +206,7 @@ class AwsEc2Runner(InstructionRunner):
             console=console,
             instance_id=instance_id,
             desired_state=desired_state,
+            timeout_seconds=timeout_seconds,
         )
         return {
             "InstanceStateName": StrResolvedInstructionResult(
@@ -250,6 +252,7 @@ class AwsEc2Runner(InstructionRunner):
                 resolved_arguments=resolved_arguments,
                 console=console,
                 desired_state=ec2_instance.Ec2InstanceState.STOPPED,
+                timeout_seconds=120,
             )
 
         raise NotImplementedError(f"No execution implementation for command: aws.ec2.{instruction_name}")

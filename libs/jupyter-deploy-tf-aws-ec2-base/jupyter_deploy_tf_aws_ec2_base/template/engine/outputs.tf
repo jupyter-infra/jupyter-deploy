@@ -22,7 +22,7 @@ output "ami_id" {
 
 output "jupyter_server_public_ip" {
   description = "The public IP address of the jupyter server."
-  value       = aws_instance.ec2_jupyter_server.public_ip
+  value       = aws_eip.jupyter_eip.public_ip
 }
 
 # Secret information
@@ -71,5 +71,11 @@ output "auth_org_set_document" {
 output "auth_org_unset_document" {
   description = "Name of the SSM document to unset the organization whose members or teams are authorized to access the app."
   value       = aws_ssm_document.auth_org_unset.name
+}
+
+# server.start, server.stop, server.restart CLI handling
+output "server_update_document" {
+  description = "Name of the SSM document to control server container operations (start/stop/restart)."
+  value       = aws_ssm_document.server_update.name
 }
 

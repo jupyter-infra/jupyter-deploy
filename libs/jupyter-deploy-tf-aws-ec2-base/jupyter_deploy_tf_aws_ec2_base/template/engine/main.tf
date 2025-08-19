@@ -134,6 +134,21 @@ resource "aws_instance" "ec2_jupyter_server" {
   depends_on = [aws_ssm_document.instance_startup]
 }
 
+# Allocate an Elastic IP address for the EC2 instance
+resource "aws_eip" "jupyter_eip" {
+  domain   = "vpc"
+  instance = aws_instance.ec2_jupyter_server.id
+  tags = merge(
+    local.combined_tags,
+    {
+      Name = "jupyter-eip-${local.doc_postfix}"
+    }
+  )
+
+  # Only create the EIP once the instance is ready
+  depends_on = [aws_instance.ec2_jupyter_server]
+}
+
 # Define the IAM role for the instance and add policies
 data "aws_iam_policy_document" "server_assume_role_policy" {
   statement {
@@ -310,7 +325,7 @@ resource "aws_route53_record" "jupyter" {
   name    = local.full_domain
   type    = "A"
   ttl     = 300
-  records = [aws_instance.ec2_jupyter_server.public_ip]
+  records = [aws_eip.jupyter_eip.public_ip]
 }
 
 # Read the local files defining the instance and docker services setup
@@ -365,6 +380,10 @@ data "local_file" "get_status" {
 
 data "local_file" "refresh_oauth_cookie" {
   filename = "${path.module}/../services/commands/refresh-oauth-cookie.sh"
+}
+
+data "local_file" "update_server" {
+  filename = "${path.module}/../services/commands/update-server.sh"
 }
 
 # variables consistency checks
@@ -430,6 +449,7 @@ locals {
   check_status_indented          = join("\n${local.indent_str}", compact(split("\n", data.local_file.check_status.content)))
   get_status_indented            = join("\n${local.indent_str}", compact(split("\n", data.local_file.get_status.content)))
   get_auth_indented              = join("\n${local.indent_str}", compact(split("\n", data.local_file.get_auth.content)))
+  update_server_indented         = join("\n${local.indent_str}", compact(split("\n", data.local_file.update_server.content)))
   cloudinit_volumes_indented     = join("\n${local.indent_str}", compact(split("\n", local.cloudinit_volumes_script)))
 }
 
@@ -510,6 +530,9 @@ mainSteps:
           tee /usr/local/bin/get-auth.sh << 'EOF'
           ${local.get_auth_indented}
           EOF
+          tee /usr/local/bin/update-server.sh << 'EOF'
+          ${local.update_server_indented}
+          EOF
 
   - action: aws:runShellScript
     name: StartDockerServices
@@ -532,6 +555,7 @@ DOC
     fileexists("${path.module}/../services/commands/check-status-internal.sh"),
     fileexists("${path.module}/../services/commands/get-status.sh"),
     fileexists("${path.module}/../services/commands/get-auth.sh"),
+    fileexists("${path.module}/../services/commands/update-server.sh"),
   ])
 
   files_not_empty = alltrue([
@@ -545,6 +569,7 @@ DOC
     length(data.local_file.check_status) > 0,
     length(data.local_file.get_status) > 0,
     length(data.local_file.get_auth) > 0,
+    length(data.local_file.update_server) > 0,
   ])
 
   docker_compose_valid = can(yamldecode(local.docker_compose_file))
@@ -597,7 +622,7 @@ resource "aws_ssm_document" "instance_startup" {
 }
 
 locals {
-  ssm_status_check = <<DOC
+  ssm_status_check  = <<DOC
 schemaVersion: '2.2'
 description: Check the status of the docker services and TLS certs in the instance.
 mainSteps:
@@ -609,7 +634,7 @@ mainSteps:
           sh /usr/local/bin/get-status.sh
 
 DOC
-  ssm_auth_check   = <<DOC
+  ssm_auth_check    = <<DOC
 schemaVersion: '2.2'
 description: Retrieve and print the auth settings.
 parameters:
@@ -629,7 +654,7 @@ mainSteps:
         - |
           sh /usr/local/bin/get-auth.sh {{category}}
 DOC
-  ssm_users_update = <<DOC
+  ssm_users_update  = <<DOC
 schemaVersion: '2.2'
 description: Update allowlisted GitHub usernames
 parameters:
@@ -652,7 +677,7 @@ mainSteps:
         - |
           sh /usr/local/bin/update-auth.sh users {{action}} {{users}}
 DOC
-  ssm_teams_update = <<DOC
+  ssm_teams_update  = <<DOC
 schemaVersion: '2.2'
 description: Update allowlisted GitHub teams; you must have allowlisted a GitHub organization.
 parameters:
@@ -674,7 +699,7 @@ mainSteps:
       runCommand:
         - "sh /usr/local/bin/update-auth.sh teams {{action}} {{teams}}"
 DOC
-  ssm_org_set      = <<DOC
+  ssm_org_set       = <<DOC
 schemaVersion: '2.2'
 description: Set the GitHub organization to allowlist; only one organization may be allowlisted at a time.
 parameters:
@@ -688,7 +713,7 @@ mainSteps:
       runCommand:
         - "sh /usr/local/bin/update-auth.sh org {{organization}}"
 DOC
-  ssm_org_unset    = <<DOC
+  ssm_org_unset     = <<DOC
 schemaVersion: '2.2'
 description: Remove the GitHub organization; rely exclusively on username allowlisting.
 mainSteps:
@@ -698,6 +723,33 @@ mainSteps:
       runCommand:
         - |
           sh /usr/local/bin/update-auth.sh org remove  
+DOC
+  ssm_server_update = <<DOC
+schemaVersion: '2.2'
+description: Control the server containers (start, stop, restart).
+parameters:
+  action:
+    type: String
+    description: "The action to perform on the server (start, stop, restart)."
+    default: start
+    allowedValues:
+      - start
+      - stop
+      - restart
+  target:
+    type: String
+    description: "The target of the action (all containers or just jupyter)."
+    default: all
+    allowedValues:
+      - all
+      - jupyter
+mainSteps:
+  - action: aws:runShellScript
+    name: UpdateServer
+    inputs:
+      runCommand:
+        - |
+          sh /usr/local/bin/update-server.sh {{action}} {{target}}
 DOC
 }
 
@@ -756,6 +808,15 @@ resource "aws_ssm_document" "auth_org_unset" {
   document_format = "YAML"
 
   content = local.ssm_org_unset
+  tags    = local.combined_tags
+}
+
+resource "aws_ssm_document" "server_update" {
+  name            = "server-update-${local.doc_postfix}"
+  document_type   = "Command"
+  document_format = "YAML"
+
+  content = local.ssm_server_update
   tags    = local.combined_tags
 }
 

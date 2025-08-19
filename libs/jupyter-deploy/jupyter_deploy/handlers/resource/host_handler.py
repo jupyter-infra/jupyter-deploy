@@ -50,7 +50,10 @@ class HostHandler(BaseProjectHandler):
         runner = cmd_runner.ManifestCommandRunner(
             console=console, output_handler=self._output_handler, variable_handler=self._variable_handler
         )
-        runner.run_command_sequence(command, cli_paramdefs={})
+        runner.run_command_sequence(
+            command,
+            cli_paramdefs={},
+        )
 
     def restart_host(self) -> None:
         """Restart the host machine."""
@@ -59,4 +62,7 @@ class HostHandler(BaseProjectHandler):
         runner = cmd_runner.ManifestCommandRunner(
             console=console, output_handler=self._output_handler, variable_handler=self._variable_handler
         )
-        runner.run_command_sequence(command, cli_paramdefs={})
+        runner.run_command_sequence(
+            command,
+            cli_paramdefs={},
+        )

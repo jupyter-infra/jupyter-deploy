@@ -88,7 +88,9 @@ _INSTANCE_CODE_MAP: dict[Ec2InstanceState, int] = {
 _INSTANCE_REVERSE_CODE_MAP: dict[int, Ec2InstanceState] = {v: k for k, v in _INSTANCE_CODE_MAP.items()}
 
 
-def describe_instance_status(ec2_client: EC2Client, instance_id: str, check_status_first: bool = True) -> InstanceStatusTypeDef:
+def describe_instance_status(
+    ec2_client: EC2Client, instance_id: str, check_status_first: bool = True
+) -> InstanceStatusTypeDef:
     """Call one of the EC2 describe-instance APIs, return the InstanceStatus.
 
     Raises:
@@ -107,24 +109,20 @@ def describe_instance_status(ec2_client: EC2Client, instance_id: str, check_stat
             return instance_statuses[0]
 
     # second try calling EC2:DescribeInstance directly
-    full_describe_request: DescribeInstancesRequestTypeDef = {
-        "InstanceIds": [instance_id]
-    }
+    full_describe_request: DescribeInstancesRequestTypeDef = {"InstanceIds": [instance_id]}
     full_response = ec2_client.describe_instances(**full_describe_request)
     reservations = full_response["Reservations"]
 
     if not reservations:
         raise ValueError("Instance not found: no reservation.")
-    
+
     instances = reservations[0].get("Instances", [])
 
     if not instances:
         raise ValueError("Instance not found in reservation")
     instance = instances[0]
 
-    instance_status: InstanceStatusTypeDef = {
-        "InstanceState": instance.get("State", {})
-    }
+    instance_status: InstanceStatusTypeDef = {"InstanceState": instance.get("State", {})}
     return instance_status
 
 
@@ -135,7 +133,7 @@ def poll_for_instance_status(
     desired_state: Ec2InstanceState,
     timeout_seconds: int = 60,
     wait_after_seconds: int = 2,
-    poll_interval_seconds: int = 3,
+    poll_interval_seconds: int = 5,
 ) -> InstanceStatusTypeDef:
     """Synchronously poll EC2:GetInstanceStatus until the instance reaches a terminal state.
 
@@ -154,14 +152,14 @@ def poll_for_instance_status(
         curr_time = time.time()
 
         if state == desired_state:
+            console.print(f"Instance reached desired state: '{desired_state.value}'")
             return response
         elif state.is_terminal():
-            raise ValueError(f"Unexpected terminal state for instance '{instance_id}': {state}")
+            raise ValueError(f"Unexpected terminal state for instance '{instance_id}': '{state.value}'")
         elif curr_time - start_time > timeout_seconds:
-            raise TimeoutError(f"Timed out polling state of instance '{instance_id}', end state: {state}")
+            raise TimeoutError(f"Timed out polling state of instance '{instance_id}', end state '{state.value}'")
         else:
-            console.print(f"Waiting for instance '{instance_id}' to reach desired state '{desired_state}'.")
-            console.print(f"current state: {state}...")
+            console.print(f"Instance state is '{state.value}', waiting for '{desired_state.value}'...")
             time.sleep(poll_interval_seconds)
 
 

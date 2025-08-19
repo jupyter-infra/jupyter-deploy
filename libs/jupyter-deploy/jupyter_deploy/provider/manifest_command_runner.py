@@ -1,5 +1,9 @@
 from typing import Any, TypeVar, get_origin
 
+# we should remove this import
+# the instruction runner should NOT depend on the CLI because
+# the CLI should just be one way to run these instructions.
+import typer
 from rich import console as rich_console
 
 from jupyter_deploy import transform_utils
@@ -7,6 +11,7 @@ from jupyter_deploy.engine.engine_outputs import EngineOutputsHandler
 from jupyter_deploy.engine.engine_variables import EngineVariablesHandler
 from jupyter_deploy.enum import InstructionArgumentSource, ResultSource, UpdateSource
 from jupyter_deploy.manifest import JupyterDeployCommandV1
+from jupyter_deploy.provider.instruction_runner import InterruptInstructionError
 from jupyter_deploy.provider.instruction_runner_factory import InstructionRunnerFactory
 from jupyter_deploy.provider.resolved_argdefs import (
     ResolvedInstructionArgument,
@@ -70,14 +75,17 @@ class ManifestCommandRunner:
                 else:
                     raise NotImplementedError(f"Argument source is not handled: {arg_source_type}")
 
-            instruction_results = runner.execute_instruction(
-                instruction_name=api_name,
-                resolved_arguments=resolved_argdefs,
-                console=self._console,
-            )
-            for instruction_result_name, instruction_result_def in instruction_results.items():
-                indexed_result_name = f"[{instruction_idx}].{instruction_result_name}"
-                resolved_resultdefs[indexed_result_name] = instruction_result_def
+            try:
+                instruction_results = runner.execute_instruction(
+                    instruction_name=api_name,
+                    resolved_arguments=resolved_argdefs,
+                    console=self._console,
+                )
+                for instruction_result_name, instruction_result_def in instruction_results.items():
+                    indexed_result_name = f"[{instruction_idx}].{instruction_result_name}"
+                    resolved_resultdefs[indexed_result_name] = instruction_result_def
+            except InterruptInstructionError:
+                typer.Abort()
 
         self._resolved_resultdefs = resolved_resultdefs
         return resolved_resultdefs

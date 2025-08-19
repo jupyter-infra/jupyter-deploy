@@ -6,6 +6,12 @@ from jupyter_deploy.provider.resolved_argdefs import ResolvedInstructionArgument
 from jupyter_deploy.provider.resolved_resultdefs import ResolvedInstructionResult
 
 
+class InterruptInstructionError(RuntimeError):
+    """Error to indicate that the runner should interrupt the sequence."""
+
+    pass
+
+
 class InstructionRunner(ABC):
     """Abstract class to call provider APIs.
 

@@ -3,6 +3,7 @@ from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.terraform import tf_outputs, tf_variables
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
 from jupyter_deploy.provider import manifest_command_runner as cmd_runner
+from jupyter_deploy.provider.resolved_clidefs import StrResolvedCliParameter
 
 
 class ServerHandler(BaseProjectHandler):
@@ -33,3 +34,48 @@ class ServerHandler(BaseProjectHandler):
         )
         runner.run_command_sequence(command, cli_paramdefs={})
         return runner.get_result_value(command, "server.status", str)
+
+    def start_server(self, target: str) -> None:
+        """Start the jupyter server and optionally all its sidecars."""
+        command = self.project_manifest.get_command("server.start")
+        console = self.get_console()
+        runner = cmd_runner.ManifestCommandRunner(
+            console=console, output_handler=self._output_handler, variable_handler=self._variable_handler
+        )
+        runner.run_command_sequence(
+            command,
+            cli_paramdefs={
+                "action": StrResolvedCliParameter(parameter_name="action", value="start"),
+                "target": StrResolvedCliParameter(parameter_name="target", value=target),
+            },
+        )
+
+    def stop_server(self, target: str) -> None:
+        """Stop the jupyter server and optionally all its sidecars."""
+        command = self.project_manifest.get_command("server.stop")
+        console = self.get_console()
+        runner = cmd_runner.ManifestCommandRunner(
+            console=console, output_handler=self._output_handler, variable_handler=self._variable_handler
+        )
+        runner.run_command_sequence(
+            command,
+            cli_paramdefs={
+                "action": StrResolvedCliParameter(parameter_name="action", value="stop"),
+                "target": StrResolvedCliParameter(parameter_name="target", value=target),
+            },
+        )
+
+    def restart_server(self, target: str) -> None:
+        """Restart the jupyter-server and optionally all its sidecars."""
+        command = self.project_manifest.get_command("server.restart")
+        console = self.get_console()
+        runner = cmd_runner.ManifestCommandRunner(
+            console=console, output_handler=self._output_handler, variable_handler=self._variable_handler
+        )
+        runner.run_command_sequence(
+            command,
+            cli_paramdefs={
+                "action": StrResolvedCliParameter(parameter_name="action", value="restart"),
+                "target": StrResolvedCliParameter(parameter_name="target", value=target),
+            },
+        )
