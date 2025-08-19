@@ -197,6 +197,7 @@ dependencies = [
 aws = [
     { name = "boto3" },
     { name = "boto3-stubs" },
+    { name = "mypy-boto3-ec2" },
     { name = "mypy-boto3-ssm" },
 ]
 
@@ -217,6 +218,7 @@ requires-dist = [
     { name = "decorator", specifier = ">=5.2.1" },
     { name = "jupyter-core", specifier = ">=5.0.0" },
     { name = "jupyter-deploy-tf-aws-ec2-base", editable = "libs/jupyter-deploy-tf-aws-ec2-base" },
+    { name = "mypy-boto3-ec2", marker = "extra == 'aws'", specifier = ">=1.40.4" },
     { name = "mypy-boto3-ssm", marker = "extra == 'aws'", specifier = ">=1.38.5" },
     { name = "packaging", specifier = ">=25.0" },
     { name = "pydantic", specifier = ">=2.11.5" },
@@ -370,6 +372,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/67/5a4268782eb77344cc613a4cf23540928e41f018a9a1ec4c6882baf20ab8/mypy-1.15.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:baefc32840a9f00babd83251560e0ae1573e2f9d1b067719479bfb0e987c6357", size = 12494348, upload-time = "2025-02-05T03:48:52.361Z" },
     { url = "https://files.pythonhosted.org/packages/83/3e/57bb447f7bbbfaabf1712d96f9df142624a386d98fb026a761532526057e/mypy-1.15.0-cp313-cp313-win_amd64.whl", hash = "sha256:b9378e2c00146c44793c98b8d5a61039a048e31f429fb0eb546d93f4b000bedf", size = 9373648, upload-time = "2025-02-05T03:49:11.395Z" },
     { url = "https://files.pythonhosted.org/packages/09/4e/a7d65c7322c510de2c409ff3828b03354a7c43f5a8ed458a7a131b41c7b9/mypy-1.15.0-py3-none-any.whl", hash = "sha256:5469affef548bd1895d86d3bf10ce2b44e33d86923c29e4d675b3e323437ea3e", size = 2221777, upload-time = "2025-02-05T03:50:08.348Z" },
+]
+
+[[package]]
+name = "mypy-boto3-ec2"
+version = "1.40.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f7/1f/ba6f616a0597a92919d26fc40354b3668796b3d3624104bfb3c5b297d6b6/mypy_boto3_ec2-1.40.4.tar.gz", hash = "sha256:7e8b664868feafce652593caab850e7373af09d9d7d293bea92415428cf1189c", size = 404052, upload-time = "2025-08-06T19:46:08.275Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/09/dd/a63793cc11e05e3f0b64e4d43a98358ffdfeab3b1c4478fb1252535794ba/mypy_boto3_ec2-1.40.4-py3-none-any.whl", hash = "sha256:e4e4fa429da1102fa4ad73501c9c163267d99628b61cf8e63aadf0bfe709c459", size = 393203, upload-time = "2025-08-06T19:45:52.529Z" },
 ]
 
 [[package]]

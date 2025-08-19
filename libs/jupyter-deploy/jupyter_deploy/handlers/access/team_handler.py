@@ -77,7 +77,7 @@ class TeamsHandler(BaseProjectHandler):
         runner.run_command_sequence(
             command,
             cli_paramdefs={
-                "users": StrResolvedCliParameter(parameter_name="teams", value=joined_teams),
+                "teams": StrResolvedCliParameter(parameter_name="teams", value=joined_teams),
                 "action": StrResolvedCliParameter(parameter_name="action", value="set"),
                 "category": StrResolvedCliParameter(parameter_name="category", value="teams"),
             },

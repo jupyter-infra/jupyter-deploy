@@ -33,6 +33,7 @@ deploy = "jupyter_deploy.cli.app:main"
 aws = [
     "boto3>=1.38.23",
     "boto3-stubs>=1.38.23",
+    "mypy-boto3-ec2>=1.40.4",
     "mypy-boto3-ssm>=1.38.5",
 ]
 

@@ -82,33 +82,17 @@ resource "aws_security_group" "ec2_jupyter_server_sg" {
 }
 
 # Retrieve the latest AL 2023 AMI
+data "aws_ssm_parameter" "amazon_linux_2023" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+}
+
 data "aws_ami" "amazon_linux_2023" {
   most_recent = true
   owners      = ["amazon"]
 
   filter {
-    name   = "owner-alias"
-    values = ["amazon"]
-  }
-
-  filter {
-    name   = "name"
-    values = ["al2023-ami-*"]
-  }
-
-  filter {
-    name   = "architecture"
-    values = ["x86_64"] # Specify architecture (optional)
-  }
-
-  filter {
-    name   = "root-device-type"
-    values = ["ebs"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
+    name   = "image-id"
+    values = [data.aws_ssm_parameter.amazon_linux_2023.value]
   }
 }
 
