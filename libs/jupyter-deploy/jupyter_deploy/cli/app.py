@@ -8,6 +8,7 @@ from jupyter_core.application import JupyterApp
 from rich.console import Console
 
 from jupyter_deploy import cmd_utils
+from jupyter_deploy.cli.host_app import host_app
 from jupyter_deploy.cli.organization_app import organization_app
 from jupyter_deploy.cli.servers_app import servers_app
 from jupyter_deploy.cli.teams_app import teams_app
@@ -38,6 +39,7 @@ class JupyterDeployCliRunner:
         self.app.add_typer(users_app, name="users")
         self.app.add_typer(teams_app, name="teams")
         self.app.add_typer(organization_app, name="organization")
+        self.app.add_typer(host_app, name="host")
 
     def _setup_basic_commands(self) -> None:
         """Register the basic commands."""

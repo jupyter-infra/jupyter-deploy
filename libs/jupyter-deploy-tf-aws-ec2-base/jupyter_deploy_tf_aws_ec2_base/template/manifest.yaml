@@ -15,6 +15,38 @@ values:
     source: "output"
     source-key: "region"
 commands:
+  - cmd: "host.status"
+    sequence:
+      - api-name: "aws.ec2.describe-instance-status"
+        arguments:
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+    results:
+      - result-name: "host.status"
+        source: "result"
+        source-key: "[0].InstanceStateName"
+  - cmd: "host.stop"
+    sequence:
+      - api-name: "aws.ec2.stop-instance"
+        arguments:
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+  - cmd: "host.start"
+    sequence:
+      - api-name: "aws.ec2.start-instance"
+        arguments:
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+  - cmd: "host.restart"
+    sequence:
+      - api-name: "aws.ec2.reboot-instance"
+        arguments:
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
   - cmd: "server.status"
     sequence:
       - api-name: "aws.ssm.wait-command-sync"

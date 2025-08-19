@@ -2,6 +2,7 @@ from enum import Enum
 
 from rich import console as rich_console
 
+from jupyter_deploy.provider.aws.aws_ec2_runner import AwsEc2Runner
 from jupyter_deploy.provider.aws.aws_ssm_runner import AwsSsmRunner
 from jupyter_deploy.provider.instruction_runner import InstructionRunner
 from jupyter_deploy.provider.resolved_argdefs import ResolvedInstructionArgument
@@ -11,6 +12,7 @@ from jupyter_deploy.provider.resolved_resultdefs import ResolvedInstructionResul
 class AwsService(str, Enum):
     """AWS services mapped to jupyter-deploy instructions."""
 
+    EC2 = "ec2"
     SSM = "ssm"
 
 
@@ -46,6 +48,10 @@ class AwsApiRunner(InstructionRunner):
 
         if service_name == AwsService.SSM:
             service_runner = AwsSsmRunner(region_name=self.region_name)
+            self.service_runners[service_name] = service_runner
+            return service_runner
+        elif service_name == AwsService.EC2:
+            service_runner = AwsEc2Runner(region_name=self.region_name)
             self.service_runners[service_name] = service_runner
             return service_runner
 
