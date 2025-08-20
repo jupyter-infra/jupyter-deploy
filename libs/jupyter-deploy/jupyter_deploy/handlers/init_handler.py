@@ -16,7 +16,7 @@ class InitHandler:
         engine: EngineType = EngineType.TERRAFORM,
         provider: ProviderType = ProviderType.AWS,
         infrastructure: InfrastructureType = AWSInfrastructureType.EC2,
-        template: str = "aws-ec2-base",
+        template: str = "base",
     ) -> None:
         """Create the project handler."""
         if not project_dir:

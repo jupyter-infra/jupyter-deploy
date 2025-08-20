@@ -28,7 +28,7 @@ class TestInitHandler(unittest.TestCase):
         # Assert
         self.assertEqual(handler.project_path, Path(project_dir))
         self.assertEqual(handler.engine, EngineType.TERRAFORM)
-        mock_find_template_path.assert_called_once_with("aws:ec2:tls-via-ngrok")
+        mock_find_template_path.assert_called_once_with("aws:ec2:base")
         mock_get_default_project_path.assert_not_called()
 
     @patch("jupyter_deploy.fs_utils.get_default_project_path")
@@ -49,7 +49,7 @@ class TestInitHandler(unittest.TestCase):
         # Assert
         self.assertEqual(handler.project_path, mock_default_path)
         self.assertEqual(handler.engine, EngineType.TERRAFORM)
-        mock_find_template_path.assert_called_once_with("aws:ec2:tls-via-ngrok")
+        mock_find_template_path.assert_called_once_with("aws:ec2:base")
         mock_get_default_project_path.assert_called_once()
 
     @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")

@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+from unittest import mock
 from unittest.mock import Mock, patch
 
 import yaml
@@ -113,6 +114,15 @@ class TestServerHandler(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             handler.get_server_status()
 
+        with self.assertRaises(NotImplementedError):
+            handler.start_server("all")
+
+        with self.assertRaises(NotImplementedError):
+            handler.stop_server("jupyter")
+
+        with self.assertRaises(NotImplementedError):
+            handler.restart_server("all")
+
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
@@ -125,15 +135,31 @@ class TestServerHandler(unittest.TestCase):
         mock_retrieve_manifest: Mock,
     ) -> None:
         mock_retrieve_manifest.return_value = self.mock_full_manifest
-        mock_cmd_runner_class.return_value = self.get_mock_manifest_cmd_runner_and_fns()[0]
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_class.return_value = mock_cmd_runner
         mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
         mock_tf_variables_handler.return_value = Mock()
 
         handler = ServerHandler()
 
-        # verify methods work
+        # Test get_server_status
         status = handler.get_server_status()
         self.assertEqual(status, "IN_SERVICE")
+        mock_cmd_runner_fns["run_command_sequence"].assert_called_with(mock.ANY, cli_paramdefs={})
+        mock_cmd_runner_fns["get_result_value"].assert_called_with(mock.ANY, "server.status", str)
+
+        # Test start_server
+        mock_cmd_runner_fns["run_command_sequence"].reset_mock()
+        mock_cmd_runner_fns["get_result_value"].reset_mock()
+        handler.start_server("all")
+
+        # Test stop_server
+        mock_cmd_runner_fns["run_command_sequence"].reset_mock()
+        handler.stop_server("jupyter")
+
+        # Test restart_server
+        mock_cmd_runner_fns["run_command_sequence"].reset_mock()
+        handler.restart_server("sidecars")
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
@@ -163,11 +189,20 @@ class TestServerHandler(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             handler.get_server_status()
 
+        with self.assertRaises(RuntimeError):
+            handler.start_server("all")
+
+        with self.assertRaises(RuntimeError):
+            handler.stop_server("jupyter")
+
+        with self.assertRaises(RuntimeError):
+            handler.restart_server("sidecars")
+
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
-    def test_status_methods_raise_if_get_command_result_raises(
+    def test_get_status_method_raises_if_get_command_result_raises(
         self,
         mock_cmd_runner_class: Mock,
         mock_tf_variables_handler: Mock,
@@ -230,3 +265,141 @@ class TestServerHandler(unittest.TestCase):
         self.assertEqual(mock_cmd_runner_class.call_args[1]["variable_handler"], mock_variable_handler)
         mock_cmd_runner_fns["run_command_sequence"].assert_called_once_with(mock_cmd, cli_paramdefs={})
         mock_cmd_runner_fns["get_result_value"].assert_called_once_with(mock_cmd, "server.status", str)
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_start_server_calls_run_command_with_correct_params(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        # Setup
+        mock_manifest, mock_manifest_fns = self.get_mock_manifest_and_fns()
+        mock_cmd = Mock()
+        mock_manifest_fns["get_command"].return_value = mock_cmd
+
+        mock_retrieve_manifest.return_value = mock_manifest
+        mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
+
+        mock_tf_outputs_handler.return_value = mock_output_handler
+        mock_variable_handler = Mock()
+        mock_tf_variables_handler.return_value = mock_variable_handler
+
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        # Act
+        handler = ServerHandler()
+        handler.start_server("all")
+
+        # Verify
+        mock_cmd_runner_class.assert_called_once()
+        mock_manifest_fns["get_command"].assert_called_once_with("server.start")
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["output_handler"], mock_output_handler)
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["variable_handler"], mock_variable_handler)
+
+        # Check that StrResolvedCliParameter objects are created correctly
+        cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
+        self.assertEqual(len(cli_paramdefs), 2)
+        self.assertIn("action", cli_paramdefs)
+        self.assertIn("target", cli_paramdefs)
+        self.assertEqual(cli_paramdefs["action"].parameter_name, "action")
+        self.assertEqual(cli_paramdefs["action"].value, "start")
+        self.assertEqual(cli_paramdefs["target"].parameter_name, "target")
+        self.assertEqual(cli_paramdefs["target"].value, "all")
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_stop_server_calls_run_command_with_correct_params(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        # Setup
+        mock_manifest, mock_manifest_fns = self.get_mock_manifest_and_fns()
+        mock_cmd = Mock()
+        mock_manifest_fns["get_command"].return_value = mock_cmd
+
+        mock_retrieve_manifest.return_value = mock_manifest
+        mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
+
+        mock_tf_outputs_handler.return_value = mock_output_handler
+        mock_variable_handler = Mock()
+        mock_tf_variables_handler.return_value = mock_variable_handler
+
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        # Act
+        handler = ServerHandler()
+        handler.stop_server("jupyter")
+
+        # Verify
+        mock_cmd_runner_class.assert_called_once()
+        mock_manifest_fns["get_command"].assert_called_once_with("server.stop")
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["output_handler"], mock_output_handler)
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["variable_handler"], mock_variable_handler)
+
+        # Check CLI parameters
+        cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
+        self.assertEqual(len(cli_paramdefs), 2)
+        self.assertIn("action", cli_paramdefs)
+        self.assertIn("target", cli_paramdefs)
+        self.assertEqual(cli_paramdefs["action"].parameter_name, "action")
+        self.assertEqual(cli_paramdefs["action"].value, "stop")
+        self.assertEqual(cli_paramdefs["target"].parameter_name, "target")
+        self.assertEqual(cli_paramdefs["target"].value, "jupyter")
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_restart_server_calls_run_command_with_correct_params(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        # Setup
+        mock_manifest, mock_manifest_fns = self.get_mock_manifest_and_fns()
+        mock_cmd = Mock()
+        mock_manifest_fns["get_command"].return_value = mock_cmd
+
+        mock_retrieve_manifest.return_value = mock_manifest
+        mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
+
+        mock_tf_outputs_handler.return_value = mock_output_handler
+        mock_variable_handler = Mock()
+        mock_tf_variables_handler.return_value = mock_variable_handler
+
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        # Act
+        handler = ServerHandler()
+        handler.restart_server("sidecars")
+
+        # Verify
+        mock_cmd_runner_class.assert_called_once()
+        mock_manifest_fns["get_command"].assert_called_once_with("server.restart")
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["output_handler"], mock_output_handler)
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["variable_handler"], mock_variable_handler)
+
+        # Check CLI parameters
+        cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
+        self.assertEqual(len(cli_paramdefs), 2)
+        self.assertIn("action", cli_paramdefs)
+        self.assertIn("target", cli_paramdefs)
+        self.assertEqual(cli_paramdefs["action"].parameter_name, "action")
+        self.assertEqual(cli_paramdefs["action"].value, "restart")
+        self.assertEqual(cli_paramdefs["target"].parameter_name, "target")
+        self.assertEqual(cli_paramdefs["target"].value, "sidecars")

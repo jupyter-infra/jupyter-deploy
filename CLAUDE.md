@@ -28,9 +28,13 @@ After making code changes, always run from the root of the repository:
 - Do not use `pytest.fixtures`
 - Use `@patch()` or inline `with patch` when possible
 - Always set `: Mock` typing for `mypy` with patches
+- When mocking boto3 types in tests, use proper type annotations (e.g., `instance_state: InstanceStateTypeDef = {"Code": code}`) rather than casting
 - Do not silence linters or formatters without user permission
 - For terraform templates, only add tests in test_base_template.py
+- Avoid docstrings in test methods that merely repeat the method name
 - Always run `uv run ruff format` after implementing test cases to ensure proper formatting
+- After writing tests, run `uv run mypy` to verify all type annotations are correct
+- If you detect inconsistencies between implementation and test assertions (e.g., code raises `KeyError` but test expects `ValueError`), notify the user of the implementation issue rather than modifying tests to pass
 
 # End-to-end Testing Workflow for the Base Template
 - Make sure you are in the root directory (same dir as `CLAUDE.md`)

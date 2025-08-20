@@ -44,6 +44,31 @@ class TestAwsApiRunner(unittest.TestCase):
         )
         self.assertEqual(result, expected_result)
 
+    @patch("jupyter_deploy.provider.aws.aws_runner.AwsEc2Runner")
+    def test_execute_instantiate_ec2_runner_and_call_execute(self, mock_ec2_runner_class: Mock) -> None:
+        # Setup
+        mock_ec2_runner = Mock()
+        mock_ec2_runner_class.return_value = mock_ec2_runner
+
+        expected_result = {"result_key": Mock(spec=ResolvedInstructionResult)}
+        mock_ec2_runner.execute_instruction.return_value = expected_result
+
+        runner = AwsApiRunner(region_name="us-west-2")
+        console = Mock(spec=Console)
+        resolved_args: dict[str, ResolvedInstructionArgument] = {"arg1": Mock(spec=ResolvedInstructionArgument)}
+
+        # Execute
+        result = runner.execute_instruction(
+            instruction_name="aws.ec2.start-instance", resolved_arguments=resolved_args, console=console
+        )
+
+        # Assert
+        mock_ec2_runner_class.assert_called_once_with(region_name="us-west-2")
+        mock_ec2_runner.execute_instruction.assert_called_once_with(
+            instruction_name="start-instance", resolved_arguments=resolved_args, console=console
+        )
+        self.assertEqual(result, expected_result)
+
     @patch("jupyter_deploy.provider.aws.aws_runner.AwsSsmRunner")
     def test_execute_recycle_service_runner(self, mock_ssm_runner_class: Mock) -> None:
         # Setup

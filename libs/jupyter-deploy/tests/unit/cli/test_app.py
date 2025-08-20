@@ -22,9 +22,12 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         self.assertIsNotNone(runner.app, "attribute app should be set")
 
         # Check that sub-commands are added
-        self.assertGreaterEqual(len(runner.app.registered_groups), 4)  # At least server, users, teams, organization
+
+        # At least server, host, users, teams, organization
+        self.assertGreaterEqual(len(runner.app.registered_groups), 5)
         registered_group_names = [group.name for group in runner.app.registered_groups]
         self.assertIn("server", registered_group_names)
+        self.assertIn("host", registered_group_names)
         self.assertIn("users", registered_group_names)
         self.assertIn("teams", registered_group_names)
         self.assertIn("organization", registered_group_names)
@@ -50,6 +53,7 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertTrue(result.stdout.index("Jupyter-deploy") >= 0)
         self.assertTrue(result.stdout.index("server") >= 0)
+        self.assertTrue(result.stdout.index("host") >= 0)
         self.assertTrue(result.stdout.index("users") >= 0)
         self.assertTrue(result.stdout.index("teams") >= 0)
         self.assertTrue(result.stdout.index("organization") >= 0)

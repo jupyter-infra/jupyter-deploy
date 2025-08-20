@@ -1,16 +1,16 @@
 import unittest
 from pathlib import Path
+from unittest import mock
 from unittest.mock import Mock, patch
 
 import yaml
 
 from jupyter_deploy.engine.enum import EngineType
-from jupyter_deploy.handlers.access.team_handler import TeamsHandler
+from jupyter_deploy.handlers.resource.host_handler import HostHandler
 from jupyter_deploy.manifest import JupyterDeployManifest, JupyterDeployManifestV1
-from jupyter_deploy.provider.resolved_clidefs import StrResolvedCliParameter
 
 
-class TestTeamsHandler(unittest.TestCase):
+class TestHostHandler(unittest.TestCase):
     mock_full_manifest: JupyterDeployManifest
 
     @classmethod
@@ -44,18 +44,15 @@ class TestTeamsHandler(unittest.TestCase):
         mock_cmd_runner_handler = Mock()
         mock_run_command_sequence = Mock()
         mock_get_result_value = Mock()
-        mock_update_variables = Mock()
 
         mock_cmd_runner_handler.run_command_sequence = mock_run_command_sequence
         mock_cmd_runner_handler.get_result_value = mock_get_result_value
-        mock_cmd_runner_handler.update_variables = mock_update_variables
 
-        mock_get_result_value.return_value = []
+        mock_get_result_value.return_value = "running"
 
         return mock_cmd_runner_handler, {
             "run_command_sequence": mock_run_command_sequence,
             "get_result_value": mock_get_result_value,
-            "update_variables": mock_update_variables,
         }
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
@@ -71,21 +68,21 @@ class TestTeamsHandler(unittest.TestCase):
     ) -> None:
         path = Path("/some/cur/dir")
         mock_cwd.return_value = path
-
-        mock_manifest, _ = self.get_mock_manifest_and_fns()
-        mock_retrieve_manifest.return_value = mock_manifest
-
         mock_output_handler = self.get_mock_outputs_handler_and_fns()[0]
         mock_tf_outputs_handler.return_value = mock_output_handler
 
         mock_variable_handler = Mock()
         mock_tf_variables_handler.return_value = mock_variable_handler
 
-        handler = TeamsHandler()
+        mock_manifest, _ = self.get_mock_manifest_and_fns()
+        mock_retrieve_manifest.return_value = mock_manifest
+
+        handler = HostHandler()
 
         mock_retrieve_manifest.assert_called_once()
         mock_tf_outputs_handler.assert_called_once_with(project_path=path, project_manifest=mock_manifest)
         mock_tf_variables_handler.assert_called_once_with(project_path=path, project_manifest=mock_manifest)
+
         self.assertEqual(handler._output_handler, mock_output_handler)
         self.assertEqual(handler._variable_handler, mock_variable_handler)
         self.assertEqual(handler.engine, EngineType.TERRAFORM)
@@ -93,7 +90,7 @@ class TestTeamsHandler(unittest.TestCase):
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
-    def test_teams_methods_raise_not_implemented_error_if_manifest_does_not_define_cmd(
+    def test_host_methods_raise_not_implemented_error_if_manifest_does_not_define_cmd(
         self, mock_tf_variables_handler: Mock, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock
     ) -> None:
         mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
@@ -111,25 +108,26 @@ class TestTeamsHandler(unittest.TestCase):
             }
         )
         mock_retrieve_manifest.return_value = no_cmd_manifest
-        handler = TeamsHandler()
+
+        handler = HostHandler()
 
         with self.assertRaises(NotImplementedError):
-            handler.add_teams(["team1", "team2"])
+            handler.get_host_status()
 
         with self.assertRaises(NotImplementedError):
-            handler.remove_teams(["team1", "team2"])
+            handler.start_host()
 
         with self.assertRaises(NotImplementedError):
-            handler.set_teams(["team1", "team2"])
+            handler.stop_host()
 
         with self.assertRaises(NotImplementedError):
-            handler.list_teams()
+            handler.restart_host()
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
-    def test_teams_methods_run_against_actual_manifest(
+    def test_host_methods_run_against_actual_manifest(
         self,
         mock_cmd_runner_class: Mock,
         mock_tf_variables_handler: Mock,
@@ -137,25 +135,40 @@ class TestTeamsHandler(unittest.TestCase):
         mock_retrieve_manifest: Mock,
     ) -> None:
         mock_retrieve_manifest.return_value = self.mock_full_manifest
-        mock_cmd_runner_class.return_value = self.get_mock_manifest_cmd_runner_and_fns()[0]
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_class.return_value = mock_cmd_runner
         mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
         mock_tf_variables_handler.return_value = Mock()
 
-        handler = TeamsHandler()
+        handler = HostHandler()
 
-        # verify methods work
-        handler.add_teams(["team1", "team2"])
-        handler.remove_teams(["team1", "team2"])
-        handler.set_teams(["team1", "team2"])
+        # Test get_host_status
+        status = handler.get_host_status()
+        self.assertEqual(status, "running")
+        mock_cmd_runner_fns["run_command_sequence"].assert_called_with(mock.ANY, cli_paramdefs={})
+        mock_cmd_runner_fns["get_result_value"].assert_called_with(mock.ANY, "host.status", str)
 
-        teams = handler.list_teams()
-        self.assertEqual(teams, [])
+        # Test start_host
+        mock_cmd_runner_fns["run_command_sequence"].reset_mock()
+        mock_cmd_runner_fns["get_result_value"].reset_mock()
+        handler.start_host()
+        mock_cmd_runner_fns["run_command_sequence"].assert_called_with(mock.ANY, cli_paramdefs={})
+
+        # Test stop_host
+        mock_cmd_runner_fns["run_command_sequence"].reset_mock()
+        handler.stop_host()
+        mock_cmd_runner_fns["run_command_sequence"].assert_called_with(mock.ANY, cli_paramdefs={})
+
+        # Test restart_host
+        mock_cmd_runner_fns["run_command_sequence"].reset_mock()
+        handler.restart_host()
+        mock_cmd_runner_fns["run_command_sequence"].assert_called_with(mock.ANY, cli_paramdefs={})
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
-    def test_team_methods_raises_if_run_command_raises(
+    def test_host_methods_raise_if_run_command_raises(
         self,
         mock_cmd_runner_class: Mock,
         mock_tf_variables_handler: Mock,
@@ -173,23 +186,26 @@ class TestTeamsHandler(unittest.TestCase):
         mock_cmd_runner_class.return_value = mock_cmd_runner
         mock_cmd_runner_fns["run_command_sequence"].side_effect = RuntimeError()
 
-        handler = TeamsHandler()
+        handler = HostHandler()
 
         # verify methods raise
         with self.assertRaises(RuntimeError):
-            handler.add_teams(["team1", "team2"])
+            handler.get_host_status()
+
         with self.assertRaises(RuntimeError):
-            handler.remove_teams(["team1", "team2"])
+            handler.start_host()
+
         with self.assertRaises(RuntimeError):
-            handler.set_teams(["team1", "team2"])
+            handler.stop_host()
+
         with self.assertRaises(RuntimeError):
-            handler.list_teams()
+            handler.restart_host()
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
-    def test_status_methods_raises_if_get_command_result_raises(
+    def test_get_status_method_raises_if_get_command_result_raises(
         self,
         mock_cmd_runner_class: Mock,
         mock_tf_variables_handler: Mock,
@@ -207,214 +223,159 @@ class TestTeamsHandler(unittest.TestCase):
         mock_cmd_runner_class.return_value = mock_cmd_runner
         mock_cmd_runner_fns["get_result_value"].side_effect = KeyError()
 
-        handler = TeamsHandler()
+        handler = HostHandler()
 
         # verify methods raise
         # add only commands that return a result here
         with self.assertRaises(KeyError):
-            handler.list_teams()
+            handler.get_host_status()
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
-    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
-    @patch("rich.console.Console")
-    def test_add_teams_calls_run_command_sequence_with_correct_params(
+    def test_get_host_status_calls_run_command_and_return_result(
         self,
-        mock_console_class: Mock,
         mock_cmd_runner_class: Mock,
-        mock_tf_outputs_handler: Mock,
         mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
         mock_retrieve_manifest: Mock,
     ) -> None:
         # Setup
-        mock_cmd = Mock()
         mock_manifest, mock_manifest_fns = self.get_mock_manifest_and_fns()
+        mock_cmd = Mock()
         mock_manifest_fns["get_command"].return_value = mock_cmd
+
         mock_retrieve_manifest.return_value = mock_manifest
-
         mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
-        mock_tf_outputs_handler.return_value = mock_output_handler
 
+        mock_tf_outputs_handler.return_value = mock_output_handler
         mock_variable_handler = Mock()
         mock_tf_variables_handler.return_value = mock_variable_handler
 
         mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
         mock_cmd_runner_class.return_value = mock_cmd_runner
 
-        mock_console = mock_console_class.return_value
-
-        # Execute
-        handler = TeamsHandler()
-        handler.add_teams(["team1", "team2"])
+        # Act
+        handler = HostHandler()
+        result = handler.get_host_status()
 
         # Verify
-        mock_manifest_fns["get_command"].assert_called_once_with("teams.add")
-        mock_cmd_runner_class.assert_called_once_with(
-            console=mock_console,
-            output_handler=mock_output_handler,
-            variable_handler=mock_variable_handler,
-        )
-        mock_cmd_runner_fns["run_command_sequence"].assert_called_once_with(
-            mock_cmd,
-            cli_paramdefs={
-                "teams": StrResolvedCliParameter(parameter_name="teams", value="team1,team2"),
-                "action": StrResolvedCliParameter(parameter_name="action", value="add"),
-                "category": StrResolvedCliParameter(parameter_name="category", value="teams"),
-            },
-        )
-        mock_cmd_runner_fns["update_variables"].assert_called_once_with(mock_cmd)
+        self.assertEqual(result, "running")
+        mock_cmd_runner_class.assert_called_once()
+        mock_manifest_fns["get_command"].assert_called_once_with("host.status")
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["output_handler"], mock_output_handler)
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["variable_handler"], mock_variable_handler)
+        mock_cmd_runner_fns["run_command_sequence"].assert_called_once_with(mock_cmd, cli_paramdefs={})
+        mock_cmd_runner_fns["get_result_value"].assert_called_once_with(mock_cmd, "host.status", str)
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
-    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
-    @patch("rich.console.Console")
-    def test_remove_teams_calls_run_command_sequence_with_correct_params(
+    def test_start_host_calls_run_command(
         self,
-        mock_console_class: Mock,
         mock_cmd_runner_class: Mock,
-        mock_tf_outputs_handler: Mock,
         mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
         mock_retrieve_manifest: Mock,
     ) -> None:
         # Setup
-        mock_cmd = Mock()
         mock_manifest, mock_manifest_fns = self.get_mock_manifest_and_fns()
+        mock_cmd = Mock()
         mock_manifest_fns["get_command"].return_value = mock_cmd
+
         mock_retrieve_manifest.return_value = mock_manifest
-
         mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
-        mock_tf_outputs_handler.return_value = mock_output_handler
 
+        mock_tf_outputs_handler.return_value = mock_output_handler
         mock_variable_handler = Mock()
         mock_tf_variables_handler.return_value = mock_variable_handler
 
         mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
         mock_cmd_runner_class.return_value = mock_cmd_runner
 
-        mock_console = mock_console_class.return_value
-
-        # Execute
-        handler = TeamsHandler()
-        handler.remove_teams(["team1", "team2"])
+        # Act
+        handler = HostHandler()
+        handler.start_host()
 
         # Verify
-        mock_manifest_fns["get_command"].assert_called_once_with("teams.remove")
-        mock_cmd_runner_class.assert_called_once_with(
-            console=mock_console,
-            output_handler=mock_output_handler,
-            variable_handler=mock_variable_handler,
-        )
-        mock_cmd_runner_fns["run_command_sequence"].assert_called_once_with(
-            mock_cmd,
-            cli_paramdefs={
-                "teams": StrResolvedCliParameter(parameter_name="teams", value="team1,team2"),
-                "action": StrResolvedCliParameter(parameter_name="action", value="remove"),
-                "category": StrResolvedCliParameter(parameter_name="category", value="teams"),
-            },
-        )
-        mock_cmd_runner_fns["update_variables"].assert_called_once_with(mock_cmd)
+        mock_cmd_runner_class.assert_called_once()
+        mock_manifest_fns["get_command"].assert_called_once_with("host.start")
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["output_handler"], mock_output_handler)
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["variable_handler"], mock_variable_handler)
+        mock_cmd_runner_fns["run_command_sequence"].assert_called_once_with(mock_cmd, cli_paramdefs={})
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
-    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
-    @patch("rich.console.Console")
-    def test_set_teams_calls_run_command_sequence_with_correct_params(
+    def test_stop_host_calls_run_command(
         self,
-        mock_console_class: Mock,
         mock_cmd_runner_class: Mock,
-        mock_tf_outputs_handler: Mock,
         mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
         mock_retrieve_manifest: Mock,
     ) -> None:
         # Setup
-        mock_cmd = Mock()
         mock_manifest, mock_manifest_fns = self.get_mock_manifest_and_fns()
+        mock_cmd = Mock()
         mock_manifest_fns["get_command"].return_value = mock_cmd
+
         mock_retrieve_manifest.return_value = mock_manifest
-
         mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
-        mock_tf_outputs_handler.return_value = mock_output_handler
 
+        mock_tf_outputs_handler.return_value = mock_output_handler
         mock_variable_handler = Mock()
         mock_tf_variables_handler.return_value = mock_variable_handler
 
         mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
         mock_cmd_runner_class.return_value = mock_cmd_runner
 
-        mock_console = mock_console_class.return_value
-
-        # Execute
-        handler = TeamsHandler()
-        handler.set_teams(["team1", "team2"])
+        # Act
+        handler = HostHandler()
+        handler.stop_host()
 
         # Verify
-        mock_manifest_fns["get_command"].assert_called_once_with("teams.set")
-        mock_cmd_runner_class.assert_called_once_with(
-            console=mock_console,
-            output_handler=mock_output_handler,
-            variable_handler=mock_variable_handler,
-        )
-        mock_cmd_runner_fns["run_command_sequence"].assert_called_once_with(
-            mock_cmd,
-            cli_paramdefs={
-                "teams": StrResolvedCliParameter(parameter_name="teams", value="team1,team2"),
-                "action": StrResolvedCliParameter(parameter_name="action", value="set"),
-                "category": StrResolvedCliParameter(parameter_name="category", value="teams"),
-            },
-        )
-        mock_cmd_runner_fns["update_variables"].assert_called_once_with(mock_cmd)
+        mock_cmd_runner_class.assert_called_once()
+        mock_manifest_fns["get_command"].assert_called_once_with("host.stop")
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["output_handler"], mock_output_handler)
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["variable_handler"], mock_variable_handler)
+        mock_cmd_runner_fns["run_command_sequence"].assert_called_once_with(mock_cmd, cli_paramdefs={})
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
-    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
-    @patch("rich.console.Console")
-    def test_list_teams_calls_run_command_sequence_with_correct_params(
+    def test_restart_host_calls_run_command(
         self,
-        mock_console_class: Mock,
         mock_cmd_runner_class: Mock,
-        mock_tf_outputs_handler: Mock,
         mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
         mock_retrieve_manifest: Mock,
     ) -> None:
         # Setup
-        mock_cmd = Mock()
         mock_manifest, mock_manifest_fns = self.get_mock_manifest_and_fns()
+        mock_cmd = Mock()
         mock_manifest_fns["get_command"].return_value = mock_cmd
+
         mock_retrieve_manifest.return_value = mock_manifest
-
         mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
-        mock_tf_outputs_handler.return_value = mock_output_handler
 
+        mock_tf_outputs_handler.return_value = mock_output_handler
         mock_variable_handler = Mock()
         mock_tf_variables_handler.return_value = mock_variable_handler
 
         mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
         mock_cmd_runner_class.return_value = mock_cmd_runner
-        mock_cmd_runner_fns["get_result_value"].return_value = ["team1", "team2", "team3"]
 
-        mock_console = mock_console_class.return_value
-
-        # Execute
-        handler = TeamsHandler()
-        result = handler.list_teams()
+        # Act
+        handler = HostHandler()
+        handler.restart_host()
 
         # Verify
-        self.assertEqual(result, ["team1", "team2", "team3"])
-        mock_manifest_fns["get_command"].assert_called_once_with("teams.list")
-        mock_cmd_runner_class.assert_called_once_with(
-            console=mock_console,
-            output_handler=mock_output_handler,
-            variable_handler=mock_variable_handler,
-        )
-        mock_cmd_runner_fns["run_command_sequence"].assert_called_once_with(
-            mock_cmd,
-            cli_paramdefs={
-                "category": StrResolvedCliParameter(parameter_name="category", value="teams"),
-            },
-        )
-        mock_cmd_runner_fns["get_result_value"].assert_called_once_with(mock_cmd, "teams.list", list[str])
-        mock_cmd_runner_fns["update_variables"].assert_not_called()
+        mock_cmd_runner_class.assert_called_once()
+        mock_manifest_fns["get_command"].assert_called_once_with("host.restart")
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["output_handler"], mock_output_handler)
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["variable_handler"], mock_variable_handler)
+        mock_cmd_runner_fns["run_command_sequence"].assert_called_once_with(mock_cmd, cli_paramdefs={})

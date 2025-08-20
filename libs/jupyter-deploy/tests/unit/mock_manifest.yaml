@@ -14,6 +14,53 @@ values:
     source: "output"
     source-key: "region"
 commands:
+  - cmd: "host.status"
+    sequence:
+      - api-name: "aws.ec2.describe-instance-status"
+        arguments:
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+    results:
+      - result-name: "host.status"
+        source: "result"
+        source-key: "[0].InstanceStateName"
+  - cmd: "host.stop"
+    sequence:
+      - api-name: "aws.ec2.stop-instance"
+        arguments:
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+      - api-name: "aws.ec2.wait-for-stopped"
+        arguments:
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+  - cmd: "host.start"
+    sequence:
+      - api-name: "aws.ec2.start-instance"
+        arguments:
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+      - api-name: "aws.ec2.wait-for-running"
+        arguments:
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+  - cmd: "host.restart"
+    sequence:
+      - api-name: "aws.ec2.reboot-instance"
+        arguments:
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+      - api-name: "aws.ec2.wait-for-running"
+        arguments:
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
   - cmd: "server.status"
     sequence:
       - api-name: "aws.ssm.wait-command-sync"
@@ -28,6 +75,54 @@ commands:
       - result-name: "server.status"
         source: "result"
         source-key: "[0].StandardOutputContent"
+  - cmd: "server.start"
+    sequence:
+      - api-name: "aws.ssm.wait-command-sync"
+        arguments:
+          - api-attribute: "document_name"
+            source: "output"
+            source-key: "jd_cmd_doc_name"
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+          - api-attribute: "action"
+            source: "cli"
+            source-key: "action"
+          - api-attribute: "target"
+            source: "cli"
+            source-key: "target"
+  - cmd: "server.stop"
+    sequence:
+      - api-name: "aws.ssm.wait-command-sync"
+        arguments:
+          - api-attribute: "document_name"
+            source: "output"
+            source-key: "jd_cmd_doc_name"
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+          - api-attribute: "action"
+            source: "cli"
+            source-key: "action"
+          - api-attribute: "target"
+            source: "cli"
+            source-key: "target"
+  - cmd: "server.restart"
+    sequence:
+      - api-name: "aws.ssm.wait-command-sync"
+        arguments:
+          - api-attribute: "document_name"
+            source: "output"
+            source-key: "jd_cmd_doc_name"
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+          - api-attribute: "action"
+            source: "cli"
+            source-key: "action"
+          - api-attribute: "target"
+            source: "cli"
+            source-key: "target"
   - cmd: "users.add"
     sequence:
       - api-name: "aws.ssm.wait-command-sync"

@@ -6,7 +6,7 @@ from jupyter_deploy import cmd_utils
 from jupyter_deploy.handlers.resource import host_handler
 
 host_app = typer.Typer(
-    help=("""Interact with the host running your jupyter server."""),
+    help=("""Interact with the host running your Jupyter server."""),
     no_args_is_help=True,
 )
 
@@ -18,7 +18,7 @@ def status(
         typer.Option("--path", "-p", help="Directory of the jupyter-deploy project whose host to check status."),
     ] = None,
 ) -> None:
-    """Check the status of the host machine running your jupyter server.
+    """Check the status of the host machine.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
     or pass a --path PATH to such a directory.
@@ -39,7 +39,7 @@ def stop(
         typer.Option("--path", "-p", help="Directory of the jupyter-deploy project whose host to stop."),
     ] = None,
 ) -> None:
-    """Stop the host machine running your jupyter server.
+    """Stop the host machine.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
     or pass a --path PATH to such a directory.
@@ -56,7 +56,7 @@ def start(
         typer.Option("--path", "-p", help="Directory of the jupyter-deploy project whose host to start."),
     ] = None,
 ) -> None:
-    """Start the host machine running your jupyter server.
+    """Start the host machine.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
     or pass a --path PATH to such a directory.
@@ -73,7 +73,7 @@ def restart(
         typer.Option("--path", "-p", help="Directory of the jupyter-deploy project whose host to restart."),
     ] = None,
 ) -> None:
-    """Restart the host machine running your jupyter server.
+    """Restart the host machine.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
     or pass a --path PATH to such a directory.

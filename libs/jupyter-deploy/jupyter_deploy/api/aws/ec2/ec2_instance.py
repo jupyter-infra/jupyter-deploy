@@ -30,7 +30,7 @@ class Ec2InstanceState(str, Enum):
         """Return the enum value, ignoring case.
 
         Raises:
-            ValueError: If no matching enum value is found.
+            ValueError if no matching enum value is found.
         """
         name_lower = state_name.lower()
         for state in cls:
@@ -40,14 +40,18 @@ class Ec2InstanceState(str, Enum):
 
     @classmethod
     def from_state_response(cls, instance_state: InstanceStateTypeDef) -> "Ec2InstanceState":
-        """Return the enum value."""
+        """Return the enum value.
+
+        Raises:
+            ValueError if no matching code or name is found.
+        """
         state_code = instance_state.get("Code")
         state_name = instance_state.get("Name")
 
         if state_code is not None:
             try:
                 return _INSTANCE_REVERSE_CODE_MAP[state_code]
-            except IndexError as e:
+            except KeyError as e:
                 raise ValueError(f"Unknown state code: {state_code}") from e
 
         if state_name is not None:
@@ -200,7 +204,7 @@ def stop_instance(ec2_client: EC2Client, instance_id: str) -> InstanceStateChang
 
 
 def restart_instance(ec2_client: EC2Client, instance_id: str) -> None:
-    """Call EC2:RebootInstance, return the InstanceStateChange."""
+    """Call EC2:RebootInstance."""
 
     request: RebootInstancesRequestTypeDef = {"InstanceIds": [instance_id]}
     ec2_client.reboot_instances(**request)

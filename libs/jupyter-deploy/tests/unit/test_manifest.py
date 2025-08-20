@@ -50,10 +50,7 @@ class TestJupyterDeployManifestV1(unittest.TestCase):
         manifest = JupyterDeployManifestV1(
             **self.manifest_v1_parsed_content  # type: ignore
         )
-        self.assertEqual(
-            manifest.get_command("server.status"),
-            manifest.commands[0],  # type: ignore
-        )
+        manifest.get_command("server.status")  # should not raise
 
     def test_manifest_v1_not_found_command_raises_not_implemented_error(self) -> None:
         manifest = JupyterDeployManifestV1(

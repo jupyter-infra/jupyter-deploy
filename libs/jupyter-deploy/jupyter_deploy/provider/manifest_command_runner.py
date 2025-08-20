@@ -86,6 +86,8 @@ class ManifestCommandRunner:
                     resolved_resultdefs[indexed_result_name] = instruction_result_def
             except InterruptInstructionError:
                 typer.Abort()
+                self._resolved_resultdefs = resolved_resultdefs
+                return resolved_resultdefs
 
         self._resolved_resultdefs = resolved_resultdefs
         return resolved_resultdefs
