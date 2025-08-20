@@ -59,9 +59,9 @@ def start(
         console = handler.get_console()
         console.line()
         if all_services:
-            console.print("Started the jupyter server and all the sidecars.")
+            console.print("Started the Jupyter server and all the sidecars.", style="bold green")
         else:
-            console.print("Started jupyter server.")
+            console.print("Started the Jupyter server.", style="bold green")
 
 
 @servers_app.command()
@@ -89,9 +89,9 @@ def stop(
         console = handler.get_console()
         console.line()
         if all_services:
-            console.print("Stopped the jupyter server and all the sidecars.")
+            console.print("Stopped the Jupyter server and all the sidecars.", style="bold green")
         else:
-            console.print("Stopped jupyter server.")
+            console.print("Stopped the Jupyter server.", style="bold green")
 
 
 @servers_app.command()
@@ -119,6 +119,6 @@ def restart(
         console = handler.get_console()
         console.line()
         if all_services:
-            console.print("Restarted the jupyter server and all the sidecars.")
+            console.print("Restarted the Jupyter server and all the sidecars.", style="bold green")
         else:
-            console.print("Restarted the jupyter server.")
+            console.print("Restarted the Jupyter server.", style="bold green")
