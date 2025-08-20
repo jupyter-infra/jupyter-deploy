@@ -7,10 +7,11 @@ The instance is configured so that you can access it using [AWS SSM](https://doc
 
 This project:
 - places the instance in the first subnet of the default VPC
-- select the latest AL 2023 AMI for `x86_64` architecture
+- selects the latest AL 2023 kernel default AMI for `x86_64` architecture
 - sets up an IAM role to enable SSM, route53 and (optionally) EFS access
 - passes on the root volume of the AMI
 - adds an EBS volume which will mount on the Jupyter Server container
+- adds an Elastic IP (EIP) to keep the public IP of the instance stable
 - writes docker service logs to disk at /var/log/services using `fluent-bit`
 - configures automatic rotation for all log files using `logrotate`
 - creates an SSM instance-startup script, which references several files:
@@ -32,6 +33,7 @@ This project:
     - `get-status.sh` to translate the return code of `check-status` script to a human-readable status
     - `update-auth.sh` to update the authorized org, teams, and/or users
     - `get-auth.sh` to retrieve the authorized org, teams, and/or users
+    - `update-server.sh` to update the services running within the host
     - `refresh-oauth-cookie.sh` to rotate the oauth cookie secret and invalidate all issued cookies
 - creates an SSM association, which runs the startup script on the instance
 - creates the Route 53 Hosted Zone for the domain unless it already exists
@@ -82,18 +84,40 @@ jd up
 
 ### Access your notebook
 ```bash
-
 jd open
 ```
 
 ### Manage access
+
+** By GitHub users
 ```bash
 jd users list
 jd users add USERNAME1 USERNAME2
 jd users remove USERNAME1
 ```
 
-### Take down the infrastructure
+** By GitHub organization
+```bash
+jd organization get
+jd organization set ORGANIZATION
+jd organization unset
+```
+
+** Along with GitHub organization, by teams:
+```bash
+jd teams list
+jd teams add TEAM1 TEAM2
+jd team remove TEAM2
+```
+
+### Temporarily stop your instance
+```bash
+jd host stop
+jd host start
+jd host status
+```
+
+### Take down all the infrastructure
 ```bash
 jd down
 ```
@@ -135,6 +159,7 @@ No modules.
 | [aws_ebs_volume](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ebs_volume)| resource |
 | [aws_efs_file_system](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_file_system)| resource |
 | [aws_efs_mount_target](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/efs_mount_target) | resource |
+| [aws_eip](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/eip) | resource |
 | [aws_subnets](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnets) | data source |
 | [aws_subnet](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnet) | data source |
 | [aws_ami](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/ami) | data source |
@@ -183,6 +208,8 @@ No modules.
 | `secret_arn` | The ARN of the AWS Secret storing the OAuth client secret |
 | `region` | The AWS region where the resources were created |
 | `server_status_check_document` | Name of the SSM document to verify if the server is ready to serve traffic |
+| `server_update_document` | Name of the SSM document to control server container operations |
+| `auth_org_unset_document` | Name of the SSM document to remove the allowlisted organization |
 | `auth_check_document` | Name of the SSM document to view authorized users, teams and organization |
 | `auth_users_update_document` | Name of the SSM document to change the authorized users |
 | `auth_teams_update_document` | Name of the SSM document to change the authorized teams |
