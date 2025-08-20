@@ -35,7 +35,7 @@ class ServerHandler(BaseProjectHandler):
         runner.run_command_sequence(command, cli_paramdefs={})
         return runner.get_result_value(command, "server.status", str)
 
-    def start_server(self, target: str) -> None:
+    def start_server(self, service: str) -> None:
         """Start the jupyter server and optionally all its sidecars."""
         command = self.project_manifest.get_command("server.start")
         console = self.get_console()
@@ -46,11 +46,11 @@ class ServerHandler(BaseProjectHandler):
             command,
             cli_paramdefs={
                 "action": StrResolvedCliParameter(parameter_name="action", value="start"),
-                "target": StrResolvedCliParameter(parameter_name="target", value=target),
+                "service": StrResolvedCliParameter(parameter_name="service", value=service),
             },
         )
 
-    def stop_server(self, target: str) -> None:
+    def stop_server(self, service: str) -> None:
         """Stop the jupyter server and optionally all its sidecars."""
         command = self.project_manifest.get_command("server.stop")
         console = self.get_console()
@@ -61,11 +61,11 @@ class ServerHandler(BaseProjectHandler):
             command,
             cli_paramdefs={
                 "action": StrResolvedCliParameter(parameter_name="action", value="stop"),
-                "target": StrResolvedCliParameter(parameter_name="target", value=target),
+                "service": StrResolvedCliParameter(parameter_name="service", value=service),
             },
         )
 
-    def restart_server(self, target: str) -> None:
+    def restart_server(self, service: str) -> None:
         """Restart the jupyter-server and optionally all its sidecars."""
         command = self.project_manifest.get_command("server.restart")
         console = self.get_console()
@@ -76,6 +76,6 @@ class ServerHandler(BaseProjectHandler):
             command,
             cli_paramdefs={
                 "action": StrResolvedCliParameter(parameter_name="action", value="restart"),
-                "target": StrResolvedCliParameter(parameter_name="target", value=target),
+                "service": StrResolvedCliParameter(parameter_name="service", value=service),
             },
         )

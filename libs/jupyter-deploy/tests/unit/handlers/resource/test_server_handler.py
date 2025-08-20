@@ -306,11 +306,11 @@ class TestServerHandler(unittest.TestCase):
         cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
         self.assertEqual(len(cli_paramdefs), 2)
         self.assertIn("action", cli_paramdefs)
-        self.assertIn("target", cli_paramdefs)
+        self.assertIn("service", cli_paramdefs)
         self.assertEqual(cli_paramdefs["action"].parameter_name, "action")
         self.assertEqual(cli_paramdefs["action"].value, "start")
-        self.assertEqual(cli_paramdefs["target"].parameter_name, "target")
-        self.assertEqual(cli_paramdefs["target"].value, "all")
+        self.assertEqual(cli_paramdefs["service"].parameter_name, "service")
+        self.assertEqual(cli_paramdefs["service"].value, "all")
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
@@ -352,11 +352,11 @@ class TestServerHandler(unittest.TestCase):
         cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
         self.assertEqual(len(cli_paramdefs), 2)
         self.assertIn("action", cli_paramdefs)
-        self.assertIn("target", cli_paramdefs)
+        self.assertIn("service", cli_paramdefs)
         self.assertEqual(cli_paramdefs["action"].parameter_name, "action")
         self.assertEqual(cli_paramdefs["action"].value, "stop")
-        self.assertEqual(cli_paramdefs["target"].parameter_name, "target")
-        self.assertEqual(cli_paramdefs["target"].value, "jupyter")
+        self.assertEqual(cli_paramdefs["service"].parameter_name, "service")
+        self.assertEqual(cli_paramdefs["service"].value, "jupyter")
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
@@ -398,8 +398,8 @@ class TestServerHandler(unittest.TestCase):
         cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
         self.assertEqual(len(cli_paramdefs), 2)
         self.assertIn("action", cli_paramdefs)
-        self.assertIn("target", cli_paramdefs)
+        self.assertIn("service", cli_paramdefs)
         self.assertEqual(cli_paramdefs["action"].parameter_name, "action")
         self.assertEqual(cli_paramdefs["action"].value, "restart")
-        self.assertEqual(cli_paramdefs["target"].parameter_name, "target")
-        self.assertEqual(cli_paramdefs["target"].value, "sidecars")
+        self.assertEqual(cli_paramdefs["service"].parameter_name, "service")
+        self.assertEqual(cli_paramdefs["service"].value, "sidecars")

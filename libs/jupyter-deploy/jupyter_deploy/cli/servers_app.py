@@ -6,7 +6,7 @@ from jupyter_deploy import cmd_utils
 from jupyter_deploy.handlers.resource import server_handler
 
 servers_app = typer.Typer(
-    help=("""Interact with the jupyter server running your app."""),
+    help=("""Interact with the services running your Jupyter app."""),
     no_args_is_help=True,
 )
 
@@ -20,7 +20,7 @@ def status(
         ),
     ] = None,
 ) -> None:
-    """Sends an health check to the Jupyter server.
+    """Sends a health check to the services.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
     or pass a --path PATH to such a directory.
@@ -40,28 +40,27 @@ def start(
         str | None,
         typer.Option("--path", "-p", help="Directory of the jupyter-deploy project whose server to start."),
     ] = None,
-    all_services: Annotated[
-        bool, typer.Option("--all", help="Start all services instead of just the jupyter server.")
-    ] = False,
+    service: Annotated[
+        str, typer.Option("--service", "-s", help="Service to start ('all', 'jupyter', or other available services).")
+    ] = "all",
 ) -> None:
-    """Start the Jupyter server within the host.
+    """Start the services.
 
-    By default, start only the jupyter server. Use --all to start all sidecar services as well.
+    By default, starts all services. Specify --service to target a specific service.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
     or pass a --path PATH to such a directory.
     """
     with cmd_utils.project_dir(project_dir):
         handler = server_handler.ServerHandler()
-        target = "all" if all_services else "jupyter"
-        handler.start_server(target)
+        handler.start_server(service)
 
         console = handler.get_console()
         console.line()
-        if all_services:
+        if service == "all":
             console.print("Started the Jupyter server and all the sidecars.", style="bold green")
         else:
-            console.print("Started the Jupyter server.", style="bold green")
+            console.print(f"Started the '{service}' service.", style="bold green")
 
 
 @servers_app.command()
@@ -70,28 +69,27 @@ def stop(
         str | None,
         typer.Option("--path", "-p", help="Directory of the jupyter-deploy project whose server to stop."),
     ] = None,
-    all_services: Annotated[
-        bool, typer.Option("--all", help="Stop all services instead of just the jupyter server.")
-    ] = False,
+    service: Annotated[
+        str, typer.Option("--service", "-s", help="Service to stop ('all', 'jupyter', or other available services).")
+    ] = "all",
 ) -> None:
-    """Stop the Jupyter server.
+    """Stop the services.
 
-    By default, stops only the jupyter server. Use --all to stop all sidecar services as well.
+    By default, stops all services. Specify --service to target a specific service.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
     or pass a --path PATH to such a directory.
     """
     with cmd_utils.project_dir(project_dir):
         handler = server_handler.ServerHandler()
-        target = "all" if all_services else "jupyter"
-        handler.stop_server(target)
+        handler.stop_server(service)
 
         console = handler.get_console()
         console.line()
-        if all_services:
+        if service == "all":
             console.print("Stopped the Jupyter server and all the sidecars.", style="bold green")
         else:
-            console.print("Stopped the Jupyter server.", style="bold green")
+            console.print(f"Stopped the '{service}' service.", style="bold green")
 
 
 @servers_app.command()
@@ -100,25 +98,24 @@ def restart(
         str | None,
         typer.Option("--path", "-p", help="Directory of the jupyter-deploy project whose server to restart."),
     ] = None,
-    all_services: Annotated[
-        bool, typer.Option("--all", help="Restart all services instead of just the jupyter server.")
-    ] = False,
+    service: Annotated[
+        str, typer.Option("--service", "-s", help="Service to restart ('all', 'jupyter', or other available services).")
+    ] = "all",
 ) -> None:
-    """Restart the Jupyter server.
+    """Restart the services.
 
-    By default, restart only the jupyter server. Use --all to restart all the sidecar services as well.
+    By default, restarts all services. Specify --service to target a specific service.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
     or pass a --path PATH to such a directory.
     """
     with cmd_utils.project_dir(project_dir):
         handler = server_handler.ServerHandler()
-        target = "all" if all_services else "jupyter"
-        handler.restart_server(target)
+        handler.restart_server(service)
 
         console = handler.get_console()
         console.line()
-        if all_services:
+        if service == "all":
             console.print("Restarted the Jupyter server and all the sidecars.", style="bold green")
         else:
-            console.print("Restarted the Jupyter server.", style="bold green")
+            console.print(f"Restarted the '{service}' service.", style="bold green")

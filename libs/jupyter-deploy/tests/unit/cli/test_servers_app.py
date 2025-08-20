@@ -155,7 +155,7 @@ class TestServerStartCmd(unittest.TestCase):
         # Assert
         self.assertEqual(result.exit_code, 0)
         mock_server_handler_class.assert_called_once()
-        mock_handler_fns["start_server"].assert_called_once_with("jupyter")
+        mock_handler_fns["start_server"].assert_called_once_with("all")
         mock_handler_fns["get_console"].assert_called_once()
 
     @patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler")
@@ -192,7 +192,9 @@ class TestServerStartCmd(unittest.TestCase):
 
     @patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_all_flag_starts_all_services(self, mock_project_dir: Mock, mock_server_handler_class: Mock) -> None:
+    def test_service_parameter_passes_service_name_for_start(
+        self, mock_project_dir: Mock, mock_server_handler_class: Mock
+    ) -> None:
         # Setup
         mock_server_handler, mock_handler_fns = self.get_mock_server_handler()
         mock_server_handler_class.return_value = mock_server_handler
@@ -200,11 +202,11 @@ class TestServerStartCmd(unittest.TestCase):
 
         # Execute
         runner = CliRunner()
-        result = runner.invoke(servers_app, ["start", "--all"])
+        result = runner.invoke(servers_app, ["start", "--service", "jupyter"])
 
         # Assert
         self.assertEqual(result.exit_code, 0)
-        mock_handler_fns["start_server"].assert_called_once_with("all")
+        mock_handler_fns["start_server"].assert_called_once_with("jupyter")
 
 
 class TestServerStopCmd(unittest.TestCase):
@@ -241,7 +243,7 @@ class TestServerStopCmd(unittest.TestCase):
         # Assert
         self.assertEqual(result.exit_code, 0)
         mock_server_handler_class.assert_called_once()
-        mock_handler_fns["stop_server"].assert_called_once_with("jupyter")
+        mock_handler_fns["stop_server"].assert_called_once_with("all")
         mock_handler_fns["get_console"].assert_called_once()
 
     @patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler")
@@ -278,7 +280,9 @@ class TestServerStopCmd(unittest.TestCase):
 
     @patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_all_flag_stops_all_services(self, mock_project_dir: Mock, mock_server_handler_class: Mock) -> None:
+    def test_service_parameter_passes_service_name_for_stop(
+        self, mock_project_dir: Mock, mock_server_handler_class: Mock
+    ) -> None:
         # Setup
         mock_server_handler, mock_handler_fns = self.get_mock_server_handler()
         mock_server_handler_class.return_value = mock_server_handler
@@ -286,11 +290,11 @@ class TestServerStopCmd(unittest.TestCase):
 
         # Execute
         runner = CliRunner()
-        result = runner.invoke(servers_app, ["stop", "--all"])
+        result = runner.invoke(servers_app, ["stop", "--service", "jupyter"])
 
         # Assert
         self.assertEqual(result.exit_code, 0)
-        mock_handler_fns["stop_server"].assert_called_once_with("all")
+        mock_handler_fns["stop_server"].assert_called_once_with("jupyter")
 
 
 class TestServerRestartCmd(unittest.TestCase):
@@ -327,7 +331,7 @@ class TestServerRestartCmd(unittest.TestCase):
         # Assert
         self.assertEqual(result.exit_code, 0)
         mock_server_handler_class.assert_called_once()
-        mock_handler_fns["restart_server"].assert_called_once_with("jupyter")
+        mock_handler_fns["restart_server"].assert_called_once_with("all")
         mock_handler_fns["get_console"].assert_called_once()
 
     @patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler")
@@ -364,7 +368,9 @@ class TestServerRestartCmd(unittest.TestCase):
 
     @patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_all_flag_restarts_all_services(self, mock_project_dir: Mock, mock_server_handler_class: Mock) -> None:
+    def test_service_parameter_passes_service_name_for_restart(
+        self, mock_project_dir: Mock, mock_server_handler_class: Mock
+    ) -> None:
         # Setup
         mock_server_handler, mock_handler_fns = self.get_mock_server_handler()
         mock_server_handler_class.return_value = mock_server_handler
@@ -372,8 +378,8 @@ class TestServerRestartCmd(unittest.TestCase):
 
         # Execute
         runner = CliRunner()
-        result = runner.invoke(servers_app, ["restart", "--all"])
+        result = runner.invoke(servers_app, ["restart", "--service", "jupyter"])
 
         # Assert
         self.assertEqual(result.exit_code, 0)
-        mock_handler_fns["restart_server"].assert_called_once_with("all")
+        mock_handler_fns["restart_server"].assert_called_once_with("jupyter")

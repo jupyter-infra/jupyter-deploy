@@ -736,20 +736,22 @@ parameters:
       - start
       - stop
       - restart
-  target:
+  service:
     type: String
-    description: "The target of the action (all containers or just jupyter)."
+    description: "The service to act on (all, jupyter, traefik or oauth)."
     default: all
     allowedValues:
       - all
       - jupyter
+      - traefik
+      - oauth
 mainSteps:
   - action: aws:runShellScript
     name: UpdateServer
     inputs:
       runCommand:
         - |
-          sh /usr/local/bin/update-server.sh {{action}} {{target}}
+          sh /usr/local/bin/update-server.sh {{action}} {{service}}
 DOC
 }
 
