@@ -30,8 +30,8 @@ def status(
         console = handler.get_console()
         server_status = handler.get_server_status()
 
-        console.line()
         console.print(f"Jupyter server status: [bold cyan]{server_status}[/]")
+        console.line()
 
 
 @servers_app.command()
@@ -54,13 +54,13 @@ def start(
     with cmd_utils.project_dir(project_dir):
         handler = server_handler.ServerHandler()
         handler.start_server(service)
-
         console = handler.get_console()
-        console.line()
+
         if service == "all":
             console.print("Started the Jupyter server and all the sidecars.", style="bold green")
         else:
             console.print(f"Started the '{service}' service.", style="bold green")
+        console.line()
 
 
 @servers_app.command()
@@ -83,13 +83,13 @@ def stop(
     with cmd_utils.project_dir(project_dir):
         handler = server_handler.ServerHandler()
         handler.stop_server(service)
-
         console = handler.get_console()
-        console.line()
+
         if service == "all":
             console.print("Stopped the Jupyter server and all the sidecars.", style="bold green")
         else:
             console.print(f"Stopped the '{service}' service.", style="bold green")
+        console.line()
 
 
 @servers_app.command()
@@ -112,10 +112,10 @@ def restart(
     with cmd_utils.project_dir(project_dir):
         handler = server_handler.ServerHandler()
         handler.restart_server(service)
-
         console = handler.get_console()
-        console.line()
+
         if service == "all":
             console.print("Restarted the Jupyter server and all the sidecars.", style="bold green")
         else:
             console.print(f"Restarted the '{service}' service.", style="bold green")
+        console.line()

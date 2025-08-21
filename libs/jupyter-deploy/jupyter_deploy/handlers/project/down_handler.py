@@ -12,7 +12,9 @@ class DownHandler(BaseProjectHandler):
         super().__init__()
 
         if self.engine == EngineType.TERRAFORM:
-            self._handler = tf_down.TerraformDownHandler(project_path=self.project_path)
+            self._handler = tf_down.TerraformDownHandler(
+                project_path=self.project_path, project_manifest=self.project_manifest
+            )
         else:
             raise NotImplementedError(f"DownHandler implementation not found for engine: {self.engine}")
 

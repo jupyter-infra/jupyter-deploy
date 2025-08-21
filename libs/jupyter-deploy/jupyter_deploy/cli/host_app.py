@@ -28,8 +28,8 @@ def status(
         console = handler.get_console()
         status = handler.get_host_status()
 
-        console.line()
         console.print(f"Jupyter host status: [bold cyan]{status}[/]")
+        console.line()
 
 
 @host_app.command()

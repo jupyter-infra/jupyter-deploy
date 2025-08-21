@@ -32,7 +32,7 @@ class TestDownHandler(unittest.TestCase):
 
         handler = DownHandler()
 
-        mock_tf_handler_cls.assert_called_once_with(project_path=Path("/mock/cwd"))
+        mock_tf_handler_cls.assert_called_once_with(project_path=Path("/mock/cwd"), project_manifest=self.mock_manifest)
         self.assertEqual(handler._handler, mock_tf_handler)
 
     @patch("jupyter_deploy.engine.terraform.tf_down.TerraformDownHandler")

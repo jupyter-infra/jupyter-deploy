@@ -4,7 +4,12 @@ from typing import Generic, TypeVar  # noqa: UP035
 
 from pydantic import BaseModel, ConfigDict
 
-from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition, TemplateOutputDefinition
+from jupyter_deploy import type_utils
+from jupyter_deploy.engine.outdefs import (
+    ListStrTemplateOutputDefinition,
+    StrTemplateOutputDefinition,
+    TemplateOutputDefinition,
+)
 from jupyter_deploy.engine.terraform.tf_types import TerraformType
 
 V = TypeVar("V")
@@ -40,11 +45,23 @@ class TerraformStrOutputDefinition(TerraformOutputDefinition[str]):
         return StrTemplateOutputDefinition(**self.model_dump())
 
 
+class TerraformListStrOutputDefinition(TerraformOutputDefinition[list[str]]):
+    """Terraform wrapper class for variable definition of type 'list(string)'."""
+
+    tf_type: TerraformType = TerraformType.LIST_STR
+
+    def to_template_definition(self) -> TemplateOutputDefinition:
+        return ListStrTemplateOutputDefinition(**self.model_dump())
+
+
 def create_tf_output_definition(parsed_config: dict) -> TerraformOutputDefinition:
     """Return an instance of the corresponding TerraformOutput class."""
     tf_type = parsed_config.get("type")
     if tf_type == TerraformType.STRING:
         return TerraformStrOutputDefinition(**parsed_config)
+    elif tf_type == TerraformType.LIST_STR or type_utils.is_list_str_repr(tf_type):
+        return TerraformListStrOutputDefinition(**parsed_config)
+
     raise NotImplementedError(f"No terraform class found for type: {tf_type}.")
 
 

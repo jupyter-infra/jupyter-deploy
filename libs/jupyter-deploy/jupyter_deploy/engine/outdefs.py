@@ -30,6 +30,12 @@ class StrTemplateOutputDefinition(TemplateOutputDefinition[str]):
     pass
 
 
+class ListStrTemplateOutputDefinition(TemplateOutputDefinition[list[str]]):
+    """Wrapper class for teemplate-outputable list of string value."""
+
+    pass
+
+
 TOD = TypeVar("TOD", bound=TemplateOutputDefinition)
 
 

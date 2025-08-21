@@ -14,6 +14,9 @@ values:
   - name: "aws_region"
     source: "output"
     source-key: "region"
+  - name: "persisting_resources"
+    source: "output"
+    source-key: "persisting_resources"
 commands:
   - cmd: "host.status"
     sequence:

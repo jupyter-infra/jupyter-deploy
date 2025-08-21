@@ -320,7 +320,7 @@ variable "custom_tags" {
 # Variables for additional EBS volumes
 variable "additional_ebs_mounts" {
   description = <<-EOT
-    Elastic block stores to mount on the notebook home directory; keys: name or id, mount_point, type, size_gb.
+    Elastic block stores to mount on the notebook home directory; keys: name or id, mount_point, type, size_gb, persist.
   
     Each volume is defined by a map with the following keys:
       - name: (optional) If specified, create/manage lifecycle of the volume.
@@ -328,6 +328,7 @@ variable "additional_ebs_mounts" {
       - mount_point: (required) Directory name under the home directory of the notebook.
       - type: (optional) EBS volume type (default: "gp3").
       - size_gb: (optional) Size in GB (default: "30").
+      - persist: (optional) If set to "true", prevent destruction of the volume (default: "false"). Only valid with 'name' key.
     
     Note: Either 'name' or 'id' must be specified, but not both.
     Maximum of 5 EBS mounts allowed.
@@ -337,7 +338,8 @@ variable "additional_ebs_mounts" {
         name = "data-volume",
         mount_point = "data",
         type = "gp3",
-        size_gb = "50"
+        size_gb = "50",
+        persist = "true"
       },
       {
         id = "vol-0123456789abcdef0",
@@ -353,6 +355,24 @@ variable "additional_ebs_mounts" {
       (lookup(v, "name", null) != null && lookup(v, "id", null) == null) || (lookup(v, "id", null) != null && lookup(v, "name", null) == null)
     ])
     error_message = "For each EBS mount, either 'name' or 'id' must be specified, but not both."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.additional_ebs_mounts :
+      lookup(v, "persist", null) == null ||
+      (lookup(v, "persist", null) != null && lookup(v, "name", null) != null && lookup(v, "id", null) == null)
+    ])
+    error_message = "The 'persist' attribute may only be set when 'name' is specified, not with 'id'."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.additional_ebs_mounts :
+      lookup(v, "persist", null) == null ||
+      contains(["true", "false"], lookup(v, "persist", ""))
+    ])
+    error_message = "The 'persist' attribute can only be set to 'true' or 'false'."
   }
 
   validation {
@@ -404,12 +424,13 @@ variable "additional_ebs_mounts" {
 # Variables for additional EFS volumes
 variable "additional_efs_mounts" {
   description = <<-EOT
-    Elastic file systems to mount on the notebook home directory; keys: name or id, mount_point.
+    Elastic file systems to mount on the notebook home directory; keys: name or id, mount_point, persist.
     
     Each volume is defined by a map with the following keys:
       - name: (optional) If specified, create/manage lifecycle of the volume.
       - id: (optional) If specified, reference an existing file system by ID.
       - mount_point: (required) Directory name under the home directory of the notebook.
+      - persist: (optional) If set to "true", prevent destruction of the file system (default: "false"). Only valid with 'name' key.
     
     Note: Either 'name' or 'id' must be specified, but not both.
     Maximum of 5 EFS mounts allowed.
@@ -417,7 +438,8 @@ variable "additional_efs_mounts" {
     Example: [
       {
         name = "shared-data",
-        mount_point = "shared"
+        mount_point = "shared",
+        persist = "true"
       },
       {
         id = "fs-0123456789abcdef0",
@@ -433,6 +455,24 @@ variable "additional_efs_mounts" {
       (lookup(v, "name", null) != null && lookup(v, "id", null) == null) || (lookup(v, "id", null) != null && lookup(v, "name", null) == null)
     ])
     error_message = "For each EFS mount, either 'name' or 'id' must be specified, but not both."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.additional_efs_mounts :
+      lookup(v, "persist", null) == null ||
+      (lookup(v, "persist", null) != null && lookup(v, "name", null) != null && lookup(v, "id", null) == null)
+    ])
+    error_message = "The 'persist' attribute may only be set when 'name' is specified, not with 'id'."
+  }
+
+  validation {
+    condition = alltrue([
+      for v in var.additional_efs_mounts :
+      lookup(v, "persist", null) == null ||
+      contains(["true", "false"], lookup(v, "persist", ""))
+    ])
+    error_message = "The 'persist' attribute can only be set to 'true' or 'false'."
   }
 
   validation {

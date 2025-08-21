@@ -83,6 +83,20 @@ locals {
     }
   ]
 
+  # List of EBS volumes with persist=true
+  persist_ebs_volumes = [
+    for idx, ebs_mount in var.additional_ebs_mounts :
+    "aws_ebs_volume.additional_volumes[\"${idx}\"]"
+    if lookup(ebs_mount, "persist", "") == "true"
+  ]
+
+  # List of EFS file systems with persist=true
+  persist_efs_file_systems = [
+    for idx, efs_mount in var.additional_efs_mounts :
+    "aws_efs_file_system.additional_file_systems[\"${idx}\"]"
+    if lookup(efs_mount, "persist", "") == "true"
+  ]
+
   # Do NOT depend on the attachments to avoid a circular dependency issue
   # instance -> attachment -> cloudinit-volume -> ssm-document -> instance
   cloudinit_volumes_script = templatefile("${path.module}/../services/cloudinit-volumes.sh.tftpl", {

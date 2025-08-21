@@ -8,7 +8,7 @@ from jupyter_deploy.manifest import JupyterDeployManifest
 
 
 class EngineOpenHandler:
-    """Abstract base class for engine-specific open handlers."""
+    """Base class for engine-specific open handlers."""
 
     def __init__(
         self,
@@ -36,7 +36,7 @@ class EngineOpenHandler:
         except (ValueError, KeyError, NotImplementedError, TypeError) as e:
             console = self.get_console()
             console.print(
-                f":x: Could not get the retrieve the declared value 'open_url' in the manifest. Error details: {e}",
+                f":x: Could not retrieve the declared value 'open_url' in the manifest. Error details: {e}",
                 style="red",
             )
             return ""
