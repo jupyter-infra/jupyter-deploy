@@ -26,7 +26,10 @@ dev = [
     "mypy>=1.15.0",
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
+    "python-hcl2>=7.2.1",
+    "pyyaml>=6.0.2",
     "ruff>=0.11.8",
+    "types-pyyaml>=6.0.12.20250516",
 ]
 
 [tool.mypy]
