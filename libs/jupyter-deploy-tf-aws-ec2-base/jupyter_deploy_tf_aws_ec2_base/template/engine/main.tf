@@ -113,7 +113,7 @@ resource "aws_instance" "ec2_jupyter_server" {
   subnet_id              = data.aws_subnet.first_subnet_of_default_vpc.id
   vpc_security_group_ids = [aws_security_group.ec2_jupyter_server_sg.id]
   key_name               = var.key_pair_name
-  tags                   = merge(
+  tags = merge(
     local.combined_tags,
     {
       Name = "jupyter-server-${local.doc_postfix}"

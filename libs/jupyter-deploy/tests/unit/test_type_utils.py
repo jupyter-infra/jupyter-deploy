@@ -14,6 +14,9 @@ class TestTypeUtils(unittest.TestCase):
         # Test with 'list' and 'str' - another valid representation
         self.assertTrue(type_utils.is_list_str_repr(["list", "str"]))
 
+        # Test with 'list' and 'dynamic' - empty array case
+        self.assertTrue(type_utils.is_list_str_repr(["list", "dynamic"]))
+
         # Test with additional elements in the list
         self.assertTrue(type_utils.is_list_str_repr(["list", "string", "additional", "elements"]))
         self.assertTrue(type_utils.is_list_str_repr(["list", "str", True]))
