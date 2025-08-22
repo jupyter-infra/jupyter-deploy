@@ -1,6 +1,6 @@
 [project]
 name = "jupyter-deploy"
-version = "0.1.0"
+version = "0.2.0"
 description = "CLI based tool to deploy Jupyter application that integrates with infrastructure as code frameworks."
 readme = "README.md"
 authors = [

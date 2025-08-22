@@ -1,6 +1,6 @@
 [project]
 name = "jupyter"
-version = "0.1.0"
+version = "0.2.0"
 description = "A basic image with jupyterlab and server-documents"
 requires-python = ">=3.12"
 dependencies = [
