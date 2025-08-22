@@ -66,3 +66,15 @@ class HostHandler(BaseProjectHandler):
             command,
             cli_paramdefs={},
         )
+
+    def connect(self) -> None:
+        """Start an SSH-style connection to the host."""
+        command = self.project_manifest.get_command("host.connect")
+        console = self.get_console()
+        runner = cmd_runner.ManifestCommandRunner(
+            console=console, output_handler=self._output_handler, variable_handler=self._variable_handler
+        )
+        runner.run_command_sequence(
+            command,
+            cli_paramdefs={},
+        )

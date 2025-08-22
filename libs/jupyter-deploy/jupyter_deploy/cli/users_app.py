@@ -81,11 +81,10 @@ def list_users(
     with cmd_utils.project_dir(project_dir):
         handler = user_handler.UsersHandler()
         users = handler.list_users()
-
         console = handler.get_console()
-        console.line()
 
         if users:
             console.print(f"Allowlisted usernames: [bold cyan]{', '.join(users)}[/]")
         else:
             console.print("Allowlisted usernames: [bold cyan]None[/]")
+        console.line()

@@ -20,10 +20,13 @@ def _check_installation(
 
     if not installed:
         console.print(
-            f"This operation requires [bold]{tool_name}[/] to be installed in your system.\n\n"
-            "Got the following error when verifying installation:"
+            f":x: This operation requires [bold]{tool_name}[/] to be installed in your system.", style="red"
         )
-        console.print(error_msg, style="bold red")
+        console.line()
+
+        if error_msg:
+            console.print(f"Error: {error_msg}", style="red")
+            console.line()
 
         if installation_url:
             console.print(f"Refer to the installation guide: {installation_url}")

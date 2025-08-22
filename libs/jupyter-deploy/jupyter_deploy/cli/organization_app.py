@@ -61,11 +61,10 @@ def get(
     with cmd_utils.project_dir(project_dir):
         handler = organization_handler.OrganizationHandler()
         organization = handler.get_organization()
-
         console = handler.get_console()
-        console.line()
 
         if organization:
             console.print(f"Allowlisted organization: [bold cyan]{organization}[/]")
         else:
             console.print("Allowlisted organization: [bold cyan]None[/]")
+        console.line()

@@ -65,6 +65,13 @@ commands:
           - api-attribute: "instance_id"
             source: "output"
             source-key: "instance_id"
+  - cmd: "host.connect"
+    sequence:
+      - api-name: "aws.ssm.start-session"
+        arguments:
+          - api-attribute: "target_id"
+            source: "output"
+            source-key: "instance_id"
   - cmd: "server.status"
     sequence:
       - api-name: "aws.ssm.wait-command-sync"

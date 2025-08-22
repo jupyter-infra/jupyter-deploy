@@ -81,11 +81,10 @@ def list_teams(
     with cmd_utils.project_dir(project_dir):
         handler = team_handler.TeamsHandler()
         teams = handler.list_teams()
-
         console = handler.get_console()
-        console.line()
 
         if teams:
             console.print(f"Allowlisted teams: [bold cyan]{', '.join(teams)}[/]")
         else:
             console.print("Allowlisted teams: [bold cyan]None[/]")
+        console.line()
