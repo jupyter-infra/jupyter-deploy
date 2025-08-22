@@ -27,7 +27,6 @@ class AwsSsmInstruction(str, Enum):
 
     SEND_CMD_AND_WAIT_SYNC = "wait-command-sync"
     START_SESSION = "start-session"
-    VERIFY_SSM_CONNECTION = "verify-connection"
 
 
 class AwsSsmRunner(InstructionRunner):
@@ -43,6 +42,7 @@ class AwsSsmRunner(InstructionRunner):
         self,
         instance_id: str,
         console: rich_console.Console,
+        silent_success: bool = True,
     ) -> bool:
         """Call SSM API, write messages to console, return True if connected."""
 
@@ -50,7 +50,8 @@ class AwsSsmRunner(InstructionRunner):
         ping_status = instance_info_response.get("PingStatus")
 
         if ping_status == "Online":
-            console.print(f":white_check_mark: SSM agent running on instance '{instance_id}'.")
+            if not silent_success:
+                console.print(f":white_check_mark: SSM agent running on instance '{instance_id}'.")
             return True
         elif ping_status == "ConnectionLost":
             last_ping_date = instance_info_response.get("LastPingDateTime", "unknown")
@@ -161,15 +162,18 @@ class AwsSsmRunner(InstructionRunner):
             raise InterruptInstructionError
 
         # verify that the SSM agent status on the instance
-        ssm_agent_connected = self._verify_ec2_instance_accessible(instance_id=target_id_arg.value, console=console)
-        console.rule()
+        ssm_agent_connected = self._verify_ec2_instance_accessible(
+            instance_id=target_id_arg.value, console=console, silent_success=False
+        )
+
         if not ssm_agent_connected:
             # verify method writes to console
+            console.rule()
             raise InterruptInstructionError
 
         # provide information to the user
         console.print(f"Starting SSM session with target '{target_id_arg.value}'.")
-        console.print(f"Type 'exit' to disconnect.")
+        console.print("Type 'exit' to disconnect.")
 
         # start the session
         start_session_cmds = START_SESSION_CMD.copy()

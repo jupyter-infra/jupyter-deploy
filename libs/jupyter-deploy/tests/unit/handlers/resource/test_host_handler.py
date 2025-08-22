@@ -123,6 +123,9 @@ class TestHostHandler(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             handler.restart_host()
 
+        with self.assertRaises(NotImplementedError):
+            handler.connect()
+
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
@@ -200,6 +203,9 @@ class TestHostHandler(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             handler.restart_host()
+
+        with self.assertRaises(RuntimeError):
+            handler.connect()
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
@@ -376,6 +382,43 @@ class TestHostHandler(unittest.TestCase):
         # Verify
         mock_cmd_runner_class.assert_called_once()
         mock_manifest_fns["get_command"].assert_called_once_with("host.restart")
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["output_handler"], mock_output_handler)
+        self.assertEqual(mock_cmd_runner_class.call_args[1]["variable_handler"], mock_variable_handler)
+        mock_cmd_runner_fns["run_command_sequence"].assert_called_once_with(mock_cmd, cli_paramdefs={})
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_connect_calls_run_command(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        # Setup
+        mock_manifest, mock_manifest_fns = self.get_mock_manifest_and_fns()
+        mock_cmd = Mock()
+        mock_manifest_fns["get_command"].return_value = mock_cmd
+
+        mock_retrieve_manifest.return_value = mock_manifest
+        mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
+
+        mock_tf_outputs_handler.return_value = mock_output_handler
+        mock_variable_handler = Mock()
+        mock_tf_variables_handler.return_value = mock_variable_handler
+
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        # Act
+        handler = HostHandler()
+        handler.connect()
+
+        # Verify
+        mock_cmd_runner_class.assert_called_once()
+        mock_manifest_fns["get_command"].assert_called_once_with("host.connect")
         self.assertEqual(mock_cmd_runner_class.call_args[1]["output_handler"], mock_output_handler)
         self.assertEqual(mock_cmd_runner_class.call_args[1]["variable_handler"], mock_variable_handler)
         mock_cmd_runner_fns["run_command_sequence"].assert_called_once_with(mock_cmd, cli_paramdefs={})

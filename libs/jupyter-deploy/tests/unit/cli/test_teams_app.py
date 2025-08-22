@@ -309,7 +309,6 @@ class TestTeamListCmd(unittest.TestCase):
         # Assert
         self.assertEqual(result.exit_code, 0)
         mock_console.print.assert_called_once()
-        mock_console.line.assert_called_once()
         mock_call = mock_console.print.mock_calls[0]
         self.assertTrue("team1, team2" in str(mock_call))
 

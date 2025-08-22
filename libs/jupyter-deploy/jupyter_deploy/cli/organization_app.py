@@ -67,4 +67,3 @@ def get(
             console.print(f"Allowlisted organization: [bold cyan]{organization}[/]")
         else:
             console.print("Allowlisted organization: [bold cyan]None[/]")
-        console.line()

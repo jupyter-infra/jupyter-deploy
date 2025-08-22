@@ -87,4 +87,3 @@ def list_users(
             console.print(f"Allowlisted usernames: [bold cyan]{', '.join(users)}[/]")
         else:
             console.print("Allowlisted usernames: [bold cyan]None[/]")
-        console.line()

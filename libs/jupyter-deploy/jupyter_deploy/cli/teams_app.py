@@ -87,4 +87,3 @@ def list_teams(
             console.print(f"Allowlisted teams: [bold cyan]{', '.join(teams)}[/]")
         else:
             console.print("Allowlisted teams: [bold cyan]None[/]")
-        console.line()

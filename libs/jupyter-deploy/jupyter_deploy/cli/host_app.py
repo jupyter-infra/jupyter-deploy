@@ -29,7 +29,6 @@ def status(
         status = handler.get_host_status()
 
         console.print(f"Jupyter host status: [bold cyan]{status}[/]")
-        console.line()
 
 
 @host_app.command()

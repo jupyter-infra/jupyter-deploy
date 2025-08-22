@@ -19,9 +19,7 @@ def _check_installation(
     console = Console()
 
     if not installed:
-        console.print(
-            f":x: This operation requires [bold]{tool_name}[/] to be installed in your system.", style="red"
-        )
+        console.print(f":x: This operation requires [bold]{tool_name}[/] to be installed in your system.", style="red")
         console.line()
 
         if error_msg:
