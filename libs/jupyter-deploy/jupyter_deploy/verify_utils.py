@@ -78,7 +78,7 @@ def _check_ssm_plugin_installation(min_version: Version | None = None) -> bool:
     return _check_installation(
         tool_name="session-manager-plugin",
         min_version=min_version,
-        installation_url="https://docs.aws.amazon.com/systems-manager/latest/userguide/plugin-version-history.html",
+        installation_url="https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html",
     )
 
 
