@@ -20,6 +20,7 @@ from jupyter_deploy.handlers.init_handler import InitHandler
 from jupyter_deploy.handlers.project import config_handler
 from jupyter_deploy.handlers.project.down_handler import DownHandler
 from jupyter_deploy.handlers.project.open_handler import OpenHandler
+from jupyter_deploy.handlers.project.show_handler import ShowHandler
 from jupyter_deploy.handlers.project.up_handler import UpHandler
 from jupyter_deploy.infrastructure.enum import AWSInfrastructureType, InfrastructureType
 from jupyter_deploy.provider.enum import ProviderType
@@ -347,7 +348,9 @@ def show(project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None
     If the project is up, shows the values of the output as defined in
     the infrastructure as code project.
     """
-    pass
+    with cmd_utils.project_dir(project_dir):
+        handler = ShowHandler()
+        handler.show_project_info()
 
 
 class JupyterDeployApp(JupyterApp):
