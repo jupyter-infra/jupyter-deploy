@@ -1,8 +1,11 @@
 from enum import Enum
+from typing import TYPE_CHECKING
 
 import boto3
-from mypy_boto3_ssm.client import SSMClient
 from rich import console as rich_console
+
+if TYPE_CHECKING:
+    from mypy_boto3_ssm.client import SSMClient
 
 from jupyter_deploy import cmd_utils, verify_utils
 from jupyter_deploy.api.aws.ssm import ssm_command, ssm_session
@@ -32,11 +35,11 @@ class AwsSsmInstruction(str, Enum):
 class AwsSsmRunner(InstructionRunner):
     """Runner class for AWS SSM service API instructions."""
 
-    client: SSMClient
+    client: "SSMClient"
 
     def __init__(self, region_name: str | None) -> None:
         """Instantiates the SSM boto3 client."""
-        self.client: SSMClient = boto3.client("ssm", region_name=region_name)
+        self.client = boto3.client("ssm", region_name=region_name)
 
     def _verify_ec2_instance_accessible(
         self,

@@ -1,26 +1,34 @@
 import time
+from typing import TYPE_CHECKING, Any
 
 import botocore
 import botocore.exceptions
-from mypy_boto3_ssm.client import SSMClient
-from mypy_boto3_ssm.literals import CommandInvocationStatusType
-from mypy_boto3_ssm.type_defs import GetCommandInvocationResultTypeDef, SendCommandRequestTypeDef
 
-TERMINAL_COMMAND_STATUS: list[CommandInvocationStatusType] = ["Cancelled", "Failed", "Success", "TimedOut"]
+if TYPE_CHECKING:
+    from mypy_boto3_ssm.client import SSMClient
+    from mypy_boto3_ssm.literals import CommandInvocationStatusType
+    from mypy_boto3_ssm.type_defs import GetCommandInvocationResultTypeDef, SendCommandRequestTypeDef
+else:
+    SSMClient = Any
+    CommandInvocationStatusType = str
+    GetCommandInvocationResultTypeDef = dict[str, Any]
+    SendCommandRequestTypeDef = dict[str, Any]
+
+TERMINAL_COMMAND_STATUS: list["CommandInvocationStatusType"] = ["Cancelled", "Failed", "Success", "TimedOut"]
 
 
-def is_terminal_command_invocation_status(command_status: CommandInvocationStatusType) -> bool:
+def is_terminal_command_invocation_status(command_status: "CommandInvocationStatusType") -> bool:
     """Return True for terminal status, False otherwise."""
     return command_status in TERMINAL_COMMAND_STATUS
 
 
 def poll_command(
-    client: SSMClient,
+    client: "SSMClient",
     command_id: str,
     instance_id: str,
     poll_interval_seconds: int = 2,
     wait_on_invocation_does_not_exist: int = 2,
-) -> GetCommandInvocationResultTypeDef:
+) -> "GetCommandInvocationResultTypeDef":
     """Call SSM:GetCommandExecution until terminal state, return API response.
 
     The first call may fail as SSM takes 1-2 seconds to register a newly-sent command.
@@ -47,13 +55,13 @@ def poll_command(
 
 
 def send_cmd_to_one_instance_and_wait_sync(
-    client: SSMClient,
+    client: "SSMClient",
     document_name: str,
     instance_id: str,
     timeout_seconds: int = 30,
     wait_after_send_seconds: int = 2,
     **parameters: list[str],
-) -> GetCommandInvocationResultTypeDef:
+) -> "GetCommandInvocationResultTypeDef":
     """Send the command, poll execution, return execution response."""
     request: SendCommandRequestTypeDef = {
         "DocumentName": document_name,

@@ -1,18 +1,31 @@
 import time
 from enum import Enum
+from typing import TYPE_CHECKING, Any
 
-from mypy_boto3_ec2.client import EC2Client
-from mypy_boto3_ec2.type_defs import (
-    DescribeInstancesRequestTypeDef,
-    DescribeInstanceStatusRequestTypeDef,
-    InstanceStateChangeTypeDef,
-    InstanceStateTypeDef,
-    InstanceStatusTypeDef,
-    RebootInstancesRequestTypeDef,
-    StartInstancesRequestTypeDef,
-    StopInstancesRequestTypeDef,
-)
 from rich import console as rich_console
+
+if TYPE_CHECKING:
+    from mypy_boto3_ec2.client import EC2Client
+    from mypy_boto3_ec2.type_defs import (
+        DescribeInstancesRequestTypeDef,
+        DescribeInstanceStatusRequestTypeDef,
+        InstanceStateChangeTypeDef,
+        InstanceStateTypeDef,
+        InstanceStatusTypeDef,
+        RebootInstancesRequestTypeDef,
+        StartInstancesRequestTypeDef,
+        StopInstancesRequestTypeDef,
+    )
+else:
+    EC2Client = Any
+    DescribeInstancesRequestTypeDef = dict[str, Any]
+    DescribeInstanceStatusRequestTypeDef = dict[str, Any]
+    InstanceStateChangeTypeDef = dict[str, Any]
+    InstanceStateTypeDef = dict[str, Any]
+    InstanceStatusTypeDef = dict[str, Any]
+    RebootInstancesRequestTypeDef = dict[str, Any]
+    StartInstancesRequestTypeDef = dict[str, Any]
+    StopInstancesRequestTypeDef = dict[str, Any]
 
 
 class Ec2InstanceState(str, Enum):
@@ -93,8 +106,8 @@ _INSTANCE_REVERSE_CODE_MAP: dict[int, Ec2InstanceState] = {v: k for k, v in _INS
 
 
 def describe_instance_status(
-    ec2_client: EC2Client, instance_id: str, check_status_first: bool = True
-) -> InstanceStatusTypeDef:
+    ec2_client: "EC2Client", instance_id: str, check_status_first: bool = True
+) -> "InstanceStatusTypeDef":
     """Call one of the EC2 describe-instance APIs, return the InstanceStatus.
 
     Raises:
@@ -131,14 +144,14 @@ def describe_instance_status(
 
 
 def poll_for_instance_status(
-    ec2_client: EC2Client,
+    ec2_client: "EC2Client",
     console: rich_console.Console,
     instance_id: str,
     desired_state: Ec2InstanceState,
     timeout_seconds: int = 60,
     wait_after_seconds: int = 2,
     poll_interval_seconds: int = 5,
-) -> InstanceStatusTypeDef:
+) -> "InstanceStatusTypeDef":
     """Synchronously poll EC2:GetInstanceStatus until the instance reaches a terminal state.
 
     Raises:
@@ -167,7 +180,7 @@ def poll_for_instance_status(
             time.sleep(poll_interval_seconds)
 
 
-def start_instance(ec2_client: EC2Client, instance_id: str) -> InstanceStateChangeTypeDef:
+def start_instance(ec2_client: "EC2Client", instance_id: str) -> "InstanceStateChangeTypeDef":
     """Call EC2:StartInstance, return the InstanceStateChange.
 
     Raises:
@@ -185,7 +198,7 @@ def start_instance(ec2_client: EC2Client, instance_id: str) -> InstanceStateChan
     return instance_state_changes[0]
 
 
-def stop_instance(ec2_client: EC2Client, instance_id: str) -> InstanceStateChangeTypeDef:
+def stop_instance(ec2_client: "EC2Client", instance_id: str) -> "InstanceStateChangeTypeDef":
     """Call EC2:StopInstance, return the InstanceStateChange.
 
     Raises:
@@ -203,7 +216,7 @@ def stop_instance(ec2_client: EC2Client, instance_id: str) -> InstanceStateChang
     return instance_state_changes[0]
 
 
-def restart_instance(ec2_client: EC2Client, instance_id: str) -> None:
+def restart_instance(ec2_client: "EC2Client", instance_id: str) -> None:
     """Call EC2:RebootInstance."""
 
     request: RebootInstancesRequestTypeDef = {"InstanceIds": [instance_id]}

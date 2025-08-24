@@ -1,8 +1,11 @@
 from enum import Enum
+from typing import TYPE_CHECKING
 
 import boto3
-from mypy_boto3_ec2.client import EC2Client
 from rich import console as rich_console
+
+if TYPE_CHECKING:
+    from mypy_boto3_ec2.client import EC2Client
 
 from jupyter_deploy.api.aws.ec2 import ec2_instance
 from jupyter_deploy.provider.instruction_runner import InstructionRunner, InterruptInstructionError
@@ -28,11 +31,11 @@ class AwsEc2Instruction(str, Enum):
 class AwsEc2Runner(InstructionRunner):
     """Runner class for AWS EC2 service API instructions."""
 
-    client: EC2Client
+    client: "EC2Client"
 
     def __init__(self, region_name: str | None) -> None:
         """Instantiates the EC2 boto3 client."""
-        self.client: EC2Client = boto3.client("ec2", region_name=region_name)
+        self.client = boto3.client("ec2", region_name=region_name)
 
     def _describe_instance_status(
         self,
