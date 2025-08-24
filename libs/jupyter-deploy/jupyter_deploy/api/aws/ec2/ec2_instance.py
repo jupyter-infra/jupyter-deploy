@@ -1,6 +1,6 @@
 import time
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from rich import console as rich_console
 
@@ -16,16 +16,6 @@ if TYPE_CHECKING:
         StartInstancesRequestTypeDef,
         StopInstancesRequestTypeDef,
     )
-else:
-    EC2Client = Any
-    DescribeInstancesRequestTypeDef = dict[str, Any]
-    DescribeInstanceStatusRequestTypeDef = dict[str, Any]
-    InstanceStateChangeTypeDef = dict[str, Any]
-    InstanceStateTypeDef = dict[str, Any]
-    InstanceStatusTypeDef = dict[str, Any]
-    RebootInstancesRequestTypeDef = dict[str, Any]
-    StartInstancesRequestTypeDef = dict[str, Any]
-    StopInstancesRequestTypeDef = dict[str, Any]
 
 
 class Ec2InstanceState(str, Enum):
@@ -52,7 +42,7 @@ class Ec2InstanceState(str, Enum):
         raise ValueError(f"No Ec2InstanceState found for '{state_name}'")
 
     @classmethod
-    def from_state_response(cls, instance_state: InstanceStateTypeDef) -> "Ec2InstanceState":
+    def from_state_response(cls, instance_state: "InstanceStateTypeDef") -> "Ec2InstanceState":
         """Return the enum value.
 
         Raises:
@@ -117,7 +107,7 @@ def describe_instance_status(
     # first try calling EC2:DescribeInstanceStatuses
     # this will only surface running instances
     if check_status_first:
-        request: DescribeInstanceStatusRequestTypeDef = {"InstanceIds": [instance_id]}
+        request: "DescribeInstanceStatusRequestTypeDef" = {"InstanceIds": [instance_id]}
         response = ec2_client.describe_instance_status(**request)
 
         instance_statuses = response["InstanceStatuses"]
@@ -126,7 +116,7 @@ def describe_instance_status(
             return instance_statuses[0]
 
     # second try calling EC2:DescribeInstance directly
-    full_describe_request: DescribeInstancesRequestTypeDef = {"InstanceIds": [instance_id]}
+    full_describe_request: "DescribeInstancesRequestTypeDef" = {"InstanceIds": [instance_id]}
     full_response = ec2_client.describe_instances(**full_describe_request)
     reservations = full_response["Reservations"]
 
@@ -139,7 +129,7 @@ def describe_instance_status(
         raise ValueError("Instance not found in reservation")
     instance = instances[0]
 
-    instance_status: InstanceStatusTypeDef = {"InstanceState": instance.get("State", {})}
+    instance_status: "InstanceStatusTypeDef" = {"InstanceState": instance.get("State", {})}
     return instance_status
 
 
@@ -187,7 +177,7 @@ def start_instance(ec2_client: "EC2Client", instance_id: str) -> "InstanceStateC
         ValueError if the instance is not found.
     """
 
-    request: StartInstancesRequestTypeDef = {"InstanceIds": [instance_id]}
+    request: "StartInstancesRequestTypeDef" = {"InstanceIds": [instance_id]}
     response = ec2_client.start_instances(**request)
 
     instance_state_changes = response["StartingInstances"]
@@ -205,7 +195,7 @@ def stop_instance(ec2_client: "EC2Client", instance_id: str) -> "InstanceStateCh
         ValueError if the instance is not found.
     """
 
-    request: StopInstancesRequestTypeDef = {"InstanceIds": [instance_id]}
+    request: "StopInstancesRequestTypeDef" = {"InstanceIds": [instance_id]}
     response = ec2_client.stop_instances(**request)
 
     instance_state_changes = response["StoppingInstances"]
@@ -219,5 +209,5 @@ def stop_instance(ec2_client: "EC2Client", instance_id: str) -> "InstanceStateCh
 def restart_instance(ec2_client: "EC2Client", instance_id: str) -> None:
     """Call EC2:RebootInstance."""
 
-    request: RebootInstancesRequestTypeDef = {"InstanceIds": [instance_id]}
+    request: "RebootInstancesRequestTypeDef" = {"InstanceIds": [instance_id]}
     ec2_client.reboot_instances(**request)

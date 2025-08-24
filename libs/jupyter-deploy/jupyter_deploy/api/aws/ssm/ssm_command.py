@@ -1,5 +1,5 @@
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import botocore
 import botocore.exceptions
@@ -8,11 +8,6 @@ if TYPE_CHECKING:
     from mypy_boto3_ssm.client import SSMClient
     from mypy_boto3_ssm.literals import CommandInvocationStatusType
     from mypy_boto3_ssm.type_defs import GetCommandInvocationResultTypeDef, SendCommandRequestTypeDef
-else:
-    SSMClient = Any
-    CommandInvocationStatusType = str
-    GetCommandInvocationResultTypeDef = dict[str, Any]
-    SendCommandRequestTypeDef = dict[str, Any]
 
 TERMINAL_COMMAND_STATUS: list["CommandInvocationStatusType"] = ["Cancelled", "Failed", "Success", "TimedOut"]
 
@@ -63,7 +58,7 @@ def send_cmd_to_one_instance_and_wait_sync(
     **parameters: list[str],
 ) -> "GetCommandInvocationResultTypeDef":
     """Send the command, poll execution, return execution response."""
-    request: SendCommandRequestTypeDef = {
+    request: "SendCommandRequestTypeDef" = {
         "DocumentName": document_name,
         "InstanceIds": [instance_id],
         "TimeoutSeconds": timeout_seconds,
