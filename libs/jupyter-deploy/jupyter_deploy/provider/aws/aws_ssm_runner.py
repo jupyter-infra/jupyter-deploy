@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -35,7 +37,7 @@ class AwsSsmInstruction(str, Enum):
 class AwsSsmRunner(InstructionRunner):
     """Runner class for AWS SSM service API instructions."""
 
-    client: "SSMClient"
+    client: SSMClient
 
     def __init__(self, region_name: str | None) -> None:
         """Instantiates the SSM boto3 client."""

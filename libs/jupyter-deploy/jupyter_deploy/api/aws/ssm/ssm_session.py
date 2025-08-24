@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -5,10 +7,10 @@ if TYPE_CHECKING:
     from mypy_boto3_ssm.type_defs import DescribeInstanceInformationRequestTypeDef, InstanceInformationTypeDef
 
 
-def describe_instance_information(ssm_client: "SSMClient", instance_id: str) -> "InstanceInformationTypeDef":
+def describe_instance_information(ssm_client: SSMClient, instance_id: str) -> InstanceInformationTypeDef:
     """Call SSM:DescribeInstanceInformation, return the result."""
 
-    request: "DescribeInstanceInformationRequestTypeDef" = {
+    request: DescribeInstanceInformationRequestTypeDef = {
         "Filters": [{"Key": "InstanceIds", "Values": [instance_id]}]
     }
     response = ssm_client.describe_instance_information(**request)

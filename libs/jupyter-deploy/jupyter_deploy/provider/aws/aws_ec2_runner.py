@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -31,7 +33,7 @@ class AwsEc2Instruction(str, Enum):
 class AwsEc2Runner(InstructionRunner):
     """Runner class for AWS EC2 service API instructions."""
 
-    client: "EC2Client"
+    client: EC2Client
 
     def __init__(self, region_name: str | None) -> None:
         """Instantiates the EC2 boto3 client."""
