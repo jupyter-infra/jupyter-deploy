@@ -51,7 +51,7 @@ class TestShowHandler:
             handler = ShowHandler()
 
             with (
-                patch.object(handler._outputs_handler, "get_full_project_outputs", return_value={}) as mock_outputs,
+                patch.object(handler._outputs_handler, "get_full_project_outputs", return_value={}) as _,
                 patch.object(handler.console, "print") as mock_print,
             ):
                 handler._show_project_outputs()
@@ -74,7 +74,7 @@ class TestShowHandler:
             with (
                 patch.object(
                     handler._outputs_handler, "get_full_project_outputs", return_value=mock_outputs
-                ) as mock_get_outputs,
+                ) as _,
                 patch.object(handler.console, "print") as mock_print,
             ):
                 handler._show_project_outputs()
