@@ -10,9 +10,7 @@ if TYPE_CHECKING:
 def describe_instance_information(ssm_client: SSMClient, instance_id: str) -> InstanceInformationTypeDef:
     """Call SSM:DescribeInstanceInformation, return the result."""
 
-    request: DescribeInstanceInformationRequestTypeDef = {
-        "Filters": [{"Key": "InstanceIds", "Values": [instance_id]}]
-    }
+    request: DescribeInstanceInformationRequestTypeDef = {"Filters": [{"Key": "InstanceIds", "Values": [instance_id]}]}
     response = ssm_client.describe_instance_information(**request)
     information_list = response["InstanceInformationList"]
 
