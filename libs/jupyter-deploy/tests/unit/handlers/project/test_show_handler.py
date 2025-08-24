@@ -72,9 +72,7 @@ class TestShowHandler:
             mock_outputs = {"jupyter_url": mock_output}
 
             with (
-                patch.object(
-                    handler._outputs_handler, "get_full_project_outputs", return_value=mock_outputs
-                ) as _,
+                patch.object(handler._outputs_handler, "get_full_project_outputs", return_value=mock_outputs) as _,
                 patch.object(handler.console, "print") as mock_print,
             ):
                 handler._show_project_outputs()
