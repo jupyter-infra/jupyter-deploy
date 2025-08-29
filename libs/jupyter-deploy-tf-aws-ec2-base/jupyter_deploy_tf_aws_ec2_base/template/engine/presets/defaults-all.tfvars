@@ -1,5 +1,6 @@
 # defaults.tfvars
 region                     = "us-west-2"
+jupyter_package_manager    = "uv"
 instance_type              = "t3.medium"
 key_pair_name              = null
 ami_id                     = null

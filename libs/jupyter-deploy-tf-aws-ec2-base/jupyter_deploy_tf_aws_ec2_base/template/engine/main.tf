@@ -331,9 +331,14 @@ resource "aws_route53_record" "jupyter" {
   type    = "A"
   ttl     = 300
   records = [aws_eip.jupyter_eip.public_ip]
+
+  depends_on = [
+    aws_eip.jupyter_eip
+  ]
 }
 
 # Read the local files defining the instance and docker services setup
+# Files for the UV (standard) environment
 data "local_file" "dockerfile_jupyter" {
   filename = "${path.module}/../services/jupyter/dockerfile.jupyter"
 }
@@ -350,10 +355,40 @@ data "local_file" "pyproject_jupyter" {
   filename = "${path.module}/../services/jupyter/pyproject.jupyter.toml"
 }
 
-data "local_file" "jupyter_server_config" {
+data "local_file" "jupyter_server_config_uv" {
   filename = "${path.module}/../services/jupyter/jupyter_server_config.py"
 }
 
+data "local_file" "pyproject_kernel" {
+  filename = "${path.module}/../services/jupyter/pyproject.kernel.toml"
+}
+
+# Files for the Pixi environment
+data "local_file" "dockerfile_jupyter_pixi" {
+  filename = "${path.module}/../services/jupyter-pixi/dockerfile.jupyter.pixi"
+}
+
+data "local_file" "jupyter_start_pixi" {
+  filename = "${path.module}/../services/jupyter-pixi/jupyter-start-pixi.sh"
+}
+
+data "local_file" "jupyter_reset_pixi" {
+  filename = "${path.module}/../services/jupyter-pixi/jupyter-reset-pixi.sh"
+}
+
+data "local_file" "pixi_jupyter" {
+  filename = "${path.module}/../services/jupyter-pixi/pyproject.jupyter.pixi.toml"
+}
+
+data "local_file" "jupyter_server_config_pixi" {
+  filename = "${path.module}/../services/jupyter-pixi/jupyter_server_config_pixi.py"
+}
+
+data "local_file" "pyproject_kernel_pixi" {
+  filename = "${path.module}/../services/jupyter-pixi/pyproject.kernel.pixi.toml"
+}
+
+# Other services
 data "local_file" "dockerfile_logrotator" {
   filename = "${path.module}/../services/logrotator/dockerfile.logrotator"
 }
@@ -396,6 +431,15 @@ locals {
   full_domain       = "${var.subdomain}.${var.domain}"
   github_auth_valid = var.oauth_provider != "github" || (var.oauth_allowed_usernames != null && length(var.oauth_allowed_usernames) > 0) || (var.oauth_allowed_org != null && length(var.oauth_allowed_org) > 0)
   teams_have_org    = var.oauth_allowed_teams == null || length(var.oauth_allowed_teams) == 0 || (var.oauth_allowed_org != null && length(var.oauth_allowed_org) > 0)
+
+  # Select the correct files based on package manager type
+  dockerfile_content            = var.jupyter_package_manager == "pixi" ? data.local_file.dockerfile_jupyter_pixi.content : data.local_file.dockerfile_jupyter.content
+  jupyter_pyproject_content     = var.jupyter_package_manager == "pixi" ? data.local_file.pixi_jupyter.content : data.local_file.pyproject_jupyter.content
+  jupyter_start_content         = var.jupyter_package_manager == "pixi" ? data.local_file.jupyter_start_pixi.content : data.local_file.jupyter_start.content
+  jupyter_reset_content         = var.jupyter_package_manager == "pixi" ? data.local_file.jupyter_reset_pixi.content : data.local_file.jupyter_reset.content
+  jupyter_server_config_content = var.jupyter_package_manager == "pixi" ? data.local_file.jupyter_server_config_pixi.content : data.local_file.jupyter_server_config_uv.content
+  kernel_pyproject_content      = var.jupyter_package_manager == "pixi" ? data.local_file.pyproject_kernel_pixi.content : data.local_file.pyproject_kernel.content
+  dockerfile_name               = "dockerfile.jupyter"
 }
 
 locals {
@@ -420,6 +464,7 @@ locals {
     allowed_github_teams     = local.allowed_github_teams
     ebs_mounts               = local.resolved_ebs_mounts
     efs_mounts               = local.resolved_efs_mounts
+    dockerfile_name          = local.dockerfile_name
   })
   traefik_config_file = templatefile("${path.module}/../services/traefik/traefik.yml.tftpl", {
     letsencrypt_notification_email = var.letsencrypt_email
@@ -438,13 +483,14 @@ locals {
   indent_str                     = join("", [for i in range(local.indent_count) : " "])
   cloud_init_indented            = join("\n${local.indent_str}", compact(split("\n", local.cloud_init_file)))
   docker_compose_indented        = join("\n${local.indent_str}", compact(split("\n", local.docker_compose_file)))
-  dockerfile_jupyter_indented    = join("\n${local.indent_str}", compact(split("\n", data.local_file.dockerfile_jupyter.content)))
-  jupyter_start_indented         = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_start.content)))
-  jupyter_reset_indented         = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_reset.content)))
+  dockerfile_jupyter_indented    = join("\n${local.indent_str}", compact(split("\n", local.dockerfile_content)))
+  jupyter_start_indented         = join("\n${local.indent_str}", compact(split("\n", local.jupyter_start_content)))
+  jupyter_reset_indented         = join("\n${local.indent_str}", compact(split("\n", local.jupyter_reset_content)))
   docker_startup_indented        = join("\n${local.indent_str}", compact(split("\n", local.docker_startup_file)))
+  pyproject_jupyter_indented     = join("\n${local.indent_str}", compact(split("\n", local.jupyter_pyproject_content)))
+  pyproject_kernel_indented      = join("\n${local.indent_str}", compact(split("\n", local.kernel_pyproject_content)))
+  jupyter_server_config_indented = join("\n${local.indent_str}", compact(split("\n", local.jupyter_server_config_content)))
   traefik_config_indented        = join("\n${local.indent_str}", compact(split("\n", local.traefik_config_file)))
-  pyproject_jupyter_indented     = join("\n${local.indent_str}", compact(split("\n", data.local_file.pyproject_jupyter.content)))
-  jupyter_server_config_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.jupyter_server_config.content)))
   dockerfile_logrotator_indented = join("\n${local.indent_str}", compact(split("\n", data.local_file.dockerfile_logrotator.content)))
   fluent_bit_conf_indented       = join("\n${local.indent_str}", compact(split("\n", data.local_file.fluent_bit_conf.content)))
   parsers_conf_indented          = join("\n${local.indent_str}", compact(split("\n", data.local_file.parsers_conf.content)))
@@ -503,6 +549,9 @@ mainSteps:
           tee /opt/docker/pyproject.jupyter.toml << 'EOF'
           ${local.pyproject_jupyter_indented}
           EOF
+          tee /opt/docker/pyproject.kernel.toml << 'EOF'
+          ${local.pyproject_kernel_indented}
+          EOF
           tee /opt/docker/jupyter_server_config.py << 'EOF'
           ${local.jupyter_server_config_indented}
           EOF
@@ -554,6 +603,10 @@ DOC
     fileexists("${path.module}/../services/jupyter/jupyter-start.sh"),
     fileexists("${path.module}/../services/jupyter/jupyter-reset.sh"),
     fileexists("${path.module}/../services/jupyter/jupyter_server_config.py"),
+    fileexists("${path.module}/../services/jupyter-pixi/dockerfile.jupyter"),
+    fileexists("${path.module}/../services/jupyter-pixi/jupyter-start-pixi.sh"),
+    fileexists("${path.module}/../services/jupyter-pixi/jupyter-reset-pixi.sh"),
+    fileexists("${path.module}/../services/jupyter-pixi/jupyter_server_config_pixi.py"),
     fileexists("${path.module}/../services/logrotator/dockerfile.logrotator"),
     fileexists("${path.module}/../services/commands/update-auth.sh"),
     fileexists("${path.module}/../services/commands/refresh-oauth-cookie.sh"),
@@ -567,7 +620,11 @@ DOC
     length(data.local_file.dockerfile_jupyter) > 0,
     length(data.local_file.jupyter_start) > 0,
     length(data.local_file.jupyter_reset) > 0,
-    length(data.local_file.jupyter_server_config) > 0,
+    length(data.local_file.jupyter_server_config_uv) > 0,
+    length(data.local_file.dockerfile_jupyter_pixi) > 0,
+    length(data.local_file.jupyter_start_pixi) > 0,
+    length(data.local_file.jupyter_reset_pixi) > 0,
+    length(data.local_file.jupyter_server_config_pixi) > 0,
     length(data.local_file.dockerfile_logrotator) > 0,
     length(data.local_file.update_auth) > 0,
     length(data.local_file.refresh_oauth_cookie) > 0,

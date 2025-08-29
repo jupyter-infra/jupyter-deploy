@@ -1,24 +1,26 @@
 import unittest
+from pathlib import Path
 
 import hcl2
 import yaml
+from jupyter_deploy.handlers import base_project_handler
 
 from jupyter_deploy_tf_aws_ec2_base.template import TEMPLATE_PATH
 
 
 class TestVariablesYaml(unittest.TestCase):
+    VARIABLES_CONFIG_PATH: Path = TEMPLATE_PATH / "variables.yaml"
     VARIABLES_CONFIG: dict
     DEFAULTS_ALL_TFVARS: dict
     TF_VARIABLES: dict
 
     @classmethod
     def setUpClass(cls) -> None:
-        variables_yaml_filepath = TEMPLATE_PATH / "variables.yaml"
         defaults_all_filepath = TEMPLATE_PATH / "engine" / "presets" / "defaults-all.tfvars"
         variables_tf_filepath = TEMPLATE_PATH / "engine" / "variables.tf"
 
         # Read and parse variables.yaml
-        with open(variables_yaml_filepath) as variables_config_file:
+        with open(cls.VARIABLES_CONFIG_PATH) as variables_config_file:
             variable_config = yaml.safe_load(variables_config_file)
 
         if not isinstance(variable_config, dict):
@@ -224,3 +226,8 @@ class TestVariablesYaml(unittest.TestCase):
             0,
             f"Variables in 'required_sensitive' not marked as sensitive in variables.tf: {not_marked_sensitive}",
         )
+
+    def test_variables_file_parsable_by_base_project_handler(self) -> None:
+        """Test that the variables.yaml file can be parsed by the base project handler."""
+        variables_config = base_project_handler.retrieve_variables_config(self.VARIABLES_CONFIG_PATH)
+        self.assertIsNotNone(variables_config)

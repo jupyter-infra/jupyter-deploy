@@ -23,6 +23,7 @@ packages = ["jupyter_deploy_tf_aws_ec2_base"]
 
 [dependency-groups]
 dev = [
+    "jupyter-deploy",
     "mypy>=1.15.0",
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
@@ -81,3 +82,6 @@ exclude_lines = [
 ]
 fail_under = 80
 show_missing = true
+
+[tool.uv.sources]
+jupyter-deploy = { workspace = true }

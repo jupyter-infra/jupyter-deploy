@@ -10,6 +10,24 @@ variable "region" {
   type        = string
 }
 
+variable "jupyter_package_manager" {
+  description = <<-EOT
+    The type of package manager to use for Jupyter.
+
+    Options:
+    - uv: more performant but only supports native python dependencies (default)
+    - pixi: uses conda-forge which supports scientific and non-Python dependencies
+
+    Recommended: uv
+  EOT
+  type        = string
+
+  validation {
+    condition     = contains(["uv", "pixi"], var.jupyter_package_manager)
+    error_message = "The jupyter_package_manager value must be one of: uv, pixi"
+  }
+}
+
 variable "instance_type" {
   description = <<-EOT
     The instance type of the EC2 instance for the jupyter server.
