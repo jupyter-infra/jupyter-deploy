@@ -50,9 +50,9 @@ RUN mkdir -p /etc/jupyter
 COPY jupyter_server_config.py /etc/jupyter/
 
 # 8/ Create uv env for jupyter
-COPY pyproject.jupyter.toml /opt/pixi/jupyter/pyproject.toml
+COPY pixi.jupyter.toml /opt/pixi/jupyter/pixi.toml
 WORKDIR /opt/pixi/jupyter
-RUN uv sync
+RUN pixi install
 
 # 9/ Create the start-up script
 COPY jupyter-start.sh /usr/local/bin/

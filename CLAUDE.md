@@ -54,3 +54,4 @@ After making code changes, always run from the root of the repository:
     - Clear the deployment template with: `rm -rf sandbox-claude`
     - !IMPORTANT: never run `rm -rf` on any other dir than `sandbox-claude`
     - Edit the template project, and start again the end-to-end testing workflow
+- Finally, always go back to the project root directory (same dir as `CLAUDE.md`)

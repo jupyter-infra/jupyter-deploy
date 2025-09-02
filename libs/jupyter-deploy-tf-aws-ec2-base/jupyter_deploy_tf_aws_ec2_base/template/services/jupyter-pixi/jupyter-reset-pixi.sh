@@ -26,7 +26,7 @@ fi
 # Clean up kernels
 if [ -d "/home/jovyan/.kernels" ]; then
     echo "Cleaning kernels config..."
-    rm -rf /home/jovyan/.jupyter
+    rm -rf /home/jovyan/.kernels
 fi
 
 if [ -d "/home/jovyan/.local" ]; then
@@ -34,7 +34,7 @@ if [ -d "/home/jovyan/.local" ]; then
     rm -rf /home/jovyan/.local
 fi
 
-cp /opt/pixi/jupyter/pyproject.toml /home/jovyan/
+cp /opt/pixi/jupyter/pixi.toml /home/jovyan/
 cp /opt/pixi/jupyter/pixi.lock /home/jovyan/
 
 echo "Recreating pixi environment..."
@@ -48,7 +48,7 @@ uv sync --directory /home/jovyan/.kernels/uv-kernel --locked
 uv run --directory /home/jovyan/.kernels/uv-kernel \
     python -m ipykernel install --user --name python3-uv --display-name "Python 3 (UV)"
 
-pixi run -- jupyter lab \
+pixi run jupyter lab \
     --no-browser \
     --ip=0.0.0.0 \
     --IdentityProvider.token=

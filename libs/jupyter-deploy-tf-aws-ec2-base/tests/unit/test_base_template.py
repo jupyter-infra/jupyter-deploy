@@ -33,7 +33,7 @@ EXPECTED_TEMPLATE_STRPATHS: list[str] = [
     "services/jupyter-pixi/jupyter_server_config_pixi.py",
     "services/jupyter-pixi/jupyter-reset-pixi.sh",
     "services/jupyter-pixi/jupyter-start-pixi.sh",
-    "services/jupyter-pixi/pyproject.jupyter.pixi.toml",
+    "services/jupyter-pixi/pixi.jupyter.toml",
     "services/jupyter-pixi/pyproject.kernel.pixi.toml",
     "services/logrotator/dockerfile.logrotator",
     "services/logrotator/logrotator-start.sh.tftpl",

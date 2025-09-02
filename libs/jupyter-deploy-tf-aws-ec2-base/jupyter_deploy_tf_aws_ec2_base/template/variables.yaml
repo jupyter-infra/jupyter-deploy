@@ -32,6 +32,7 @@ defaults:
   oauth_provider: "github"
   oauth_app_secret_prefix: "Jupyter-deploy-ec2-base"
   region: "us-west-2"
+  root_volume_size_gb: 30
   volume_size_gb: 30
   volume_type: "gp3"
   additional_ebs_mounts: []

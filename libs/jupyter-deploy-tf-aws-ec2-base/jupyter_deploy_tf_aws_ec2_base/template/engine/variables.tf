@@ -65,6 +65,23 @@ variable "ami_id" {
   type        = string
 }
 
+variable "root_volume_size_gb" {
+  description = <<-EOT
+    The size in gigabytes of the root EBS volume for the EC2 instance.
+    
+    If not specified, defaults to the size provided by the AMI.
+    
+    Recommended: 30
+  EOT
+  type        = number
+  nullable    = true
+
+  validation {
+    condition     = var.root_volume_size_gb == null || (var.root_volume_size_gb > 0 && var.root_volume_size_gb < 1024)
+    error_message = "The root_volume_size_gb value must be greater than 0 and less than 1024 (1TB)."
+  }
+}
+
 variable "volume_size_gb" {
   description = <<-EOT
     The size in gigabytes of the EBS volume accessible to the jupyter server.
@@ -439,7 +456,6 @@ variable "additional_ebs_mounts" {
   }
 }
 
-# Variables for additional EFS volumes
 variable "additional_efs_mounts" {
   description = <<-EOT
     Elastic file systems to mount on the notebook home directory; keys: name or id, mount_point, persist.

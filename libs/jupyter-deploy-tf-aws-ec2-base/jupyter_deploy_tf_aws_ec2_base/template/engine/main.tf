@@ -104,6 +104,17 @@ locals {
 }
 
 
+# Allocate an Elastic IP address first
+resource "aws_eip" "jupyter_eip" {
+  domain = "vpc"
+  tags = merge(
+    local.combined_tags,
+    {
+      Name = "jupyter-eip-${local.doc_postfix}"
+    }
+  )
+}
+
 # Place the EC2 instance in the first subnet of the default VPC, using:
 # - the security group
 # - the AMI
@@ -122,7 +133,7 @@ resource "aws_instance" "ec2_jupyter_server" {
 
   # Root volume configuration
   root_block_device {
-    volume_size = local.root_block_device.ebs.volume_size
+    volume_size = var.root_volume_size_gb != null ? var.root_volume_size_gb : local.root_block_device.ebs.volume_size
     volume_type = try(local.root_block_device.ebs.volume_type, "gp3")
     encrypted   = try(local.root_block_device.ebs.encrypted, true)
     tags = merge(
@@ -139,19 +150,10 @@ resource "aws_instance" "ec2_jupyter_server" {
   depends_on = [aws_ssm_document.instance_startup]
 }
 
-# Allocate an Elastic IP address for the EC2 instance
-resource "aws_eip" "jupyter_eip" {
-  domain   = "vpc"
-  instance = aws_instance.ec2_jupyter_server.id
-  tags = merge(
-    local.combined_tags,
-    {
-      Name = "jupyter-eip-${local.doc_postfix}"
-    }
-  )
-
-  # Only create the EIP once the instance is ready
-  depends_on = [aws_instance.ec2_jupyter_server]
+# Associate the Elastic IP with the EC2 instance
+resource "aws_eip_association" "jupyter_eip_assoc" {
+  instance_id   = aws_instance.ec2_jupyter_server.id
+  allocation_id = aws_eip.jupyter_eip.id
 }
 
 # Define the IAM role for the instance and add policies
@@ -331,10 +333,6 @@ resource "aws_route53_record" "jupyter" {
   type    = "A"
   ttl     = 300
   records = [aws_eip.jupyter_eip.public_ip]
-
-  depends_on = [
-    aws_eip.jupyter_eip
-  ]
 }
 
 # Read the local files defining the instance and docker services setup
@@ -377,7 +375,7 @@ data "local_file" "jupyter_reset_pixi" {
 }
 
 data "local_file" "pixi_jupyter" {
-  filename = "${path.module}/../services/jupyter-pixi/pyproject.jupyter.pixi.toml"
+  filename = "${path.module}/../services/jupyter-pixi/pixi.jupyter.toml"
 }
 
 data "local_file" "jupyter_server_config_pixi" {
@@ -434,12 +432,12 @@ locals {
 
   # Select the correct files based on package manager type
   dockerfile_content            = var.jupyter_package_manager == "pixi" ? data.local_file.dockerfile_jupyter_pixi.content : data.local_file.dockerfile_jupyter.content
-  jupyter_pyproject_content     = var.jupyter_package_manager == "pixi" ? data.local_file.pixi_jupyter.content : data.local_file.pyproject_jupyter.content
+  jupyter_toml_content          = var.jupyter_package_manager == "pixi" ? data.local_file.pixi_jupyter.content : data.local_file.pyproject_jupyter.content
   jupyter_start_content         = var.jupyter_package_manager == "pixi" ? data.local_file.jupyter_start_pixi.content : data.local_file.jupyter_start.content
   jupyter_reset_content         = var.jupyter_package_manager == "pixi" ? data.local_file.jupyter_reset_pixi.content : data.local_file.jupyter_reset.content
   jupyter_server_config_content = var.jupyter_package_manager == "pixi" ? data.local_file.jupyter_server_config_pixi.content : data.local_file.jupyter_server_config_uv.content
   kernel_pyproject_content      = var.jupyter_package_manager == "pixi" ? data.local_file.pyproject_kernel_pixi.content : data.local_file.pyproject_kernel.content
-  dockerfile_name               = "dockerfile.jupyter"
+  jupyter_toml_filename         = var.jupyter_package_manager == "pixi" ? "pixi.jupyter.toml" : "pyproject.jupyter.toml"
 }
 
 locals {
@@ -464,7 +462,6 @@ locals {
     allowed_github_teams     = local.allowed_github_teams
     ebs_mounts               = local.resolved_ebs_mounts
     efs_mounts               = local.resolved_efs_mounts
-    dockerfile_name          = local.dockerfile_name
   })
   traefik_config_file = templatefile("${path.module}/../services/traefik/traefik.yml.tftpl", {
     letsencrypt_notification_email = var.letsencrypt_email
@@ -487,7 +484,7 @@ locals {
   jupyter_start_indented         = join("\n${local.indent_str}", compact(split("\n", local.jupyter_start_content)))
   jupyter_reset_indented         = join("\n${local.indent_str}", compact(split("\n", local.jupyter_reset_content)))
   docker_startup_indented        = join("\n${local.indent_str}", compact(split("\n", local.docker_startup_file)))
-  pyproject_jupyter_indented     = join("\n${local.indent_str}", compact(split("\n", local.jupyter_pyproject_content)))
+  toml_jupyter_indented          = join("\n${local.indent_str}", compact(split("\n", local.jupyter_toml_content)))
   pyproject_kernel_indented      = join("\n${local.indent_str}", compact(split("\n", local.kernel_pyproject_content)))
   jupyter_server_config_indented = join("\n${local.indent_str}", compact(split("\n", local.jupyter_server_config_content)))
   traefik_config_indented        = join("\n${local.indent_str}", compact(split("\n", local.traefik_config_file)))
@@ -546,8 +543,8 @@ mainSteps:
           tee /opt/docker/jupyter-reset.sh << 'EOF'
           ${local.jupyter_reset_indented}
           EOF
-          tee /opt/docker/pyproject.jupyter.toml << 'EOF'
-          ${local.pyproject_jupyter_indented}
+          tee /opt/docker/${local.jupyter_toml_filename} << 'EOF'
+          ${local.toml_jupyter_indented}
           EOF
           tee /opt/docker/pyproject.kernel.toml << 'EOF'
           ${local.pyproject_kernel_indented}
@@ -603,10 +600,11 @@ DOC
     fileexists("${path.module}/../services/jupyter/jupyter-start.sh"),
     fileexists("${path.module}/../services/jupyter/jupyter-reset.sh"),
     fileexists("${path.module}/../services/jupyter/jupyter_server_config.py"),
-    fileexists("${path.module}/../services/jupyter-pixi/dockerfile.jupyter"),
+    fileexists("${path.module}/../services/jupyter-pixi/dockerfile.jupyter.pixi"),
     fileexists("${path.module}/../services/jupyter-pixi/jupyter-start-pixi.sh"),
     fileexists("${path.module}/../services/jupyter-pixi/jupyter-reset-pixi.sh"),
     fileexists("${path.module}/../services/jupyter-pixi/jupyter_server_config_pixi.py"),
+    fileexists("${path.module}/../services/jupyter-pixi/pyproject.kernel.pixi.toml"),
     fileexists("${path.module}/../services/logrotator/dockerfile.logrotator"),
     fileexists("${path.module}/../services/commands/update-auth.sh"),
     fileexists("${path.module}/../services/commands/refresh-oauth-cookie.sh"),
@@ -946,7 +944,7 @@ resource "null_resource" "wait_for_instance_ready" {
     instance_id = aws_instance.ec2_jupyter_server.id
     # the instance ID might be preserved even on VM swap
     # add instance public IP.
-    instance_ip    = aws_instance.ec2_jupyter_server.public_ip
+    instance_ip    = aws_eip.jupyter_eip.public_ip
     ami            = aws_instance.ec2_jupyter_server.ami
     instance_type  = aws_instance.ec2_jupyter_server.instance_type
     root_volume_id = aws_instance.ec2_jupyter_server.root_block_device[0].volume_id
@@ -971,6 +969,7 @@ resource "null_resource" "wait_for_instance_ready" {
     aws_ssm_document.instance_status_check,
     aws_ssm_document.instance_startup,
     aws_instance.ec2_jupyter_server,
+    aws_eip_association.jupyter_eip_assoc,
     aws_route53_record.jupyter,
     aws_ebs_volume.jupyter_data,
   ]
