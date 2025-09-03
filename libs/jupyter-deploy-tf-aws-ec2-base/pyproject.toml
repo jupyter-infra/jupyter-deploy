@@ -9,7 +9,12 @@ authors = [
     { name = "Brian Granger", email = "brgrange@amazon.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "boto3",
+    "boto3-stubs",
+    "mypy-boto3-ec2",
+    "mypy-boto3-ssm",
+]
 
 [project.entry-points."jupyter_deploy.terraform_templates"]
 aws_ec2_base = "jupyter_deploy_tf_aws_ec2_base.template:TEMPLATE_PATH"
@@ -23,6 +28,7 @@ packages = ["jupyter_deploy_tf_aws_ec2_base"]
 
 [dependency-groups]
 dev = [
+    "jupyter-deploy",
     "mypy>=1.15.0",
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
@@ -81,3 +87,6 @@ exclude_lines = [
 ]
 fail_under = 80
 show_missing = true
+
+[tool.uv.sources]
+jupyter-deploy = { workspace = true }

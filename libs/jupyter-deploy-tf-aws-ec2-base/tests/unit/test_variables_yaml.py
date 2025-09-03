@@ -2,6 +2,7 @@ import unittest
 
 import hcl2
 import yaml
+from jupyter_deploy.variables_config import JupyterDeployVariablesConfigV1
 
 from jupyter_deploy_tf_aws_ec2_base.template import TEMPLATE_PATH
 
@@ -43,6 +44,10 @@ class TestVariablesYaml(unittest.TestCase):
                     tf_variables[var_name] = var_config
 
             TestVariablesYaml.TF_VARIABLES = tf_variables
+
+    def test_variables_yaml_parsable_by_jupyter_deploy(self) -> None:
+        variables_config = JupyterDeployVariablesConfigV1.model_validate(self.VARIABLES_CONFIG)
+        self.assertIsInstance(variables_config, JupyterDeployVariablesConfigV1)
 
     def test_all_keys_are_present(self) -> None:
         self.assertIn("required", self.VARIABLES_CONFIG)
