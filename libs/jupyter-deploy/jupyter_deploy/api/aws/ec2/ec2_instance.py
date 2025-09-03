@@ -2,22 +2,19 @@ from __future__ import annotations
 
 import time
 from enum import Enum
-from typing import TYPE_CHECKING
 
+from mypy_boto3_ec2.client import EC2Client
+from mypy_boto3_ec2.type_defs import (
+    DescribeInstancesRequestTypeDef,
+    DescribeInstanceStatusRequestTypeDef,
+    InstanceStateChangeTypeDef,
+    InstanceStateTypeDef,
+    InstanceStatusTypeDef,
+    RebootInstancesRequestTypeDef,
+    StartInstancesRequestTypeDef,
+    StopInstancesRequestTypeDef,
+)
 from rich import console as rich_console
-
-if TYPE_CHECKING:
-    from mypy_boto3_ec2.client import EC2Client
-    from mypy_boto3_ec2.type_defs import (
-        DescribeInstancesRequestTypeDef,
-        DescribeInstanceStatusRequestTypeDef,
-        InstanceStateChangeTypeDef,
-        InstanceStateTypeDef,
-        InstanceStatusTypeDef,
-        RebootInstancesRequestTypeDef,
-        StartInstancesRequestTypeDef,
-        StopInstancesRequestTypeDef,
-    )
 
 
 class Ec2InstanceState(str, Enum):

@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
 
 import botocore
 import botocore.exceptions
-
-if TYPE_CHECKING:
-    from mypy_boto3_ssm.client import SSMClient
-    from mypy_boto3_ssm.literals import CommandInvocationStatusType
-    from mypy_boto3_ssm.type_defs import GetCommandInvocationResultTypeDef, SendCommandRequestTypeDef
+from mypy_boto3_ssm.client import SSMClient
+from mypy_boto3_ssm.literals import CommandInvocationStatusType
+from mypy_boto3_ssm.type_defs import GetCommandInvocationResultTypeDef, SendCommandRequestTypeDef
 
 TERMINAL_COMMAND_STATUS: list[CommandInvocationStatusType] = ["Cancelled", "Failed", "Success", "TimedOut"]
 

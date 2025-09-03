@@ -1,10 +1,5 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from mypy_boto3_ssm import SSMClient
-    from mypy_boto3_ssm.type_defs import DescribeInstanceInformationRequestTypeDef, InstanceInformationTypeDef
+from mypy_boto3_ssm import SSMClient
+from mypy_boto3_ssm.type_defs import DescribeInstanceInformationRequestTypeDef, InstanceInformationTypeDef
 
 
 def describe_instance_information(ssm_client: SSMClient, instance_id: str) -> InstanceInformationTypeDef:

@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING
 
 import boto3
+from mypy_boto3_ec2.client import EC2Client
 from rich import console as rich_console
-
-if TYPE_CHECKING:
-    from mypy_boto3_ec2.client import EC2Client
 
 from jupyter_deploy.api.aws.ec2 import ec2_instance
 from jupyter_deploy.provider.instruction_runner import InstructionRunner, InterruptInstructionError
@@ -37,7 +34,7 @@ class AwsEc2Runner(InstructionRunner):
 
     def __init__(self, region_name: str | None) -> None:
         """Instantiates the EC2 boto3 client."""
-        self.client = boto3.client("ec2", region_name=region_name)
+        self.client: EC2Client = boto3.client("ec2", region_name=region_name)
 
     def _describe_instance_status(
         self,
