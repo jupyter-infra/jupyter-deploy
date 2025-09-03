@@ -24,6 +24,7 @@ defaults:
   custom_tags: {}
   iam_role_prefix: "Jupyter-deploy-ec2-base"
   instance_type: "t3.medium"
+  jupyter_package_manager: uv
   key_pair_name: null
   log_files_retention_count: 10
   log_files_retention_days: 180
@@ -31,6 +32,7 @@ defaults:
   oauth_provider: "github"
   oauth_app_secret_prefix: "Jupyter-deploy-ec2-base"
   region: "us-west-2"
+  root_volume_size_gb: 30
   volume_size_gb: 30
   volume_type: "gp3"
   additional_ebs_mounts: []

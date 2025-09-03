@@ -1,8 +1,10 @@
 # defaults.tfvars
 region                     = "us-west-2"
+jupyter_package_manager    = "uv"
 instance_type              = "t3.medium"
 key_pair_name              = null
 ami_id                     = null
+root_volume_size_gb        = 30
 volume_size_gb             = 30
 volume_type                = "gp3"
 iam_role_prefix            = "Jupyter-deploy-ec2-base"

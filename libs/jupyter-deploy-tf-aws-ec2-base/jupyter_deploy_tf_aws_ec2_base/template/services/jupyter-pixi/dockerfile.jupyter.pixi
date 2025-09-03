@@ -1,0 +1,73 @@
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+ARG SERVICE_GID
+ARG DOCKER_GID
+ARG SERVICE_UID
+
+USER root
+
+# 1/ Map docker group with specific GIDs
+RUN groupadd -g ${DOCKER_GID} docker && \
+    groupadd -g ${SERVICE_GID} jovyan
+
+# 2/ Create a non-root user "jovyan" with a home dir
+RUN useradd -m -s /bin/bash -u ${SERVICE_UID} -g ${SERVICE_GID} -G docker jovyan
+
+# 3/ Install system dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    curl \
+    gnupg
+
+# 4/ Install docker CLI
+RUN install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | \
+    gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    chmod a+r /etc/apt/keyrings/docker.gpg && \
+    echo "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] \
+    https://download.docker.com/linux/debian bookworm stable" | \
+    tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+RUN apt-get update && \
+    apt-get install -y docker-ce-cli && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 5/ Prepare UV kernel environment
+RUN mkdir -p /opt/uv/kernel
+COPY pyproject.kernel.toml /opt/uv/kernel/pyproject.toml
+RUN uv sync --directory /opt/uv/kernel
+
+# 6/ Install Pixi
+ENV PIXI_HOME="/opt/pixi/.pixi"
+RUN mkdir -p /opt/pixi/jupyter
+RUN curl -fsSL https://pixi.sh/install.sh | sh
+ENV PATH="/opt/pixi/.pixi/bin:${PATH}"
+RUN echo "Pixi installation complete, checking version" && pixi --version
+
+# 7/ Create jupyter default config dirs
+RUN mkdir -p /etc/jupyter
+COPY jupyter_server_config.py /etc/jupyter/
+
+# 8/ Create uv env for jupyter
+COPY pixi.jupyter.toml /opt/pixi/jupyter/pixi.toml
+WORKDIR /opt/pixi/jupyter
+RUN pixi install
+
+# 9/ Create the start-up script
+COPY jupyter-start.sh /usr/local/bin/
+COPY jupyter-reset.sh /usr/local/bin/
+
+# 10/ Change dirs ownership and visibility
+RUN chmod -R a+r /opt/pixi
+RUN chmod -R a+r /opt/uv
+RUN chmod -R a+r /etc/jupyter
+RUN chmod +x /usr/local/bin/jupyter-start.sh
+RUN chmod +x /usr/local/bin/jupyter-reset.sh
+RUN chown -R jovyan:jovyan /home/jovyan
+
+# 11/ Switch user and workdir
+WORKDIR /home/jovyan
+USER jovyan
+
+ENTRYPOINT ["/usr/local/bin/jupyter-start.sh"]

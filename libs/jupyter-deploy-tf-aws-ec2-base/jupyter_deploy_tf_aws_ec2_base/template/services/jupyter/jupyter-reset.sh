@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "Resetting Jupyter environment..."
+echo "Resetting Jupyter environment (uv)..."
 
 if [ -d "/home/jovyan/.venv" ]; then
     echo "Removing existing virtual environment..."

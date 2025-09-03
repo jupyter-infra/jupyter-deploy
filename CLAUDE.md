@@ -13,6 +13,7 @@ with imports to cloud-provider or infrastructure-as-code specific libraries else
   - All variables must be defined in `variables.tf` without default values
   - Default values should be set in `presets/defaults-all.tfvars`
   - There must not be any `variable` blocks in files other than `variables.tf`
+  - IMPORTANT: Do not copy files to `/home/jovyan` during Docker build time. The EBS volume for Jupyter data is mounted at runtime, and any files copied during build will be hidden by this mount. Instead, copy files to a location like `/opt` during build and then copy them to `/home/jovyan` in startup scripts.
 - The `-ngrok` template is stale and no longer under active development
 
 # Development Workflow
@@ -36,7 +37,7 @@ After making code changes, always run from the root of the repository:
 - After writing tests, run `uv run mypy` to verify all type annotations are correct
 - If you detect inconsistencies between implementation and test assertions (e.g., code raises `KeyError` but test expects `ValueError`), notify the user of the implementation issue rather than modifying tests to pass
 
-# End-to-end Testing Workflow for the Base Template
+# Configuration Testing Workflow for the Base Template
 - Make sure you are in the root directory (same dir as `CLAUDE.md`)
 - Setup the deployment directory:
   - If `./sandbox-claude` directory exists and is not empty, stop and ask the user to clean it
@@ -53,3 +54,4 @@ After making code changes, always run from the root of the repository:
     - Clear the deployment template with: `rm -rf sandbox-claude`
     - !IMPORTANT: never run `rm -rf` on any other dir than `sandbox-claude`
     - Edit the template project, and start again the end-to-end testing workflow
+- Finally, always go back to the project root directory (same dir as `CLAUDE.md`)

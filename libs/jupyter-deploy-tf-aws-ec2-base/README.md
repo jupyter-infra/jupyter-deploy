@@ -24,6 +24,7 @@ This project:
     - `jupyter-start.sh` to provide entrypoint script for the Jupyter container
     - `jupyter-reset.sh` to provide a fallback if the Jupyter container fails to start
     - `pyproject.jupyter.toml` to configure the Python dependencies of the base environment where the Jupyter server runs
+        - note: `pixi.jupyter.toml` if you select `pixi` as dependency manager
     - `jupyter_server_config.py` to configure Jupyter server
     - `dockerfile.logrotator` to configure the sidecar container rotating log files on disk
     - `logrotator-start.sh.tftpl` to configure logrotate
@@ -177,6 +178,7 @@ No modules.
 | instance_type | `string` | `t3.medium` | The type of instance to start |
 | key_pair_name | `string` | `null` | The name of key pair |
 | ami_id | `string` | `null` | The ID of the AMI to use for the instance |
+| root_volume_size_gb | `number` | `30` | The size in gigabytes of the root EBS volume for the EC2 instance |
 | volume_size_gb | `number` | `30` | The size in GB of the EBS volume the Jupyter Server has access to |
 | volume_type | `string` | `gp3` | The type of EBS volume the Jupyter Server will has access to |
 | iam_role_prefix | `string` | `Jupyter-deploy-ec2-base` | The prefix for the name of the IAM role for the instance |

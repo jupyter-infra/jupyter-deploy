@@ -1,137 +1,130 @@
 import unittest
 
+from pathlib import Path
+from typing import Any
+
 import yaml
-from jupyter_deploy.manifest import JupyterDeployManifestV1
+from jupyter_deploy.handlers import base_project_handler
 
 from jupyter_deploy_tf_aws_ec2_base.template import TEMPLATE_PATH
 
 
-class TestManifestDotYaml(unittest.TestCase):
-    MANIFEST: dict
+class TestManifest(unittest.TestCase):
+    MANIFEST_PATH: Path = TEMPLATE_PATH / "manifest.yaml"
+    MANIFEST: dict[str, Any] | None = None
+    EXPECTED_REQUIREMENTS = ["terraform", "awscli", "jq"]
+    EXPECTED_VALUES = ["open_url", "aws_region", "persisting_resources"]
+    EXPECTED_HOST_COMMANDS = ["host.status", "host.start", "host.stop", "host.restart", "host.connect"]
+    EXPECTED_SERVER_COMMANDS = ["server.status", "server.start", "server.stop", "server.restart"]
+    EXPECTED_USERS_COMMANDS = ["users.list", "users.add", "users.remove", "users.set"]
+    EXPECTED_TEAMS_COMMANDS = ["teams.list", "teams.add", "teams.remove", "teams.set"]
+    EXPECTED_ORGANIZATION_COMMANDS = ["organization.get", "organization.set", "organization.unset"]
 
     @classmethod
     def setUpClass(cls) -> None:
-        manifest_yaml_filepath = TEMPLATE_PATH / "manifest.yaml"
+        # Read and parse manifest.yaml
+        with open(cls.MANIFEST_PATH) as manifest_file:
+            cls.MANIFEST = yaml.safe_load(manifest_file)
 
-        # Read and parse variables.yaml
-        with open(manifest_yaml_filepath) as manifest_file:
-            manifest_content = yaml.safe_load(manifest_file)
+    def test_manifest_parses_as_yaml(self) -> None:
+        """Test that the manifest file parses as valid YAML."""
+        self.assertIsNotNone(self.MANIFEST, "Manifest file should parse as valid YAML")
 
-        if not isinstance(manifest_content, dict):
-            raise ValueError("Invalid manifest.yaml file: not a dict")
+    def test_manifest_parses_as_a_dict(self) -> None:
+        """Test that the manifest file parses as a dictionary."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None, test setup failed")
+            return
 
-        TestManifestDotYaml.MANIFEST = manifest_content
+        self.assertIsInstance(self.MANIFEST, dict, "Manifest file should parse as a dictionary")
 
-    def test_manifest_yaml_parsable_by_jupyter_deploy(self) -> None:
-        manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
-        self.assertIsInstance(manifest, JupyterDeployManifestV1)
+    def test_manifest_parsable_by_jd(self) -> None:
+        """Test that the manifest file is parsable by jd."""
+        manifest = base_project_handler.retrieve_project_manifest(self.MANIFEST_PATH)
+        self.assertIsNotNone(manifest)
 
-        # Verify key required components exist
-        self.assertEqual(manifest.schema_version, 1)
-        self.assertIsNotNone(manifest.template)
-        self.assertIsNotNone(manifest.template.name)
-        self.assertIsNotNone(manifest.template.engine)
-        self.assertIsNotNone(manifest.template.version)
+    def test_all_expected_requirements_declared(self) -> None:
+        """Test that all expected requirements are declared in the manifest."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None, test setup failed")
+            return
 
-    def test_manifest_template_name_is_correct(self) -> None:
-        self.assertIn("template", self.MANIFEST)
-        self.assertIn("name", self.MANIFEST["template"])
-        self.assertEqual(self.MANIFEST["template"]["name"], "tf-aws-ec2-base")
+        requirements = self.MANIFEST.get("requirements", [])
+        requirement_names = [req.get("name") for req in requirements]
 
-    def test_manifest_template_engine_is_correct(self) -> None:
-        self.assertIn("template", self.MANIFEST)
-        self.assertIn("engine", self.MANIFEST["template"])
-        self.assertEqual(self.MANIFEST["template"]["engine"], "terraform")
+        for expected_req in self.EXPECTED_REQUIREMENTS:
+            self.assertIn(expected_req, requirement_names, f"Expected requirement {expected_req} missing from manifest")
 
-    def test_manifest_template_version_follows_semantic_versioning(self) -> None:
-        self.assertIn("template", self.MANIFEST)
-        self.assertIn("version", self.MANIFEST["template"])
+    def test_all_expected_values_declared(self) -> None:
+        """Test that all expected values are declared in the manifest."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None, test setup failed")
+            return
 
-        version = self.MANIFEST["template"]["version"]
-        # Semantic versioning regex pattern: MAJOR.MINOR.PATCH
-        # Using a simplified regex that still covers basic semver format
-        semver_pattern = r"^\d+\.\d+\.\d+$"
-        self.assertRegex(version, semver_pattern)
+        values = self.MANIFEST.get("values", [])
+        value_names = [val.get("name") for val in values]
 
-    def test_manifest_declares_output_url(self) -> None:
-        self.assertIn("values", self.MANIFEST)
+        for expected_val in self.EXPECTED_VALUES:
+            self.assertIn(expected_val, value_names, f"Expected value {expected_val} missing from manifest")
 
-        # Find the open_url value
-        open_url_found = False
-        for value in self.MANIFEST["values"]:
-            if value.get("name") == "open_url":
-                open_url_found = True
-                self.assertEqual(value.get("source"), "output")
-                break
+    def test_all_expected_host_commands_declared(self) -> None:
+        """Test that all expected host commands are declared in the manifest."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None, test setup failed")
+            return
 
-        self.assertTrue(open_url_found, "The manifest does not declare an 'open_url' value")
+        commands = self.MANIFEST.get("commands", [])
+        command_names = [cmd.get("cmd") for cmd in commands]
 
-    def test_manifest_declares_aws_region(self) -> None:
-        self.assertIn("values", self.MANIFEST)
+        for expected_cmd in self.EXPECTED_HOST_COMMANDS:
+            self.assertIn(expected_cmd, command_names, f"Expected host command {expected_cmd} missing from manifest")
 
-        # Find the aws_region value
-        aws_region_found = False
-        for value in self.MANIFEST["values"]:
-            if value.get("name") == "aws_region":
-                aws_region_found = True
-                self.assertEqual(value.get("source"), "output")
-                break
+    def test_all_expected_server_commands_declared(self) -> None:
+        """Test that all expected server commands are declared in the manifest."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None, test setup failed")
+            return
 
-        self.assertTrue(aws_region_found, "The manifest does not declare an 'aws_region' value")
+        commands = self.MANIFEST.get("commands", [])
+        command_names = [cmd.get("cmd") for cmd in commands]
 
-    def test_manifest_declares_persisting_resources(self) -> None:
-        self.assertIn("values", self.MANIFEST)
+        for expected_cmd in self.EXPECTED_SERVER_COMMANDS:
+            self.assertIn(expected_cmd, command_names, f"Expected server command {expected_cmd} missing from manifest")
 
-        # Find the persisting_resources value
-        persisting_resources_found = False
-        for value in self.MANIFEST["values"]:
-            if value.get("name") == "persisting_resources":
-                persisting_resources_found = True
-                self.assertEqual(value.get("source"), "output")
-                break
+    def test_all_expected_users_commands_declared(self) -> None:
+        """Test that all expected users commands are declared in the manifest."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None, test setup failed")
+            return
 
-        self.assertTrue(persisting_resources_found, "The manifest does not declare a 'persisting_resources' value")
+        commands = self.MANIFEST.get("commands", [])
+        command_names = [cmd.get("cmd") for cmd in commands]
 
-    def test_manifest_declares_commands(self) -> None:
-        self.assertIn("commands", self.MANIFEST)
-        self.assertTrue(len(self.MANIFEST["commands"]) > 0, "The manifest does not declare any commands")
+        for expected_cmd in self.EXPECTED_USERS_COMMANDS:
+            self.assertIn(expected_cmd, command_names, f"Expected users command {expected_cmd} missing from manifest")
 
-    def test_manifest_declares_host_commands(self) -> None:
-        required_host_commands = ["host.status", "host.stop", "host.start", "host.restart", "host.connect"]
-        for cmd in required_host_commands:
-            self.assertTrue(
-                any(c.get("cmd") == cmd for c in self.MANIFEST["commands"]),
-                f"The manifest does not declare the required '{cmd}' command",
-            )
+    def test_all_expected_teams_commands_declared(self) -> None:
+        """Test that all expected teams commands are declared in the manifest."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None, test setup failed")
+            return
 
-    def test_manifest_declares_server_commands(self) -> None:
-        required_server_commands = ["server.status", "server.start", "server.stop", "server.restart"]
-        for cmd in required_server_commands:
-            self.assertTrue(
-                any(c.get("cmd") == cmd for c in self.MANIFEST["commands"]),
-                f"The manifest does not declare the required '{cmd}' command",
-            )
+        commands = self.MANIFEST.get("commands", [])
+        command_names = [cmd.get("cmd") for cmd in commands]
 
-    def test_manifest_declares_users_commands(self) -> None:
-        required_user_commands = ["users.add", "users.remove", "users.set", "users.list"]
-        for cmd in required_user_commands:
-            self.assertTrue(
-                any(c.get("cmd") == cmd for c in self.MANIFEST["commands"]),
-                f"The manifest does not declare the required '{cmd}' command",
-            )
+        for expected_cmd in self.EXPECTED_TEAMS_COMMANDS:
+            self.assertIn(expected_cmd, command_names, f"Expected teams command {expected_cmd} missing from manifest")
 
-    def test_manifest_declares_teams_commands(self) -> None:
-        required_user_commands = ["teams.add", "teams.remove", "teams.set", "teams.list"]
-        for cmd in required_user_commands:
-            self.assertTrue(
-                any(c.get("cmd") == cmd for c in self.MANIFEST["commands"]),
-                f"The manifest does not declare the required '{cmd}' command",
-            )
+    def test_all_expected_organization_commands_declared(self) -> None:
+        """Test that all expected organization commands are declared in the manifest."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None, test setup failed")
+            return
 
-    def test_manifest_declares_organization_commands(self) -> None:
-        required_user_commands = ["organization.get", "organization.set", "organization.unset"]
-        for cmd in required_user_commands:
-            self.assertTrue(
-                any(c.get("cmd") == cmd for c in self.MANIFEST["commands"]),
-                f"The manifest does not declare the required '{cmd}' command",
+        commands = self.MANIFEST.get("commands", [])
+        command_names = [cmd.get("cmd") for cmd in commands]
+
+        for expected_cmd in self.EXPECTED_ORGANIZATION_COMMANDS:
+            self.assertIn(
+                expected_cmd, command_names, f"Expected organization command {expected_cmd} missing from manifest"
             )

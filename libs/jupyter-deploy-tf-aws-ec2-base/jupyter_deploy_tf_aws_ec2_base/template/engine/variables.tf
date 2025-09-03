@@ -10,6 +10,24 @@ variable "region" {
   type        = string
 }
 
+variable "jupyter_package_manager" {
+  description = <<-EOT
+    The type of package manager to use for Jupyter.
+
+    Options:
+    - uv: more performant but only supports native python dependencies (default)
+    - pixi: uses conda-forge which supports scientific and non-Python dependencies
+
+    Recommended: uv
+  EOT
+  type        = string
+
+  validation {
+    condition     = contains(["uv", "pixi"], var.jupyter_package_manager)
+    error_message = "The jupyter_package_manager value must be one of: uv, pixi"
+  }
+}
+
 variable "instance_type" {
   description = <<-EOT
     The instance type of the EC2 instance for the jupyter server.
@@ -45,6 +63,23 @@ variable "ami_id" {
     Recommended: leave empty
   EOT
   type        = string
+}
+
+variable "root_volume_size_gb" {
+  description = <<-EOT
+    The size in gigabytes of the root EBS volume for the EC2 instance.
+    
+    If not specified, defaults to the size provided by the AMI.
+    
+    Recommended: 30
+  EOT
+  type        = number
+  nullable    = true
+
+  validation {
+    condition     = var.root_volume_size_gb == null || (var.root_volume_size_gb > 0 && var.root_volume_size_gb < 1024)
+    error_message = "The root_volume_size_gb value must be greater than 0 and less than 1024 (1TB)."
+  }
 }
 
 variable "volume_size_gb" {
@@ -421,7 +456,6 @@ variable "additional_ebs_mounts" {
   }
 }
 
-# Variables for additional EFS volumes
 variable "additional_efs_mounts" {
   description = <<-EOT
     Elastic file systems to mount on the notebook home directory; keys: name or id, mount_point, persist.
