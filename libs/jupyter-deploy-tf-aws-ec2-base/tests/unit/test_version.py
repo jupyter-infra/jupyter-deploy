@@ -54,6 +54,14 @@ def test_version_consistency() -> None:
         jupyter_pyproject_data = tomllib.load(f)
     jupyter_pyproject_version = jupyter_pyproject_data["project"]["version"]
 
+    # Read version from template/services/jupyter-pixi/pixi.jupyter.toml
+    jupyter_pyproject_path = (
+        project_path / "jupyter_deploy_tf_aws_ec2_base" / "template" / "services" / "jupyter-pixi" / "pixi.jupyter.toml"
+    )
+    with open(jupyter_pyproject_path, "rb") as f:
+        jupyter_pixi_data = tomllib.load(f)
+    jupyter_pixi_version = jupyter_pixi_data["workspace"]["version"]
+
     # Compare all versions
     assert pyproject_version == init_version, (
         f"Version mismatch: pyproject.toml ({pyproject_version}) != __init__.py ({init_version})"
@@ -70,4 +78,8 @@ def test_version_consistency() -> None:
     assert pyproject_version == jupyter_pyproject_version, (
         f"Version mismatch: pyproject.toml ({pyproject_version}) != "
         f"jupyter/pyproject.jupyter.toml ({jupyter_pyproject_version})"
+    )
+
+    assert pyproject_version == jupyter_pixi_version, (
+        f"Version mismatch: pyproject.toml ({pyproject_version}) != jupyter/pixi.jupyter.toml ({jupyter_pixi_version})"
     )

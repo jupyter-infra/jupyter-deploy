@@ -800,3 +800,131 @@ class TestOpenCommand(unittest.TestCase):
         mock_project_ctx_manager.assert_called_once_with("/custom/path")
         mock_open_fns["get_url"].assert_called_once()
         mock_open_fns["open_url"].assert_called_once_with("https://example.com/jupyter")
+
+
+class TestShowCommand(unittest.TestCase):
+    """Test cases for the show command."""
+
+    @contextmanager
+    def mock_project_dir(*_args: object, **_kwargs: object) -> Generator[None]:
+        yield None
+
+    def get_mock_show_handler(self) -> tuple[Mock, dict[str, Mock]]:
+        mock_show_handler = Mock()
+        mock_show_project_info = Mock()
+
+        mock_show_handler.show_project_info = mock_show_project_info
+
+        return mock_show_handler, {"show_project_info": mock_show_project_info}
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_default_flags(self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock) -> None:
+        """Test that show command with no flags shows all sections."""
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_show_fns["show_project_info"].assert_called_once_with(
+            show_info=True, show_outputs=True, show_variables=True
+        )
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_with_info_flag(self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock) -> None:
+        """Test that show command with --info flag shows only info section."""
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "--info"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_show_fns["show_project_info"].assert_called_once_with(
+            show_info=True, show_outputs=False, show_variables=False
+        )
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_with_outputs_flag(self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock) -> None:
+        """Test that show command with --outputs flag shows only outputs section."""
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "--outputs"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_show_fns["show_project_info"].assert_called_once_with(
+            show_info=False, show_outputs=True, show_variables=False
+        )
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_with_variables_flag(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        """Test that show command with --variables flag shows only variables section."""
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "--variables"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_show_fns["show_project_info"].assert_called_once_with(
+            show_info=False, show_outputs=False, show_variables=True
+        )
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_with_multiple_flags(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        """Test that show command with multiple flags shows only selected sections."""
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "--info", "--outputs"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with(None)
+        mock_show_fns["show_project_info"].assert_called_once_with(
+            show_info=True, show_outputs=True, show_variables=False
+        )
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_with_custom_path(self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock) -> None:
+        """Test show command with custom project path."""
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "--path", "/custom/path"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_ctx_manager.assert_called_once_with("/custom/path")
+        mock_show_fns["show_project_info"].assert_called_once_with(
+            show_info=True, show_outputs=True, show_variables=True
+        )

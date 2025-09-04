@@ -81,7 +81,7 @@ output "server_update_document" {
 
 # Resources that should not be destroyed by `jd down`
 output "persisting_resources" {
-  description = "List of resource addresses that should not be destroyed (have persist=true)"
+  description = "List of identifiers of resources that should not be destroyed (have persist=true)."
   value       = tolist(concat(local.persist_ebs_volumes, local.persist_efs_file_systems))
 }
 

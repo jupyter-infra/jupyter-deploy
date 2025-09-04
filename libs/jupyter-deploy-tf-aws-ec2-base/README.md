@@ -217,3 +217,4 @@ No modules.
 | `auth_teams_update_document` | Name of the SSM document to change the authorized teams |
 | `auth_org_set_document` | Name of the SSM document to allowlist an organization |
 | `auth_org_unset_document` | Name of the SSM document to remove the allowlisted organization |
+| `persisting_resources` | List of identifiers of resources that should not be destroyed |

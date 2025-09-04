@@ -339,7 +339,14 @@ def open(
 
 
 @runner.app.command()
-def show(project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None) -> None:
+def show(
+    project_dir: Annotated[
+        str | None, typer.Option("--path", "-p", help="Directory of the jupyter-deploy project to show information.")
+    ] = None,
+    info: Annotated[bool, typer.Option("--info", "-i", help="Display core project and template information.")] = False,
+    outputs: Annotated[bool, typer.Option("--outputs", "-o", help="Display outputs information.")] = False,
+    variables: Annotated[bool, typer.Option("--variables", "-v", help="Display variables information.")] = False,
+) -> None:
     """Display information about the jupyter-deploy project.
 
     Run either from a jupyter-deploy project directory that you created with `jd init`;
@@ -348,9 +355,18 @@ def show(project_dir: Annotated[str | None, typer.Option("--path", "-p")] = None
     If the project is up, shows the values of the output as defined in
     the infrastructure as code project.
     """
+    if not info and not outputs and not variables:
+        show_info = True
+        show_outputs = True
+        show_variables = True
+    else:
+        show_info = info
+        show_outputs = outputs
+        show_variables = variables
+
     with cmd_utils.project_dir(project_dir):
         handler = ShowHandler()
-        handler.show_project_info()
+        handler.show_project_info(show_info=show_info, show_outputs=show_outputs, show_variables=show_variables)
 
 
 class JupyterDeployApp(JupyterApp):

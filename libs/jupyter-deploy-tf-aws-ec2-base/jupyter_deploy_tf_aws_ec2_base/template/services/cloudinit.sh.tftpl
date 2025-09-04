@@ -71,6 +71,7 @@ useradd -r -s /sbin/nologin -d /home/service-user -m service-user
 
 # revisit: granting access to the docker deamon is an avenue for elevation of privilege
 usermod -aG docker service-user
+usermod -aG docker ssm-user
 
 tee /etc/sudoers.d/service-user << EOF
 service-user ALL=(ALL) NOPASSWD: /bin/systemctl start docker
