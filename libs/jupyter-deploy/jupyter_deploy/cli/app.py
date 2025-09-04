@@ -343,9 +343,9 @@ def show(
     project_dir: Annotated[
         str | None, typer.Option("--path", "-p", help="Directory of the jupyter-deploy project to show information.")
     ] = None,
-    info: Annotated[bool, typer.Option("--info", "-i", help="Display core project and template information.")] = False,
-    outputs: Annotated[bool, typer.Option("--outputs", "-o", help="Display outputs information.")] = False,
-    variables: Annotated[bool, typer.Option("--variables", "-v", help="Display variables information.")] = False,
+    info: Annotated[bool, typer.Option("--info", help="Display core project and template information.")] = False,
+    outputs: Annotated[bool, typer.Option("--outputs", help="Display outputs information.")] = False,
+    variables: Annotated[bool, typer.Option("--variables", help="Display variables information.")] = False,
 ) -> None:
     """Display information about the jupyter-deploy project.
 
