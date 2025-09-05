@@ -29,6 +29,7 @@ dev-dependencies = [
     "typer>=0.15.4",
     "rich>=10.11.0",
     "parameterized>=0.9.0",
+    "tomli-w>=1.2.0",
 ]
 
 [tool.mypy]

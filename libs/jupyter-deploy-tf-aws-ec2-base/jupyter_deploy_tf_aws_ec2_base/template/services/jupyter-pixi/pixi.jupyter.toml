@@ -1,9 +1,13 @@
 [workspace]
-channels = ["conda-forge"]
+channels = [
+    "conda-forge",
+]
 description = "A basic image with jupyterlab and server-documents"
 name = "jupyter-pixi"
-platforms = ["linux-64"]
-version = "0.2.0"
+platforms = [
+    "linux-64",
+]
+version = "0.2.1"
 
 [tasks]
 

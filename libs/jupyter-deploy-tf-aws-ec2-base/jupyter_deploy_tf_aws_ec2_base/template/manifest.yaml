@@ -1,434 +1,434 @@
 schema_version: 1
 template:
-  name: "tf-aws-ec2-base"
-  engine: "terraform"
-  version: "0.2.0"
+  name: tf-aws-ec2-base
+  engine: terraform
+  version: 0.2.1
 requirements:
-  - name: "terraform"
-  - name: "awscli"
-  - name: "jq"
+- name: terraform
+- name: awscli
+- name: jq
 values:
-  - name: "open_url"
-    source: "output"
-    source-key: "jupyter_url"
-  - name: "aws_region"
-    source: "output"
-    source-key: "region"
-  - name: "persisting_resources"
-    source: "output"
-    source-key: "persisting_resources"
+- name: open_url
+  source: output
+  source-key: jupyter_url
+- name: aws_region
+  source: output
+  source-key: region
+- name: persisting_resources
+  source: output
+  source-key: persisting_resources
 commands:
-  - cmd: "host.status"
-    sequence:
-      - api-name: "aws.ec2.describe-instance-status"
-        arguments:
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-    results:
-      - result-name: "host.status"
-        source: "result"
-        source-key: "[0].InstanceStateName"
-  - cmd: "host.stop"
-    sequence:
-      - api-name: "aws.ec2.stop-instance"
-        arguments:
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-      - api-name: "aws.ec2.wait-for-stopped"
-        arguments:
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-  - cmd: "host.start"
-    sequence:
-      - api-name: "aws.ec2.start-instance"
-        arguments:
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-      - api-name: "aws.ec2.wait-for-running"
-        arguments:
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-  - cmd: "host.restart"
-    sequence:
-      - api-name: "aws.ec2.reboot-instance"
-        arguments:
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-      - api-name: "aws.ec2.wait-for-running"
-        arguments:
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-  - cmd: "host.connect"
-    sequence:
-      - api-name: "aws.ssm.start-session"
-        arguments:
-          - api-attribute: "target_id"
-            source: "output"
-            source-key: "instance_id"
-  - cmd: "server.status"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "server_status_check_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-    results:
-      - result-name: "server.status"
-        source: "result"
-        source-key: "[0].StandardOutputContent"
-  - cmd: "server.start"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "server_update_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "action"
-            source: "cli"
-            source-key: "action"
-          - api-attribute: "service"
-            source: "cli"
-            source-key: "service"
-  - cmd: "server.stop"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "server_update_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "action"
-            source: "cli"
-            source-key: "action"
-          - api-attribute: "service"
-            source: "cli"
-            source-key: "service"
-  - cmd: "server.restart"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "server_update_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "action"
-            source: "cli"
-            source-key: "action"
-          - api-attribute: "service"
-            source: "cli"
-            source-key: "service"
-  - cmd: "users.add"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_users_update_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "users"
-            source: "cli"
-            source-key: "users"
-          - api-attribute: "action"
-            source: "cli"
-            source-key: "action"
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_check_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "category"
-            source: "cli"
-            source-key: "category"
-    updates:
-      - variable-name: "oauth_allowed_usernames"
-        source: "result"
-        source-key: "[1].StandardOutputContent"
-        transform: "comma-separated-str-to-list-str"
-  - cmd: "users.remove"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_users_update_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "users"
-            source: "cli"
-            source-key: "users"
-          - api-attribute: "action"
-            source: "cli"
-            source-key: "action"
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_check_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "category"
-            source: "cli"
-            source-key: "category"
-    updates:
-      - variable-name: "oauth_allowed_usernames"
-        source: "result"
-        source-key: "[1].StandardOutputContent"
-        transform: "comma-separated-str-to-list-str"
-  - cmd: "users.set"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_users_update_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "users"
-            source: "cli"
-            source-key: "users"
-          - api-attribute: "action"
-            source: "cli"
-            source-key: "action"
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_check_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "category"
-            source: "cli"
-            source-key: "category"
-    updates:
-      - variable-name: "oauth_allowed_usernames"
-        source: "result"
-        source-key: "[1].StandardOutputContent"
-        transform: "comma-separated-str-to-list-str"
-  - cmd: "users.list"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_check_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "category"
-            source: "cli"
-            source-key: "category"
-    results:
-      - result-name: "users.list"
-        source: "result"
-        source-key: "[0].StandardOutputContent"
-        transform: "comma-separated-str-to-list-str"
-  - cmd: "teams.add"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_teams_update_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "teams"
-            source: "cli"
-            source-key: "teams"
-          - api-attribute: "action"
-            source: "cli"
-            source-key: "action"
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_check_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "category"
-            source: "cli"
-            source-key: "category"
-    updates:
-      - variable-name: "oauth_allowed_teams"
-        source: "result"
-        source-key: "[1].StandardOutputContent"
-        transform: "comma-separated-str-to-list-str"
-  - cmd: "teams.remove"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_teams_update_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "teams"
-            source: "cli"
-            source-key: "teams"
-          - api-attribute: "action"
-            source: "cli"
-            source-key: "action"
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_check_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "category"
-            source: "cli"
-            source-key: "category"
-    updates:
-      - variable-name: "oauth_allowed_teams"
-        source: "result"
-        source-key: "[1].StandardOutputContent"
-        transform: "comma-separated-str-to-list-str"
-  - cmd: "teams.set"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_teams_update_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "teams"
-            source: "cli"
-            source-key: "teams"
-          - api-attribute: "action"
-            source: "cli"
-            source-key: "action"
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_check_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "category"
-            source: "cli"
-            source-key: "category"
-    updates:
-      - variable-name: "oauth_allowed_teams"
-        source: "result"
-        source-key: "[1].StandardOutputContent"
-        transform: "comma-separated-str-to-list-str"
-  - cmd: "teams.list"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_check_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "category"
-            source: "cli"
-            source-key: "category"
-    results:
-      - result-name: "teams.list"
-        source: "result"
-        source-key: "[0].StandardOutputContent"
-        transform: "comma-separated-str-to-list-str"
-  - cmd: "organization.set"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_org_set_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "organization"
-            source: "cli"
-            source-key: "organization"
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_check_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "category"
-            source: "cli"
-            source-key: "category"
-    updates:
-      - variable-name: "oauth_allowed_org"
-        source: "result"
-        source-key: "[1].StandardOutputContent"
-  - cmd: "organization.unset"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_org_unset_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_check_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "category"
-            source: "cli"
-            source-key: "category"
-    updates:
-      - variable-name: "oauth_allowed_org"
-        source: "result"
-        source-key: "[1].StandardOutputContent"
-  - cmd: "organization.get"
-    sequence:
-      - api-name: "aws.ssm.wait-command-sync"
-        arguments:
-          - api-attribute: "document_name"
-            source: "output"
-            source-key: "auth_check_document"
-          - api-attribute: "instance_id"
-            source: "output"
-            source-key: "instance_id"
-          - api-attribute: "category"
-            source: "cli"
-            source-key: "category"
-    results:
-      - result-name: "organization.get"
-        source: "result"
-        source-key: "[0].StandardOutputContent"
+- cmd: host.status
+  sequence:
+  - api-name: aws.ec2.describe-instance-status
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+  results:
+  - result-name: host.status
+    source: result
+    source-key: '[0].InstanceStateName'
+- cmd: host.stop
+  sequence:
+  - api-name: aws.ec2.stop-instance
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+  - api-name: aws.ec2.wait-for-stopped
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+- cmd: host.start
+  sequence:
+  - api-name: aws.ec2.start-instance
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+  - api-name: aws.ec2.wait-for-running
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+- cmd: host.restart
+  sequence:
+  - api-name: aws.ec2.reboot-instance
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+  - api-name: aws.ec2.wait-for-running
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+- cmd: host.connect
+  sequence:
+  - api-name: aws.ssm.start-session
+    arguments:
+    - api-attribute: target_id
+      source: output
+      source-key: instance_id
+- cmd: server.status
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: server_status_check_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+  results:
+  - result-name: server.status
+    source: result
+    source-key: '[0].StandardOutputContent'
+- cmd: server.start
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: server_update_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: action
+      source: cli
+      source-key: action
+    - api-attribute: service
+      source: cli
+      source-key: service
+- cmd: server.stop
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: server_update_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: action
+      source: cli
+      source-key: action
+    - api-attribute: service
+      source: cli
+      source-key: service
+- cmd: server.restart
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: server_update_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: action
+      source: cli
+      source-key: action
+    - api-attribute: service
+      source: cli
+      source-key: service
+- cmd: users.add
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_users_update_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: users
+      source: cli
+      source-key: users
+    - api-attribute: action
+      source: cli
+      source-key: action
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_check_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: category
+      source: cli
+      source-key: category
+  updates:
+  - variable-name: oauth_allowed_usernames
+    source: result
+    source-key: '[1].StandardOutputContent'
+    transform: comma-separated-str-to-list-str
+- cmd: users.remove
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_users_update_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: users
+      source: cli
+      source-key: users
+    - api-attribute: action
+      source: cli
+      source-key: action
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_check_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: category
+      source: cli
+      source-key: category
+  updates:
+  - variable-name: oauth_allowed_usernames
+    source: result
+    source-key: '[1].StandardOutputContent'
+    transform: comma-separated-str-to-list-str
+- cmd: users.set
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_users_update_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: users
+      source: cli
+      source-key: users
+    - api-attribute: action
+      source: cli
+      source-key: action
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_check_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: category
+      source: cli
+      source-key: category
+  updates:
+  - variable-name: oauth_allowed_usernames
+    source: result
+    source-key: '[1].StandardOutputContent'
+    transform: comma-separated-str-to-list-str
+- cmd: users.list
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_check_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: category
+      source: cli
+      source-key: category
+  results:
+  - result-name: users.list
+    source: result
+    source-key: '[0].StandardOutputContent'
+    transform: comma-separated-str-to-list-str
+- cmd: teams.add
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_teams_update_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: teams
+      source: cli
+      source-key: teams
+    - api-attribute: action
+      source: cli
+      source-key: action
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_check_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: category
+      source: cli
+      source-key: category
+  updates:
+  - variable-name: oauth_allowed_teams
+    source: result
+    source-key: '[1].StandardOutputContent'
+    transform: comma-separated-str-to-list-str
+- cmd: teams.remove
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_teams_update_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: teams
+      source: cli
+      source-key: teams
+    - api-attribute: action
+      source: cli
+      source-key: action
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_check_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: category
+      source: cli
+      source-key: category
+  updates:
+  - variable-name: oauth_allowed_teams
+    source: result
+    source-key: '[1].StandardOutputContent'
+    transform: comma-separated-str-to-list-str
+- cmd: teams.set
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_teams_update_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: teams
+      source: cli
+      source-key: teams
+    - api-attribute: action
+      source: cli
+      source-key: action
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_check_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: category
+      source: cli
+      source-key: category
+  updates:
+  - variable-name: oauth_allowed_teams
+    source: result
+    source-key: '[1].StandardOutputContent'
+    transform: comma-separated-str-to-list-str
+- cmd: teams.list
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_check_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: category
+      source: cli
+      source-key: category
+  results:
+  - result-name: teams.list
+    source: result
+    source-key: '[0].StandardOutputContent'
+    transform: comma-separated-str-to-list-str
+- cmd: organization.set
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_org_set_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: organization
+      source: cli
+      source-key: organization
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_check_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: category
+      source: cli
+      source-key: category
+  updates:
+  - variable-name: oauth_allowed_org
+    source: result
+    source-key: '[1].StandardOutputContent'
+- cmd: organization.unset
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_org_unset_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_check_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: category
+      source: cli
+      source-key: category
+  updates:
+  - variable-name: oauth_allowed_org
+    source: result
+    source-key: '[1].StandardOutputContent'
+- cmd: organization.get
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: auth_check_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: category
+      source: cli
+      source-key: category
+  results:
+  - result-name: organization.get
+    source: result
+    source-key: '[0].StandardOutputContent'
