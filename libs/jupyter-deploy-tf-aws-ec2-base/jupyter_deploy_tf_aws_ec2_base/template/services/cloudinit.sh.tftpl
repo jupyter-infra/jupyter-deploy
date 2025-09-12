@@ -20,51 +20,52 @@ fi
 if [[ "$OS" == "Amazon Linux" ]]; then
     yum update -y
 
-    # Install docker
-    yum install -y docker  # this should be a no-op
+    # Check if Docker is already installed
+    if ! command -v docker &> /dev/null; then
+        echo "Docker not found, installing..."
+        yum install -y docker
+
+        # Enable docker
+        systemctl start docker
+        systemctl enable docker
+    else
+        echo "Docker is already installed"
+    fi
     
-    # Install docker-compose
-    curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
+    # Check if docker-compose is already installed
+    if ! command -v docker-compose &> /dev/null; then
+        echo "docker-compose not found, installing..."
+        curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
+    else
+        echo "docker-compose is already installed"
+    fi
 
-    # Install jq
-    yum install -y jq
+    # Check if jq is already installed
+    if ! command -v jq &> /dev/null; then
+        echo "jq not found, installing..."
+        yum install -y jq
+    else
+        echo "jq is already installed"
+    fi
 
-elif [[ "$OS" == "Ubuntu" ]] || [[ "$OS" == "Debian" ]]; then
-    # Update package list and install required packages
-    apt-get update
-    apt-get install -y \
-        apt-transport-https \
-        ca-certificates \
-        curl \
-        software-properties-common \
-        jq
-
-    # Add docker's official GPG key
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-
-    # Add docker repository
-    add-apt-repository \
-    "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-    $(lsb_release -cs) \
-    stable"
-
-    # Install docker
-    apt-get update -y
-    apt-get install -y docker-ce docker-ce-cli containerd.io
-
-    # Install docker Compose
-    apt-get install -y docker-compose-plugin
-    chmod +x /usr/local/bin/docker-compose
-
+    # Check if SSM agent is installed and running
+    if ! systemctl is-active --quiet amazon-ssm-agent; then
+        echo "SSM agent not running, checking if installed..."
+        if ! rpm -q amazon-ssm-agent &> /dev/null; then
+            echo "SSM agent not found, installing..."
+            yum install -y amazon-ssm-agent
+        fi
+        echo "Starting SSM agent..."
+        systemctl start amazon-ssm-agent
+        systemctl enable amazon-ssm-agent
+    else
+        echo "SSM agent is already running"
+    fi
 else
-    echo "Unsupported OS version"
+    echo "Unsupported OS version. This script only supports Amazon Linux."
     exit 1
 fi
-
-# Enable docker
-systemctl start docker
-systemctl enable docker
 
 # create the service user and restrict permissions
 useradd -r -s /sbin/nologin -d /home/service-user -m service-user

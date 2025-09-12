@@ -81,26 +81,30 @@ resource "aws_security_group" "ec2_jupyter_server_sg" {
   tags = local.combined_tags
 }
 
-# Retrieve the latest AL 2023 AMI
-data "aws_ssm_parameter" "amazon_linux_2023" {
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
-}
-
-data "aws_ami" "amazon_linux_2023" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "image-id"
-    values = [data.aws_ssm_parameter.amazon_linux_2023.value]
-  }
+# Use the AMI module to select the appropriate AMI based on instance type
+module "ami_al2023" {
+  source        = "./modules/ami_al2023"
+  instance_type = var.instance_type
 }
 
 locals {
+  # Determine the AMI ID to use (user-provided or module-selected)
+  actual_ami_id = coalesce(var.ami_id, module.ami_al2023.ami_id)
+
+  # Extract AMI details for later use
+  ami_details = data.aws_ami.selected_ami
   root_block_device = [
-    for device in data.aws_ami.amazon_linux_2023.block_device_mappings :
-    device if device.device_name == data.aws_ami.amazon_linux_2023.root_device_name
+    for device in local.ami_details.block_device_mappings :
+    device if device.device_name == local.ami_details.root_device_name
   ][0]
+}
+
+# Get details of the selected AMI
+data "aws_ami" "selected_ami" {
+  filter {
+    name   = "image-id"
+    values = [local.actual_ami_id]
+  }
 }
 
 
@@ -119,7 +123,7 @@ resource "aws_eip" "jupyter_eip" {
 # - the security group
 # - the AMI
 resource "aws_instance" "ec2_jupyter_server" {
-  ami                    = coalesce(var.ami_id, data.aws_ami.amazon_linux_2023.id)
+  ami                    = local.actual_ami_id
   instance_type          = var.instance_type
   subnet_id              = data.aws_subnet.first_subnet_of_default_vpc.id
   vpc_security_group_ids = [aws_security_group.ec2_jupyter_server_sg.id]
