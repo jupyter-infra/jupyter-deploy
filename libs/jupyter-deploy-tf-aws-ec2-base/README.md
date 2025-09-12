@@ -7,7 +7,9 @@ The instance is configured so that you can access it using [AWS SSM](https://doc
 
 This project:
 - places the instance in the first subnet of the default VPC
-- selects the latest AL 2023 kernel default AMI for `x86_64` architecture
+- selects the latest Amazon Linux 2023 AMI compatible with the selected instance type
+    - standard AL2023 AMI for CPU instances (x86_64 or arm64)
+    - DLAMI in the case of GPU or Neuron instances (x86_64 or arm64)
 - sets up an IAM role to enable SSM, route53 and (optionally) EFS access
 - passes on the root volume of the AMI
 - adds an EBS volume which will mount on the Jupyter Server container
@@ -178,7 +180,7 @@ No modules.
 | instance_type | `string` | `t3.medium` | The type of instance to start |
 | key_pair_name | `string` | `null` | The name of key pair |
 | ami_id | `string` | `null` | The ID of the AMI to use for the instance |
-| root_volume_size_gb | `number` | `30` | The size in gigabytes of the root EBS volume for the EC2 instance |
+| min_root_volume_size_gb | `number` | `30` | The minimum size in gigabytes of the root EBS volume for the EC2 instance (will use AMI snapshot size if larger) |
 | volume_size_gb | `number` | `30` | The size in GB of the EBS volume the Jupyter Server has access to |
 | volume_type | `string` | `gp3` | The type of EBS volume the Jupyter Server will has access to |
 | iam_role_prefix | `string` | `Jupyter-deploy-ec2-base` | The prefix for the name of the IAM role for the instance |

@@ -137,7 +137,7 @@ resource "aws_instance" "ec2_jupyter_server" {
 
   # Root volume configuration
   root_block_device {
-    volume_size = var.root_volume_size_gb != null ? var.root_volume_size_gb : local.root_block_device.ebs.volume_size
+    volume_size = var.min_root_volume_size_gb != null ? max(var.min_root_volume_size_gb, try(local.root_block_device.ebs.volume_size, 1)) : local.root_block_device.ebs.volume_size
     volume_type = try(local.root_block_device.ebs.volume_type, "gp3")
     encrypted   = try(local.root_block_device.ebs.encrypted, true)
     tags = merge(
@@ -354,7 +354,7 @@ data "local_file" "jupyter_reset" {
 }
 
 data "local_file" "pyproject_jupyter" {
-  filename = "${path.module}/../services/jupyter/pyproject.jupyter.toml"
+  filename = "${path.module}/../services/jupyter/pyproject.jupyter.toml.tftpl"
 }
 
 data "local_file" "jupyter_server_config_uv" {
@@ -379,7 +379,7 @@ data "local_file" "jupyter_reset_pixi" {
 }
 
 data "local_file" "pixi_jupyter" {
-  filename = "${path.module}/../services/jupyter-pixi/pixi.jupyter.toml"
+  filename = "${path.module}/../services/jupyter-pixi/pixi.jupyter.toml.tftpl"
 }
 
 data "local_file" "jupyter_server_config_pixi" {
@@ -434,9 +434,20 @@ locals {
   github_auth_valid = var.oauth_provider != "github" || (var.oauth_allowed_usernames != null && length(var.oauth_allowed_usernames) > 0) || (var.oauth_allowed_org != null && length(var.oauth_allowed_org) > 0)
   teams_have_org    = var.oauth_allowed_teams == null || length(var.oauth_allowed_teams) == 0 || (var.oauth_allowed_org != null && length(var.oauth_allowed_org) > 0)
 
+  # Generate the templated TOML files
+  pyproject_jupyter_templated = templatefile("${path.module}/../services/jupyter/pyproject.jupyter.toml.tftpl", {
+    has_gpu    = module.ami_al2023.has_gpu
+    has_neuron = module.ami_al2023.has_neuron
+  })
+
+  pixi_jupyter_templated = templatefile("${path.module}/../services/jupyter-pixi/pixi.jupyter.toml.tftpl", {
+    has_gpu    = module.ami_al2023.has_gpu
+    has_neuron = module.ami_al2023.has_neuron
+  })
+
   # Select the correct files based on package manager type
   dockerfile_content            = var.jupyter_package_manager == "pixi" ? data.local_file.dockerfile_jupyter_pixi.content : data.local_file.dockerfile_jupyter.content
-  jupyter_toml_content          = var.jupyter_package_manager == "pixi" ? data.local_file.pixi_jupyter.content : data.local_file.pyproject_jupyter.content
+  jupyter_toml_content          = var.jupyter_package_manager == "pixi" ? local.pixi_jupyter_templated : local.pyproject_jupyter_templated
   jupyter_start_content         = var.jupyter_package_manager == "pixi" ? data.local_file.jupyter_start_pixi.content : data.local_file.jupyter_start.content
   jupyter_reset_content         = var.jupyter_package_manager == "pixi" ? data.local_file.jupyter_reset_pixi.content : data.local_file.jupyter_reset.content
   jupyter_server_config_content = var.jupyter_package_manager == "pixi" ? data.local_file.jupyter_server_config_pixi.content : data.local_file.jupyter_server_config_uv.content
@@ -466,6 +477,8 @@ locals {
     allowed_github_teams     = local.allowed_github_teams
     ebs_mounts               = local.resolved_ebs_mounts
     efs_mounts               = local.resolved_efs_mounts
+    has_gpu                  = module.ami_al2023.has_gpu
+    has_neuron               = module.ami_al2023.has_neuron
   })
   traefik_config_file = templatefile("${path.module}/../services/traefik/traefik.yml.tftpl", {
     letsencrypt_notification_email = var.letsencrypt_email

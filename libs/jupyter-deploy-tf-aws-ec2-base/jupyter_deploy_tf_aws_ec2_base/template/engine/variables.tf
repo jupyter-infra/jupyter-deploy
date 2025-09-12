@@ -65,11 +65,12 @@ variable "ami_id" {
   type        = string
 }
 
-variable "root_volume_size_gb" {
+variable "min_root_volume_size_gb" {
   description = <<-EOT
-    The size in gigabytes of the root EBS volume for the EC2 instance.
+    The minimum size in gigabytes of the root EBS volume for the EC2 instance.
     
     If not specified, defaults to the size provided by the AMI.
+    If specified but smaller than the AMI's snapshot size, the larger value will be used.
     
     Recommended: 30
   EOT
@@ -77,8 +78,8 @@ variable "root_volume_size_gb" {
   nullable    = true
 
   validation {
-    condition     = var.root_volume_size_gb == null || (var.root_volume_size_gb > 0 && var.root_volume_size_gb < 1024)
-    error_message = "The root_volume_size_gb value must be greater than 0 and less than 1024 (1TB)."
+    condition     = var.min_root_volume_size_gb == null || (var.min_root_volume_size_gb > 0 && var.min_root_volume_size_gb < 1024)
+    error_message = "The min_root_volume_size_gb value must be greater than 0 and less than 1024 (1TB)."
   }
 }
 

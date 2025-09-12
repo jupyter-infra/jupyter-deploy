@@ -16,7 +16,7 @@ def test_version_consistency() -> None:
     2. __init__.py
     3. template/manifest.yaml
     4. template/engine/main.tf for template_version
-    5. template/services/jupyter/pyproject.jupyter.toml
+    5. template/services/jupyter/pyproject.jupyter.toml.tftpl
     """
     # Base path to the project
     project_path = Path(__file__).parent.parent.parent
@@ -46,21 +46,25 @@ def test_version_consistency() -> None:
     assert main_tf_version_match is not None, "Could not find template_version in main.tf"
     main_tf_version = main_tf_version_match.group(1)
 
-    # Read version from template/services/jupyter/pyproject.jupyter.toml
+    # Read version from template/services/jupyter/pyproject.jupyter.toml.tftpl
     jupyter_pyproject_path = (
-        project_path / "jupyter_deploy_tf_aws_ec2_base" / "template" / "services" / "jupyter" / "pyproject.jupyter.toml"
+        project_path / "jupyter_deploy_tf_aws_ec2_base" / "template" / "services" / "jupyter" / "pyproject.jupyter.toml.tftpl"
     )
-    with open(jupyter_pyproject_path, "rb") as f:
-        jupyter_pyproject_data = tomllib.load(f)
-    jupyter_pyproject_version = jupyter_pyproject_data["project"]["version"]
+    # Extract version directly using regex for template files instead of parsing as TOML
+    jupyter_pyproject_content = jupyter_pyproject_path.read_text()
+    jupyter_pyproject_version_match = re.search(r'version\s*=\s*["\']([\d\.]+)["\']', jupyter_pyproject_content)
+    assert jupyter_pyproject_version_match is not None, "Could not find version in pyproject.jupyter.toml.tftpl"
+    jupyter_pyproject_version = jupyter_pyproject_version_match.group(1)
 
-    # Read version from template/services/jupyter-pixi/pixi.jupyter.toml
-    jupyter_pyproject_path = (
-        project_path / "jupyter_deploy_tf_aws_ec2_base" / "template" / "services" / "jupyter-pixi" / "pixi.jupyter.toml"
+    # Read version from template/services/jupyter-pixi/pixi.jupyter.toml.tftpl
+    jupyter_pixi_path = (
+        project_path / "jupyter_deploy_tf_aws_ec2_base" / "template" / "services" / "jupyter-pixi" / "pixi.jupyter.toml.tftpl"
     )
-    with open(jupyter_pyproject_path, "rb") as f:
-        jupyter_pixi_data = tomllib.load(f)
-    jupyter_pixi_version = jupyter_pixi_data["workspace"]["version"]
+    # Extract version directly using regex for template files instead of parsing as TOML
+    jupyter_pixi_content = jupyter_pixi_path.read_text()
+    jupyter_pixi_version_match = re.search(r'version\s*=\s*["\']([\d\.]+)["\']', jupyter_pixi_content)
+    assert jupyter_pixi_version_match is not None, "Could not find version in pixi.jupyter.toml.tftpl"
+    jupyter_pixi_version = jupyter_pixi_version_match.group(1)
 
     # Compare all versions
     assert pyproject_version == init_version, (
@@ -77,9 +81,9 @@ def test_version_consistency() -> None:
 
     assert pyproject_version == jupyter_pyproject_version, (
         f"Version mismatch: pyproject.toml ({pyproject_version}) != "
-        f"jupyter/pyproject.jupyter.toml ({jupyter_pyproject_version})"
+        f"jupyter/pyproject.jupyter.toml.tftpl ({jupyter_pyproject_version})"
     )
 
     assert pyproject_version == jupyter_pixi_version, (
-        f"Version mismatch: pyproject.toml ({pyproject_version}) != jupyter/pixi.jupyter.toml ({jupyter_pixi_version})"
+        f"Version mismatch: pyproject.toml ({pyproject_version}) != jupyter-pixi/pixi.jupyter.toml.tftpl ({jupyter_pixi_version})"
     )

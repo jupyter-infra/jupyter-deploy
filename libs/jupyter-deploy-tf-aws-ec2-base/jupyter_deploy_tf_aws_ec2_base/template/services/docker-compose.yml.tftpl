@@ -37,6 +37,11 @@ services:
     volumes:
       - /mnt/jupyter-data:/home/jovyan
       - /var/run/docker.sock:/var/run/docker.sock
+%{ if has_gpu ~}
+      - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro
+      - /usr/lib64/libnvidia-ml.so:/usr/lib64/libnvidia-ml.so:ro
+      - /usr/lib64/libnvidia-ml.so.1:/usr/lib64/libnvidia-ml.so.1:ro
+%{ endif ~}
 %{ if length(ebs_mounts) > 0 ~}
 %{ for ebs in ebs_mounts ~}
       - /home/jovyan/${ebs.mount_point}:/home/jovyan/${ebs.mount_point}
