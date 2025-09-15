@@ -48,7 +48,12 @@ def test_version_consistency() -> None:
 
     # Read version from template/services/jupyter/pyproject.jupyter.toml.tftpl
     jupyter_pyproject_path = (
-        project_path / "jupyter_deploy_tf_aws_ec2_base" / "template" / "services" / "jupyter" / "pyproject.jupyter.toml.tftpl"
+        project_path
+        / "jupyter_deploy_tf_aws_ec2_base"
+        / "template"
+        / "services"
+        / "jupyter"
+        / "pyproject.jupyter.toml.tftpl"
     )
     # Extract version directly using regex for template files instead of parsing as TOML
     jupyter_pyproject_content = jupyter_pyproject_path.read_text()
@@ -58,7 +63,12 @@ def test_version_consistency() -> None:
 
     # Read version from template/services/jupyter-pixi/pixi.jupyter.toml.tftpl
     jupyter_pixi_path = (
-        project_path / "jupyter_deploy_tf_aws_ec2_base" / "template" / "services" / "jupyter-pixi" / "pixi.jupyter.toml.tftpl"
+        project_path
+        / "jupyter_deploy_tf_aws_ec2_base"
+        / "template"
+        / "services"
+        / "jupyter-pixi"
+        / "pixi.jupyter.toml.tftpl"
     )
     # Extract version directly using regex for template files instead of parsing as TOML
     jupyter_pixi_content = jupyter_pixi_path.read_text()
@@ -85,5 +95,6 @@ def test_version_consistency() -> None:
     )
 
     assert pyproject_version == jupyter_pixi_version, (
-        f"Version mismatch: pyproject.toml ({pyproject_version}) != jupyter-pixi/pixi.jupyter.toml.tftpl ({jupyter_pixi_version})"
+        f"Version mismatch: pyproject.toml ({pyproject_version}) "
+        "!= jupyter-pixi/pixi.jupyter.toml.tftpl ({jupyter_pixi_version})"
     )
