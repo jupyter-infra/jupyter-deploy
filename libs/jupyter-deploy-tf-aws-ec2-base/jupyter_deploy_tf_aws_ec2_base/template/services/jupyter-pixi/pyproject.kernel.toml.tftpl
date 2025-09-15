@@ -6,4 +6,8 @@ requires-python = ">=3.12"
 dependencies = [
     "ipykernel>=6.0.0,<7",
     "ipython>=8.0.0",
+%{ if has_gpu || has_neuron ~}
+    "numpy>=2.3.0",
+    "torch>=2.8.0",
+%{ endif ~}
 ]

@@ -353,16 +353,8 @@ data "local_file" "jupyter_reset" {
   filename = "${path.module}/../services/jupyter/jupyter-reset.sh"
 }
 
-data "local_file" "pyproject_jupyter" {
-  filename = "${path.module}/../services/jupyter/pyproject.jupyter.toml.tftpl"
-}
-
 data "local_file" "jupyter_server_config_uv" {
   filename = "${path.module}/../services/jupyter/jupyter_server_config.py"
-}
-
-data "local_file" "pyproject_kernel" {
-  filename = "${path.module}/../services/jupyter/pyproject.kernel.toml"
 }
 
 # Files for the Pixi environment
@@ -378,16 +370,8 @@ data "local_file" "jupyter_reset_pixi" {
   filename = "${path.module}/../services/jupyter-pixi/jupyter-reset-pixi.sh"
 }
 
-data "local_file" "pixi_jupyter" {
-  filename = "${path.module}/../services/jupyter-pixi/pixi.jupyter.toml.tftpl"
-}
-
 data "local_file" "jupyter_server_config_pixi" {
   filename = "${path.module}/../services/jupyter-pixi/jupyter_server_config_pixi.py"
-}
-
-data "local_file" "pyproject_kernel_pixi" {
-  filename = "${path.module}/../services/jupyter-pixi/pyproject.kernel.pixi.toml"
 }
 
 # Other services
@@ -445,13 +429,23 @@ locals {
     has_neuron = module.ami_al2023.has_neuron
   })
 
+  kernel_templated = templatefile("${path.module}/../services/jupyter/pyproject.kernel.toml.tftpl", {
+    has_gpu    = module.ami_al2023.has_gpu
+    has_neuron = module.ami_al2023.has_neuron
+  })
+
+  pixi_kernel_templated = templatefile("${path.module}/../services/jupyter-pixi/pyproject.kernel.toml.tftpl", {
+    has_gpu    = module.ami_al2023.has_gpu
+    has_neuron = module.ami_al2023.has_neuron
+  })
+
   # Select the correct files based on package manager type
   dockerfile_content            = var.jupyter_package_manager == "pixi" ? data.local_file.dockerfile_jupyter_pixi.content : data.local_file.dockerfile_jupyter.content
   jupyter_toml_content          = var.jupyter_package_manager == "pixi" ? local.pixi_jupyter_templated : local.pyproject_jupyter_templated
   jupyter_start_content         = var.jupyter_package_manager == "pixi" ? data.local_file.jupyter_start_pixi.content : data.local_file.jupyter_start.content
   jupyter_reset_content         = var.jupyter_package_manager == "pixi" ? data.local_file.jupyter_reset_pixi.content : data.local_file.jupyter_reset.content
   jupyter_server_config_content = var.jupyter_package_manager == "pixi" ? data.local_file.jupyter_server_config_pixi.content : data.local_file.jupyter_server_config_uv.content
-  kernel_pyproject_content      = var.jupyter_package_manager == "pixi" ? data.local_file.pyproject_kernel_pixi.content : data.local_file.pyproject_kernel.content
+  kernel_pyproject_content      = var.jupyter_package_manager == "pixi" ? local.pixi_kernel_templated : local.kernel_templated
   jupyter_toml_filename         = var.jupyter_package_manager == "pixi" ? "pixi.jupyter.toml" : "pyproject.jupyter.toml"
 }
 
@@ -621,7 +615,6 @@ DOC
     fileexists("${path.module}/../services/jupyter-pixi/jupyter-start-pixi.sh"),
     fileexists("${path.module}/../services/jupyter-pixi/jupyter-reset-pixi.sh"),
     fileexists("${path.module}/../services/jupyter-pixi/jupyter_server_config_pixi.py"),
-    fileexists("${path.module}/../services/jupyter-pixi/pyproject.kernel.pixi.toml"),
     fileexists("${path.module}/../services/logrotator/dockerfile.logrotator"),
     fileexists("${path.module}/../services/commands/update-auth.sh"),
     fileexists("${path.module}/../services/commands/refresh-oauth-cookie.sh"),

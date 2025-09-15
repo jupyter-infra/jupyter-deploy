@@ -15,10 +15,10 @@ version = "0.2.1"
 python = ">=3.12"
 jupyterlab = ">=4.4.2,<5"
 ipywidgets = ">=8.1.7,<9"
+
+[pypi-dependencies]
+jupyter-server-documents = ">=0.1.0a0"
 %{ if has_gpu || has_neuron ~}
 numpy = ">=2.3.0"
 torch = ">=2.8.0"
 %{ endif ~}
-
-[pypi-dependencies]
-jupyter-server-documents = ">=0.1.0a0"

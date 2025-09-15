@@ -147,12 +147,12 @@ wait_for_cloudinit_execution() {
             --output text)
 
         # Check if status is None or empty, which means the association is still pending
-        if [ "$ASSOC_STATUS" = "None" ] || [ "$ASSOC_STATUS" = "Failed" ] || [ -z "$ASSOC_STATUS" ] ; then
+        if [ "$ASSOC_STATUS" = "None" ] || [ "$ASSOC_STATUS" = "Failed" ] || [ "$ASSOC_STATUS" = "Queued" ] || [ "$ASSOC_STATUS" = "Pending" ] || [ -z "$ASSOC_STATUS" ] ; then
             echo "Association status not yet available or might have run too early (Failed), retrying..."
             # Sleep and retry a few times (accelerated instances need more time)
             local retry_count=0
             local max_retries=5
-            while [ "$ASSOC_STATUS" = "None" ] || [ "$ASSOC_STATUS" = "Failed" ] || [ -z "$ASSOC_STATUS" ]; do
+            while [ "$ASSOC_STATUS" = "None" ] || [ "$ASSOC_STATUS" = "Failed" ] || [ "$ASSOC_STATUS" = "Queued" ] || [ "$ASSOC_STATUS" = "Pending" ] || [ -z "$ASSOC_STATUS" ]; do
                 if [ $retry_count -ge $max_retries ]; then
                     echo "Max retries reached, breaking."
                     break
