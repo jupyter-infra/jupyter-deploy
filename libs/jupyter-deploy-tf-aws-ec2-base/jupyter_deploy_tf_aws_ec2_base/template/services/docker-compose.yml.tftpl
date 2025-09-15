@@ -12,8 +12,6 @@ services:
         - SERVICE_GID=$${SERVICE_GID}
         - DOCKER_GID=$${DOCKER_GID}
     restart: unless-stopped
-    mem_limit: "$${JUPYTER_MEM_LIMIT_MB}M"
-    mem_reservation: "$${JUPYTER_MEM_RESERVATION_MB}M"
     security_opt:
       - no-new-privileges:true
     logging:
@@ -37,11 +35,6 @@ services:
     volumes:
       - /mnt/jupyter-data:/home/jovyan
       - /var/run/docker.sock:/var/run/docker.sock
-%{ if has_gpu ~}
-      - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro
-      - /usr/lib64/libnvidia-ml.so:/usr/lib64/libnvidia-ml.so:ro
-      - /usr/lib64/libnvidia-ml.so.1:/usr/lib64/libnvidia-ml.so.1:ro
-%{ endif ~}
 %{ if length(ebs_mounts) > 0 ~}
 %{ for ebs in ebs_mounts ~}
       - /home/jovyan/${ebs.mount_point}:/home/jovyan/${ebs.mount_point}
@@ -51,6 +44,24 @@ services:
 %{ for efs in efs_mounts ~}
       - /home/jovyan/${efs.mount_point}:/home/jovyan/${efs.mount_point}
 %{ endfor ~}
+%{ endif ~}
+    deploy:
+      resources:
+        limits:
+          memory: "$${JUPYTER_MEM_LIMIT_MB}M"
+        reservations:
+          memory: "$${JUPYTER_MEM_RESERVATION_MB}M"
+%{ if has_gpu ~}
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+%{ endif ~}
+%{ if has_neuron ~}
+          devices:
+            - driver: aws-neuron
+              count: all
+              capabilities: [neuron]
 %{ endif ~}
   oauth:
     image: quay.io/oauth2-proxy/oauth2-proxy:latest

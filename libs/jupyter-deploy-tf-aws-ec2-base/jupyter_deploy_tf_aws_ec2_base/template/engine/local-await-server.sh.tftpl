@@ -146,12 +146,34 @@ wait_for_cloudinit_execution() {
             --query "AssociationExecutionTargets[0].Status" \
             --output text)
 
+        # Check if status is None or empty, which means the association is still pending
+        if [ "$ASSOC_STATUS" = "None" ] || [ "$ASSOC_STATUS" = "Failed" ] || [ -z "$ASSOC_STATUS" ] ; then
+            echo "Association status not yet available or might have run too early (Failed), retrying..."
+            # Sleep and retry a few times (accelerated instances need more time)
+            local retry_count=0
+            local max_retries=5
+            while [ "$ASSOC_STATUS" = "None" ] || [ "$ASSOC_STATUS" = "Failed" ] || [ -z "$ASSOC_STATUS" ]; do
+                if [ $retry_count -ge $max_retries ]; then
+                    echo "Max retries reached, breaking."
+                    break
+                fi
+                sleep 20
+                retry_count=$((retry_count + 1))
+                ASSOC_STATUS=$(aws ssm describe-association-execution-targets \
+                    --association-id "$INSTANCE_STARTUP_ASSOCIATION_ID" \
+                    --execution-id "$LATEST_EXECUTION_ID" \
+                    --region "$REGION" \
+                    --query "AssociationExecutionTargets[0].Status" \
+                    --output text)
+            done
+        fi
+
         if [ "$ASSOC_STATUS" != "Success" ]; then
             echo "Instance startup association did not complete successfully. Target status: $ASSOC_STATUS"
             return 1
         fi
         
-        echo "Instance startup association completed successfully."
+        echo "Instance startup association completed."
         return 0
     else
         echo "Instance startup association failed with status: $LATEST_STATUS"
