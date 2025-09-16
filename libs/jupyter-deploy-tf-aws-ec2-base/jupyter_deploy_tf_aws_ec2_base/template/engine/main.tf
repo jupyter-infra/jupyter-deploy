@@ -425,8 +425,9 @@ locals {
   })
 
   pixi_jupyter_templated = templatefile("${path.module}/../services/jupyter-pixi/pixi.jupyter.toml.tftpl", {
-    has_gpu    = module.ami_al2023.has_gpu
-    has_neuron = module.ami_al2023.has_neuron
+    has_gpu          = module.ami_al2023.has_gpu
+    has_neuron       = module.ami_al2023.has_neuron
+    cpu_architecture = module.ami_al2023.cpu_architecture
   })
 
   kernel_templated = templatefile("${path.module}/../services/jupyter/pyproject.kernel.toml.tftpl", {

@@ -5,7 +5,11 @@ channels = [
 description = "A basic image with jupyterlab and server-documents"
 name = "jupyter-pixi"
 platforms = [
+%{ if cpu_architecture == "arm64" ~}
+    "linux-aarch64",
+%{ else ~}
     "linux-64",
+%{ endif ~}
 ]
 version = "0.2.1"
 
