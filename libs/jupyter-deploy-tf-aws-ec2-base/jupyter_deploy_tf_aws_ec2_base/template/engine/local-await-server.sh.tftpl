@@ -220,7 +220,13 @@ main(){
     while [ $attempts -lt $MAX_ATTEMPTS ] && [ "$ready" = "false" ]; do
         echo "Checking instance status (attempt $attempts of $MAX_ATTEMPTS)..."
 
-        INNER_STATUS=$(get_status)
+        # Large or accelerator-enables instances take longer to fully come online.
+        # Tolerate errors for up to 1 minute before failing.
+        if [ $attempts -lt 6 ]; then
+            INNER_STATUS=$(get_status || echo "INITIALIZING")
+        else
+            INNER_STATUS=$(get_status)
+        fi
 
         # Check if the status is either 0 (IN_SERVICE) or 40 (OUT_OF_SERVICE)
         if [ "$INNER_STATUS" = "IN_SERVICE" ]; then

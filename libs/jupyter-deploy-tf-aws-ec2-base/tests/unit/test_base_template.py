@@ -11,6 +11,7 @@ EXPECTED_TEMPLATE_STRPATHS: list[str] = [
     "variables.yaml",
     "engine/presets/defaults-all.tfvars",
     "engine/presets/defaults-base.tfvars",
+    "engine/presets/destroy.tfvars",
     "engine/local-await-server.sh.tftpl",
     "engine/main.tf",
     "engine/outputs.tf",

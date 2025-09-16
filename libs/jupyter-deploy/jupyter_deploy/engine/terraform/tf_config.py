@@ -99,7 +99,7 @@ class TerraformConfigHandler(EngineConfigHandler):
             console.print(":x: Error initializing Terraform project.", style="red")
             return False
 
-        # 2/ run terraform plan and save output with ``terraform plan PATH``
+        # 2/ prepare to run terraform plan and save output with ``terraform plan PATH``
         plan_cmds = TF_PLAN_CMD.copy()
 
         # 2.1/ output plan to disk

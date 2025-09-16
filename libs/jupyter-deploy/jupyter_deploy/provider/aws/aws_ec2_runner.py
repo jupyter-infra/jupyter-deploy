@@ -246,13 +246,14 @@ class AwsEc2Runner(InstructionRunner):
                 resolved_arguments=resolved_arguments,
                 console=console,
                 desired_state=ec2_instance.Ec2InstanceState.RUNNING,
+                timeout_seconds=60,  # EC2:StartInstances is generally fast
             )
         elif instruction_name == AwsEc2Instruction.WAIT_FOR_STOPPED:
             return self._wait_for_state(
                 resolved_arguments=resolved_arguments,
                 console=console,
                 desired_state=ec2_instance.Ec2InstanceState.STOPPED,
-                timeout_seconds=120,
+                timeout_seconds=600,  # GPU instances take a while to stop
             )
 
         raise NotImplementedError(f"No execution implementation for command: 'aws.ec2.{instruction_name}'")

@@ -19,6 +19,7 @@ TF_DEFAULT_PLAN_FILENAME = "jdout-tfplan"
 TF_RECORDED_VARS_FILENAME = "jdinputs.auto.tfvars"
 TF_RECORDED_SECRETS_FILENAME = "jdinputs.secrets.auto.tfvars"
 TF_CUSTOM_PRESET_FILENAME = "jdinputs.preset.override.tfvars"
+TF_DESTROY_PRESET_FILENAME = "destroy.tfvars"
 TF_VARIABLES_FILENAME = "variables.tf"
 TF_OUTPUTS_FILENAME = "outputs.tf"
 

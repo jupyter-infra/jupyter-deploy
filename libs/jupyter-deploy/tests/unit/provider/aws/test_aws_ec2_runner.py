@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 
 from rich.console import Console
 
+from jupyter_deploy.api.aws.ec2 import ec2_instance
 from jupyter_deploy.api.aws.ec2.ec2_instance import Ec2InstanceState
 from jupyter_deploy.provider.aws.aws_ec2_runner import AwsEc2Instruction, AwsEc2Runner
 from jupyter_deploy.provider.instruction_runner import InterruptInstructionError
@@ -646,3 +647,71 @@ class TestExecuteInstructions(unittest.TestCase):
             )
 
         self.assertIn("unknown-instruction", str(context.exception))
+
+    @patch("jupyter_deploy.api.aws.ec2.ec2_instance.poll_for_instance_status")
+    def test_wait_for_running_pass_a_timeout_of_at_least_sixty_seconds(
+        self, mock_poll_for_instance_status: Mock
+    ) -> None:
+        # Setup
+        runner = AwsEc2Runner(region_name="us-west-2")
+        console = Mock(spec=Console)
+
+        # Configure mock
+        mock_poll_for_instance_status.return_value = {"InstanceState": {"Name": "running", "Code": 16}}
+
+        # Prepare arguments
+        instance_id_arg = StrResolvedInstructionArgument(argument_name="instance_id", value="i-123456789abcdef")
+        resolved_args: dict[str, ResolvedInstructionArgument] = {"instance_id": instance_id_arg}
+
+        # Execute
+        runner.execute_instruction(
+            instruction_name=AwsEc2Instruction.WAIT_FOR_RUNNING, resolved_arguments=resolved_args, console=console
+        )
+
+        # Assert that poll_for_instance_status was called with a timeout >= 60 seconds
+        mock_poll_for_instance_status.assert_called_once()
+        actual_timeout = mock_poll_for_instance_status.call_args[1]["timeout_seconds"]
+        self.assertGreaterEqual(
+            actual_timeout,
+            60,
+            f"WAIT_FOR_RUNNING should use a timeout of at least 60 seconds, but got {actual_timeout}",
+        )
+
+        # Verify we're using the correct state
+        self.assertEqual(
+            mock_poll_for_instance_status.call_args[1]["desired_state"], ec2_instance.Ec2InstanceState.RUNNING
+        )
+
+    @patch("jupyter_deploy.api.aws.ec2.ec2_instance.poll_for_instance_status")
+    def test_wait_for_stopped_pass_a_timeout_of_at_least_five_minutes(
+        self, mock_poll_for_instance_status: Mock
+    ) -> None:
+        # Setup
+        runner = AwsEc2Runner(region_name="us-west-2")
+        console = Mock(spec=Console)
+
+        # Configure mock
+        mock_poll_for_instance_status.return_value = {"InstanceState": {"Name": "stopped", "Code": 80}}
+
+        # Prepare arguments
+        instance_id_arg = StrResolvedInstructionArgument(argument_name="instance_id", value="i-123456789abcdef")
+        resolved_args: dict[str, ResolvedInstructionArgument] = {"instance_id": instance_id_arg}
+
+        # Execute
+        runner.execute_instruction(
+            instruction_name=AwsEc2Instruction.WAIT_FOR_STOPPED, resolved_arguments=resolved_args, console=console
+        )
+
+        # Assert that poll_for_instance_status was called with a timeout >= 300 seconds (5 minutes)
+        mock_poll_for_instance_status.assert_called_once()
+        actual_timeout = mock_poll_for_instance_status.call_args[1]["timeout_seconds"]
+        self.assertGreaterEqual(
+            actual_timeout,
+            300,
+            f"WAIT_FOR_STOPPED should use a timeout of at least 5 minutes (300 seconds), but got {actual_timeout}",
+        )
+
+        # Verify we're using the correct state
+        self.assertEqual(
+            mock_poll_for_instance_status.call_args[1]["desired_state"], ec2_instance.Ec2InstanceState.STOPPED
+        )

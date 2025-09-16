@@ -110,6 +110,38 @@ def update_jupyter_pixi_toml(file_path: Path, new_version: str) -> None:
     print(f"✓ Updated version in {file_path}")
 
 
+def update_kernel_pyproject_toml(file_path: Path, new_version: str) -> None:
+    """Update version in kernel pyproject.toml files."""
+    try:
+        # Check if the file exists first
+        if not file_path.exists():
+            # Try with .tftpl extension if the plain file doesn't exist
+            tftpl_path = Path(f"{file_path}.tftpl")
+            if tftpl_path.exists():
+                file_path = tftpl_path
+            else:
+                print(f"! Warning: File not found: {file_path}")
+                return
+
+        # Read the current content as text
+        content = file_path.read_text()
+        updated_content = re.sub(
+            r'version\s*=\s*["\']([^"\']+)["\']',
+            f'version = "{new_version}"',
+            content,
+            count=1,  # Only replace the first occurrence (the project version)
+        )
+
+        if content == updated_content:
+            print(f"! Warning: No version pattern found in {file_path}")
+        else:
+            file_path.write_text(updated_content)
+            print(f"✓ Updated version in {file_path}")
+
+    except Exception as e:
+        print(f"! Error updating {file_path}: {e}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Update version across all project files."
@@ -160,6 +192,24 @@ def main() -> None:
         / "pixi.jupyter.toml"
     )
 
+    # Kernel template file paths
+    jupyter_kernel_path = (
+        project_path
+        / "jupyter_deploy_tf_aws_ec2_base"
+        / "template"
+        / "services"
+        / "jupyter"
+        / "pyproject.kernel.toml"
+    )
+    jupyter_pixi_kernel_path = (
+        project_path
+        / "jupyter_deploy_tf_aws_ec2_base"
+        / "template"
+        / "services"
+        / "jupyter-pixi"
+        / "pyproject.kernel.toml"
+    )
+
     # Update files
     update_pyproject_toml(pyproject_path, new_version)
     update_init_py(init_path, new_version)
@@ -167,6 +217,10 @@ def main() -> None:
     update_main_tf(main_tf_path, new_version)
     update_jupyter_pyproject_toml(jupyter_pyproject_path, new_version)
     update_jupyter_pixi_toml(jupyter_pixi_path, new_version)
+
+    # Update kernel template files
+    update_kernel_pyproject_toml(jupyter_kernel_path, new_version)
+    update_kernel_pyproject_toml(jupyter_pixi_kernel_path, new_version)
 
     print("\nVersion update completed successfully!")
 

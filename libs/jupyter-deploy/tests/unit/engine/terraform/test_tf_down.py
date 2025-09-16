@@ -286,3 +286,71 @@ class TestTerraformDownHandler(unittest.TestCase):
 
         # Verify we don't proceed with terraform destroy
         self.assertEqual(1, mock_cmd_utils.run_cmd_and_pipe_to_terminal.call_count)
+
+    @patch("jupyter_deploy.engine.terraform.tf_down.fs_utils")
+    @patch("jupyter_deploy.engine.terraform.tf_down.cmd_utils")
+    @patch("jupyter_deploy.engine.terraform.tf_down.rich_console")
+    def test_passes_destroy_tfvars_file_when_available(
+        self, mock_console: Mock, mock_cmd_utils: Mock, mock_fs_utils: Mock
+    ) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        mock_manifest, _ = self.get_mock_manifest_and_fns()
+        handler = TerraformDownHandler(project_path=project_path, project_manifest=mock_manifest)
+        engine_path = project_path / "engine"
+
+        mock_console_instance = Mock()
+        mock_console.Console.return_value = mock_console_instance
+
+        # Mock fs_utils to indicate that destroy.tfvars exists
+        mock_fs_utils.file_exists.return_value = True
+
+        # Mock successful command execution
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (0, False)
+
+        # Define expected tfvars file path (using tf_constants.TF_DESTROY_PRESET_FILENAME)
+        destroy_tfvars_path = engine_path / "presets" / "destroy.tfvars"
+
+        # Act
+        handler.destroy(auto_approve=True)
+
+        # Assert
+        mock_fs_utils.file_exists.assert_called_once()
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once()
+
+        # Check that the var-file option was included in the command
+        cmd_args = mock_cmd_utils.run_cmd_and_pipe_to_terminal.call_args[0][0]
+        var_file_arg = f"-var-file={destroy_tfvars_path.absolute()}"
+        self.assertIn(var_file_arg, cmd_args)
+
+    @patch("jupyter_deploy.engine.terraform.tf_down.fs_utils")
+    @patch("jupyter_deploy.engine.terraform.tf_down.cmd_utils")
+    @patch("jupyter_deploy.engine.terraform.tf_down.rich_console")
+    def test_skips_passing_destroy_tfvars_file_when_unavailable(
+        self, mock_console: Mock, mock_cmd_utils: Mock, mock_fs_utils: Mock
+    ) -> None:
+        # Setup
+        project_path = Path("/mock/project")
+        mock_manifest, _ = self.get_mock_manifest_and_fns()
+        handler = TerraformDownHandler(project_path=project_path, project_manifest=mock_manifest)
+
+        mock_console_instance = Mock()
+        mock_console.Console.return_value = mock_console_instance
+
+        # Mock fs_utils to indicate that destroy.tfvars does NOT exist
+        mock_fs_utils.file_exists.return_value = False
+
+        # Mock successful command execution
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (0, False)
+
+        # Act
+        handler.destroy(auto_approve=True)
+
+        # Assert
+        mock_fs_utils.file_exists.assert_called_once()
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once()
+
+        # Check that the var-file option was NOT included in the command
+        cmd_args = mock_cmd_utils.run_cmd_and_pipe_to_terminal.call_args[0][0]
+        for arg in cmd_args:
+            self.assertFalse(arg.startswith("-var-file="))

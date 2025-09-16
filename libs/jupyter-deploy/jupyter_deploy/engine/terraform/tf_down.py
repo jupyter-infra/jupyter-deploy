@@ -5,13 +5,15 @@ from subprocess import CalledProcessError
 
 from rich import console as rich_console
 
-from jupyter_deploy import cmd_utils
+from jupyter_deploy import cmd_utils, fs_utils
 from jupyter_deploy.engine.engine_down import EngineDownHandler
 from jupyter_deploy.engine.terraform import tf_outputs
 from jupyter_deploy.engine.terraform.tf_constants import (
     TF_AUTO_APPROVE_CMD_OPTION,
     TF_DESTROY_CMD,
+    TF_DESTROY_PRESET_FILENAME,
     TF_ENGINE_DIR,
+    TF_PRESETS_DIR,
     TF_RM_FROM_STATE_CMD,
 )
 from jupyter_deploy.manifest import JupyterDeployManifest
@@ -28,6 +30,14 @@ class TerraformDownHandler(EngineDownHandler):
 
         super().__init__(project_path=project_path, project_manifest=project_manifest, output_handler=outputs_handler)
         self.engine_dir_path = project_path / TF_ENGINE_DIR
+
+    def _get_destroy_tfvars_file_path(self) -> Path:
+        return self.engine_dir_path / TF_PRESETS_DIR / TF_DESTROY_PRESET_FILENAME
+
+    def _destroy_tfvars_file_exists(self) -> bool:
+        """Return True if special presets for destroy exists."""
+        tfvars_file_path = self._get_destroy_tfvars_file_path()
+        return fs_utils.file_exists(tfvars_file_path)
 
     def destroy(self, auto_approve: bool = False) -> None:
         console = rich_console.Console()
@@ -96,6 +106,12 @@ class TerraformDownHandler(EngineDownHandler):
         destroy_cmd = TF_DESTROY_CMD.copy()
         if auto_approve:
             destroy_cmd.append(TF_AUTO_APPROVE_CMD_OPTION)
+        if self._destroy_tfvars_file_exists():
+            # jupyter-deploy does not record sensitive values by default,
+            # however 'terraform destroy' believes it needs them (not necessarily true).
+            # Allow templates to provide mock values in order to avoid prompting the user.
+            destroy_tfvars_path = self._get_destroy_tfvars_file_path()
+            destroy_cmd.append(f"-var-file={destroy_tfvars_path.absolute()}")
 
         retcode, timed_out = cmd_utils.run_cmd_and_pipe_to_terminal(destroy_cmd, exec_dir=self.engine_dir_path)
 

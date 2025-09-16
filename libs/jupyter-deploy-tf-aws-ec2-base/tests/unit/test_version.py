@@ -17,6 +17,9 @@ def test_version_consistency() -> None:
     3. template/manifest.yaml
     4. template/engine/main.tf for template_version
     5. template/services/jupyter/pyproject.jupyter.toml.tftpl
+    6. template/services/jupyter-pixi/pixi.jupyter.toml.tftpl
+    7. template/services/jupyter/pyproject.kernel.toml.tftpl
+    8. template/services/jupyter-pixi/pyproject.kernel.toml.tftpl
     """
     # Base path to the project
     project_path = Path(__file__).parent.parent.parent
@@ -76,6 +79,36 @@ def test_version_consistency() -> None:
     assert jupyter_pixi_version_match is not None, "Could not find version in pixi.jupyter.toml.tftpl"
     jupyter_pixi_version = jupyter_pixi_version_match.group(1)
 
+    # Read version from template/services/jupyter/pyproject.kernel.toml.tftpl
+    jupyter_kernel_path = (
+        project_path
+        / "jupyter_deploy_tf_aws_ec2_base"
+        / "template"
+        / "services"
+        / "jupyter"
+        / "pyproject.kernel.toml.tftpl"
+    )
+    jupyter_kernel_content = jupyter_kernel_path.read_text()
+    jupyter_kernel_version_match = re.search(r'version\s*=\s*["\']([\d\.]+)["\']', jupyter_kernel_content)
+    assert jupyter_kernel_version_match is not None, "Could not find version in jupyter/pyproject.kernel.toml.tftpl"
+    jupyter_kernel_version = jupyter_kernel_version_match.group(1)
+
+    # Read version from template/services/jupyter-pixi/pyproject.kernel.toml.tftpl
+    jupyter_pixi_kernel_path = (
+        project_path
+        / "jupyter_deploy_tf_aws_ec2_base"
+        / "template"
+        / "services"
+        / "jupyter-pixi"
+        / "pyproject.kernel.toml.tftpl"
+    )
+    jupyter_pixi_kernel_content = jupyter_pixi_kernel_path.read_text()
+    jupyter_pixi_kernel_version_match = re.search(r'version\s*=\s*["\']([\d\.]+)["\']', jupyter_pixi_kernel_content)
+    assert jupyter_pixi_kernel_version_match is not None, (
+        "Could not find version in jupyter-pixi/pyproject.kernel.toml.tftpl"
+    )
+    jupyter_pixi_kernel_version = jupyter_pixi_kernel_version_match.group(1)
+
     # Compare all versions
     assert pyproject_version == init_version, (
         f"Version mismatch: pyproject.toml ({pyproject_version}) != __init__.py ({init_version})"
@@ -95,6 +128,16 @@ def test_version_consistency() -> None:
     )
 
     assert pyproject_version == jupyter_pixi_version, (
-        f"Version mismatch: pyproject.toml ({pyproject_version}) "
-        "!= jupyter-pixi/pixi.jupyter.toml.tftpl ({jupyter_pixi_version})"
+        f"Version mismatch: pyproject.toml ({pyproject_version}) != "
+        f"jupyter-pixi/pixi.jupyter.toml.tftpl ({jupyter_pixi_version})"
+    )
+
+    assert pyproject_version == jupyter_kernel_version, (
+        f"Version mismatch: pyproject.toml ({pyproject_version}) != "
+        f"jupyter/pyproject.kernel.toml.tftpl ({jupyter_kernel_version})"
+    )
+
+    assert pyproject_version == jupyter_pixi_kernel_version, (
+        f"Version mismatch: pyproject.toml ({pyproject_version}) != "
+        f"jupyter-pixi/pyproject.kernel.toml.tftpl ({jupyter_pixi_kernel_version})"
     )

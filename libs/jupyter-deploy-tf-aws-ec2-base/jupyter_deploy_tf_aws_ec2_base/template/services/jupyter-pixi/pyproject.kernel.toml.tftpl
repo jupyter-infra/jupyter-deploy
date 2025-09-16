@@ -1,13 +1,9 @@
 [project]
 name = "jupyter-uv-kernel"
-version = "0.2.0"
+version = "0.2.1"
 description = "A jupyter kernel configuration managed by UV"
 requires-python = ">=3.12"
 dependencies = [
     "ipykernel>=6.0.0,<7",
     "ipython>=8.0.0",
-%{ if has_gpu || has_neuron ~}
-    "numpy>=2.3.0",
-    "torch>=2.8.0",
-%{ endif ~}
 ]
