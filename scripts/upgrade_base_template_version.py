@@ -79,35 +79,79 @@ def update_main_tf(file_path: Path, new_version: str) -> None:
 
 
 def update_jupyter_pyproject_toml(file_path: Path, new_version: str) -> None:
-    """Update version in pyproject.jupyter.toml file."""
-    # Read the current content as bytes (required by tomllib)
-    with open(file_path, "rb") as f:
-        data = tomllib.load(f)
+    """Update version in pyproject.jupyter.toml or pyproject.jupyter.toml.tftpl file."""
+    try:
+        # Check if file exists and has .tftpl extension
+        is_tftpl = file_path.name.endswith(".tftpl")
 
-    # Update the version
-    data["project"]["version"] = new_version
+        if is_tftpl:
+            # For tftpl files, use regex to replace the version
+            content = file_path.read_text()
+            updated_content = re.sub(
+                r'version\s*=\s*["\']([^"\']+)["\']',
+                f'version = "{new_version}"',
+                content,
+                count=1,  # Only replace the first occurrence (the project version)
+            )
 
-    # Write the updated content back
-    with open(file_path, "wb") as f:
-        tomli_w.dump(data, f)
+            if content == updated_content:
+                print(f"! Warning: No version pattern found in {file_path}")
+            else:
+                file_path.write_text(updated_content)
+                print(f"✓ Updated version in {file_path}")
+        else:
+            # For regular toml files, use tomllib/tomli_w
+            with open(file_path, "rb") as f:
+                data = tomllib.load(f)
 
-    print(f"✓ Updated version in {file_path}")
+            # Update the version
+            data["project"]["version"] = new_version
+
+            # Write the updated content back
+            with open(file_path, "wb") as f:
+                tomli_w.dump(data, f)
+
+            print(f"✓ Updated version in {file_path}")
+    except Exception as e:
+        print(f"! Error updating {file_path}: {e}")
 
 
 def update_jupyter_pixi_toml(file_path: Path, new_version: str) -> None:
-    """Update version in pixi.jupyter.toml file."""
-    # Read the current content as bytes (required by tomllib)
-    with open(file_path, "rb") as f:
-        data = tomllib.load(f)
+    """Update version in pixi.jupyter.toml or pixi.jupyter.toml.tftpl file."""
+    try:
+        # Check if file exists and has .tftpl extension
+        is_tftpl = file_path.name.endswith(".tftpl")
 
-    # Update the version
-    data["workspace"]["version"] = new_version
+        if is_tftpl:
+            # For tftpl files, use regex to replace the version
+            content = file_path.read_text()
+            updated_content = re.sub(
+                r'version\s*=\s*["\']([^"\']+)["\']',
+                f'version = "{new_version}"',
+                content,
+                count=1,  # Only replace the first occurrence (the workspace version)
+            )
 
-    # Write the updated content back
-    with open(file_path, "wb") as f:
-        tomli_w.dump(data, f)
+            if content == updated_content:
+                print(f"! Warning: No version pattern found in {file_path}")
+            else:
+                file_path.write_text(updated_content)
+                print(f"✓ Updated version in {file_path}")
+        else:
+            # For regular toml files, use tomllib/tomli_w
+            with open(file_path, "rb") as f:
+                data = tomllib.load(f)
 
-    print(f"✓ Updated version in {file_path}")
+            # Update the version
+            data["workspace"]["version"] = new_version
+
+            # Write the updated content back
+            with open(file_path, "wb") as f:
+                tomli_w.dump(data, f)
+
+            print(f"✓ Updated version in {file_path}")
+    except Exception as e:
+        print(f"! Error updating {file_path}: {e}")
 
 
 def update_kernel_pyproject_toml(file_path: Path, new_version: str) -> None:
@@ -181,7 +225,7 @@ def main() -> None:
         / "template"
         / "services"
         / "jupyter"
-        / "pyproject.jupyter.toml"
+        / "pyproject.jupyter.toml.tftpl"
     )
     jupyter_pixi_path = (
         project_path
@@ -189,7 +233,7 @@ def main() -> None:
         / "template"
         / "services"
         / "jupyter-pixi"
-        / "pixi.jupyter.toml"
+        / "pixi.jupyter.toml.tftpl"
     )
 
     # Kernel template file paths
@@ -199,7 +243,7 @@ def main() -> None:
         / "template"
         / "services"
         / "jupyter"
-        / "pyproject.kernel.toml"
+        / "pyproject.kernel.toml.tftpl"
     )
     jupyter_pixi_kernel_path = (
         project_path
@@ -207,7 +251,7 @@ def main() -> None:
         / "template"
         / "services"
         / "jupyter-pixi"
-        / "pyproject.kernel.toml"
+        / "pyproject.kernel.toml.tftpl"
     )
 
     # Update files

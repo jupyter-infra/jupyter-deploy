@@ -178,7 +178,7 @@ wheels = [
 
 [[package]]
 name = "jupyter-deploy"
-version = "0.2.1"
+version = "0.2.2"
 source = { editable = "libs/jupyter-deploy" }
 dependencies = [
     { name = "click" },
@@ -277,7 +277,7 @@ dev = [
 
 [[package]]
 name = "jupyter-deploy-tf-aws-ec2-base"
-version = "0.2.1"
+version = "0.2.2"
 source = { editable = "libs/jupyter-deploy-tf-aws-ec2-base" }
 dependencies = [
     { name = "boto3" },
