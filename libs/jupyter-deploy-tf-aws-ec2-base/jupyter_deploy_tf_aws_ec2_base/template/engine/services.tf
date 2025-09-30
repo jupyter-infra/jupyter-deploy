@@ -157,7 +157,7 @@ locals {
   get_status_indented            = join("\n${local.indent_str}", compact(split("\n", data.local_file.get_status.content)))
   get_auth_indented              = join("\n${local.indent_str}", compact(split("\n", data.local_file.get_auth.content)))
   update_server_indented         = join("\n${local.indent_str}", compact(split("\n", data.local_file.update_server.content)))
-  cloudinit_volumes_indented = join("\n${local.indent_str}", compact(split("\n", local.cloudinit_volumes_script)))
+  cloudinit_volumes_indented     = join("\n${local.indent_str}", compact(split("\n", local.cloudinit_volumes_script)))
 }
 
 locals {
