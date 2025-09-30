@@ -14,13 +14,13 @@ variable "postfix" {
 }
 
 variable "oauth_app_secret_prefix" {
-    description = "The prefix for the name of the AWS secret where to store your OAuth app client secret."
-    type        = string
+  description = "The prefix for the name of the AWS secret where to store your OAuth app client secret."
+  type        = string
 }
 
 variable "oauth_app_client_secret" {
-    description = "Client secret of the OAuth app that will control access to your jupyter notebooks."
-    type        = string
-    sensitive   = true
+  description = "Client secret of the OAuth app that will control access to your jupyter notebooks."
+  type        = string
+  sensitive   = true
 }
 

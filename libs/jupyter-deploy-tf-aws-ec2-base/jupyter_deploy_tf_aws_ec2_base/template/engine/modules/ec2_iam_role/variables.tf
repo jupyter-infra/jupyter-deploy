@@ -19,11 +19,11 @@ variable "iam_role_prefix" {
 }
 
 variable "has_efs_filesystems" {
-    description = "Whether any Elastic file systems will mount on the instance."
-    type        = bool
+  description = "Whether any Elastic file systems will mount on the instance."
+  type        = bool
 }
 
 variable "oauth_app_secret_arn" {
-    description = "ARN of the AWS Secret that stores the oauth app secret."
-    type        = string
+  description = "ARN of the AWS Secret that stores the oauth app secret."
+  type        = string
 }

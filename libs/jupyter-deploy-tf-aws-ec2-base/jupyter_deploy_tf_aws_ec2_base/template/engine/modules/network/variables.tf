@@ -19,6 +19,11 @@ variable "domain" {
 }
 
 variable "subdomain" {
-    description = "The subdomain where to add the DNS records for the notebook and auth URLs."
-    type        = string
+  description = "The subdomain where to add the DNS records for the notebook and auth URLs."
+  type        = string
+}
+
+variable "has_efs_filesystems" {
+  description = "Flag indicating if EFS filesystems will be used."
+  type        = bool
 }

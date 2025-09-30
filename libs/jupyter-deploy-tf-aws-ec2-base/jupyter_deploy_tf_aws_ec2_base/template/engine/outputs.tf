@@ -1,34 +1,34 @@
 # URLs and DNS information
 output "jupyter_url" {
   description = "URL for accessing the Jupyter server."
-  value       = "https://${local.full_domain}"
+  value       = "https://${module.network.full_domain}"
 }
 
 output "auth_callback_url" {
   description = "URL that the OAuth provider will call on successful authentication."
-  value       = "https://${local.full_domain}/oauth2/callback"
+  value       = "https://${module.network.full_domain}/oauth2/callback"
 }
 
 # EC2 instance information
 output "instance_id" {
   description = "ID for the EC2 instance hosting the jupyter notebook."
-  value       = aws_instance.ec2_jupyter_server.id
+  value       = module.ec2_instance.id
 }
 
 output "ami_id" {
   description = "AMI ID of the EC2 instance hosting the jupyter notebook."
-  value       = aws_instance.ec2_jupyter_server.ami
+  value       = module.ec2_instance.ami
 }
 
 output "jupyter_server_public_ip" {
   description = "The public IP address of the jupyter server."
-  value       = aws_eip.jupyter_eip.public_ip
+  value       = module.network.eip_public_ip
 }
 
 # Secret information
 output "secret_arn" {
   description = "ARN of the AWS Secret where the GitHub app client secret is stored."
-  value       = aws_secretsmanager_secret.oauth_github_client_secret.arn
+  value       = module.secret.secret_arn
 }
 
 # Declarative value for AWS SDK
@@ -82,6 +82,6 @@ output "server_update_document" {
 # Resources that should not be destroyed by `jd down`
 output "persisting_resources" {
   description = "List of identifiers of resources that should not be destroyed (have persist=true)."
-  value       = tolist(concat(local.persist_ebs_volumes, local.persist_efs_file_systems))
+  value       = tolist(concat(module.volumes.persist_ebs_volumes, module.volumes.persist_efs_file_systems))
 }
 
