@@ -36,7 +36,7 @@ class TeamsHandler(BaseProjectHandler):
         )
 
         joined_teams = ",".join(teams)
-        runner.run_command_sequence(
+        success, _ = runner.run_command_sequence(
             command,
             cli_paramdefs={
                 "teams": StrResolvedCliParameter(parameter_name="teams", value=joined_teams),
@@ -44,7 +44,8 @@ class TeamsHandler(BaseProjectHandler):
                 "category": StrResolvedCliParameter(parameter_name="category", value="teams"),
             },
         )
-        runner.update_variables(command)
+        if success:
+            runner.update_variables(command)
 
     def remove_teams(self, teams: list[str]) -> None:
         """Remove the teams from the allowlist of the Jupyter app."""
@@ -55,7 +56,7 @@ class TeamsHandler(BaseProjectHandler):
         )
 
         joined_teams = ",".join(teams)
-        runner.run_command_sequence(
+        success, _ = runner.run_command_sequence(
             command,
             cli_paramdefs={
                 "teams": StrResolvedCliParameter(parameter_name="teams", value=joined_teams),
@@ -63,7 +64,8 @@ class TeamsHandler(BaseProjectHandler):
                 "category": StrResolvedCliParameter(parameter_name="category", value="teams"),
             },
         )
-        runner.update_variables(command)
+        if success:
+            runner.update_variables(command)
 
     def set_teams(self, teams: list[str]) -> None:
         """Replace the list of teams allowlisted to the Jupyter app."""
@@ -74,7 +76,7 @@ class TeamsHandler(BaseProjectHandler):
         )
         joined_teams = ",".join(teams)
 
-        runner.run_command_sequence(
+        success, _ = runner.run_command_sequence(
             command,
             cli_paramdefs={
                 "teams": StrResolvedCliParameter(parameter_name="teams", value=joined_teams),
@@ -82,7 +84,8 @@ class TeamsHandler(BaseProjectHandler):
                 "category": StrResolvedCliParameter(parameter_name="category", value="teams"),
             },
         )
-        runner.update_variables(command)
+        if success:
+            runner.update_variables(command)
 
     def list_teams(self) -> list[str]:
         """Return a list of teams allowlisted to access the Jupyter app."""
@@ -93,10 +96,13 @@ class TeamsHandler(BaseProjectHandler):
             console=console, output_handler=self._output_handler, variable_handler=self._variable_handler
         )
 
-        runner.run_command_sequence(
+        success, _ = runner.run_command_sequence(
             command,
             cli_paramdefs={
                 "category": StrResolvedCliParameter(parameter_name="category", value="teams"),
             },
         )
-        return runner.get_result_value(command, "teams.list", list[str])
+        if success:
+            # No variables to update for list command
+            return runner.get_result_value(command, "teams.list", list[str])
+        return []

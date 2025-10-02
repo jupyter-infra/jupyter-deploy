@@ -50,6 +50,7 @@ class TestUsersHandler(unittest.TestCase):
         mock_cmd_runner_handler.get_result_value = mock_get_result_value
         mock_cmd_runner_handler.update_variables = mock_update_variables
 
+        mock_run_command_sequence.return_value = (True, {})
         mock_get_result_value.return_value = []
 
         return mock_cmd_runner_handler, {
@@ -416,4 +417,56 @@ class TestUsersHandler(unittest.TestCase):
             },
         )
         mock_cmd_runner_fns["get_result_value"].assert_called_once_with(mock_cmd, "users.list", list[str])
+        mock_cmd_runner_fns["update_variables"].assert_not_called()
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    @patch("rich.console.Console")
+    def test_user_methods_do_not_update_variables_when_command_fails(
+        self,
+        mock_console_class: Mock,
+        mock_cmd_runner_class: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        # Setup
+        mock_cmd = Mock()
+        mock_manifest, mock_manifest_fns = self.get_mock_manifest_and_fns()
+        mock_manifest_fns["get_command"].return_value = mock_cmd
+        mock_retrieve_manifest.return_value = mock_manifest
+
+        mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
+        mock_tf_outputs_handler.return_value = mock_output_handler
+
+        mock_variable_handler = Mock()
+        mock_tf_variables_handler.return_value = mock_variable_handler
+
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        # Set up run_command_sequence to return False (command failed)
+        mock_cmd_runner_fns["run_command_sequence"].return_value = (False, {})
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        handler = UsersHandler()
+
+        # Test add_users
+        handler.add_users(["user1", "user2"])
+        mock_cmd_runner_fns["update_variables"].assert_not_called()
+
+        # Reset mocks
+        mock_manifest_fns["get_command"].reset_mock()
+        mock_cmd_runner_fns["update_variables"].reset_mock()
+
+        # Test remove_users
+        handler.remove_users(["user1", "user2"])
+        mock_cmd_runner_fns["update_variables"].assert_not_called()
+
+        # Reset mocks
+        mock_manifest_fns["get_command"].reset_mock()
+        mock_cmd_runner_fns["update_variables"].reset_mock()
+
+        # Test set_users
+        handler.set_users(["user1", "user2"])
         mock_cmd_runner_fns["update_variables"].assert_not_called()

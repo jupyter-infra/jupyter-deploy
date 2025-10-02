@@ -36,7 +36,7 @@ class UsersHandler(BaseProjectHandler):
         )
         joined_users = ",".join(users)
 
-        runner.run_command_sequence(
+        success, _ = runner.run_command_sequence(
             command,
             cli_paramdefs={
                 "users": StrResolvedCliParameter(parameter_name="users", value=joined_users),
@@ -44,7 +44,8 @@ class UsersHandler(BaseProjectHandler):
                 "category": StrResolvedCliParameter(parameter_name="category", value="users"),
             },
         )
-        runner.update_variables(command)
+        if success:
+            runner.update_variables(command)
 
     def remove_users(self, users: list[str]) -> None:
         """Remove the users from the allowlist of the Jupyter app."""
@@ -55,7 +56,7 @@ class UsersHandler(BaseProjectHandler):
         )
         joined_users = ",".join(users)
 
-        runner.run_command_sequence(
+        success, _ = runner.run_command_sequence(
             command,
             cli_paramdefs={
                 "users": StrResolvedCliParameter(parameter_name="users", value=joined_users),
@@ -63,7 +64,8 @@ class UsersHandler(BaseProjectHandler):
                 "category": StrResolvedCliParameter(parameter_name="category", value="users"),
             },
         )
-        runner.update_variables(command)
+        if success:
+            runner.update_variables(command)
 
     def set_users(self, users: list[str]) -> None:
         """Replace the list of users allowlisted to access the Jupyter app."""
@@ -74,7 +76,7 @@ class UsersHandler(BaseProjectHandler):
         )
         joined_users = ",".join(users)
 
-        runner.run_command_sequence(
+        success, _ = runner.run_command_sequence(
             command,
             cli_paramdefs={
                 "users": StrResolvedCliParameter(parameter_name="users", value=joined_users),
@@ -82,7 +84,8 @@ class UsersHandler(BaseProjectHandler):
                 "category": StrResolvedCliParameter(parameter_name="category", value="users"),
             },
         )
-        runner.update_variables(command)
+        if success:
+            runner.update_variables(command)
 
     def list_users(self) -> list[str]:
         """Return a list of users allowlisted to access the Jupyter app."""
@@ -91,10 +94,13 @@ class UsersHandler(BaseProjectHandler):
         runner = cmd_runner.ManifestCommandRunner(
             console=console, output_handler=self._output_handler, variable_handler=self._variable_handler
         )
-        runner.run_command_sequence(
+        success, _ = runner.run_command_sequence(
             command,
             cli_paramdefs={
                 "category": StrResolvedCliParameter(parameter_name="category", value="users"),
             },
         )
-        return runner.get_result_value(command, "users.list", list[str])
+        if success:
+            # No variables to update for list command, but we can add the check for consistency
+            return runner.get_result_value(command, "users.list", list[str])
+        return []

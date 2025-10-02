@@ -122,7 +122,7 @@ class TestManifestCommandRunner(unittest.TestCase):
             runner = ManifestCommandRunner(
                 console=console_mock, output_handler=output_handler_mock, variable_handler=variable_handler_mock
             )
-            runner.run_command_sequence(cmd, mock_cliparam_defs)
+            success, results = runner.run_command_sequence(cmd, mock_cliparam_defs)
 
         return cmd, console_mock, output_handler_mock, variable_handler_mock
 
@@ -168,9 +168,10 @@ class TestManifestCommandRunner(unittest.TestCase):
         runner = ManifestCommandRunner(
             console=console_mock, output_handler=output_handler_mock, variable_handler=Mock()
         )
-        results = runner.run_command_sequence(cmd, mock_cliparam_defs)
+        success, results = runner.run_command_sequence(cmd, mock_cliparam_defs)
 
         # Assert
+        self.assertTrue(success)
         self.assertEqual(mock_get_provider_instruction_runner.call_count, 2)
         self.assertEqual(mock_runner.execute_instruction.call_count, 2)
 
@@ -207,7 +208,10 @@ class TestManifestCommandRunner(unittest.TestCase):
         runner = ManifestCommandRunner(
             console=console_mock, output_handler=output_handler_mock, variable_handler=Mock()
         )
-        runner.run_command_sequence(cmd, mock_cliparam_defs)
+        success, results = runner.run_command_sequence(cmd, mock_cliparam_defs)
+
+        # Assert success
+        self.assertTrue(success)
 
         # Assert
         output_handler_mock.get_full_project_outputs.assert_called()
@@ -261,7 +265,10 @@ class TestManifestCommandRunner(unittest.TestCase):
         runner = ManifestCommandRunner(
             console=console_mock, output_handler=output_handler_mock, variable_handler=Mock()
         )
-        runner.run_command_sequence(cmd, mock_cliparam_defs)
+        success, results = runner.run_command_sequence(cmd, mock_cliparam_defs)
+
+        # Assert
+        self.assertTrue(success)
 
         # Assert
         # Verify that the factory was called with the correct API names
@@ -292,9 +299,10 @@ class TestManifestCommandRunner(unittest.TestCase):
         runner = ManifestCommandRunner(
             console=console_mock, output_handler=output_handler_mock, variable_handler=Mock()
         )
-        results = runner.run_command_sequence(cmd, mock_cliparam_defs)
+        success, results = runner.run_command_sequence(cmd, mock_cliparam_defs)
 
         # Verify results are available
+        self.assertTrue(success)
         self.assertEqual(results["[0].rsus_left"].value, "300")
 
         # Test get_result_value with string result
@@ -338,7 +346,10 @@ class TestManifestCommandRunner(unittest.TestCase):
         runner = ManifestCommandRunner(
             console=console_mock, output_handler=output_handler_mock, variable_handler=Mock()
         )
-        runner.run_command_sequence(cmd, mock_cliparam_defs)
+        success, results = runner.run_command_sequence(cmd, mock_cliparam_defs)
+
+        # Assert
+        self.assertTrue(success)
 
         # Test with non-existent result name
         with self.assertRaises(StopIteration):
@@ -387,7 +398,8 @@ class TestManifestCommandRunner(unittest.TestCase):
         runner = ManifestCommandRunner(
             console=console_mock, output_handler=output_handler_mock, variable_handler=variable_handler_mock
         )
-        runner.run_command_sequence(cmd, mock_cliparam_defs)
+        success, results = runner.run_command_sequence(cmd, mock_cliparam_defs)
+        self.assertTrue(success)
         runner.update_variables(cmd)
 
         # Assert
@@ -426,7 +438,8 @@ class TestManifestCommandRunner(unittest.TestCase):
         runner = ManifestCommandRunner(
             console=console_mock, output_handler=output_handler_mock, variable_handler=variable_handler_mock
         )
-        runner.run_command_sequence(cmd, mock_cliparam_defs)
+        success, results = runner.run_command_sequence(cmd, mock_cliparam_defs)
+        self.assertTrue(success)
         runner.update_variables(cmd)
 
         # Assert - variable_handler.update_variable_records should not be called
@@ -474,7 +487,10 @@ class TestManifestCommandRunner(unittest.TestCase):
         runner = ManifestCommandRunner(
             console=console_mock, output_handler=output_handler_mock, variable_handler=variable_handler_mock
         )
-        runner.run_command_sequence(cmd, mock_cliparam_defs)
+        success, results = runner.run_command_sequence(cmd, mock_cliparam_defs)
+
+        # Assert
+        self.assertTrue(success)
 
         # Assert - should raise KeyError for invalid source key
         with self.assertRaises(KeyError):
@@ -505,7 +521,8 @@ class TestManifestCommandRunner(unittest.TestCase):
         runner = ManifestCommandRunner(
             console=console_mock, output_handler=output_handler_mock, variable_handler=Mock()
         )
-        runner.run_command_sequence(cmd, mock_cliparam_defs)
+        success, results = runner.run_command_sequence(cmd, mock_cliparam_defs)
 
         # Assert
+        self.assertFalse(success)
         mock_typer_abort.assert_called_once()

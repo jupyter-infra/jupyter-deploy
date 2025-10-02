@@ -62,8 +62,85 @@ update_section() {
     fi
 }
 
+# Check if an operation would remove all authentication restrictions
+check_would_remove_all_auth() {
+    local entity_type=$1
+    local action=$2
+    local values=$3
+
+    # Get current values from each section
+    local users_content=$(get_section_content "users")
+    local org_content=$(get_section_content "org")
+    local teams_content=$(get_section_content "teams")
+
+    # Simulate the operation based on entity type and action
+    case "$entity_type" in
+        "org")
+            if [ "$action" == "remove" ]; then
+                org_content=""
+            fi
+            ;;
+        "users")
+            if [ "$action" == "remove" ]; then
+                IFS=',' read -ra input_values <<< "$values"
+
+                # Use explicit variables instead of variable indirection
+                IFS=',' read -ra current_values <<< "$users_content"
+
+                if [ "$action" == "remove" ]; then
+                    # Simulate removal
+                    local temp_array=()
+                    for value in "${current_values[@]}"; do
+                        local keep=true
+                        for remove_value in "${input_values[@]}"; do
+                            if [ "$value" == "$remove_value" ]; then
+                                keep=false
+                                break
+                            fi
+                        done
+                        if [ "$keep" == "true" ]; then
+                            temp_array+=("$value")
+                        fi
+                    done
+
+                    # Update the simulated content
+                    if [ ${#temp_array[@]} -gt 0 ]; then
+                        users_content=$(IFS=,; echo "${temp_array[*]}")
+                    else
+                        users_content=""
+                    fi
+                fi
+            fi
+            ;;
+    esac
+
+    # Check if operation would result in no auth restrictions
+    # Teams are not independent from organization, so we only check users and org
+    if [ -z "$users_content" ] && [ -z "$org_content" ]; then
+        ERROR="Error: This operation would remove all authentication restrictions."
+        DECISION_MESSAGE="At least one user or an organization must remain specified."
+        log_message "$ERROR"
+        log_message "$DECISION_MESSAGE"
+        echo "$ERROR"
+        echo "$DECISION_MESSAGE"
+        exit 1
+    fi
+}
+
 REFRESH_OAUTH_COOKIE=false
 AUTH_CHANGED=false
+
+# Pre-check if the operation would remove all auth restrictions
+if [ "$ACTION" == "remove" ]; then
+    if [ "$ENTITY_TYPE" == "org" ]; then
+        check_would_remove_all_auth "org" "remove" ""
+    elif [ "$ENTITY_TYPE" == "users" ]; then
+        check_would_remove_all_auth "$ENTITY_TYPE" "$ACTION" "$VALUES"
+    fi
+    # Note: teams are irrelevant here: they only apply if an organization is set.
+    # Even if all teams are removed, the authorization checks that the users
+    # belong to the specified organization.
+fi
 
 if [ "$ENTITY_TYPE" == "org" ]; then
     if [ "$ACTION" == "remove" ]; then
@@ -119,6 +196,15 @@ elif [ "$ENTITY_TYPE" == "users" ] || [ "$ENTITY_TYPE" == "teams" ]; then
     CURRENT_VALUES_SORTED=$(echo "$CURRENT_VALUES" | tr ',' '\n' | sort)
 
     if [ "$ACTION" == "add" ]; then
+        # Edge case: If we're adding teams, and there are currently no teams but an org is set,
+        # we need to refresh cookies as this is a new restriction
+        if [ "$ENTITY_TYPE" == "teams" ] && [ -z "$CURRENT_VALUES" ]; then
+            ORG_CONTENT=$(get_section_content "org")
+            if [ -n "$ORG_CONTENT" ]; then
+                REFRESH_OAUTH_COOKIE=true
+            fi
+        fi
+
         for value in "${INPUT_VALUES[@]}"; do
             if ! echo "${CURRENT_VALUES_ARRAY[@]}" | grep -q -w "$value"; then
                 CURRENT_VALUES_ARRAY+=("$value")

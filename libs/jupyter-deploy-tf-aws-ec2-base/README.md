@@ -1,10 +1,106 @@
-# AWS EC2 instance running a Jupyter Server with GitHub OAuth access
-------
-This terraform project creates an EC2 instance in the default VPC and a route 53 record in a domain you own.
-Within the EC2 instance, it runs a `jupyter` service, a `traefik` service for proxy and an `oauth` sidecar for authentication and authorization.
+# Jupyter-deploy AWS EC2 base template
 
-The instance is configured so that you can access it using [AWS SSM](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html).
+The Jupyter-deploy AWS EC2 base template is an open-source project to run JupyterLab applications
+on remote hosts served on your domain with encrypted HTTP (TLS), GitHub OAuth integration, real-time-collaboration, and fast UV-based environments.
+It uses Terraform as infrastructure-as-code engine, deploys the JupyterLab container to an Amazon EC2 instance, and controls access with GitHub identities. 
+It places the EC2 instance in the default VPC and adds a DNS record to your domain with Amazon Route53. 
 
+Within the EC2 instance, it leverages `docker-compose` to run a `jupyter` service, a `traefik` sidecar to control ingress and an `oauth2-proxy` middleware to hanlde oauth with `traefik` ForwardAuth [protocol](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/forwardauth/). The instance only allows ingress on port 443 (HTTPS), and relies on the `ssm-agent` for admin operation. Refer to [AWS SSM](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html) for more details.
+
+The base template is maintained and supported by AWS.
+
+## Prerequisites
+- a domain that you own verifiable by route 53
+    - [instructions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/welcome-domain-registration.html) to register a domain
+    - [instructions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-register.html#domain-register-procedure-section) to buy a domain
+- a GitHub OAuth App
+    - [register](https://github.com/settings/applications/new) a new application
+    - choose any application name
+    - set `Homepage URL` to: `https://<subdomain>.<domain>`
+    - set `Authorization callback URL` to: `https://<subdomain>.<domain>/oauth2/callback`
+    - [documentation](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) to dive deeper
+    - write down your app client ID and client secret
+- at least one of the following for GitHub authorization:
+    - a list of GitHub usernames to authorize
+    - the name of a GitHub organization whose members to authorize; optionally restrict further by GitHub teams
+
+## Usage
+This terraform project is meant to be used with `jupyter-deploy` CLI.
+
+### Installation (with pip):
+Recommended: create or activate a python environment.
+
+```bash
+pip install jupyter-deploy[aws]
+pip install jupyter-deploy-tf-aws-ec2-base
+```
+
+### Project setup
+Consider making `my-jupyter-deployment` a git repository.
+```bash
+mkdir my-jupyter-deployment
+cd my-jupyter-deployment
+
+jd init . -E terraform -P aws -I ec2 -T base
+```
+
+### Configure and create the infrastructure
+```bash
+jd config
+jd up
+```
+
+### Access your JupyterLab application
+```bash
+jd open
+```
+
+### Manage access
+
+```bash
+# By GitHub users
+jd users list
+jd users add USERNAME1 USERNAME2
+jd users remove USERNAME1
+
+# By GitHub organization
+jd organization get
+jd organization set ORGANIZATION
+jd organization unset
+
+# Along with GitHub organization, by teams
+jd teams list
+jd teams add TEAM1 TEAM2
+jd teams remove TEAM2
+```
+
+### Temporarily stop/start your instance
+```bash
+# To stop
+jd host stop
+jd host status
+
+# To start again
+jd host start
+jd server start
+jd server status
+```
+
+### Manage to your host
+```bash
+# connect to your host
+jd host connect
+
+# disconnect
+exit
+```
+
+### Take down all the infrastructure
+```bash
+jd down
+```
+
+## Details
 This project:
 - places the instance in the first subnet of the default VPC
 - selects the latest Amazon Linux 2023 AMI compatible with the selected instance type
@@ -48,84 +144,6 @@ This project:
     - `defaults-base.tfvars` more limited preset; it will prompt user to select the instance type and volume size
 - creates AWS SSM documents for jupyter-deploy commands
 
-## Prerequisites
-- a domain that you own verifiable by route 53
-    - [instructions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/welcome-domain-registration.html) to register a domain
-    - [instructions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-register.html#domain-register-procedure-section) to acquire a domain
-- a GitHub OAuth App
-    - [instructions](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) to create a new app
-    - you'll need the app client ID and client secret
-- at least one of the following for GitHub authorization:
-    - a list of GitHub usernames to authorize
-    - the name of a GitHub organization whose members to authorize; optionally restrict further by GitHub teams
-
-## Usage
-This terraform project is meant to be used with `jupyter-deploy`.
-
-### Installation (with pip):
-Create or activate a python environment.
-
-```bash
-pip install jupyter-deploy
-pip install jupyter-deploy-tf-aws-ec2-base
-```
-
-### Project setup
-Consider making `my-jupyter-deployment` a git repository.
-```bash
-mkdir my-jupyter-deployment
-cd my-jupyter-deployment
-
-jd init . -E terraform -P aws -I ec2 -T base
-```
-
-### Configure and create the infrastructure
-```bash
-jd config
-jd up
-```
-
-### Access your notebook
-```bash
-jd open
-```
-
-### Manage access
-
-** By GitHub users
-```bash
-jd users list
-jd users add USERNAME1 USERNAME2
-jd users remove USERNAME1
-```
-
-** By GitHub organization
-```bash
-jd organization get
-jd organization set ORGANIZATION
-jd organization unset
-```
-
-** Along with GitHub organization, by teams:
-```bash
-jd teams list
-jd teams add TEAM1 TEAM2
-jd team remove TEAM2
-```
-
-### Temporarily stop your instance
-```bash
-jd host stop
-jd host start
-jd host status
-```
-
-### Take down all the infrastructure
-```bash
-jd down
-```
-
-
 ## Requirements
 | Name | Version |
 |---|---|
@@ -138,7 +156,14 @@ jd down
 | aws | >= 4.66 |
 
 ## Modules
-No modules.
+| Name | Location |
+|---|---|
+| `ami_al2023` | `template/engine/modules/ami_al2023` |
+| `ec2_iam_role` | `template/engine/modules/ec2_iam_role` |
+| `ec2_instance` | `template/engine/modules/ec2_instance` |
+| `network` | `template/engine/modules/network` |
+| `secret` | `template/engine/modules/secret` |
+| `volumes` | `template/engine/modules/volumes` |
 
 ## Resources
 | Name | Type |
@@ -220,3 +245,7 @@ No modules.
 | `auth_org_set_document` | Name of the SSM document to allowlist an organization |
 | `auth_org_unset_document` | Name of the SSM document to remove the allowlisted organization |
 | `persisting_resources` | List of identifiers of resources that should not be destroyed |
+
+## License
+
+The Jupyter Deploy AWS EC2 base template is licensed under the [MIT License](LICENSE).

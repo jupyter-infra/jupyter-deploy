@@ -34,14 +34,15 @@ class OrganizationHandler(BaseProjectHandler):
         runner = cmd_runner.ManifestCommandRunner(
             console=console, output_handler=self._output_handler, variable_handler=self._variable_handler
         )
-        runner.run_command_sequence(
+        success, _ = runner.run_command_sequence(
             command,
             cli_paramdefs={
                 "organization": StrResolvedCliParameter(parameter_name="organization", value=organization),
                 "category": StrResolvedCliParameter(parameter_name="category", value="org"),
             },
         )
-        runner.update_variables(command)
+        if success:
+            runner.update_variables(command)
 
     def unset_organization(self) -> None:
         """Remove allowlisting by organization to the Jupyter app."""
@@ -50,13 +51,14 @@ class OrganizationHandler(BaseProjectHandler):
         runner = cmd_runner.ManifestCommandRunner(
             console=console, output_handler=self._output_handler, variable_handler=self._variable_handler
         )
-        runner.run_command_sequence(
+        success, _ = runner.run_command_sequence(
             command,
             cli_paramdefs={
                 "category": StrResolvedCliParameter(parameter_name="category", value="org"),
             },
         )
-        runner.update_variables(command)
+        if success:
+            runner.update_variables(command)
 
     def get_organization(self) -> str:
         """Return the organization allowlisted to access the Jupyter app."""
@@ -66,10 +68,13 @@ class OrganizationHandler(BaseProjectHandler):
             console=console, output_handler=self._output_handler, variable_handler=self._variable_handler
         )
 
-        runner.run_command_sequence(
+        success, _ = runner.run_command_sequence(
             command,
             cli_paramdefs={
                 "category": StrResolvedCliParameter(parameter_name="category", value="org"),
             },
         )
-        return runner.get_result_value(command, "organization.get", str)
+        if success:
+            # No variables to update for get command
+            return runner.get_result_value(command, "organization.get", str)
+        return ""

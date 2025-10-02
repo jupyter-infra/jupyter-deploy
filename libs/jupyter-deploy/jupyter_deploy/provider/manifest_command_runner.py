@@ -42,8 +42,8 @@ class ManifestCommandRunner:
 
     def run_command_sequence(
         self, cmd_def: JupyterDeployCommandV1, cli_paramdefs: dict[str, ResolvedCliParameter]
-    ) -> dict[str, ResolvedInstructionResult]:
-        """Execute the cmd, return the resolved results."""
+    ) -> tuple[bool, dict[str, ResolvedInstructionResult]]:
+        """Execute the cmd, return a tuple of success flag, resolved results."""
 
         # run all the instructions and collect results
         resolved_resultdefs: dict[str, ResolvedInstructionResult] = {}
@@ -87,10 +87,10 @@ class ManifestCommandRunner:
             except InterruptInstructionError:
                 typer.Abort()
                 self._resolved_resultdefs = resolved_resultdefs
-                return resolved_resultdefs
+                return False, resolved_resultdefs
 
         self._resolved_resultdefs = resolved_resultdefs
-        return resolved_resultdefs
+        return True, resolved_resultdefs
 
     def get_result_value(self, cmd_def: JupyterDeployCommandV1, result_name: str, expect_type: type[R]) -> R:
         """Return the transformed result value."""

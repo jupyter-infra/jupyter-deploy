@@ -44,6 +44,14 @@ else
     AUTHED_TEAMS_CONTENT=""
 fi
 
+# Safety check: If no auth restrictions are set (no users, no org, no teams), exit with error
+# This prevents the dangerous configuration where any GitHub user could access the system
+if [ -z "$AUTHED_USERS_CONTENT" ] && [ -z "$AUTHED_ORG_CONTENT" ] && [ -z "$AUTHED_TEAMS_CONTENT" ]; then
+    echo "ERROR: No authentication restrictions found!"
+    echo "At least one user, organization, or team must be specified."
+    exit 1
+fi
+
 tee /opt/docker/.env >/dev/null << EOFENV
 SERVICE_UID=$(id -u service-user)
 SERVICE_GID=$(id -g service-user)

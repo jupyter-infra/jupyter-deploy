@@ -6,7 +6,6 @@ This monorepo contains packages for deploying Jupyter applications to various cl
 
 - [jupyter-deploy](./libs/jupyter-deploy/README.md): Core package providing a command line interface tool (CLI) that you can use to deploy a Jupyter Server container to a remote compute provided by a Cloud provider.
 - [jupyter-deploy-tf-aws-ec2-base](./libs/jupyter-deploy-tf-aws-ec2-base/README.md): A Terraform template for Jupyter deployment on AWS EC2 with a Traefik proxy.
-- [jupyter-deploy-tf-aws-ec2-ngrok](./libs/jupyter-deploy-tf-aws-ec2-ngrok/README.md): A Terraform template for Jupyter deployment on AWS EC2 with an ngrok proxy.
 
 ### Installation
 
