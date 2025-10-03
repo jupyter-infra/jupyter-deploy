@@ -39,7 +39,6 @@ aws = [
 
 [tool.uv.sources]
 jupyter-deploy-tf-aws-ec2-base = { workspace = true }
-jupyter-deploy-tf-aws-ec2-ngrok = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

@@ -1,7 +1,7 @@
 [project]
 name = "jupyter-deploy-monorepo"
 version = "0.2.0"
-description = "Monorepo for Jupyter deployment packages"
+description = "Monorepo for Jupyter deploy packages"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -14,7 +14,6 @@ jupyter-deploy = { workspace = true }
 [tool.uv.workspace]
 members = [
     "libs/jupyter-deploy",
-    "libs/jupyter-deploy-tf-aws-ec2-ngrok",
     "libs/jupyter-deploy-tf-aws-ec2-base",
     "images/uvbase"
 ]
@@ -39,13 +38,11 @@ disallow_untyped_defs = true
 check_untyped_defs = true
 files = [
     "libs/jupyter-deploy",
-    "libs/jupyter-deploy-tf-aws-ec2-ngrok",
     "libs/jupyter-deploy-tf-aws-ec2-base"
 ]
 
 [tool.pytest.ini_options]
 pythonpath = [
   "libs/jupyter-deploy",
-  "libs/jupyter-deploy-tf-aws-ec2-ngrok",
   "libs/jupyter-deploy-tf-aws-ec2-base"
 ]

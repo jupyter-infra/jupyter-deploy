@@ -14,7 +14,6 @@ with imports to cloud-provider or infrastructure-as-code specific libraries else
   - Default values should be set in `presets/defaults-all.tfvars`
   - There must not be any `variable` blocks in files other than `variables.tf`
   - IMPORTANT: Do not copy files to `/home/jovyan` during Docker build time. The EBS volume for Jupyter data is mounted at runtime, and any files copied during build will be hidden by this mount. Instead, copy files to a location like `/opt` during build and then copy them to `/home/jovyan` in startup scripts.
-- The `-ngrok` template is stale and no longer under active development
 
 # Development Workflow
 After making code changes, always run from the root of the repository:

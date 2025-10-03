@@ -14,7 +14,7 @@ class TestTemplateUtils(unittest.TestCase):
         """Test that get_templates correctly loads templates from entry points."""
         # Setup
         mock_entry_point1 = MagicMock()
-        mock_entry_point1.name = "aws_ec2_tls-via-ngrok"
+        mock_entry_point1.name = "aws_ec2_base"
         mock_entry_point1.load.return_value = Path("/mock/template/path")
 
         mock_entry_point2 = MagicMock()
@@ -30,7 +30,7 @@ class TestTemplateUtils(unittest.TestCase):
 
             # Assert
             self.assertEqual(len(templates), 2)
-            self.assertEqual(templates["aws:ec2:tls-via-ngrok"], Path("/mock/template/path"))
+            self.assertEqual(templates["aws:ec2:base"], Path("/mock/template/path"))
             self.assertEqual(templates["aws:lambda:basic"], Path("/mock/lambda/path"))
             mock_entry_points.assert_called_once_with(group=TEMPLATE_ENTRY_POINTS[EngineType.TERRAFORM])
             mock_entry_point1.load.assert_called_once()
@@ -50,7 +50,7 @@ class TestTemplateUtils(unittest.TestCase):
         """Test that get_templates handles invalid paths."""
         # Setup
         mock_entry_point = MagicMock()
-        mock_entry_point.name = "aws_ec2_tls-via-ngrok"
+        mock_entry_point.name = "aws_ec2_base"
         mock_entry_point.load.return_value = "not_a_path"  # Invalid path
 
         mock_entry_points.return_value = [mock_entry_point]
@@ -68,7 +68,7 @@ class TestTemplateUtils(unittest.TestCase):
         """Test that get_templates handles paths that don't exist."""
         # Setup
         mock_entry_point = MagicMock()
-        mock_entry_point.name = "aws_ec2_tls-via-ngrok"
+        mock_entry_point.name = "aws_ec2_base"
         mock_entry_point.load.return_value = Path("/nonexistent/path")
 
         mock_entry_points.return_value = [mock_entry_point]

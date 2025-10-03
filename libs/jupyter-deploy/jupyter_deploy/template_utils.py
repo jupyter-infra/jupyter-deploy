@@ -33,7 +33,7 @@ def get_templates(engine: EngineType) -> dict[str, Path]:
     for entry_point in importlib.metadata.entry_points(group=entry_point_group):
         template_path = entry_point.load()
         if isinstance(template_path, Path) and template_path.exists():
-            # Convert entry point name to template format, ex. aws_ec2_tls-via-ngrok -> aws:ec2:tls-via-ngrok
+            # Convert entry point name to template format, ex. aws_ec2_some-name -> aws:ec2:some_name
             template_name = entry_point.name.replace("_", ":")
             templates[template_name] = template_path
             logger.debug(f"Loaded {engine} template {template_name} from {template_path}")

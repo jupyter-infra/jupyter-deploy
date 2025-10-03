@@ -7,7 +7,6 @@ members = [
     "jupyter-deploy",
     "jupyter-deploy-monorepo",
     "jupyter-deploy-tf-aws-ec2-base",
-    "jupyter-deploy-tf-aws-ec2-ngrok",
 ]
 
 [[package]]
@@ -316,29 +315,6 @@ dev = [
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "ruff", specifier = ">=0.11.8" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20250516" },
-]
-
-[[package]]
-name = "jupyter-deploy-tf-aws-ec2-ngrok"
-version = "0.1.0a0"
-source = { editable = "libs/jupyter-deploy-tf-aws-ec2-ngrok" }
-
-[package.dev-dependencies]
-dev = [
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.15.0" },
-    { name = "pytest", specifier = ">=8.3.5" },
-    { name = "pytest-cov", specifier = ">=6.1.1" },
-    { name = "ruff", specifier = ">=0.11.8" },
 ]
 
 [[package]]

@@ -75,9 +75,7 @@ class TestInitHandler(unittest.TestCase):
         mock_find_template_path.assert_called_once_with("aws:ec2:custom-template")
 
     @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
-    @patch(
-        "jupyter_deploy.template_utils.TEMPLATES", {"terraform": {"aws:ec2:tls-via-ngrok": Path("/mock/template/path")}}
-    )
+    @patch("jupyter_deploy.template_utils.TEMPLATES", {"terraform": {"aws:ec2:base": Path("/mock/template/path")}})
     def test_find_template_path_valid(self, mock_find_template_path: MagicMock) -> None:
         """Test _find_template_path with valid template name."""
         # Setup
@@ -87,7 +85,7 @@ class TestInitHandler(unittest.TestCase):
 
         # Execute
         mock_find_template_path.return_value = Path("/mock/template/path")
-        result = handler._find_template_path("aws:ec2:tls-via-ngrok")
+        result = handler._find_template_path("aws:ec2:base")
 
         # Assert
         self.assertEqual(result, Path("/mock/template/path"))
@@ -124,7 +122,7 @@ class TestInitHandler(unittest.TestCase):
         # Execute and Assert
         with self.assertRaisesRegex(ValueError, "Engine 'terraform' is not supported"):
             mock_find_template_path.side_effect = ValueError("Engine 'terraform' is not supported")
-            handler._find_template_path("aws:ec2:tls-via-ngrok")
+            handler._find_template_path("aws:ec2:base")
 
     @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
     @patch("jupyter_deploy.template_utils.TEMPLATES", {"terraform": {}})
@@ -134,16 +132,16 @@ class TestInitHandler(unittest.TestCase):
         mock_find_template_path.side_effect = [
             Path("/mock/template/path"),  # For constructor
             ValueError(
-                "Template 'aws:ec2:tls-via-ngrok' not found for engine 'terraform'. Available templates: none"
+                "Template 'aws:ec2:base' not found for engine 'terraform'. Available templates: none"
             ),  # For the actual test
         ]
 
         handler = InitHandler(project_dir="/test/project/dir")
 
         # Execute and Assert
-        with self.assertRaisesRegex(ValueError, "Template 'aws:ec2:tls-via-ngrok' not found"):
-            mock_find_template_path.side_effect = ValueError("Template 'aws:ec2:tls-via-ngrok' not found")
-            handler._find_template_path("aws:ec2:tls-via-ngrok")
+        with self.assertRaisesRegex(ValueError, "Template 'aws:ec2:base' not found"):
+            mock_find_template_path.side_effect = ValueError("Template 'aws:ec2:base' not found")
+            handler._find_template_path("aws:ec2:base")
 
     @patch("jupyter_deploy.fs_utils.is_empty_dir")
     @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")

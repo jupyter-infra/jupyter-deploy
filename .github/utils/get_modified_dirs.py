@@ -5,7 +5,6 @@ import json
 # Update this for any new packages/libs we want checked
 LIB_PATHS = [
     "libs/jupyter-deploy",
-    "libs/jupyter-deploy-tf-aws-ec2-ngrok",
     "libs/jupyter-deploy-tf-aws-ec2-base",
     "images/uvbase",
 ]

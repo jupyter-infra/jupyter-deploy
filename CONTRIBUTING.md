@@ -15,10 +15,9 @@ uv sync
 This will automatically handle installation of all packages and their dependencies.
 
 ## Interact with the library
-Use `uv` to manage your virtual environment, and interact directly with the library:
-> uv run python -c "import jupyter_deploy; print(jupyter_deploy.hello())"
+Activate the virtual env: `source .venv/bin/activate`
 
-Or use the CLI by running `jupyter-deploy --help`
+Then verify the CLI install with: `jupyter-deploy --help`
 
 ## Run tools
 This project uses:
