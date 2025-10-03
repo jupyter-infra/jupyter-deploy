@@ -276,7 +276,7 @@ dev = [
 
 [[package]]
 name = "jupyter-deploy-tf-aws-ec2-base"
-version = "2.2.3"
+version = "0.2.3"
 source = { editable = "libs/jupyter-deploy-tf-aws-ec2-base" }
 dependencies = [
     { name = "boto3" },
