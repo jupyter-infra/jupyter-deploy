@@ -9,8 +9,9 @@ This monorepo contains packages for deploying Jupyter applications to various cl
 
 ### Installation
 
-The project uses [uv](https://github.com/astral-sh/uv) for dependency management. After cloning the repository, run the following commands from the repository root:
+The project uses [uv](https://github.com/astral-sh/uv) for dependency management.
 
+After cloning the repository, run the following commands from the repository root:
 ```bash
 uv sync
 ```
