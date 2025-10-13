@@ -1,16 +1,16 @@
-# Jupyter-deploy AWS EC2 base template
+# Jupyter Deploy AWS EC2 base template
 
-The Jupyter-deploy AWS EC2 base template is an open-source project to run JupyterLab applications
+The Jupyter Deploy AWS EC2 base template is an open-source project to run JupyterLab applications
 on remote hosts served on your domain with encrypted HTTP (TLS), GitHub OAuth integration, real-time-collaboration, and fast UV-based environments.
-It uses Terraform as infrastructure-as-code engine, deploys the JupyterLab container to an Amazon EC2 instance, and controls access with GitHub identities. 
-It places the EC2 instance in the default VPC and adds a DNS record to your domain with Amazon Route53. 
+It uses Terraform as the infrastructure-as-code engine, deploys the JupyterLab container to an Amazon EC2 instance, and controls access with GitHub identities. 
+It places the EC2 instance in the default VPC of your AWS account and adds a DNS record to your domain with Amazon Route53. 
 
-Within the EC2 instance, it leverages `docker-compose` to run a `jupyter` service, a `traefik` sidecar to control ingress and an `oauth2-proxy` middleware to hanlde oauth with `traefik` ForwardAuth [protocol](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/forwardauth/). The instance only allows ingress on port 443 (HTTPS), and relies on the `ssm-agent` for admin operation. Refer to [AWS SSM](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html) for more details.
+Within the EC2 instance, it leverages `docker-compose` to run a `jupyter` service, a `traefik` sidecar to control ingress and an `oauth2-proxy` middleware to handle oauth with `traefik` ForwardAuth [protocol](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/forwardauth/). The instance only allows ingress on port 443 (HTTPS), and relies on the `ssm-agent` for administrator operations. Refer to [AWS SSM](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html) for more details.
 
-The base template is maintained and supported by AWS.
+This base template is maintained and supported by AWS.
 
 ## Prerequisites
-- a domain that you own verifiable by route 53
+- a domain that you own verifiable by Amazon Route 53
     - [instructions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/welcome-domain-registration.html) to register a domain
     - [instructions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-register.html#domain-register-procedure-section) to buy a domain
 - a GitHub OAuth App
@@ -19,16 +19,16 @@ The base template is maintained and supported by AWS.
     - set `Homepage URL` to: `https://<subdomain>.<domain>`
     - set `Authorization callback URL` to: `https://<subdomain>.<domain>/oauth2/callback`
     - [documentation](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) to dive deeper
-    - write down your app client ID and client secret
-- at least one of the following for GitHub authorization:
-    - a list of GitHub usernames to authorize
-    - the name of a GitHub organization whose members to authorize; optionally restrict further by GitHub teams
+    - write down and save your app client ID and client secret
+- select at least one of the following GitHub identities to authorize:
+    - a GitHub username (or a list of usernames)
+    - a GitHub organization whose members; optionally restrict further by GitHub teams
 
 ## Usage
-This terraform project is meant to be used with `jupyter-deploy` CLI.
+This terraform project is meant to be used with the [jupyter-deploy](https://github.com/jupyter-infra/jupyter-deploy/tree/main/libs/jupyter-deploy) CLI.
 
 ### Installation (with pip):
-Recommended: create or activate a python environment.
+Recommended: create or activate a python virtual environment.
 
 ```bash
 pip install jupyter-deploy[aws]
@@ -36,13 +36,14 @@ pip install jupyter-deploy-tf-aws-ec2-base
 ```
 
 ### Project setup
-Consider making `my-jupyter-deployment` a git repository.
 ```bash
 mkdir my-jupyter-deployment
 cd my-jupyter-deployment
 
 jd init . -E terraform -P aws -I ec2 -T base
 ```
+
+Consider making `my-jupyter-deployment` a git repository.
 
 ### Configure and create the infrastructure
 ```bash
@@ -52,6 +53,11 @@ jd up
 
 ### Access your JupyterLab application
 ```bash
+# verify that your host and containers are running
+jd host status
+jd server status
+
+# open your application on your web browser
 jd open
 ```
 
@@ -74,19 +80,19 @@ jd teams add TEAM1 TEAM2
 jd teams remove TEAM2
 ```
 
-### Temporarily stop/start your instance
+### Temporarily stop/start your EC2 instance
 ```bash
-# To stop
+# To stop your instance
 jd host stop
 jd host status
 
-# To start again
+# To start it again
 jd host start
 jd server start
 jd server status
 ```
 
-### Manage to your host
+### Manage your EC2 instance
 ```bash
 # connect to your host
 jd host connect
@@ -96,6 +102,8 @@ exit
 ```
 
 ### Take down all the infrastructure
+This operation removes all the resources associated with this project in your AWS account.
+
 ```bash
 jd down
 ```
@@ -106,16 +114,16 @@ This project:
 - selects the latest Amazon Linux 2023 AMI compatible with the selected instance type
     - standard AL2023 AMI for CPU instances (x86_64 or arm64)
     - DLAMI in the case of GPU or Neuron instances (x86_64 or arm64)
-- sets up an IAM role to enable SSM, route53 and (optionally) EFS access
-- passes on the root volume of the AMI
+- sets up an IAM role to enable SSM, Route53 and (optionally) EFS access
+- passes on the root volume settings of the AMI
 - adds an EBS volume which will mount on the Jupyter Server container
 - adds an Elastic IP (EIP) to keep the public IP of the instance stable
-- writes docker service logs to disk at /var/log/services using `fluent-bit`
+- writes Docker service logs to disk at `/var/log/services` using `fluent-bit`
 - configures automatic rotation for all log files using `logrotate`
 - creates an SSM instance-startup script, which references several files:
     - `cloudinit.sh.tftpl` to configure the EC2 instance
-    - `docker-compose.yml.tftpl` to configure the docker services
-    - `docker-startup.sh.tftpl` to start the docker services
+    - `docker-compose.yml.tftpl` to configure the Docker services
+    - `docker-startup.sh.tftpl` to start the Docker services
     - `cloudinit-volumes.sh.tftpl` to optionally mount additional elastic block store (EBS) or elastic file systems (EFS)
     - `traefik.yml.tftpl` to configure traefik
     - `dockerfile.jupyter` to build the Jupyter container
@@ -126,8 +134,8 @@ This project:
     - `jupyter_server_config.py` to configure Jupyter server
     - `dockerfile.logrotator` to configure the sidecar container rotating log files on disk
     - `logrotator-start.sh.tftpl` to configure logrotate
-    - `fluent-bit.conf` to configure the fluent-bit service writing docker service logs to /var/log/services
-    - `parsers.conf` to configure the fluent-bit docker parsers
+    - `fluent-bit.conf` to configure the fluent-bit service writing Docker service logs to `/var/log/services`
+    - `parsers.conf` to configure the fluent-bit Docker parsers
     - `check-status-internal.sh` to verify that the services are up and the TLS certificates are available
     - `get-status.sh` to translate the return code of `check-status` script to a human-readable status
     - `update-auth.sh` to update the authorized org, teams, and/or users
