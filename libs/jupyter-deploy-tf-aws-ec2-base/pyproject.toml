@@ -1,7 +1,7 @@
 [project]
 name = "jupyter-deploy-tf-aws-ec2-base"
-version = "0.2.3"
-description = "Base terraform template to deploy jupyter notebook on AWS EC2."
+version = "0.2.4"
+description = "Base terraform template to deploy a JupyterLab application on an AWS EC2 instance."
 readme = "README.md"
 authors = [
     { name = "Jonathan Guinegagne", email = "jggg@amazon.com" },

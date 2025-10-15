@@ -1,7 +1,7 @@
 [project]
 name = "jupyter-deploy"
-version = "0.2.3"
-description = "CLI based tool to deploy Jupyter application that integrates with infrastructure as code frameworks."
+version = "0.2.4"
+description = "CLI based tool to deploy Jupyter applications that integrates with infrastructure as code frameworks."
 readme = "README.md"
 authors = [
     { name = "Jonathan Guinegagne", email = "jggg@amazon.com" },
