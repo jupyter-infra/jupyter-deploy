@@ -780,6 +780,7 @@ name = "pytest-jupyter-deploy"
 version = "0.1.0"
 source = { editable = "libs/pytest-jupyter-deploy" }
 dependencies = [
+    { name = "jupyter-deploy" },
     { name = "pexpect" },
     { name = "pytest" },
     { name = "pytest-order" },
@@ -797,12 +798,14 @@ dev = [
     { name = "mypy" },
     { name = "ruff" },
     { name = "types-pexpect" },
+    { name = "types-pyyaml" },
     { name = "types-requests" },
     { name = "yamllint" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "jupyter-deploy", editable = "libs/jupyter-deploy" },
     { name = "pexpect", specifier = ">=4.9.0" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-order", specifier = ">=1.3.0" },
@@ -817,6 +820,7 @@ dev = [
     { name = "mypy", specifier = ">=1.15.0" },
     { name = "ruff", specifier = ">=0.11.8" },
     { name = "types-pexpect", specifier = ">=4.9.0" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20250516" },
     { name = "types-requests", specifier = ">=2.32.0" },
     { name = "yamllint", specifier = ">=1.35.0" },
 ]
