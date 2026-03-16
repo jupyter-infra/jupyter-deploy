@@ -6,6 +6,7 @@ import sys
 LIB_PATHS = [
     "libs/jupyter-deploy",
     "libs/jupyter-deploy-tf-aws-ec2-base",
+    "libs/pytest-jupyter-deploy",
     "images/uvbase",
 ]
 

@@ -74,6 +74,26 @@ ignore = [
 # Allow lazy imports in tests (common pattern for imports after mocks)
 "tests/**/*.py" = ["PLC0415"]
 
+[tool.pytest.ini_options]
+addopts = "--cov=pytest_jupyter_deploy --cov-report=term-missing --cov-report=xml --cov-report=html -p pytester"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["pytest_jupyter_deploy"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "raise ImportError",
+]
+fail_under = 4
+show_missing = true
+
 [tool.mypy]
 warn_return_any = true
 warn_unused_configs = true
@@ -88,6 +108,7 @@ workspace = true
 [dependency-groups]
 dev = [
     "mypy>=1.15.0",
+    "pytest-cov>=6.1.1",
     "ruff>=0.11.8",
     "yamllint>=1.35.0",
     "types-pexpect>=4.9.0",
