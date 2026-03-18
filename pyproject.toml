@@ -82,9 +82,10 @@ files = [
 pythonpath = [
   "libs/jupyter-deploy",
   "libs/jupyter-deploy-tf-aws-ec2-base",
+  "libs/jupyter-infra-tf-aws-iam-ci",
   "libs/pytest-jupyter-deploy"
 ]
 markers = [
   "e2e: marks tests as end-to-end tests (deselect with '-m \"not e2e\"')"
 ]
-addopts = "-m 'not e2e'"
+addopts = "-m 'not e2e' --import-mode=importlib"
