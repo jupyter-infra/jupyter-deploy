@@ -7,6 +7,7 @@ from jupyter_infra_tf_aws_iam_ci.template import TEMPLATE_PATH
 MANDATORY_TEMPLATE_STRPATHS: list[str] = [
     "manifest.yaml",
     "variables.yaml",
+    "AGENT.md.template",
     "engine/presets/defaults-all.tfvars",
     "engine/main.tf",
     "engine/outputs.tf",

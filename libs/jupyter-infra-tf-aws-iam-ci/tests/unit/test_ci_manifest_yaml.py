@@ -63,6 +63,7 @@ class TestManifest(unittest.TestCase):
 
         project_store = self.MANIFEST.get("project-store")
         self.assertIsNotNone(project_store, "project-store section missing from manifest")
+        assert project_store is not None
         self.assertEqual(project_store.get("store-type"), "s3-only")
 
     def test_output_sourced_values_have_matching_terraform_outputs(self) -> None:

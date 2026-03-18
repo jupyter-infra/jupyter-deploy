@@ -8,6 +8,7 @@ from jupyter_deploy_tf_aws_ec2_base.template import TEMPLATE_PATH  # type: ignor
 MANDATORY_TEMPLATE_STRPATHS: list[str] = [
     "manifest.yaml",
     "variables.yaml",
+    "AGENT.md.template",
     "engine/presets/defaults-all.tfvars",
     "engine/presets/destroy.tfvars",
     "engine/main.tf",

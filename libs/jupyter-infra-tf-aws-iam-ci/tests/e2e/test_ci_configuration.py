@@ -25,6 +25,35 @@ def test_project_is_configurable(e2e_deployment: EndToEndDeployment) -> None:
         assert engine_dir.exists(), f"Engine directory should exist after config: {engine_dir}"
 
 
+def test_agent_md_generated_after_init(e2e_deployment: EndToEndDeployment) -> None:
+    """Test that AGENT.md is generated after jd init with all snippets substituted."""
+    with undeployed_project(e2e_deployment.suite_config) as (project_path, cli):
+        agent_path = project_path / "AGENT.md"
+        assert agent_path.exists(), f"AGENT.md should exist after init: {agent_path}"
+
+        agent_template_path = project_path / "AGENT.md.template"
+        assert not agent_template_path.exists(), (
+            f"AGENT.md.template should be removed after init: {agent_template_path}"
+        )
+
+        agent_content = agent_path.read_text()
+
+        # Verify main sections from template
+        assert "# Jupyter-deploy: CI Infrastructure Template" in agent_content, "Should have template heading"
+        assert "OIDC provider is a singleton per AWS account" in agent_content, "Should have OIDC gotcha"
+        assert "create_oidc_provider" in agent_content, "Should mention create_oidc_provider variable"
+
+        # Verify key commands are documented (from snippets)
+        assert "jd config" in agent_content, "Should document config command"
+        assert "jd up" in agent_content, "Should document up command"
+        assert "jd down" in agent_content, "Should document down command"
+        assert "jd show" in agent_content, "Should document show command"
+
+        # Verify no template placeholders remain
+        assert "{{" not in agent_content, "Should not contain template placeholders"
+        assert "}}" not in agent_content, "Should not contain template placeholders"
+
+
 def test_gitignore_generated_after_init(e2e_deployment: EndToEndDeployment) -> None:
     """Test that .gitignore is generated after jd init."""
     with undeployed_project(e2e_deployment.suite_config) as (project_path, cli):

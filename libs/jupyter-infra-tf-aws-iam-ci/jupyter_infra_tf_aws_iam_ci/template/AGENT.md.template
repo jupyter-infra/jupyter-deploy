@@ -1,0 +1,56 @@
+# Jupyter-deploy: CI Infrastructure Template (tf-aws-iam-ci)
+
+## Project organization
+
+This project manages AWS resources for running E2E tests in GitHub Actions CI.
+It uses Terraform as the infrastructure-as-code engine and deploys IAM roles,
+Secrets Manager secrets, and SSM parameters.
+
+**IMPORTANT:** The GitHub Actions OIDC provider is a singleton per AWS account.
+Only one can exist for `token.actions.githubusercontent.com`. If another deployment
+in this account already created it, set `create_oidc_provider` to `false` to
+reference the existing one via data source instead.
+
+### Resources managed
+
+- **OIDC provider** — GitHub Actions federation (conditional)
+- **IAM roles** — E2E and release roles with OIDC trust policies
+- **Secrets Manager** — auth state, bot account credentials, OAuth client secrets
+- **SSM parameters** — OAuth app client IDs (non-sensitive)
+- **Secret policies** — resource-based deny policies for least-privilege
+
+## Usage
+{{ jupyter-deploy-cli-general-instructions }}
+
+## General project information
+{{ show-info-instructions }}
+
+### Configure and create the infrastructure
+{{ config-up-instructions }}
+
+{{ set-variables-with-cmd-instructions }}
+
+{{ set-variables-with-file-instructions }}
+
+{{ read-variables-with-cmd-instructions }}
+
+### View the full terraform logs
+
+{{ history-logs-instructions }}
+
+### Delete all the resources
+
+{{ down-instructions }}
+
+## The terraform project
+
+### Engine directory
+
+The core terraform files are located in `./engine`, including `main.tf`, `variables.tf` and `outputs.tf`.
+Standalone resources, such as IAM roles or secrets, are defined in `./engine/modules` as standard
+terraform modules.
+
+### Presets
+`./engine/presets` correspond to optional set of default variables. Users SHOULD NOT modify these files.
+
+{{ generated-by-footer }}

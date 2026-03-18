@@ -71,6 +71,18 @@ IMPORTANT: Do not copy files to `/home/jovyan` during Docker build time.
 The EBS volume for Jupyter data is mounted at runtime, and any files copied during build will be hidden by this mount.
 Instead, copy files to a location like `/opt` during build and then copy them to `/home/jovyan` in startup scripts.
 
+## CI infrastructure template package
+Code: `./libs/jupyter-infra-tf-aws-iam-ci`
+
+Template that manages AWS resources for GitHub Actions CI.
+- infrastructure-as-code engine: `terraform`
+- cloud provider: `aws`
+- no host/server resources — IAM roles, SSM parameters and secrets only
+
+**IMPORTANT:** The GitHub Actions OIDC provider is a singleton per AWS account.
+The `create_oidc_provider` variable controls whether to create it or reference an existing one.
+Set to `false` if another deployment in the same account already created it.
+
 ## E2E Pytest plugin package
 Code: `./libs/pytest-jupyter-deploy`
 
@@ -164,6 +176,7 @@ Examples (for project-dir == sandbox3):
 - Run all E2E tests without mutating the project: `just test-e2e-base sandbox3 ""`
 - Run all E2E tests: `just test-e2e-base sandbox3 "" mutate=true`
 - Run specific test file: `just test-e2e-base sandbox3 test_users` (possibly needs `mutate=true`)
+- Run CI template E2E tests: `just test-e2e-ci sandbox3 ""`
 
 **NOTE:** mutate tests are long, pipe to log stream to file: `just test-e2e <project-dir> TEST-SELECTOR mutate=true 2>&1 | tee results.log`   
 The test container saves screenshots of failed tests to `./test-results`, use the read image tool.
