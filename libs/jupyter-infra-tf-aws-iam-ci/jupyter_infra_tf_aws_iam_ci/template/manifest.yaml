@@ -1,0 +1,14 @@
+schema_version: 1
+template:
+  name: tf-aws-iam-ci
+  engine: terraform
+  version: 0.1.0
+requirements:
+- name: terraform
+- name: awscli
+values:
+- name: deployment_id
+  source: output
+  source-key: deployment_id
+project-store:
+  store-type: s3-only

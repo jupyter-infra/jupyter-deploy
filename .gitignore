@@ -165,6 +165,7 @@ claude-test-*.yaml
 # local files
 /tmp
 /sandbox*
+do-not-commit*
 
 # Playwright authentication state and test artifacts
 .auth/

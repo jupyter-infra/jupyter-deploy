@@ -1,0 +1,74 @@
+[project]
+name = "jupyter-infra-tf-aws-iam-ci"
+version = "0.1.0"
+description = "CI infrastructure template for jupyter-deploy — manages IAM OIDC, CI role, and Secrets Manager secrets."
+readme = "README.md"
+authors = [
+    { name = "Jonathan Guinegagne", email = "jggg@amazon.com" },
+    { name = "Michael Chin", email = "chnmch@amazon.com" },
+    { name = "Brian Granger", email = "brgrange@amazon.com" },
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.license]
+file = "LICENSE"
+
+[project.entry-points."jupyter_deploy.terraform_templates"]
+aws_iam_ci = "jupyter_infra_tf_aws_iam_ci.template:TEMPLATE_PATH"
+
+[project.urls]
+Homepage = "https://github.com/jupyter-infra/jupyter-deploy"
+
+[build-system]
+requires = [
+    "hatchling",
+]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "jupyter_infra_tf_aws_iam_ci",
+]
+
+[tool.mypy]
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+mypy_path = [
+    ".",
+]
+packages = [
+    "jupyter_infra_tf_aws_iam_ci",
+]
+
+[tool.ruff]
+extend-exclude = [
+    ".conda/",
+]
+line-length = 120
+
+[tool.ruff.lint]
+preview = true
+select = [
+    "E",
+    "F",
+    "UP",
+    "B",
+    "SIM",
+    "I",
+    "PLC0415",
+]
+ignore = [
+    "UP042",
+    "UP046",
+    "UP047",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+docstring-code-format = true
+docstring-code-line-length = 40

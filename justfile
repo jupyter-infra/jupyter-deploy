@@ -151,7 +151,7 @@ test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-te
 
     # Determine if this is a deployment from scratch
     IS_DEPLOYMENT_FROM_SCRATCH="false"
-    if [ "{{project_dir}}" = "sandbox-e2e" ]; then
+    if [ "{{project_dir}}" = "sandbox-e2e" ] || [ "{{project_dir}}" = "sandbox-e2e-ci" ]; then
         # Check if sandbox-e2e exists and is not empty
         if [ -d "{{project_dir}}" ] && [ -n "$(ls -A {{project_dir}} 2>/dev/null)" ]; then
             # sandbox-e2e exists and is not empty - treat as existing project
@@ -239,13 +239,23 @@ test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-te
     echo "✓ test-results directory is writable"
 
     # Build the pytest command based on deployment mode
-    E2E_TESTS_DIR="libs/jupyter-deploy-{{template}}/tests/e2e"
+    # Resolve E2E tests directory: try jupyter-deploy-<template> first, then jupyter-infra-<template>
+    if [ -d "libs/jupyter-deploy-{{template}}/tests/e2e" ]; then
+        E2E_TESTS_DIR="libs/jupyter-deploy-{{template}}/tests/e2e"
+    elif [ -d "libs/jupyter-infra-{{template}}/tests/e2e" ]; then
+        E2E_TESTS_DIR="libs/jupyter-infra-{{template}}/tests/e2e"
+    else
+        echo "Error: Could not find E2E tests directory for template '{{template}}'"
+        echo "Looked in: libs/jupyter-deploy-{{template}}/tests/e2e"
+        echo "       and: libs/jupyter-infra-{{template}}/tests/e2e"
+        exit 1
+    fi
     if [ "$IS_DEPLOYMENT_FROM_SCRATCH" = "true" ]; then
         # Deploy from scratch - don't pass --e2e-existing-project (uses default config "base")
-        PYTEST_ARGS="-m e2e --e2e-tests-dir=$E2E_TESTS_DIR"
+        PYTEST_ARGS="$E2E_TESTS_DIR -m e2e --e2e-tests-dir=$E2E_TESTS_DIR"
     else
         # Use existing project
-        PYTEST_ARGS="-m e2e --e2e-tests-dir=$E2E_TESTS_DIR --e2e-existing-project={{project_dir}}"
+        PYTEST_ARGS="$E2E_TESTS_DIR -m e2e --e2e-tests-dir=$E2E_TESTS_DIR --e2e-existing-project={{project_dir}}"
     fi
 
     # Add test filter if provided
@@ -505,6 +515,10 @@ e2e-all project_dir test_filter="" options="" no_cache="false" template=default-
 # Run E2E tests for the base template (tf-aws-ec2-base)
 test-e2e-base project_dir="sandbox-e2e" test_filter="" options="":
     @just test-e2e {{project_dir}} "{{test_filter}}" "{{options}}" tf-aws-ec2-base
+
+# Run E2E tests for the CI template (tf-aws-iam-ci)
+test-e2e-ci project_dir="sandbox-e2e-ci" test_filter="" options="":
+    @just test-e2e {{project_dir}} "{{test_filter}}" "{{options}}" tf-aws-iam-ci
 
 # Setup GitHub OAuth for the base template
 auth-setup-base project_dir display="${DISPLAY:-}":

@@ -16,6 +16,7 @@ pytest-jupyter-deploy = { workspace = true }
 members = [
     "libs/jupyter-deploy",
     "libs/jupyter-deploy-tf-aws-ec2-base",
+    "libs/jupyter-infra-tf-aws-iam-ci",
     "libs/pytest-jupyter-deploy",
     "images/uvbase"
 ]

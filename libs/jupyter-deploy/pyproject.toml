@@ -19,6 +19,7 @@ dependencies = [
     "packaging>=25.0",
     "jupyter_core>=5.0.0",
     "jupyter-deploy-tf-aws-ec2-base",
+    "jupyter-infra-tf-aws-iam-ci",
     "pyyaml>=6.0.2",
     "types-pyyaml>=6.0.12.20250516",
     "pathspec>=0.12.1",
@@ -44,6 +45,7 @@ aws = [
 
 [tool.uv.sources]
 jupyter-deploy-tf-aws-ec2-base = { workspace = true }
+jupyter-infra-tf-aws-iam-ci = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

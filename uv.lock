@@ -7,6 +7,7 @@ members = [
     "jupyter-deploy",
     "jupyter-deploy-monorepo",
     "jupyter-deploy-tf-aws-ec2-base",
+    "jupyter-infra-tf-aws-iam-ci",
     "pytest-jupyter-deploy",
 ]
 
@@ -299,6 +300,7 @@ dependencies = [
     { name = "decorator" },
     { name = "jupyter-core" },
     { name = "jupyter-deploy-tf-aws-ec2-base" },
+    { name = "jupyter-infra-tf-aws-iam-ci" },
     { name = "packaging" },
     { name = "pathspec" },
     { name = "pydantic" },
@@ -337,6 +339,7 @@ requires-dist = [
     { name = "decorator", specifier = ">=5.2.1" },
     { name = "jupyter-core", specifier = ">=5.0.0" },
     { name = "jupyter-deploy-tf-aws-ec2-base", editable = "libs/jupyter-deploy-tf-aws-ec2-base" },
+    { name = "jupyter-infra-tf-aws-iam-ci", editable = "libs/jupyter-infra-tf-aws-iam-ci" },
     { name = "mypy-boto3-dynamodb", marker = "extra == 'aws'", specifier = ">=1.38.0" },
     { name = "mypy-boto3-ec2", marker = "extra == 'aws'", specifier = ">=1.40.4" },
     { name = "mypy-boto3-s3", marker = "extra == 'aws'", specifier = ">=1.38.0" },
@@ -461,6 +464,11 @@ dev = [
     { name = "types-pyyaml", specifier = ">=6.0.12.20250516" },
     { name = "yamllint", specifier = ">=1.35.0" },
 ]
+
+[[package]]
+name = "jupyter-infra-tf-aws-iam-ci"
+version = "0.1.0"
+source = { editable = "libs/jupyter-infra-tf-aws-iam-ci" }
 
 [[package]]
 name = "lark"

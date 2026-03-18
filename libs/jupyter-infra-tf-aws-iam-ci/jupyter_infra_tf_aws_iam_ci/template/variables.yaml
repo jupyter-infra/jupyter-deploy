@@ -1,0 +1,37 @@
+schema_version: 1
+required:
+  # either assign values below
+  # or run 'jd config' to use the interactive experience
+  github_org: null
+  github_repo: null
+  github_oauth_app_1: {}
+  github_oauth_app_2: {}
+  github_oauth_app_3: {}
+  github_oauth_app_4: {}
+  github_oauth_app_5: {}
+required_sensitive:
+  # either assign values below
+  # or run 'jd config -s' to use the interactive experience
+  # values entered here will be masked after running 'jd config'
+  github_bot_account_password: null
+  github_bot_account_recovery_codes: null
+  github_oauth_app_client_secret_1: null
+  github_oauth_app_client_secret_2: null
+  github_oauth_app_client_secret_3: null
+  github_oauth_app_client_secret_4: null
+  github_oauth_app_client_secret_5: null
+overrides:
+  # set variable values as <variable-name>: <variable-value>
+  # delete or comment out a line to use the default
+  # github_ci_iam_roles_prefix: my-custom-prefix
+  # iam_managed_policies_e2e: ["AdministratorAccess"]
+defaults:
+  # read-only: do not modify this section
+  # instead add overrides in the override section
+  region: us-east-1
+  secret_name_prefix: jupyter-infra-ci
+  github_ci_iam_roles_prefix: jupyter-infra-ci
+  create_oidc_provider: true
+  iam_managed_policies_e2e: ["AdministratorAccess"]
+  iam_managed_policies_release: ["AdministratorAccess"]
+  maintainer_roles: ["Admin"]
