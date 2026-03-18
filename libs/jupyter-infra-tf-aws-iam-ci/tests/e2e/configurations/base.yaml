@@ -1,0 +1,50 @@
+schema_version: 1
+required:
+  github_org: "fake-test-org"
+  github_repo: "fake-test-repo"
+  github_oauth_app_1:
+    client_id: "Aa00000000000000test"
+    app_id: "100001"
+    homepage_url: "https://fake-app-1.example.com"
+    callback_url: "https://fake-app-1.example.com/callback"
+  github_oauth_app_2:
+    client_id: "Bb00000000000000test"
+    app_id: "100002"
+    homepage_url: "https://fake-app-2.example.com"
+    callback_url: "https://fake-app-2.example.com/callback"
+  github_oauth_app_3:
+    client_id: "Cc00000000000000test"
+    app_id: "100003"
+    homepage_url: "https://fake-app-3.example.com"
+    callback_url: "https://fake-app-3.example.com/callback"
+  github_oauth_app_4:
+    client_id: "Dd00000000000000test"
+    app_id: "100004"
+    homepage_url: "https://fake-app-4.example.com"
+    callback_url: "https://fake-app-4.example.com/callback"
+  github_oauth_app_5:
+    client_id: "Ee00000000000000test"
+    app_id: "100005"
+    homepage_url: "https://fake-app-5.example.com"
+    callback_url: "https://fake-app-5.example.com/callback"
+required_sensitive:
+  github_bot_account_password: "fakebotpassword123"
+  github_bot_account_recovery_codes: "fakecodes123"
+  github_oauth_app_client_secret_1: "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"
+  github_oauth_app_client_secret_2: "b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0"
+  github_oauth_app_client_secret_3: "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
+  github_oauth_app_client_secret_4: "d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0"
+  github_oauth_app_client_secret_5: "e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0"
+overrides:
+  # set variable values as <variable-name>: <variable-value>
+  # delete or comment out a line to use the default
+defaults:
+  # read-only: do not modify this section
+  # instead add overrides in the override section
+  region: us-east-1
+  secret_name_prefix: jupyter-infra-ci
+  github_ci_iam_roles_prefix: jupyter-infra-ci
+  create_oidc_provider: true
+  iam_managed_policies_e2e: ["AdministratorAccess"]
+  iam_managed_policies_release: ["AdministratorAccess"]
+  maintainer_roles: ["Admin"]
