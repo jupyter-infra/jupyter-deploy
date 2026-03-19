@@ -286,7 +286,14 @@ class TestGetProject(unittest.TestCase):
             _obj("my-project/project/f2.txt", 20, now),
         ]
         manifest_yaml = "schema_version: 1\ntemplate:\n  name: base-template\n  version: 1.2.0\n  engine: terraform\n"
-        mock_s3_object.get_object_content.return_value = manifest_yaml
+        variables_yaml = (
+            "schema_version: 1\n"
+            "required:\n  project_name: my-project\n"
+            "required_sensitive:\n  gh_token: secret123\n"
+            "overrides:\n  instance_type: t3.large\n"
+            "defaults:\n  instance_type: t3.medium\n  region: us-east-1\n"
+        )
+        mock_s3_object.get_object_content.side_effect = [manifest_yaml, variables_yaml]
         provider = S3StoreManager(region="us-east-1", bucket_name="bucket")
 
         result = provider.get_project("my-project", NullDisplay())
@@ -297,6 +304,12 @@ class TestGetProject(unittest.TestCase):
         self.assertEqual(result.template_name, "base-template")
         self.assertEqual(result.template_version, "1.2.0")
         self.assertEqual(result.engine, "terraform")
+        self.assertIsNotNone(result.variables)
+        assert result.variables is not None
+        self.assertEqual(result.variables["project_name"], "my-project")
+        self.assertEqual(result.variables["gh_token"], "****")
+        self.assertEqual(result.variables["instance_type"], "t3.large")
+        self.assertEqual(result.variables["region"], "us-east-1")
         mock_s3_object.list_objects.assert_called_once_with(mock_boto3.client.return_value, "bucket", "my-project/")
 
     @patch(f"{_MODULE}.s3_object")
@@ -317,6 +330,7 @@ class TestGetProject(unittest.TestCase):
         self.assertIsNone(result.template_name)
         self.assertIsNone(result.template_version)
         self.assertIsNone(result.engine)
+        self.assertIsNone(result.variables)
 
     @patch(f"{_MODULE}.s3_object")
     @patch(f"{_MODULE}.boto3")

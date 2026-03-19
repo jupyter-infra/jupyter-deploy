@@ -1128,6 +1128,166 @@ class TestShowCommand(unittest.TestCase):
         self.assertEqual(result.exit_code, 1)
         self.assertIn("Cannot use multiple query flags", result.output)
 
+    # Emoji preservation tests
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_output_text_preserves_emoji_codes(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        """Test that --output --text preserves literal :secret: in ARN-like values."""
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_fns["get_output_str_value_and_description"].return_value = (
+            "arn:aws:secretsmanager:us-east-1:123456:secret:my-secret",
+            "A secret ARN",
+        )
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "-o", "secret_arn", "--text"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn(":secret:", result.output)
+        self.assertNotIn("\u3299", result.output)  # ㊙ emoji replacement
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_output_rich_preserves_emoji_codes(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        """Test that --output without --text also preserves literal :secret: in values."""
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_fns["get_output_str_value_and_description"].return_value = (
+            "arn:aws:secretsmanager:us-east-1:123456:secret:my-secret",
+            "A secret ARN",
+        )
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "-o", "secret_arn"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn(":secret:", result.output)
+        self.assertNotIn("\u3299", result.output)
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_variable_text_preserves_emoji_codes(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        """Test that --variable --text preserves literal :secret: in values."""
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_fns["get_variable_str_value_and_description"].return_value = (
+            "arn:aws:secretsmanager:us-east-1:123456:secret:my-var",
+            "A secret variable",
+        )
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "-v", "secret_var", "--text"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn(":secret:", result.output)
+        self.assertNotIn("\u3299", result.output)
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_variable_rich_preserves_emoji_codes(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        """Test that --variable without --text also preserves literal :secret: in values."""
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_fns["get_variable_str_value_and_description"].return_value = (
+            "arn:aws:secretsmanager:us-east-1:123456:secret:my-var",
+            "A secret variable",
+        )
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "-v", "secret_var"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn(":secret:", result.output)
+        self.assertNotIn("\u3299", result.output)
+
+    # Emoji preservation in tables
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_outputs_table_preserves_emoji_codes(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        """Test that outputs table preserves literal :secret: in ARN-like values."""
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+
+        mock_output = Mock()
+        mock_output.value = "a:secret:b"
+        mock_output.description = "desc"
+
+        mock_show_fns["get_full_outputs"].return_value = {"x": mock_output}
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "--outputs"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn(":secret:", result.output)
+        self.assertNotIn("\u3299", result.output)
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_variables_table_preserves_emoji_codes(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        """Test that variables table preserves literal :secret: in values."""
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+
+        mock_var = Mock()
+        mock_var.sensitive = False
+        mock_var.assigned_value = "a:secret:b"
+        mock_var.get_cli_description = Mock(return_value="desc")
+
+        mock_show_fns["get_full_variables"].return_value = {"x": mock_var}
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "--variables"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn(":secret:", result.output)
+        self.assertNotIn("\u3299", result.output)
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_info_table_preserves_emoji_codes(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        """Test that info table preserves literal emoji-like patterns in values."""
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_fns["get_template_name"].return_value = "my:secret:template"
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "--info"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn(":secret:", result.output)
+        self.assertNotIn("\u3299", result.output)
+
     # Info table store type and store ID tests
 
     @patch("jupyter_deploy.cli.app.ShowHandler")

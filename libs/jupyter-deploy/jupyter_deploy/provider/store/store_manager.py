@@ -3,15 +3,18 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, ValidationError
 from yaml.parser import ParserError
 from yaml.scanner import ScannerError
 
+from jupyter_deploy.constants import MASKED_SECRET_VALUE
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.enum import StoreType
 from jupyter_deploy.manifest import JupyterDeployManifest
+from jupyter_deploy.variables_config import JupyterDeployVariablesConfigV1
 
 
 class StoreInfo(BaseModel):
@@ -36,6 +39,7 @@ class ProjectDetails(ProjectSummary):
     template_name: str | None = None
     template_version: str | None = None
     engine: str | None = None
+    variables: dict[str, Any] | None = None
 
 
 class SyncResult(BaseModel):
@@ -133,3 +137,31 @@ class StoreManager(ABC):
             return JupyterDeployManifest(**data)
         except ValidationError:
             return None
+
+    @staticmethod
+    def _safe_parse_variables(content: str) -> dict[str, Any] | None:
+        """Parse variables YAML and return a flat dict of variable names to values.
+
+        Sensitive values are masked. Returns None if the content cannot be parsed.
+        """
+        try:
+            data = yaml.safe_load(content)
+        except (ParserError, ScannerError):
+            return None
+
+        if not isinstance(data, dict):
+            return None
+
+        try:
+            config = JupyterDeployVariablesConfigV1(**data)
+        except ValidationError:
+            return None
+
+        variables: dict[str, Any] = {}
+        variables.update(config.required)
+        for key in config.required_sensitive:
+            variables[key] = MASKED_SECRET_VALUE
+        # Overrides take precedence over defaults
+        for key, value in config.defaults.items():
+            variables[key] = config.overrides.get(key, value)
+        return variables

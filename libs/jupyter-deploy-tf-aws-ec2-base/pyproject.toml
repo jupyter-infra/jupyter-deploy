@@ -17,6 +17,7 @@ dependencies = [
     "mypy-boto3-s3",
     "mypy-boto3-dynamodb",
     "mypy-boto3-sts",
+    "mypy-boto3-secretsmanager",
 ]
 
 [project.license]

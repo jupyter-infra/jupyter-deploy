@@ -25,11 +25,12 @@ def test_application_simple_python(
     notebook_dir = Path(__file__).parent / "notebooks"
     notebook_path = notebook_dir / "application_simple.ipynb"
 
-    # Upload the notebook
-    upload_notebook(e2e_deployment, notebook_path, "e2e-test/application_simple.ipynb")
+    # Upload the notebook (returns a unique path to avoid jupyter-server-documents
+    # Y-doc room collisions between test runs — see issue.md)
+    server_path = upload_notebook(e2e_deployment, notebook_path, "e2e-test/application_simple.ipynb")
 
     # Run the notebook in the UI
-    run_notebook_in_jupyterlab(github_oauth_app.page, "e2e-test/application_simple.ipynb", timeout_ms=120000)
+    run_notebook_in_jupyterlab(github_oauth_app.page, server_path, timeout_ms=120000)
 
     # Clean up - delete the notebook
-    delete_notebook(e2e_deployment, "e2e-test/application_simple.ipynb")
+    delete_notebook(e2e_deployment, server_path)

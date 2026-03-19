@@ -101,7 +101,7 @@ def show_project(
     ] = False,
 ) -> None:
     """Show details of a specific project in a remote store."""
-    console = Console()
+    console = Console(emoji=False, highlight=False)
     with handle_cli_errors(console):
         display_manager = SimpleDisplayManager(console=console, pass_through=False)
         handler = ProjectsHandler(display_manager=display_manager, store_type=store_type, store_id=store_id)
@@ -117,6 +117,9 @@ def show_project(
             console.print(f"engine: {project.engine or 'N/A'}")
             console.print(f"last-modified: {project.last_modified.strftime('%Y-%m-%d %H:%M:%S')}")
             console.print(f"file-count: {project.file_count}")
+            if project.variables:
+                for var_name, var_value in sorted(project.variables.items()):
+                    console.print(f"var:{var_name}: {var_value}")
         else:
             table = Table(show_header=True, header_style="bold magenta")
             table.add_column("Property", style="cyan", no_wrap=True)
@@ -130,6 +133,15 @@ def show_project(
             table.add_row("Last Modified", project.last_modified.strftime("%Y-%m-%d %H:%M:%S"))
             table.add_row("Files", str(project.file_count))
             console.print(table)
+
+            if project.variables:
+                console.line()
+                var_table = Table(show_header=True, header_style="bold magenta")
+                var_table.add_column("Variable", style="cyan", no_wrap=True)
+                var_table.add_column("Value", style="white")
+                for var_name, var_value in sorted(project.variables.items()):
+                    var_table.add_row(var_name, str(var_value))
+                console.print(var_table)
 
 
 @projects_app.command("delete")

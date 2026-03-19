@@ -317,6 +317,7 @@ aws = [
     { name = "mypy-boto3-dynamodb" },
     { name = "mypy-boto3-ec2" },
     { name = "mypy-boto3-s3" },
+    { name = "mypy-boto3-secretsmanager" },
     { name = "mypy-boto3-ssm" },
     { name = "mypy-boto3-sts" },
 ]
@@ -343,6 +344,7 @@ requires-dist = [
     { name = "mypy-boto3-dynamodb", marker = "extra == 'aws'", specifier = ">=1.38.0" },
     { name = "mypy-boto3-ec2", marker = "extra == 'aws'", specifier = ">=1.40.4" },
     { name = "mypy-boto3-s3", marker = "extra == 'aws'", specifier = ">=1.38.0" },
+    { name = "mypy-boto3-secretsmanager", marker = "extra == 'aws'", specifier = ">=1.38.0" },
     { name = "mypy-boto3-ssm", marker = "extra == 'aws'", specifier = ">=1.38.5" },
     { name = "mypy-boto3-sts", marker = "extra == 'aws'", specifier = ">=1.38.0" },
     { name = "packaging", specifier = ">=25.0" },
@@ -422,6 +424,7 @@ dependencies = [
     { name = "mypy-boto3-dynamodb" },
     { name = "mypy-boto3-ec2" },
     { name = "mypy-boto3-s3" },
+    { name = "mypy-boto3-secretsmanager" },
     { name = "mypy-boto3-ssm" },
     { name = "mypy-boto3-sts" },
 ]
@@ -447,6 +450,7 @@ requires-dist = [
     { name = "mypy-boto3-dynamodb" },
     { name = "mypy-boto3-ec2" },
     { name = "mypy-boto3-s3" },
+    { name = "mypy-boto3-secretsmanager" },
     { name = "mypy-boto3-ssm" },
     { name = "mypy-boto3-sts" },
 ]
@@ -550,6 +554,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e6/41/44066f4cd3421bacb6aad4ec7b1da8d0f8858560e526166db64d95fa7ad7/mypy_boto3_s3-1.42.37.tar.gz", hash = "sha256:628a4652f727870a07e1c3854d6f30dc545a7dd5a4b719a2c59c32a95d92e4c1", size = 76317, upload-time = "2026-01-28T20:51:52.971Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/94/06/cb6050ecd72f5fa449bac80ad1a4711719367c4f545201317f36e3999784/mypy_boto3_s3-1.42.37-py3-none-any.whl", hash = "sha256:7c118665f3f583dbfde1013ce47908749f9d2a760f28f59ec65732306ee9cec9", size = 83439, upload-time = "2026-01-28T20:51:49.99Z" },
+]
+
+[[package]]
+name = "mypy-boto3-secretsmanager"
+version = "1.42.8"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f7/58/ccae71b7b7f550eab01d600e956d57e6e6bb9148dbf5d116696d0dc43369/mypy_boto3_secretsmanager-1.42.8.tar.gz", hash = "sha256:5ab42f35ce932765ebb1684146f478a87cc4b83bef950fd1aa0e268b88d59c81", size = 19863, upload-time = "2025-12-11T22:12:51.045Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/42/90cef7241c98f6e504cabc9a99d89dd38b84e4d40ff0774c89bc871ffb18/mypy_boto3_secretsmanager-1.42.8-py3-none-any.whl", hash = "sha256:50c891a88e725a8dba7444018e47590ea63d8e938abe2b1c0b25e5413f39d51d", size = 27243, upload-time = "2025-12-11T22:12:44.389Z" },
 ]
 
 [[package]]

@@ -721,7 +721,7 @@ def show(
         )
         raise typer.Exit(code=1)
 
-    console = Console()
+    console = Console(emoji=False, highlight=False)
     with handle_cli_errors(console), cmd_utils.project_dir(project_dir):
         handler = ShowHandler()
 
@@ -730,7 +730,7 @@ def show(
             var_value, var_description = handler.get_variable_str_value_and_description(variable)
             display_text = var_description if description else var_value
             if text:
-                console.print(display_text)
+                console.out(display_text)
             else:
                 console.print(f"[bold cyan]{display_text}[/]")
             return
@@ -740,7 +740,7 @@ def show(
             out_value, out_description = handler.get_output_str_value_and_description(output)
             display_text = out_description if description else out_value
             if text:
-                console.print(display_text)
+                console.out(display_text)
             else:
                 console.print(f"[bold cyan]{display_text}[/]")
             return
@@ -749,7 +749,7 @@ def show(
         if template_name:
             result = handler.get_template_name()
             if text:
-                console.print(result)
+                console.out(result)
             else:
                 console.print(f"[bold cyan]{result}[/]")
             return
@@ -757,7 +757,7 @@ def show(
         if template_version:
             result = handler.get_template_version()
             if text:
-                console.print(result)
+                console.out(result)
             else:
                 console.print(f"[bold cyan]{result}[/]")
             return
@@ -765,7 +765,7 @@ def show(
         if template_engine:
             result = handler.get_template_engine()
             if text:
-                console.print(result)
+                console.out(result)
             else:
                 console.print(f"[bold cyan]{result}[/]")
             return
@@ -774,7 +774,7 @@ def show(
         if project_id:
             result = handler.get_project_id()
             if text:
-                console.print(result)
+                console.out(result)
             else:
                 console.print(f"[bold cyan]{result}[/]")
             return
@@ -783,7 +783,7 @@ def show(
             resolved = handler.get_resolved_store_type()
             result = "N/A" if resolved is None else resolved.value
             if text:
-                console.print(result)
+                console.out(result)
             else:
                 console.print(f"[bold cyan]{result}[/]")
             return
@@ -792,7 +792,7 @@ def show(
             resolved_id = handler.get_resolved_store_id()
             result = "N/A" if resolved_id is None else resolved_id
             if text:
-                console.print(result)
+                console.out(result)
             else:
                 console.print(f"[bold cyan]{result}[/]")
             return
@@ -802,7 +802,7 @@ def show(
             if variables and not info and not outputs:
                 names = handler.list_variable_names()
                 if text:
-                    console.print(",".join(names))
+                    console.out(",".join(names))
                 else:
                     for name in names:
                         console.print(f"[bold cyan]{name}[/]")
@@ -810,7 +810,7 @@ def show(
             if outputs and not info and not variables:
                 names = handler.list_output_names()
                 if text:
-                    console.print(",".join(names))
+                    console.out(",".join(names))
                 else:
                     for name in names:
                         console.print(f"[bold cyan]{name}[/]")
@@ -834,7 +834,7 @@ def show(
 
             info_table = Table(show_header=True, header_style="bold magenta")
             info_table.add_column("Property", style="cyan", no_wrap=True)
-            info_table.add_column("Value", style="white")
+            info_table.add_column("Value", style="white", overflow="fold")
 
             info_table.add_row("Project Path", str(handler.project_path))
             info_table.add_row("Engine", handler.get_template_engine())
@@ -864,7 +864,7 @@ def show(
 
             variables_table = Table(show_header=True, header_style="bold magenta")
             variables_table.add_column("Variable Name", style="cyan", no_wrap=True)
-            variables_table.add_column("Assigned Value", style="white")
+            variables_table.add_column("Assigned Value", style="white", overflow="fold")
             variables_table.add_column("Description", style="dim")
 
             for var_name, var_def in all_variables.items():
@@ -893,7 +893,7 @@ def show(
 
                 output_table = Table(show_header=True, header_style="bold magenta")
                 output_table.add_column("Output Name", style="cyan", no_wrap=True)
-                output_table.add_column("Value", style="white")
+                output_table.add_column("Value", style="white", overflow="fold")
                 output_table.add_column("Description", style="dim")
 
                 for out_name, out_def in all_outputs.items():

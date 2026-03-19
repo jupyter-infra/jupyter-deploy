@@ -50,6 +50,7 @@ class TestProjectsHandler(unittest.TestCase):
             template_name="base-template",
             template_version="1.0.0",
             engine="terraform",
+            variables={"region": "us-east-1", "instance_type": "t3.medium"},
         )
         mock_store_manager.get_project.return_value = expected
         mock_factory.get_manager.return_value = mock_store_manager
@@ -59,6 +60,7 @@ class TestProjectsHandler(unittest.TestCase):
 
         self.assertEqual(result, expected)
         self.assertEqual(result.template_name, "base-template")
+        self.assertEqual(result.variables, {"region": "us-east-1", "instance_type": "t3.medium"})
         mock_store_manager.get_project.assert_called_once_with("template-abc123", self.mock_display)
 
     @patch("jupyter_deploy.handlers.projects_handler.StoreManagerFactory")

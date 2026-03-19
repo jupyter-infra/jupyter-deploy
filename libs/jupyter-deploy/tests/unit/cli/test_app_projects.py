@@ -154,6 +154,7 @@ class TestProjectsShowCommand(unittest.TestCase):
             template_name="base-template",
             template_version="1.2.0",
             engine="terraform",
+            variables={"region": "us-east-1", "instance_type": "t3.medium"},
         )
         mock_handler_cls.return_value = mock_handler
 
@@ -167,6 +168,10 @@ class TestProjectsShowCommand(unittest.TestCase):
         self.assertIn("base-template", result.output)
         self.assertIn("1.2.0", result.output)
         self.assertIn("terraform", result.output)
+        self.assertIn("region", result.output)
+        self.assertIn("us-east-1", result.output)
+        self.assertIn("instance_type", result.output)
+        self.assertIn("t3.medium", result.output)
 
     @patch(_HANDLER)
     def test_show_project_text_mode(self, mock_handler_cls: Mock) -> None:
@@ -179,6 +184,7 @@ class TestProjectsShowCommand(unittest.TestCase):
             template_name="base-template",
             template_version="1.2.0",
             engine="terraform",
+            variables={"region": "us-east-1", "secret_key": "****"},
         )
         mock_handler_cls.return_value = mock_handler
 
@@ -192,6 +198,8 @@ class TestProjectsShowCommand(unittest.TestCase):
         self.assertIn("template-version: 1.2.0", result.output)
         self.assertIn("engine: terraform", result.output)
         self.assertIn("file-count: 10", result.output)
+        self.assertIn("var:region: us-east-1", result.output)
+        self.assertIn("var:secret_key: ****", result.output)
 
     @patch(_HANDLER)
     def test_show_project_text_mode_none_fields(self, mock_handler_cls: Mock) -> None:

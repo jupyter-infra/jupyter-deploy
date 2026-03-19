@@ -169,7 +169,14 @@ class TerraformConfigHandler(EngineConfigHandler):
             # then the preset values may take precedence over the values specified
             # in variables.yaml, which is not desirable.
             filtered_preset_path = self.tf_variables_handler.create_filtered_preset_file(base_preset_path)
-            plan_cmds.append(f"-var-file={filtered_preset_path.absolute()}")
+
+            # The filtered preset is only written when it has remaining lines
+            # (i.e. not all defaults were overridden by user config). After a
+            # store restore, user-assigned values may cover every preset default,
+            # leaving the file uncreated — skip the -var-file to avoid a
+            # terraform "Failed to read variables file" error.
+            if filtered_preset_path.exists():
+                plan_cmds.append(f"-var-file={filtered_preset_path.absolute()}")
 
         # 2.4/ pass variable overrides
         if variable_overrides:

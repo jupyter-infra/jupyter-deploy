@@ -3,13 +3,14 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import boto3
 from mypy_boto3_s3.client import S3Client
 
 from jupyter_deploy.api.aws.s3 import s3_bucket, s3_object, s3_sync
 from jupyter_deploy.api.aws.sts import sts_identity
-from jupyter_deploy.constants import MANIFEST_FILENAME
+from jupyter_deploy.constants import MANIFEST_FILENAME, VARIABLES_FILENAME
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.enum import StoreType
 from jupyter_deploy.exceptions import ProjectNotFoundInStoreError, ProjectStoreNotFoundError
@@ -161,6 +162,16 @@ class S3StoreManager(StoreManager):
             except self._s3_client.exceptions.NoSuchKey:
                 pass
 
+            # Try to read variables from the remote variables.yaml
+            variables: dict[str, Any] | None = None
+            try:
+                variables_content = s3_object.get_object_content(
+                    self._s3_client, bucket, f"{project_id}/project/{VARIABLES_FILENAME}"
+                )
+                variables = self._safe_parse_variables(variables_content)
+            except self._s3_client.exceptions.NoSuchKey:
+                pass
+
             return ProjectDetails(
                 project_id=project_id,
                 last_modified=last_modified,
@@ -168,6 +179,7 @@ class S3StoreManager(StoreManager):
                 template_name=manifest.template.name if manifest else None,
                 template_version=manifest.template.version if manifest else None,
                 engine=manifest.template.engine if manifest else None,
+                variables=variables,
             )
 
     def list_projects(self, display_manager: DisplayManager) -> list[ProjectSummary]:

@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import time
+import uuid
 from pathlib import Path
 
 from playwright.sync_api import Page
@@ -28,13 +29,24 @@ from pytest_jupyter_deploy.notebooks.notebook_utils import (
 logger = logging.getLogger(__name__)
 
 
-def upload_notebook(deployment: EndToEndDeployment, src_path: str | Path, target_path: str) -> None:
-    """Upload a notebook to the Jupyter server.
+def upload_notebook(deployment: EndToEndDeployment, src_path: str | Path, target_path: str) -> str:
+    """Upload a notebook to the Jupyter server with a unique path.
+
+    A UUID suffix is appended to the target filename to ensure each upload creates a
+    unique server path. This works around a jupyter-server-documents bug where re-using
+    the same notebook path across runs causes a stale Y-doc room and a 'metadata'
+    KeyError on the kernel WebSocket (see issue.md).
 
     Args:
         deployment: The deployment instance
-        src_path: Path to the local notebook file, relative to the jupyterlab home
-        target_path: Target path on the server (relative to /home/jovyan, e.g., "work/test.ipynb")
+        src_path: Path to the local notebook file
+        target_path: Base target path on the server (relative to /home/jovyan,
+            e.g., "e2e-test/application_simple.ipynb"). A UUID is appended before
+            the extension to create the actual unique path.
+
+    Returns:
+        The actual unique path the notebook was uploaded to
+        (e.g., "e2e-test/application_simple-a1b2c3d4.ipynb")
 
     Raises:
         FileNotFoundError: If the source notebook doesn't exist
@@ -43,6 +55,11 @@ def upload_notebook(deployment: EndToEndDeployment, src_path: str | Path, target
     src_path = Path(src_path)
     if not src_path.exists() or not src_path.is_file():
         raise FileNotFoundError(f"Notebook not found: {src_path}")
+
+    # Append a short UUID to the filename so each upload gets a fresh Y-doc room
+    # in jupyter-server-documents (avoids stale room 'metadata' KeyError).
+    stem, ext = target_path.rsplit(".", 1)
+    unique_target = f"{stem}-{uuid.uuid4().hex[:8]}.{ext}"
 
     # Read and parse the notebook JSON
     with open(src_path) as f:
@@ -56,12 +73,13 @@ def upload_notebook(deployment: EndToEndDeployment, src_path: str | Path, target
     # Use python to avoid shell escaping issues with complex JSON content
     python_cmd = (
         f'python3 -c "import base64, os; '
-        f"os.makedirs(os.path.dirname('/home/jovyan/{target_path}'), exist_ok=True); "
+        f"os.makedirs(os.path.dirname('/home/jovyan/{unique_target}'), exist_ok=True); "
         f"data=base64.b64decode('{encoded_notebook}'); "
-        f"open('/home/jovyan/{target_path}', 'wb').write(data)\""
+        f"open('/home/jovyan/{unique_target}', 'wb').write(data)\""
     )
 
     deployment.cli.run_command(["jupyter-deploy", "server", "exec", "--", python_cmd])
+    return unique_target
 
 
 def run_notebook_in_jupyterlab(

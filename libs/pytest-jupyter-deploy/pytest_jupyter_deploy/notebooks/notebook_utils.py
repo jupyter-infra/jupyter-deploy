@@ -33,6 +33,12 @@ def prepare_jupyterlab_to_run_notebook(page: Page, notebook_path: str) -> None:
     notebook_toolbar = page.locator(".jp-NotebookPanel-toolbar")
     notebook_toolbar.wait_for(state="visible", timeout=10000)
 
+    # Dismiss "Document session error" dialog if it appeared during notebook load.
+    # This happens when jupyter-server-documents has stale Y-doc room state (e.g., from
+    # a previous test run that uploaded the notebook via filesystem). The dialog blocks
+    # all UI interaction, so we must dismiss it before clicking Run.
+    dismiss_document_session_error_if_present(page)
+
     # Wait for the kernel to be ready before executing cells
     # The kernel status is shown in the status bar (e.g., "Python 3 (ipykernel) | Idle")
     logger.debug("Waiting for kernel to be ready...")

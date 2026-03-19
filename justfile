@@ -523,3 +523,28 @@ test-e2e-ci project_dir="sandbox-e2e-ci" test_filter="" options="":
 # Setup GitHub OAuth for the base template
 auth-setup-base project_dir display="${DISPLAY:-}":
     @just auth-setup {{project_dir}} "{{display}}"
+
+# --- CI infrastructure commands ---
+
+# Export local auth state to Secrets Manager
+auth-export ci_dir="sandbox-ci":
+    uv run python scripts/sync_auth_state.py export {{ci_dir}}
+
+# Import auth state from Secrets Manager
+auth-import ci_dir="sandbox-ci":
+    uv run python scripts/ci_restore.py {{ci_dir}}
+    uv run python scripts/sync_auth_state.py import {{ci_dir}}
+
+# Check local auth state cookie expiry (no AWS access needed)
+auth-check:
+    uv run python scripts/sync_auth_state.py check
+
+# Generate .env for base template E2E tests from deployed project + CI infrastructure
+# Reads variables from the project, OAuth creds from CI, and accepts user options
+# Usage: just env-setup-base <project-dir> [ci-dir] [oauth-app-num] [options]
+# Options: comma-separated key=value pairs (same format as test-e2e options)
+# Quote options containing [] values (zsh treats brackets as glob patterns)
+# Example: just env-setup-base sandbox-e2e sandbox-ci 4 user=botuser,safe-user=realuser
+# Example: just env-setup-base sandbox-e2e sandbox-ci 4 'allowed-teams=[team1],user=botuser'
+env-setup-base project_dir ci_dir="sandbox-ci" oauth_app_num="1" options="":
+    uv run python scripts/env_setup_base.py {{project_dir}} {{ci_dir}} {{oauth_app_num}} "{{options}}"
