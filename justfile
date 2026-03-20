@@ -526,13 +526,16 @@ auth-setup-base project_dir display="${DISPLAY:-}":
 
 # --- CI infrastructure commands ---
 
+# Discover and restore CI project from S3 store
+ci-restore ci_dir="sandbox-ci":
+    uv run python scripts/ci_restore.py {{ci_dir}}
+
 # Export local auth state to Secrets Manager
 auth-export ci_dir="sandbox-ci":
     uv run python scripts/sync_auth_state.py export {{ci_dir}}
 
-# Import auth state from Secrets Manager
+# Import auth state from Secrets Manager (run ci-restore first)
 auth-import ci_dir="sandbox-ci":
-    uv run python scripts/ci_restore.py {{ci_dir}}
     uv run python scripts/sync_auth_state.py import {{ci_dir}}
 
 # Check local auth state cookie expiry (no AWS access needed)
