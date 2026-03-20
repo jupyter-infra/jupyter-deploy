@@ -23,7 +23,7 @@ def status(
     ] = None,
     status_for: Annotated[
         HostStatusType | None,
-        typer.Option("--for", help="Check a specific status. Supported: 'connection' (session agent readiness)."),
+        typer.Option("--for", help="Check the status of specific agent or access point within the host."),
     ] = None,
 ) -> None:
     """Check the status of the host machine.
@@ -41,7 +41,7 @@ def status(
                 result = handler.get_connection_status()
             console.print(f"Host agent connection status: [bold cyan]{result}[/]")
             return
-        
+
         with simple_display_manager.spinner("Checking host status..."):
             result = handler.get_host_status()
             console.print(f"Host status: [bold cyan]{result}[/]")
