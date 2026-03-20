@@ -21,6 +21,7 @@ from pytest_jupyter_deploy.constants import (
     CONFIGURATION_DEFAULT_NAME,
     DEPLOY_TIMEOUT_SECONDS,
     DESTROY_TIMEOUT_SECONDS,
+    SSM_NOT_REPORTING_SENTINEL,
 )
 from pytest_jupyter_deploy.suite_config import SuiteConfig
 
@@ -166,9 +167,8 @@ class EndToEndDeployment:
                 if not self._is_host_running():
                     raise RuntimeError("Host failed to start") from None
 
-            # Wait for SSM agent to register after host start
-            # TODO: this is too aws-specific, we should gate by a flag
-            self.wait_for_ssm_ready()
+            # Wait for host to be reachable after the start
+            self.wait_for_host_agent()
 
         # Step 3: Attempt to restart the server
         self.cli.run_command(["jupyter-deploy", "server", "restart"])
@@ -304,15 +304,12 @@ class EndToEndDeployment:
         status = self.cli.get_server_status()
         return status == "STOPPED"
 
-    def wait_for_ssm_ready(self, max_retries: int = 6) -> None:
-        """Wait for SSM agent to be ready after host state change.
+    def wait_for_host_agent(self, max_retries: int = 6) -> None:
+        """Wait for agent responsible for communication to be ready on the host.
 
         SSM agent needs time to register with AWS Systems Manager after
         the EC2 instance starts or restarts. This method polls until SSM
         is ready or max retries is reached.
-
-        After instance replacements or restarts, SSM agent registration can take
-        30-90 seconds, especially when cloud-init volume mounting is in progress.
 
         Args:
             max_retries: Maximum number of retry attempts (default: 6)
@@ -324,10 +321,9 @@ class EndToEndDeployment:
             try:
                 # Try a simple server status check to verify SSM is ready
                 self.cli.get_server_status()
-                return  # Success - SSM is ready
+                return
             except JDCliError as e:
-                error_str = str(e)
-                if "is not reporting to SSM" in error_str:
+                if SSM_NOT_REPORTING_SENTINEL in str(e):
                     if attempt < max_retries - 1:
                         # Exponential backoff with cap: 2, 4, 8, 16, 30, 30... (max ~90s total)
                         delay = min(2 ** (attempt + 1), 30)
@@ -338,6 +334,29 @@ class EndToEndDeployment:
                 else:
                     # Different error - don't retry
                     raise
+
+    def wait_for_connection_agent(self, max_retries: int = 10) -> None:
+        """Wait for Session Manager connection to be ready on the host.
+
+        The ssmmessages WebSocket channel (used by StartSession) can lag behind
+        the ec2messages channel (used by SendCommand). This method polls
+        SSM:GetConnectionStatus until the session channel is ready.
+
+        Args:
+            max_retries: Maximum number of retry attempts (default: 10)
+
+        Raises:
+            JDCliError: If connection doesn't become ready within max_retries
+        """
+        for attempt in range(max_retries):
+            status = self.cli.get_connection_status()
+            if status == "connected":
+                return
+            if attempt < max_retries - 1:
+                delay = min(2 ** (attempt + 1), 30)
+                time.sleep(delay)
+
+        raise JDCliError(f"Session Manager connection not ready after {max_retries} attempts (last status: {status})")
 
     def ensure_no_org_nor_teams_allowlisted(self) -> None:
         """Unset the organization, list then remove any allowlisted team."""

@@ -6,6 +6,7 @@ from rich.console import Console
 from jupyter_deploy import cmd_utils
 from jupyter_deploy.cli.error_decorator import handle_cli_errors
 from jupyter_deploy.cli.simple_display import SimpleDisplayManager
+from jupyter_deploy.enum import HostStatusType
 from jupyter_deploy.handlers.resource import host_handler
 
 host_app = typer.Typer(
@@ -20,6 +21,10 @@ def status(
         str | None,
         typer.Option("--path", "-p", help="Directory of the jupyter-deploy project whose host to check status."),
     ] = None,
+    status_for: Annotated[
+        HostStatusType | None,
+        typer.Option("--for", help="Check a specific status. Supported: 'connection' (session agent readiness)."),
+    ] = None,
 ) -> None:
     """Check the status of the host machine.
 
@@ -31,10 +36,15 @@ def status(
         simple_display_manager = SimpleDisplayManager(console=console)
         handler = host_handler.HostHandler(display_manager=simple_display_manager)
 
+        if status_for == HostStatusType.CONNECTION:
+            with simple_display_manager.spinner("Checking status of agent on host..."):
+                result = handler.get_connection_status()
+            console.print(f"Host agent connection status: [bold cyan]{result}[/]")
+            return
+        
         with simple_display_manager.spinner("Checking host status..."):
-            status = handler.get_host_status()
-
-        console.print(f"Jupyter host status: [bold cyan]{status}[/]")
+            result = handler.get_host_status()
+            console.print(f"Host status: [bold cyan]{result}[/]")
 
 
 @host_app.command()

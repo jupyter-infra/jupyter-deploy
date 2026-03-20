@@ -18,3 +18,7 @@ CONFIGURATION_DEFAULT_NAME = "base"
 # Timeouts (in seconds)
 DEPLOY_TIMEOUT_SECONDS = 1800  # 30 minutes
 DESTROY_TIMEOUT_SECONDS = 600  # 10 minutes
+
+# Error message sentinels (cross-referenced with provider error messages)
+# See: jupyter_deploy/api/aws/ssm/ssm_session.py
+SSM_NOT_REPORTING_SENTINEL = "is not reporting to SSM"

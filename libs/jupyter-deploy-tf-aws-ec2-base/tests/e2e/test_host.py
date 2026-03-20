@@ -28,6 +28,10 @@ def test_host_stop(e2e_deployment: EndToEndDeployment) -> None:
     host_status = e2e_deployment.cli.get_host_status()
     assert host_status == "stopped", f"Expected host status 'stopped', got '{host_status}'"
 
+    # Verify connection agent reports not connected
+    connection_status = e2e_deployment.cli.get_connection_status()
+    assert connection_status == "notconnected", f"Expected 'notconnected', got '{connection_status}'"
+
 
 def test_host_start(e2e_deployment: EndToEndDeployment) -> None:
     """Test that the host can be started from command line."""
@@ -41,12 +45,17 @@ def test_host_start(e2e_deployment: EndToEndDeployment) -> None:
     host_status = e2e_deployment.cli.get_host_status()
     assert host_status == "running", f"Expected host status 'running', got '{host_status}'"
 
+    # Check connection status
+    e2e_deployment.wait_for_connection_agent()
+    status = e2e_deployment.cli.get_connection_status()
+    assert status == "connected", f"Expected 'connected', got '{status}'"
+
 
 def test_host_connect_whoami(e2e_deployment: EndToEndDeployment) -> None:
     """Test that we can connect to the host via SSM and run a simple command."""
     # Prerequisites
     e2e_deployment.ensure_host_running()
-    e2e_deployment.wait_for_ssm_ready()
+    e2e_deployment.wait_for_connection_agent()
 
     # Start an interactive jd host connect session
     with e2e_deployment.cli.spawn_interactive_session("jupyter-deploy host connect") as session:
@@ -70,7 +79,7 @@ def test_host_exec_simple_command(e2e_deployment: EndToEndDeployment) -> None:
     """Test that we can execute a simple command on the host."""
     # Prerequisites
     e2e_deployment.ensure_host_running()
-    e2e_deployment.wait_for_ssm_ready()
+    e2e_deployment.wait_for_host_agent()
 
     # Execute whoami command
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "host", "exec", "--", "whoami"])
@@ -84,7 +93,7 @@ def test_host_exec_disk_usage(e2e_deployment: EndToEndDeployment) -> None:
     """Test host exec with disk usage command."""
     # Prerequisites
     e2e_deployment.ensure_host_running()
-    e2e_deployment.wait_for_ssm_ready()
+    e2e_deployment.wait_for_host_agent()
 
     # Execute df command
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "host", "exec", "--", "df", "-h"])
@@ -98,7 +107,7 @@ def test_host_exec_failed_command(e2e_deployment: EndToEndDeployment) -> None:
     """Test host exec with a command that fails."""
     # Prerequisites
     e2e_deployment.ensure_host_running()
-    e2e_deployment.wait_for_ssm_ready()
+    e2e_deployment.wait_for_host_agent()
 
     # Execute non-existent command - should raise JDCliError with non-zero exit code
     with pytest.raises(JDCliError) as exc_info:

@@ -65,6 +65,24 @@ commands:
           - api-attribute: "instance_id"
             source: "output"
             source-key: "instance_id"
+  - cmd: "host.status-for-connection"
+    sequence:
+      - api-name: "aws.ssm.get-connection-status"
+        arguments:
+          - api-attribute: "instance_id"
+            source: "output"
+            source-key: "instance_id"
+    results:
+      - result-name: "host.status-for-connection"
+        source: "result"
+        source-key: "[0].Status"
+  - cmd: "host.connect"
+    sequence:
+      - api-name: "aws.ssm.start-session"
+        arguments:
+          - api-attribute: "target_id"
+            source: "output"
+            source-key: "instance_id"
   - cmd: "host.exec"
     sequence:
       - api-name: "aws.ssm.wait-default-shell-command-sync"

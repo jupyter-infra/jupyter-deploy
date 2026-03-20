@@ -1,6 +1,12 @@
 from enum import Enum
 
 
+class HostStatusType(str, Enum):
+    """Types of host status checks available via `jd host status --for`."""
+
+    CONNECTION = "connection"
+
+
 class HistoryEnabledCommandType(str, Enum):
     """Command types for history tracking."""
 

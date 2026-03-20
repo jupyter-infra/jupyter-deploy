@@ -729,8 +729,10 @@ class TestExecuteInstructions(unittest.TestCase):
     @patch("jupyter_deploy.provider.aws.aws_ssm_runner.cmd_utils.run_cmd_and_pipe_to_terminal")
     @patch("jupyter_deploy.api.aws.ssm.ssm_command.send_cmd_to_one_instance_and_wait_sync")
     @patch("jupyter_deploy.api.aws.ssm.ssm_session.describe_instance_information")
+    @patch("jupyter_deploy.api.aws.ssm.ssm_connection.get_connection_status")
     def test_all_ssm_instructions_implemented(
         self,
+        mock_get_conn_status: Mock,
         mock_describe_info: Mock,
         mock_send_cmd: Mock,
         mock_run_cmd: Mock,
@@ -755,6 +757,8 @@ class TestExecuteInstructions(unittest.TestCase):
             "StandardOutputContent": "Command output",
         }
 
+        mock_get_conn_status.return_value = "connected"
+
         # Verify each instruction in AwsSsmInstruction can be executed
         for instruction in AwsSsmInstruction:
             # Reset mocks between iterations
@@ -763,6 +767,7 @@ class TestExecuteInstructions(unittest.TestCase):
             mock_run_cmd.reset_mock()
             mock_send_cmd.reset_mock()
             mock_describe_info.reset_mock()
+            mock_get_conn_status.reset_mock()
 
             # Basic arguments that work for any instruction
             base_resolved_arguments: dict[str, ResolvedInstructionArgument] = {}
@@ -780,6 +785,10 @@ class TestExecuteInstructions(unittest.TestCase):
             elif instruction == AwsSsmInstruction.START_SESSION:
                 base_resolved_arguments = {
                     "target_id": StrResolvedInstructionArgument(argument_name="target_id", value="i-12345"),
+                }
+            elif instruction == AwsSsmInstruction.GET_CONNECTION_STATUS:
+                base_resolved_arguments = {
+                    "instance_id": StrResolvedInstructionArgument(argument_name="instance_id", value="i-12345"),
                 }
             else:
                 raise NotImplementedError(f"Instruction {instruction} not implemented")
@@ -801,6 +810,9 @@ class TestExecuteInstructions(unittest.TestCase):
                 mock_verify_tools.assert_called_once()
                 mock_verify_ec2.assert_called_once()
                 mock_run_cmd.assert_called_once()
+            elif instruction == AwsSsmInstruction.GET_CONNECTION_STATUS:
+                mock_get_conn_status.assert_called_once()
+                self.assertEqual(result["Status"].value, "connected")
 
     def test_raise_not_implemented_error_on_unrecognized_instruction(self) -> None:
         # Arrange
@@ -1057,3 +1069,47 @@ class TestSendCmdToOneInstanceUsingDefaultShellDoc(unittest.TestCase):
         # Assert - Should default to 0 when ResponseCode is missing
         self.assertIn("ResponseCode", result)
         self.assertEqual(result["ResponseCode"].value, 0)
+
+
+class TestGetConnectionStatus(unittest.TestCase):
+    @patch("jupyter_deploy.api.aws.ssm.ssm_connection.get_connection_status")
+    def test_returns_connected_status(self, mock_get_conn: Mock) -> None:
+        runner = AwsSsmRunner(NullDisplay(), region_name="us-west-2")
+        mock_get_conn.return_value = "connected"
+
+        resolved_arguments: dict[str, ResolvedInstructionArgument] = {
+            "instance_id": StrResolvedInstructionArgument(argument_name="instance_id", value="i-123"),
+        }
+
+        result = runner.execute_instruction(
+            instruction_name=AwsSsmInstruction.GET_CONNECTION_STATUS,
+            resolved_arguments=resolved_arguments,
+        )
+
+        self.assertEqual(result["Status"].value, "connected")
+        mock_get_conn.assert_called_once_with(runner.client, instance_id="i-123")
+
+    @patch("jupyter_deploy.api.aws.ssm.ssm_connection.get_connection_status")
+    def test_returns_notconnected_status(self, mock_get_conn: Mock) -> None:
+        runner = AwsSsmRunner(NullDisplay(), region_name="us-west-2")
+        mock_get_conn.return_value = "notconnected"
+
+        resolved_arguments: dict[str, ResolvedInstructionArgument] = {
+            "instance_id": StrResolvedInstructionArgument(argument_name="instance_id", value="i-123"),
+        }
+
+        result = runner.execute_instruction(
+            instruction_name=AwsSsmInstruction.GET_CONNECTION_STATUS,
+            resolved_arguments=resolved_arguments,
+        )
+
+        self.assertEqual(result["Status"].value, "notconnected")
+
+    def test_raises_on_missing_instance_id(self) -> None:
+        runner = AwsSsmRunner(NullDisplay(), region_name="us-west-2")
+
+        with self.assertRaises(KeyError):
+            runner.execute_instruction(
+                instruction_name=AwsSsmInstruction.GET_CONNECTION_STATUS,
+                resolved_arguments={},
+            )

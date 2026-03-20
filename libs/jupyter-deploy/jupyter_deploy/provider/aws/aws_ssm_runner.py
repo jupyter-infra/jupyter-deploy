@@ -4,7 +4,7 @@ import boto3
 from mypy_boto3_ssm.client import SSMClient
 
 from jupyter_deploy import cmd_utils, verify_utils
-from jupyter_deploy.api.aws.ssm import ssm_command, ssm_session
+from jupyter_deploy.api.aws.ssm import ssm_command, ssm_connection, ssm_session
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.enum import JupyterDeployTool
 from jupyter_deploy.exceptions import (
@@ -39,6 +39,7 @@ class AwsSsmInstruction(str, Enum):
     SEND_CMD_AND_WAIT_SYNC = "wait-command-sync"
     SEND_DFT_SHELL_DOC_CMD_AND_WAIT_SYNC = "wait-default-shell-command-sync"
     START_SESSION = "start-session"
+    GET_CONNECTION_STATUS = "get-connection-status"
 
 
 class AwsSsmRunner(InstructionRunner):
@@ -49,6 +50,7 @@ class AwsSsmRunner(InstructionRunner):
     def __init__(self, display_manager: DisplayManager, region_name: str | None) -> None:
         """Instantiates the SSM boto3 client."""
         super().__init__(display_manager)
+        self.region_name = region_name
         self.client: SSMClient = boto3.client("ssm", region_name=region_name)
 
     def _verify_ec2_instance_accessible(
@@ -240,6 +242,8 @@ class AwsSsmRunner(InstructionRunner):
 
         # start the session
         start_session_cmds = START_SESSION_CMD.copy()
+        if self.region_name:
+            start_session_cmds.extend(["--region", self.region_name])
         start_session_cmds.extend(["--target", target_id_arg.value])
 
         # Add optional document name if provided
@@ -268,6 +272,16 @@ class AwsSsmRunner(InstructionRunner):
 
         return {}
 
+    def _get_connection_status(
+        self,
+        resolved_arguments: dict[str, ResolvedInstructionArgument],
+    ) -> dict[str, ResolvedInstructionResult]:
+        instance_id_arg = require_arg(resolved_arguments, "instance_id", StrResolvedInstructionArgument)
+        status = ssm_connection.get_connection_status(self.client, instance_id=instance_id_arg.value)
+        return {
+            "Status": StrResolvedInstructionResult(result_name="Status", value=status),
+        }
+
     def execute_instruction(
         self,
         instruction_name: str,
@@ -283,6 +297,10 @@ class AwsSsmRunner(InstructionRunner):
             )
         elif instruction_name == AwsSsmInstruction.START_SESSION:
             return self._start_session(
+                resolved_arguments=resolved_arguments,
+            )
+        elif instruction_name == AwsSsmInstruction.GET_CONNECTION_STATUS:
+            return self._get_connection_status(
                 resolved_arguments=resolved_arguments,
             )
 

@@ -327,6 +327,93 @@ class TestHostRestartCommand(unittest.TestCase):
         self.assertNotEqual(result.exit_code, 0)
 
 
+class TestHostStatusForFlag(unittest.TestCase):
+    def get_mock_host_handler(self) -> tuple[Mock, dict[str, Mock]]:
+        mock_host_handler = Mock()
+        mock_host_handler.get_connection_status.return_value = "connected"
+        mock_host_handler.get_host_status.return_value = "running"
+        return mock_host_handler, {
+            "get_connection_status": mock_host_handler.get_connection_status,
+            "get_host_status": mock_host_handler.get_host_status,
+        }
+
+    @patch("jupyter_deploy.handlers.resource.host_handler.HostHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_status_without_for_calls_get_host_status(
+        self, mock_project_dir: Mock, mock_host_handler_class: Mock
+    ) -> None:
+        mock_host_handler, mock_handler_fns = self.get_mock_host_handler()
+        mock_host_handler_class.return_value = mock_host_handler
+        mock_project_dir.return_value.__enter__.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(host_app, ["status"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_handler_fns["get_host_status"].assert_called_once()
+        mock_handler_fns["get_connection_status"].assert_not_called()
+
+    @patch("jupyter_deploy.handlers.resource.host_handler.HostHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_status_for_connection_calls_get_connection_status(
+        self, mock_project_dir: Mock, mock_host_handler_class: Mock
+    ) -> None:
+        mock_host_handler, mock_handler_fns = self.get_mock_host_handler()
+        mock_host_handler_class.return_value = mock_host_handler
+        mock_project_dir.return_value.__enter__.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(host_app, ["status", "--for", "connection"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_handler_fns["get_connection_status"].assert_called_once()
+        mock_handler_fns["get_host_status"].assert_not_called()
+
+    @patch("jupyter_deploy.handlers.resource.host_handler.HostHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_status_for_unknown_value_exits_with_error(
+        self, mock_project_dir: Mock, mock_host_handler_class: Mock
+    ) -> None:
+        mock_host_handler, _ = self.get_mock_host_handler()
+        mock_host_handler_class.return_value = mock_host_handler
+        mock_project_dir.return_value.__enter__.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(host_app, ["status", "--for", "bogus"])
+
+        self.assertNotEqual(result.exit_code, 0)
+
+    @patch("jupyter_deploy.handlers.resource.host_handler.HostHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_status_for_connection_switches_dir_when_passed_a_project(
+        self, mock_project_dir: Mock, mock_host_handler_class: Mock
+    ) -> None:
+        mock_host_handler, _ = self.get_mock_host_handler()
+        mock_host_handler_class.return_value = mock_host_handler
+        mock_project_dir.return_value.__enter__.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(host_app, ["status", "--for", "connection", "--path", "/test/project/path"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_dir.assert_called_once_with("/test/project/path")
+
+    @patch("jupyter_deploy.handlers.resource.host_handler.HostHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_status_for_connection_raises_when_handler_raises(
+        self, mock_project_dir: Mock, mock_host_handler_class: Mock
+    ) -> None:
+        mock_host_handler, mock_handler_fns = self.get_mock_host_handler()
+        mock_host_handler_class.return_value = mock_host_handler
+        mock_handler_fns["get_connection_status"].side_effect = Exception("Test error")
+        mock_project_dir.return_value.__enter__.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(host_app, ["status", "--for", "connection"])
+
+        self.assertNotEqual(result.exit_code, 0)
+
+
 class TestHostConnectCommand(unittest.TestCase):
     def get_mock_host_handler(self) -> tuple[Mock, dict[str, Mock]]:
         mock_connect = Mock()

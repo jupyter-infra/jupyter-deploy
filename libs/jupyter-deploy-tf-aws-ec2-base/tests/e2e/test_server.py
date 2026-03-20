@@ -181,7 +181,7 @@ def test_server_connect_default_service(e2e_deployment: EndToEndDeployment) -> N
     """Test that we can connect to the default service (jupyter) via SSM and run a simple command."""
     # Prerequisites
     e2e_deployment.ensure_server_running()
-    e2e_deployment.wait_for_ssm_ready()
+    e2e_deployment.wait_for_connection_agent()
 
     # Start an interactive jd server connect session (no -s flag, should default to jupyter)
     with e2e_deployment.cli.spawn_interactive_session("jupyter-deploy server connect") as session:
@@ -205,7 +205,7 @@ def test_server_connect_jupyter(e2e_deployment: EndToEndDeployment) -> None:
     """Test that we can connect to the jupyter service via SSM and run a simple command."""
     # Prerequisites
     e2e_deployment.ensure_server_running()
-    e2e_deployment.wait_for_ssm_ready()
+    e2e_deployment.wait_for_connection_agent()
 
     # Start an interactive jd server connect session with explicit -s jupyter
     with e2e_deployment.cli.spawn_interactive_session("jupyter-deploy server connect -s jupyter") as session:
@@ -229,7 +229,7 @@ def test_server_connect_traefik(e2e_deployment: EndToEndDeployment) -> None:
     """Test that we can connect to the traefik service via SSM and run a simple command."""
     # Prerequisites
     e2e_deployment.ensure_server_running()
-    e2e_deployment.wait_for_ssm_ready()
+    e2e_deployment.wait_for_connection_agent()
 
     # Start an interactive jd server connect session with explicit -s traefik
     with e2e_deployment.cli.spawn_interactive_session("jupyter-deploy server connect -s traefik") as session:

@@ -80,9 +80,9 @@ class JDCli:
         """
         result = self.run_command(["jupyter-deploy", "host", "status"])
 
-        # Parse output for line "Jupyter host status: <status>"
+        # Parse output for line "Host status: <status>"
         for line in result.stdout.splitlines():
-            if line.startswith("Jupyter host status:"):
+            if line.startswith("Host status:"):
                 # Extract status after the colon and color codes
                 status = line.split(":", 1)[1].strip()
                 # Remove ANSI color codes if present
@@ -90,6 +90,27 @@ class JDCli:
                 return status.lower()
 
         raise ValueError("Could not parse host status from command output")
+
+    def get_connection_status(self) -> str:
+        """Get the Session Manager connection status.
+
+        Returns:
+            Connection status string (e.g., "connected", "notconnected")
+
+        Raises:
+            JDCliError: If command fails
+            ValueError: If status cannot be parsed
+        """
+        result = self.run_command(["jupyter-deploy", "host", "status", "--for", "connection"])
+
+        # Parse output for line "Host agent connection status: <status>"
+        for line in result.stdout.splitlines():
+            if line.startswith("Host agent connection status:"):
+                status = line.split(":", 1)[1].strip()
+                status = re.sub(r"\x1b\[[0-9;]*m", "", status)
+                return status
+
+        raise ValueError("Could not parse connection status from command output")
 
     def get_server_status(self) -> str:
         """Get the server status string.

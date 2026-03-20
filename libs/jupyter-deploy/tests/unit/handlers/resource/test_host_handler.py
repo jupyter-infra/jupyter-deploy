@@ -133,6 +133,9 @@ class TestHostHandler(unittest.TestCase):
             handler.connect()
 
         with self.assertRaises(NotImplementedError):
+            handler.get_connection_status()
+
+        with self.assertRaises(NotImplementedError):
             handler.exec_command(["echo", "hello"])
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
@@ -222,6 +225,9 @@ class TestHostHandler(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             handler.connect()
+
+        with self.assertRaises(RuntimeError):
+            handler.get_connection_status()
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
@@ -543,3 +549,32 @@ class TestHostHandler(unittest.TestCase):
         mock_cmd_runner_fns["get_result_value_with_fallback"].assert_called_once_with(
             mock_cmd, "host.exec.returncode", int, 0
         )
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_get_connection_status_returns_status(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        mock_manifest, mock_manifest_fns = self.get_mock_manifest_and_fns()
+        mock_cmd = Mock()
+        mock_manifest_fns["get_command"].return_value = mock_cmd
+        mock_retrieve_manifest.return_value = mock_manifest
+        mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
+        mock_tf_variables_handler.return_value = Mock()
+
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_fns["get_result_value"].return_value = "connected"
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        handler = HostHandler(display_manager=NullDisplay())
+        result = handler.get_connection_status()
+
+        self.assertEqual(result, "connected")
+        mock_manifest_fns["get_command"].assert_called_once_with("host.status-for-connection")
+        mock_cmd_runner_fns["get_result_value"].assert_called_once_with(mock_cmd, "host.status-for-connection", str)

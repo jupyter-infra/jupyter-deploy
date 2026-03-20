@@ -4,7 +4,9 @@ from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.engine.terraform import tf_outputs, tf_variables
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
 from jupyter_deploy.provider import manifest_command_runner as cmd_runner
-from jupyter_deploy.provider.resolved_clidefs import ListStrResolvedCliParameter
+from jupyter_deploy.provider.resolved_clidefs import (
+    ListStrResolvedCliParameter,
+)
 
 
 class HostHandler(BaseProjectHandler):
@@ -74,6 +76,17 @@ class HostHandler(BaseProjectHandler):
             command,
             cli_paramdefs={},
         )
+
+    def get_connection_status(self) -> str:
+        """Returns the Session Manager connection status of the host."""
+        command = self.project_manifest.get_command("host.status-for-connection")
+        runner = cmd_runner.ManifestCommandRunner(
+            display_manager=self.display_manager,
+            output_handler=self._output_handler,
+            variable_handler=self._variable_handler,
+        )
+        runner.run_command_sequence(command, cli_paramdefs={})
+        return runner.get_result_value(command, "host.status-for-connection", str)
 
     def connect(self) -> None:
         """Start an SSH-style connection to the host."""
