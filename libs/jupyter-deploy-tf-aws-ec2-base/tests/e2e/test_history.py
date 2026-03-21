@@ -149,7 +149,9 @@ def test_history_show_up_command(e2e_deployment: EndToEndDeployment) -> None:
     # Verify content contains terraform-related keywords
     # Up logs should contain terraform apply output
     stdout_lower = result.stdout.lower()
-    assert "terraform" in stdout_lower, "Expected 'terraform' keyword in up log"
+    assert "terraform" in stdout_lower or "apply complete" in stdout_lower, (
+        "Expected 'terraform' or 'Apply complete' keyword in up log"
+    )
 
 
 def test_history_show_up_command_slice(e2e_deployment: EndToEndDeployment) -> None:

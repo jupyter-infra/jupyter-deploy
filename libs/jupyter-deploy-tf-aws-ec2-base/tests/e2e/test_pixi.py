@@ -82,13 +82,13 @@ def test_pixi_install_and_persist(
     notebook_path = notebook_dir / "pixi_install_libraries.ipynb"
 
     # Upload the notebook
-    upload_notebook(e2e_deployment, notebook_path, "e2e-test/pixi_install_libraries.ipynb")
+    server_path = upload_notebook(e2e_deployment, notebook_path, "e2e-test/pixi_install_libraries.ipynb")
 
     # Run the notebook in the UI
-    run_notebook_in_jupyterlab(github_oauth_app.page, "e2e-test/pixi_install_libraries.ipynb", timeout_ms=120000)
+    run_notebook_in_jupyterlab(github_oauth_app.page, server_path, timeout_ms=120000)
 
     # Clean up - delete the notebook
-    delete_notebook(e2e_deployment, "e2e-test/pixi_install_libraries.ipynb")
+    delete_notebook(e2e_deployment, server_path)
 
     # Restart server to verify persistence
     e2e_deployment.cli.run_command(["jupyter-deploy", "server", "restart"])

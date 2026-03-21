@@ -74,13 +74,13 @@ def test_uv_install_and_persist(
     notebook_path = notebook_dir / "uv_install_ipywidgets.ipynb"
 
     # Upload the notebook
-    upload_notebook(e2e_deployment, notebook_path, "e2e-test/uv_install_ipywidgets.ipynb")
+    server_path = upload_notebook(e2e_deployment, notebook_path, "e2e-test/uv_install_ipywidgets.ipynb")
 
     # Run the notebook in the UI
-    run_notebook_in_jupyterlab(github_oauth_app.page, "e2e-test/uv_install_ipywidgets.ipynb", timeout_ms=120000)
+    run_notebook_in_jupyterlab(github_oauth_app.page, server_path, timeout_ms=120000)
 
     # Clean up - delete the notebook
-    delete_notebook(e2e_deployment, "e2e-test/uv_install_ipywidgets.ipynb")
+    delete_notebook(e2e_deployment, server_path)
 
     # Restart server to verify persistence
     e2e_deployment.cli.run_command(["jupyter-deploy", "server", "restart"])

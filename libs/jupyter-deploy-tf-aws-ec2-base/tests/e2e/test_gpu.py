@@ -147,17 +147,15 @@ def test_run_gpu_notebook(
     gpu_notebook = notebook_dir / "gpu_check.ipynb"
 
     # Upload the notebook
-    upload_notebook(e2e_deployment, gpu_notebook, "e2e-test/gpu_check.ipynb")
+    server_path = upload_notebook(e2e_deployment, gpu_notebook, "e2e-test/gpu_check.ipynb")
 
     # Run the notebook in the UI
     # Note: torch installation via pixi takes ~90s, so use 5min timeout to account for network variability
     # Use longer poll interval (5s) since this notebook takes much longer to execute
-    run_notebook_in_jupyterlab(
-        github_oauth_app.page, "e2e-test/gpu_check.ipynb", timeout_ms=300000, poll_interval_ms=5000
-    )
+    run_notebook_in_jupyterlab(github_oauth_app.page, server_path, timeout_ms=300000, poll_interval_ms=5000)
 
     # Clean up - delete the notebook
-    delete_notebook(e2e_deployment, "e2e-test/gpu_check.ipynb")
+    delete_notebook(e2e_deployment, server_path)
 
     # Verify torch was installed by the notebook
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "server", "exec", "--", "pixi", "list"])
