@@ -32,6 +32,11 @@ output "github_bot_account_recovery_codes_secret_arn" {
   value       = module.github_bot_account_recovery_codes.secret_arn
 }
 
+output "github_bot_account_totp_secret_secret_arn" {
+  description = "ARN of the Secrets Manager secret for GitHub bot account TOTP seed."
+  value       = module.github_bot_account_totp_secret.secret_arn
+}
+
 # OAuth app client IDs (x5) — SSM parameters
 output "github_oauth_app_client_id_1_arn" {
   description = "ARN of the SSM parameter for GitHub OAuth app #1 client ID."

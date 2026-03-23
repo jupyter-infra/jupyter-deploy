@@ -15,7 +15,7 @@ def test_project_is_configurable(e2e_deployment: EndToEndDeployment) -> None:
     1. Creating a temporary project directory (in /tmp)
     2. Running `jd init` to initialize the project
     3. Copying the test configuration variables
-    4. Running `jd config -s` to configure the project
+    4. Running `jd config` to configure the project
     5. Verifying that configuration completes without errors
     """
     with undeployed_project(e2e_deployment.suite_config) as (project_path, cli):

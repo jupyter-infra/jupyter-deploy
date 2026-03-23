@@ -674,7 +674,7 @@ class TestWriteYamlFileWithComments(unittest.TestCase):
                 ],
                 "required_sensitive": [
                     "  # either assign values below",
-                    "  # or run 'jd config -s' to use the interactive experience",
+                    "  # or run 'jd config' to use the interactive experience",
                 ],
                 "overrides": [
                     "  # set variable values as <variable-name>: <variable-value>",

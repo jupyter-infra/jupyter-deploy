@@ -122,6 +122,7 @@ This project:
 | maintainer_roles | `list(string)` | `["Admin"]` | IAM role names that may manage all secrets |
 | github_bot_account_password | `string` | Required (sensitive) | Password for the GitHub bot account |
 | github_bot_account_recovery_codes | `string` | Required (sensitive) | Recovery codes for the GitHub bot account |
+| github_bot_account_totp_secret | `string` | Required (sensitive) | TOTP seed (base32) for the GitHub bot account 2FA |
 | github_oauth_app_1..5 | `map(string)` | Required | OAuth app metadata: client_id, app_id, app_url, callback_url |
 | github_oauth_app_client_secret_1..5 | `string` | Required (sensitive) | GitHub OAuth app client secrets |
 
@@ -134,6 +135,7 @@ This project:
 | `auth_state_secret_arn` | ARN of the Secrets Manager secret for Playwright auth state |
 | `github_bot_account_password_secret_arn` | ARN of the secret for GitHub bot account password |
 | `github_bot_account_recovery_codes_secret_arn` | ARN of the secret for GitHub bot account recovery codes |
+| `github_bot_account_totp_secret_secret_arn` | ARN of the secret for GitHub bot account TOTP seed |
 | `github_oauth_app_client_id_1..5_arn` | ARNs of the SSM parameters for OAuth app client IDs |
 | `github_oauth_app_client_secret_1..5_arn` | ARNs of the secrets for OAuth app client secrets |
 

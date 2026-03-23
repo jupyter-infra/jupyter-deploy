@@ -28,7 +28,7 @@ def test_project_is_configurable(e2e_deployment: EndToEndDeployment) -> None:
     1. Creating a temporary project directory (in /tmp)
     2. Running `jd init` to initialize the project
     3. Copying the test configuration variables
-    4. Running `jd config -s` to configure the project
+    4. Running `jd config` to configure the project
     5. Verifying that configuration completes without errors
 
     This is particularly useful for LLM-driven template development to ensure
@@ -39,7 +39,7 @@ def test_project_is_configurable(e2e_deployment: EndToEndDeployment) -> None:
     - The log file path for debugging
     """
     with undeployed_project(e2e_deployment.suite_config) as (project_path, cli):
-        # Run jd config -s and save logs (using the custom cli)
+        # Run jd config and save logs (using the custom cli)
         # This will raise RuntimeError with helpful paths if it fails.
         # Pass the cli from undeployed_project context manager to ensure
         # that any JD calls is made against the /tmp dir.

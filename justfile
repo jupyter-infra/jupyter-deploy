@@ -542,6 +542,10 @@ auth-import ci_dir="sandbox-ci":
 auth-check:
     uv run python scripts/sync_auth_state.py check
 
+# Generate a 2FA code for the GitHub bot account (requires oathtool)
+auth-2fa-code ci_dir="sandbox-ci":
+    @uv run python scripts/auth_2fa_code.py {{ci_dir}}
+
 # Generate .env for base template E2E tests from deployed project + CI infrastructure
 # Reads variables from the project, OAuth creds from CI, and accepts user options
 # Usage: just env-setup-base <project-dir> [ci-dir] [oauth-app-num] [options]

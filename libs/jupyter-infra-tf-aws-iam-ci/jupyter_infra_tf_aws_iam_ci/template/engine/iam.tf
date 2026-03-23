@@ -55,6 +55,7 @@ locals {
   bot_account_secret_arns = [
     module.github_bot_account_password.secret_arn,
     module.github_bot_account_recovery_codes.secret_arn,
+    module.github_bot_account_totp_secret.secret_arn,
   ]
 
   # All Secrets Manager ARNs (for deny-policy-edit)
@@ -77,6 +78,7 @@ locals {
   bot_account_secret_arns_map = {
     password       = module.github_bot_account_password.secret_arn
     recovery_codes = module.github_bot_account_recovery_codes.secret_arn
+    totp_secret    = module.github_bot_account_totp_secret.secret_arn
   }
 }
 
