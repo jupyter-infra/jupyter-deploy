@@ -33,8 +33,9 @@ locals {
     aws_secretsmanager_secret.auth_state.arn,
   ]
 
-  # OAuth client ID SSM parameter ARNs — GitHub roles get read-only
-  oauth_client_id_ssm_arns = [
+  # SSM parameter ARNs — GitHub roles get read-only
+  ssm_parameter_ro_arns = [
+    module.github_bot_account_email.parameter_arn,
     module.github_oauth_app_client_id_1.parameter_arn,
     module.github_oauth_app_client_id_2.parameter_arn,
     module.github_oauth_app_client_id_3.parameter_arn,
@@ -51,12 +52,22 @@ locals {
     module.github_oauth_app_client_secret_5.secret_arn,
   ]
 
-  # Bot account secrets — GitHub roles get NO access
-  bot_account_secret_arns = [
+  # Bot account auth secrets — GitHub roles get read-only (needed for automated login)
+  bot_account_auth_secret_arns = [
     module.github_bot_account_password.secret_arn,
-    module.github_bot_account_recovery_codes.secret_arn,
     module.github_bot_account_totp_secret.secret_arn,
   ]
+
+  # Bot account protected secrets — GitHub roles get NO access
+  bot_account_protected_secret_arns = [
+    module.github_bot_account_recovery_codes.secret_arn,
+  ]
+
+  # All bot account secrets (for resource-based deny policies)
+  bot_account_secret_arns = concat(
+    local.bot_account_auth_secret_arns,
+    local.bot_account_protected_secret_arns,
+  )
 
   # All Secrets Manager ARNs (for deny-policy-edit)
   all_secrets_arns = concat(
@@ -74,12 +85,22 @@ locals {
     client_secret_5 = module.github_oauth_app_client_secret_5.secret_arn
   }
 
-  # Map of bot account secrets for resource-based full-deny policy
-  bot_account_secret_arns_map = {
-    password       = module.github_bot_account_password.secret_arn
-    recovery_codes = module.github_bot_account_recovery_codes.secret_arn
-    totp_secret    = module.github_bot_account_totp_secret.secret_arn
+  # Map of bot auth secrets — CI roles get read, resource policy denies all else
+  bot_account_auth_secret_arns_map = {
+    password    = module.github_bot_account_password.secret_arn
+    totp_secret = module.github_bot_account_totp_secret.secret_arn
   }
+
+  # Map of bot protected secrets — maintainer only, no CI access
+  bot_account_protected_secret_arns_map = {
+    recovery_codes = module.github_bot_account_recovery_codes.secret_arn
+  }
+
+  # CI role ARNs (for resource-based policy exceptions)
+  ci_role_arns = [
+    module.role_ci_e2e.role_arn,
+    module.role_ci_release.role_arn,
+  ]
 }
 
 # CI E2E role — used by E2E test workflows
@@ -93,9 +114,9 @@ module "role_ci_e2e" {
   github_repo           = var.github_repo
   oidc_trust_subject    = "environment:e2e"
   secrets_rw_arns       = local.auth_state_arns
-  secrets_ro_arns       = local.oauth_client_secret_arns
+  secrets_ro_arns       = concat(local.oauth_client_secret_arns, local.bot_account_auth_secret_arns)
   secrets_all_arns      = local.all_secrets_arns
-  ssm_parameter_ro_arns = local.oauth_client_id_ssm_arns
+  ssm_parameter_ro_arns = local.ssm_parameter_ro_arns
   managed_policy_arns = [
     for name in var.iam_managed_policies_e2e :
     "arn:${data.aws_partition.current.partition}:iam::aws:policy/${name}"
@@ -114,9 +135,9 @@ module "role_ci_release" {
   github_repo           = var.github_repo
   oidc_trust_subject    = "environment:release"
   secrets_rw_arns       = local.auth_state_arns
-  secrets_ro_arns       = local.oauth_client_secret_arns
+  secrets_ro_arns       = concat(local.oauth_client_secret_arns, local.bot_account_auth_secret_arns)
   secrets_all_arns      = local.all_secrets_arns
-  ssm_parameter_ro_arns = local.oauth_client_id_ssm_arns
+  ssm_parameter_ro_arns = local.ssm_parameter_ro_arns
   managed_policy_arns = [
     for name in var.iam_managed_policies_release :
     "arn:${data.aws_partition.current.partition}:iam::aws:policy/${name}"

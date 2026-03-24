@@ -40,9 +40,66 @@ resource "aws_secretsmanager_secret_policy" "oauth_write_restricted" {
   })
 }
 
-# Bot account secrets: deny all access to everyone except maintainers
-resource "aws_secretsmanager_secret_policy" "bot_account_restricted" {
-  for_each   = local.bot_account_secret_arns_map
+# Bot auth secrets (password, TOTP): CI roles get read-only, everything else denied.
+# Two statements enforce least privilege:
+# 1. Deny read except maintainers + CI roles
+# 2. Deny write/admin except maintainers only
+resource "aws_secretsmanager_secret_policy" "bot_auth_restricted" {
+  for_each   = local.bot_account_auth_secret_arns_map
+  secret_arn = each.value
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyReadExceptMaintainersAndCI"
+        Effect    = "Deny"
+        Principal = "*"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+        ]
+        Resource = "*"
+        Condition = {
+          ArnNotLike = {
+            "aws:PrincipalArn" = concat(
+              local.secrets_admin_principal_arns,
+              local.ci_role_arns,
+            )
+          }
+        }
+      },
+      {
+        Sid       = "DenyWriteExceptMaintainers"
+        Effect    = "Deny"
+        Principal = "*"
+        Action = [
+          "secretsmanager:PutSecretValue",
+          "secretsmanager:UpdateSecret",
+          "secretsmanager:DeleteSecret",
+          "secretsmanager:ListSecretVersionIds",
+          "secretsmanager:RestoreSecret",
+          "secretsmanager:TagResource",
+          "secretsmanager:UntagResource",
+          "secretsmanager:RotateSecret",
+          "secretsmanager:CancelRotateSecret",
+          "secretsmanager:ReplicateSecretToRegions",
+          "secretsmanager:RemoveRegionsFromReplication",
+        ]
+        Resource = "*"
+        Condition = {
+          ArnNotLike = {
+            "aws:PrincipalArn" = local.secrets_admin_principal_arns
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Bot protected secrets (recovery codes): deny all access to everyone except maintainers
+resource "aws_secretsmanager_secret_policy" "bot_protected_restricted" {
+  for_each   = local.bot_account_protected_secret_arns_map
   secret_arn = each.value
 
   policy = jsonencode({

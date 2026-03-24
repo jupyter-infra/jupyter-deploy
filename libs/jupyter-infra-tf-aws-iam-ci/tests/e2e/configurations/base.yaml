@@ -2,6 +2,7 @@ schema_version: 1
 required:
   github_org: "fake-test-org"
   github_repo: "fake-test-repo"
+  github_bot_account_email: "fake-bot@example.com"
   github_oauth_app_1:
     client_id: "Aa00000000000000test"
     app_id: "100001"

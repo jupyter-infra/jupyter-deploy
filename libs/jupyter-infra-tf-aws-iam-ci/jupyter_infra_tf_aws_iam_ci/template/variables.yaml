@@ -4,6 +4,7 @@ required:
   # or run 'jd config' to use the interactive experience
   github_org: null
   github_repo: null
+  github_bot_account_email: null
   github_oauth_app_1: {}
   github_oauth_app_2: {}
   github_oauth_app_3: {}

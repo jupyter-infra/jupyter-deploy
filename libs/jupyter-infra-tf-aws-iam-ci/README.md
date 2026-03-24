@@ -69,6 +69,7 @@ This project:
 - hardens each role with deny statements preventing secret resource policy editing
 - creates a Secrets Manager secret for Playwright auth state (read/write by CI roles, no initial value)
 - creates Secrets Manager secrets for the GitHub bot account password and recovery codes (maintainer-only access)
+- creates an SSM parameter for the GitHub bot account email (read-only by CI roles)
 - creates 5 SSM parameters for OAuth app client IDs (read-only by CI roles)
 - creates 5 Secrets Manager secrets for OAuth app client secrets (read-only by CI roles)
 - seeds secret values via `local-exec` provisioner to keep them out of Terraform state
@@ -120,6 +121,7 @@ This project:
 | iam_managed_policies_e2e | `list(string)` | `["AdministratorAccess"]` | AWS managed policy names to attach to the E2E role |
 | iam_managed_policies_release | `list(string)` | `["AdministratorAccess"]` | AWS managed policy names to attach to the release role |
 | maintainer_roles | `list(string)` | `["Admin"]` | IAM role names that may manage all secrets |
+| github_bot_account_email | `string` | Required | Email address of the GitHub bot account (stored in SSM Parameter Store) |
 | github_bot_account_password | `string` | Required (sensitive) | Password for the GitHub bot account |
 | github_bot_account_recovery_codes | `string` | Required (sensitive) | Recovery codes for the GitHub bot account |
 | github_bot_account_totp_secret | `string` | Required (sensitive) | TOTP seed (base32) for the GitHub bot account 2FA |
@@ -136,6 +138,7 @@ This project:
 | `github_bot_account_password_secret_arn` | ARN of the secret for GitHub bot account password |
 | `github_bot_account_recovery_codes_secret_arn` | ARN of the secret for GitHub bot account recovery codes |
 | `github_bot_account_totp_secret_secret_arn` | ARN of the secret for GitHub bot account TOTP seed |
+| `github_bot_account_email_arn` | ARN of the SSM parameter for GitHub bot account email |
 | `github_oauth_app_client_id_1..5_arn` | ARNs of the SSM parameters for OAuth app client IDs |
 | `github_oauth_app_client_secret_1..5_arn` | ARNs of the secrets for OAuth app client secrets |
 

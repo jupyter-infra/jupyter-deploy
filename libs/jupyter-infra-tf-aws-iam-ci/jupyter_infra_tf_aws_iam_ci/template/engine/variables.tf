@@ -110,6 +110,17 @@ variable "create_oidc_provider" {
   type        = bool
 }
 
+variable "github_bot_account_email" {
+  description = <<-EOT
+    Email address of the GitHub bot account used by E2E CI.
+
+    Stored in SSM Parameter Store for retrieval by CI workflows.
+
+    Example: my-bot@example.com
+  EOT
+  type        = string
+}
+
 variable "github_bot_account_password" {
   description = <<-EOT
     Password for the GitHub bot account used by E2E CI.
