@@ -56,7 +56,7 @@ def fetch_secrets_and_configure(ci_dir: Path) -> None:
     config_args: list[str] = []
 
     # Fetch bot account secrets
-    for var in ("github_bot_account_password", "github_bot_account_recovery_codes"):
+    for var in ("github_bot_account_password", "github_bot_account_recovery_codes", "github_bot_account_totp_secret"):
         arn = jd_output(f"{var}_secret_arn", ci_dir_str)
         val = fetch_value(arn)
         flag = f"--{var.replace('_', '-')}"
