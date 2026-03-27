@@ -524,6 +524,17 @@ test-e2e-ci project_dir="sandbox-e2e-ci" test_filter="" options="":
 auth-setup-base project_dir display="${DISPLAY:-}":
     @just auth-setup {{project_dir}} "{{display}}"
 
+# Initialize a new base template project directory
+init-base project_dir:
+    uv run jd init {{project_dir}}
+
+# Configure a base template project using CI OAuth app settings
+# Usage: just config-base-from-ci <project-dir> [ci-dir] [oauth-app-num] [allowed-usernames]
+# Example: just config-base-from-ci sandbox-base sandbox-ci 1
+# Example: just config-base-from-ci sandbox-base sandbox-ci 1 '["bot-user","admin"]'
+config-base-from-ci project_dir ci_dir="sandbox-ci" oauth_app_num="1" allowed_usernames="":
+    uv run python scripts/config_base_from_ci.py {{project_dir}} {{ci_dir}} {{oauth_app_num}} "{{allowed_usernames}}"
+
 # --- CI infrastructure commands ---
 
 # Discover and restore CI project from S3 store
