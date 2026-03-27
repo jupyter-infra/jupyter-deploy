@@ -12,6 +12,7 @@ from playwright.sync_api import Page
 from pytest_jupyter_deploy import constants
 from pytest_jupyter_deploy.constants import DEPLOY_TIMEOUT_SECONDS, DESTROY_TIMEOUT_SECONDS
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
+from pytest_jupyter_deploy.oauth2_proxy.ci_credentials import fetch_ci_credentials
 from pytest_jupyter_deploy.oauth2_proxy.github import GitHubOAuth2ProxyApplication
 from pytest_jupyter_deploy.suite_config import SuiteConfig
 
@@ -100,7 +101,13 @@ def pytest_addoption(parser: Any) -> None:
         "--ci",
         action="store_true",
         default=False,
-        help="CI mode: use GITHUB_USERNAME/GITHUB_PASSWORD for authentication without 2FA",
+        help="CI mode: automated authentication via 2FA using CI infrastructure project (requires --ci-dir)",
+    )
+    add_option_if_not_exists(
+        "--ci-dir",
+        action="store",
+        default=None,
+        help="Path to CI infrastructure project (required with --ci for credential fetching)",
     )
     add_option_if_not_exists(
         "--with-mutating-cases",
@@ -249,14 +256,7 @@ def handle_browser_context_args(browser_context_args: dict[str, Any], request: p
     Returns:
         Updated browser context args with storage_state if available
     """
-    # Check if running in CI mode
-    is_ci = request.config.getoption("--ci", default=False)
-
-    # Skip loading storage state in CI mode (will use username/password login)
-    if is_ci:
-        return {**browser_context_args}
-
-    # Load storage state if file exists
+    # Always load storage state if available (both CI and local try cookies first)
     storage_state_path = Path.cwd() / constants.AUTH_DIR / constants.GITHUB_OAUTH_STATE_FILE
 
     if storage_state_path.exists():
@@ -299,6 +299,21 @@ def github_oauth_app(
     # Get CI mode from pytest option
     is_ci = request.config.getoption("--ci", default=False)
 
+    ci_email: str | None = None
+    ci_password: str | None = None
+    ci_totp_fn: Callable[[], str] | None = None
+    if is_ci:
+        ci_dir = request.config.getoption("--ci-dir")
+        if not ci_dir:
+            raise pytest.UsageError("--ci requires --ci-dir <path> for credential fetching")
+        ci_email, ci_password, ci_totp_fn = fetch_ci_credentials(ci_dir)
+
     return GitHubOAuth2ProxyApplication(
-        page=page, jupyterlab_url=jupyterlab_url, storage_state_path=storage_state_path, is_ci=is_ci
+        page=page,
+        jupyterlab_url=jupyterlab_url,
+        storage_state_path=storage_state_path,
+        is_ci=is_ci,
+        ci_email=ci_email,
+        ci_password=ci_password,
+        ci_totp_fn=ci_totp_fn,
     )

@@ -11,6 +11,7 @@ RUN apt-get update && \
     curl \
     jq \
     git \
+    oathtool \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Terraform

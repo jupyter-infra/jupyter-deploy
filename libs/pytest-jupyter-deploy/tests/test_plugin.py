@@ -95,19 +95,27 @@ def test_e2e_deployment_fixture_yields_value(pytester: Any) -> None:
     result.assert_outcomes(passed=1)
 
 
-def test_handle_browser_args_noop_with_ci_flag() -> None:
-    """Test that handle_browser_context_args returns base args unchanged when --ci flag is set."""
-    # Mock request with --ci flag set
+def test_handle_browser_args_loads_storage_state_in_ci_mode(tmp_path: Path) -> None:
+    """Test that handle_browser_context_args loads storage state even in CI mode."""
+    # Create a mock auth file
+    auth_dir = tmp_path / constants.AUTH_DIR
+    auth_dir.mkdir()
+    auth_file = auth_dir / constants.GITHUB_OAUTH_STATE_FILE
+    auth_file.write_text(json.dumps({"cookies": [{"name": "test", "value": "data"}]}))
+
+    # Mock request (CI mode — no longer skips storage state)
     mock_request = Mock()
-    mock_request.config.getoption.return_value = True  # CI mode enabled
 
     base_args = {"viewport": {"width": 1920, "height": 1080}}
 
-    result = handle_browser_context_args(base_args, mock_request)
+    with patch("pytest_jupyter_deploy.plugin.Path.cwd", return_value=tmp_path):
+        result = handle_browser_context_args(base_args, mock_request)
 
-    # Should return base args unchanged (storage_state not added even if file exists)
-    assert result == base_args
-    mock_request.config.getoption.assert_called_once_with("--ci", default=False)
+    # CI mode should now also load storage state (cookies-first approach)
+    assert result == {
+        "viewport": {"width": 1920, "height": 1080},
+        "storage_state": str(auth_file),
+    }
 
 
 def test_handle_browser_args_reads_auth_file_and_return_combined_results(tmp_path: Path) -> None:
@@ -118,9 +126,8 @@ def test_handle_browser_args_reads_auth_file_and_return_combined_results(tmp_pat
     auth_file = auth_dir / constants.GITHUB_OAUTH_STATE_FILE
     auth_file.write_text(json.dumps({"cookies": [{"name": "test", "value": "data"}]}))
 
-    # Mock request with CI mode disabled
+    # Mock request
     mock_request = Mock()
-    mock_request.config.getoption.return_value = False  # CI mode disabled
 
     base_args = {"viewport": {"width": 1920, "height": 1080}}
 
@@ -133,14 +140,12 @@ def test_handle_browser_args_reads_auth_file_and_return_combined_results(tmp_pat
         "viewport": {"width": 1920, "height": 1080},
         "storage_state": str(auth_file),
     }
-    mock_request.config.getoption.assert_called_once_with("--ci", default=False)
 
 
 def test_handle_browser_args_noop_when_auth_file_is_missing(tmp_path: Path) -> None:
     """Test that handle_browser_context_args returns base args when auth file doesn't exist."""
-    # Mock request with CI mode disabled
+    # Mock request
     mock_request = Mock()
-    mock_request.config.getoption.return_value = False  # CI mode disabled
 
     base_args = {"viewport": {"width": 1920, "height": 1080}}
 
@@ -150,4 +155,3 @@ def test_handle_browser_args_noop_when_auth_file_is_missing(tmp_path: Path) -> N
 
     # Should return base args unchanged (no storage_state added)
     assert result == base_args
-    mock_request.config.getoption.assert_called_once_with("--ci", default=False)

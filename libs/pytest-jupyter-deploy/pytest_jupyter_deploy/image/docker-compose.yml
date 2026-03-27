@@ -36,9 +36,6 @@ services:
       - AWS_PROFILE=${AWS_PROFILE:-default}
       - AWS_CONFIG_FILE=/home/testuser/.aws/config
       - AWS_SHARED_CREDENTIALS_FILE=/home/testuser/.aws/credentials
-      # GitHub credentials (for CI OAuth login without 2FA)
-      - GITHUB_USERNAME=${GITHUB_USERNAME:-}
-      - GITHUB_PASSWORD=${GITHUB_PASSWORD:-}
     network_mode: host
     # Keep container running in background
     command: sleep infinity

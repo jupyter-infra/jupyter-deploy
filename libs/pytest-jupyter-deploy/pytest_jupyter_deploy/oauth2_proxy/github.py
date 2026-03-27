@@ -2,8 +2,8 @@
 
 import contextlib
 import logging
-import os
 import time
+from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -16,7 +16,14 @@ class GitHubOAuth2ProxyApplication:
     """Helper class for authenticating through GitHub OAuth2 Proxy."""
 
     def __init__(
-        self, page: Page, jupyterlab_url: str, storage_state_path: Path | None = None, is_ci: bool = False
+        self,
+        page: Page,
+        jupyterlab_url: str,
+        storage_state_path: Path | None = None,
+        is_ci: bool = False,
+        ci_email: str | None = None,
+        ci_password: str | None = None,
+        ci_totp_fn: Callable[[], str] | None = None,
     ) -> None:
         """Initialize the GitHub OAuth2 Proxy application helper.
 
@@ -24,12 +31,18 @@ class GitHubOAuth2ProxyApplication:
             page: Playwright Page instance
             jupyterlab_url: The JupyterLab URL behind OAuth2 Proxy
             storage_state_path: Optional path to save/load browser storage state for auth persistence
-            is_ci: Whether running in CI environment (uses GITHUB_USERNAME/GITHUB_PASSWORD)
+            is_ci: Whether running in CI environment (automated 2FA via CI infrastructure)
+            ci_email: GitHub bot account email (CI mode only)
+            ci_password: GitHub bot account password (CI mode only)
+            ci_totp_fn: Callable that returns a fresh TOTP code (CI mode only, called just-in-time)
         """
         self.page = page
         self.jupyterlab_url = jupyterlab_url
         self.storage_state_path = storage_state_path
         self.is_ci = is_ci
+        self._ci_email = ci_email
+        self._ci_password = ci_password
+        self._ci_totp_fn = ci_totp_fn
 
     def _navigate_with_retry(
         self, url: str, timeout: int = 60000, wait_until: str = "load", max_retries: int = 3
@@ -156,8 +169,7 @@ class GitHubOAuth2ProxyApplication:
                     "  1. Run: just auth-setup <project-dir>\n"
                     "  2. Complete authentication in the browser\n"
                     "  3. Re-run tests\n\n"
-                    "For CI without 2FA:\n"
-                    "  Use --ci flag and set GITHUB_USERNAME and GITHUB_PASSWORD environment variables"
+                    "For CI: use --ci --ci-dir <path> for automated 2FA authentication"
                 )
                 raise RuntimeError(error_msg) from None
         except Exception as e:
@@ -171,8 +183,7 @@ class GitHubOAuth2ProxyApplication:
                 "  1. Run: just auth-setup <project-dir>\n"
                 "  2. Complete authentication in the browser\n"
                 "  3. Re-run tests\n\n"
-                "For CI without 2FA:\n"
-                "  Use --ci flag and set GITHUB_USERNAME and GITHUB_PASSWORD environment variables"
+                "For CI: use --ci --ci-dir <path> for automated 2FA authentication"
             )
             raise RuntimeError(error_msg) from e
 
@@ -202,19 +213,16 @@ class GitHubOAuth2ProxyApplication:
         else:
             self._handle_oauth_standard_authorize_page()
 
-    def login_with_auth_session(self) -> None:
-        """Login using saved authentication session from storage state.
+    def _try_auth_session(self) -> bool:
+        """Try authenticating with existing cookies (storage state).
 
-        This method handles two scenarios:
-        1. OAuth2 Proxy session is valid → goes straight to JupyterLab
-        2. OAuth2 Proxy session expired but GitHub cookies valid →
-           clicks "Sign in with GitHub" and GitHub auto-authenticates
+        Navigates to JupyterLab URL and attempts to authenticate using saved cookies.
+        If OAuth2 Proxy or GitHub cookies are valid, completes authentication and returns True.
+        If all cookies are expired and the GitHub login page is reached, returns False
+        with the page left on the GitHub login page for the caller to handle.
 
-        Raises:
-            RuntimeError: If GitHub cookies are also expired (requires manual 2FA)
-            FileNotFoundError: If storage state wasn't loaded
-
-        Note: Run scripts/github_auth_setup.py first to create the storage state file.
+        Returns:
+            True if authentication succeeded via cookies, False if login page reached.
         """
         # Navigate to the JupyterLab URL
         # Storage state should be loaded by browser context at this point
@@ -227,166 +235,139 @@ class GitHubOAuth2ProxyApplication:
         except Exception:
             sign_in_visible = False
 
-        if sign_in_visible:
-            # OAuth2 Proxy session expired, but GitHub cookies might still be valid
-            # Click "Sign in with GitHub" to attempt auto-authentication
-            sign_in_button.click()
-
-            # Wait for redirect - either:
-            # 1. OAuth authorize page → callback → JupyterLab (GitHub cookies valid)
-            # 2. GitHub login page (GitHub cookies expired)
-
-            # Wait for navigation to complete (GitHub OAuth flow)
-            # Network might not go idle if there are ongoing requests
-            with contextlib.suppress(Exception):
-                # Wait for redirect away from OAuth2 Proxy or to complete OAuth flow
-                # This handles: OAuth2 Proxy → GitHub OAuth authorize → callback → JupyterLab
-                self.page.wait_for_load_state("networkidle", timeout=10000)
-
-            # Check current URL
-            current_url = self.page.url
-
-            # Check if we're on GitHub OAuth authorize page
-            if "github.com/login/oauth/authorize" in current_url:
-                # With valid cookies, GitHub should either:
-                # 1. Auto-submit the authorization (approval_prompt=force)
-                # 2. Show an "Authorize" button that we need to click
-                # 3. Show a reauthorization page with a disabled button that becomes enabled
-
-                # Wait a moment for page to load and auto-submit
-                try:
-                    # Check if we're redirected automatically (back to app domain, not GitHub)
-                    self.page.wait_for_url(lambda url: "github.com" not in url, timeout=5000)
-                except Exception:
-                    # Still on authorize page - handle both normal and reauthorization flows
-                    self._handle_oauth_authorize_page()
-            elif "github.com" in current_url and self.jupyterlab_url not in current_url:
-                # We're on some GitHub page but not authorize or JupyterLab
-                # This could be the login page if cookies expired
-                error_msg = (
-                    "GitHub authentication required!\n\n"
-                    "Redirected to GitHub but not on JupyterLab. GitHub cookies may have expired.\n"
-                    f"Current URL: {current_url}\n\n"
-                    "For local development:\n"
-                    "  1. Run: just auth-setup <project-dir>\n"
-                    "  2. Complete authentication in the browser\n"
-                    "  3. Re-run tests\n\n"
-                    "For CI without 2FA:\n"
-                    "  Use --ci flag and set GITHUB_USERNAME and GITHUB_PASSWORD environment variables"
-                )
-                raise RuntimeError(error_msg) from None
-
-            # Save the new OAuth2 Proxy session for future test runs
+        if not sign_in_visible:
+            # OAuth2 Proxy session is valid — already authenticated
             self.save_storage_state()
+            return True
+
+        # OAuth2 Proxy session expired, but GitHub cookies might still be valid
+        # Click "Sign in with GitHub" to attempt auto-authentication
+        sign_in_button.click()
+
+        # Wait for navigation to complete (GitHub OAuth flow)
+        # Network might not go idle if there are ongoing requests
+        with contextlib.suppress(Exception):
+            self.page.wait_for_load_state("networkidle", timeout=10000)
+
+        # Check current URL
+        current_url = self.page.url
+
+        # Check if we're on GitHub OAuth authorize page
+        if "github.com/login/oauth/authorize" in current_url:
+            # With valid cookies, GitHub should either:
+            # 1. Auto-submit the authorization (approval_prompt=force)
+            # 2. Show an "Authorize" button that we need to click
+            # 3. Show a reauthorization page with a disabled button that becomes enabled
+            try:
+                # Check if we're redirected automatically (back to app domain, not GitHub)
+                self.page.wait_for_url(lambda url: "github.com" not in url, timeout=5000)
+            except Exception:
+                # Still on authorize page - handle both normal and reauthorization flows
+                self._handle_oauth_authorize_page()
+
+            # Successfully authenticated via cookies
+            self.save_storage_state()
+            return True
+
+        # Check if we ended up on the GitHub login page (cookies expired)
+        if "github.com" in current_url:
+            # Page is on GitHub login — caller must handle credentials
+            return False
+
+        # We're back on the app domain — authentication succeeded
+        self.save_storage_state()
+        return True
+
+    def login_with_auth_session(self) -> None:
+        """Login using saved authentication session from storage state.
+
+        Tries cookies first. If GitHub cookies are expired, raises RuntimeError
+        with instructions for local development or CI setup.
+
+        Raises:
+            RuntimeError: If GitHub cookies are expired (requires manual setup or CI mode)
+        """
+        if not self._try_auth_session():
+            current_url = self.page.url
+            error_msg = (
+                "GitHub authentication required!\n\n"
+                "Redirected to GitHub but cookies are expired.\n"
+                f"Current URL: {current_url}\n\n"
+                "For local development:\n"
+                "  1. Run: just auth-setup <project-dir>\n"
+                "  2. Complete authentication in the browser\n"
+                "  3. Re-run tests\n\n"
+                "For CI: use --ci --ci-dir <path> for automated 2FA authentication"
+            )
+            raise RuntimeError(error_msg) from None
 
         # Verify we're back on the application domain (not GitHub)
-        # We don't verify JupyterLab is accessible here because the user might be
-        # authenticated but not authorized (403 Forbidden)
         current_url = self.page.url
         if "github.com" in current_url:
             raise RuntimeError(f"Authentication did not complete successfully. Still on GitHub: {current_url}")
 
-    def login_without_2fa(self) -> None:
-        """Login using username/password without 2FA (for CI environments).
+    def login_with_2fa(self, email: str, password: str, totp_fn: Callable[[], str]) -> None:
+        """Login using email, password, and TOTP code (for CI environments with 2FA).
 
-        This method handles three scenarios:
-        1. OAuth2 Proxy session is valid (saved cookies) → goes straight to JupyterLab
-        2. OAuth2 Proxy session expired but GitHub cookies valid → clicks "Sign in with GitHub",
-           GitHub auto-authenticates via OAuth authorize page
-        3. Both sessions expired → performs full username/password login
+        Tries cookies first via _try_auth_session(). If cookies are expired,
+        performs full login: email + password + TOTP code.
 
-        The method:
-        1. Navigates to JupyterLab URL (with any existing cookies from storage state)
-        2. Checks if OAuth2 Proxy sign-in page is shown
-        3. If sign-in required:
-           - Clicks "Sign in with GitHub"
-           - If GitHub cookies valid: GitHub auto-authenticates (or clicks Authorize button)
-           - If GitHub cookies expired: enters username/password
-        4. If already authenticated: skips login (reuses valid OAuth2 Proxy session cookies)
-        5. Saves storage state with fresh cookies for future test runs
-
-        After first successful authentication, subsequent test runs will reuse the saved
-        session cookies (both OAuth2 Proxy and GitHub), avoiding unnecessary authentication.
-
-        Requires environment variables:
-        - GITHUB_USERNAME: GitHub username
-        - GITHUB_PASSWORD: GitHub password
-
-        Raises:
-            ValueError: If environment variables are not set
-
-        Note: Only use this for CI environments with GitHub accounts that have 2FA disabled.
+        Args:
+            email: GitHub account email
+            password: GitHub account password
+            totp_fn: Callable that returns a fresh 6-digit TOTP code (called just-in-time)
         """
-        # Check for required environment variables
-        github_username = os.getenv("GITHUB_USERNAME")
-        github_password = os.getenv("GITHUB_PASSWORD")
+        if self._try_auth_session():
+            logger.info("Authenticated via saved cookies (no 2FA needed)")
+            return
 
-        if not github_username or not github_password:
-            raise ValueError(
-                "GITHUB_USERNAME and GITHUB_PASSWORD environment variables must be set for CI authentication"
-            )
+        # Page is on GitHub login page — fill credentials
+        logger.info("Cookies expired, performing full 2FA login")
+        current_url = self.page.url
+        logger.debug(f"Current URL before login: {current_url}")
 
-        # Navigate to the JupyterLab URL
-        # Storage state should be loaded by browser context at this point
-        self._navigate_with_retry(self.jupyterlab_url, timeout=60000)
+        # Fill in GitHub credentials
+        self.page.fill('input[name="login"]', email)
+        self.page.fill('input[name="password"]', password)
+        self.page.click('input[type="submit"]')
 
-        # Check if we see the OAuth2 Proxy sign-in page
-        sign_in_button = self.page.get_by_role("button", name="Sign in with GitHub")
+        # Wait for TOTP page
+        logger.debug("Waiting for GitHub TOTP page...")
+        self.page.wait_for_url("**/sessions/two-factor/app**", timeout=30000)
+
+        # Generate fresh TOTP code and fill it
+        totp_code = totp_fn()
+        logger.debug("Generated TOTP code, filling...")
+        self.page.fill("#app_totp", totp_code)
+
+        # GitHub may auto-submit on input, or we may need to click
+        # Wait for navigation away from the 2FA page
         try:
-            sign_in_visible = sign_in_button.is_visible(timeout=2000)
+            self.page.wait_for_url(lambda url: "two-factor" not in url, timeout=10000)
         except Exception:
-            sign_in_visible = False
-
-        if sign_in_visible:
-            # OAuth2 Proxy session expired, but GitHub cookies might still be valid
-            # Click "Sign in with GitHub" to attempt auto-authentication
-            sign_in_button.click()
-
-            # Wait for redirect - either:
-            # 1. OAuth authorize page → callback → JupyterLab (GitHub cookies valid)
-            # 2. GitHub login page (GitHub cookies expired)
-
-            # Wait for navigation to complete (GitHub OAuth flow)
+            # Try clicking submit if auto-submit didn't happen
             with contextlib.suppress(Exception):
-                self.page.wait_for_load_state("networkidle", timeout=10000)
+                self.page.click('button[type="submit"]')
+            self.page.wait_for_url(lambda url: "two-factor" not in url, timeout=10000)
 
-            # Check current URL
-            current_url = self.page.url
+        logger.debug(f"Post-2FA URL: {self.page.url}")
 
-            # Check if we're on GitHub OAuth authorize page
-            if "github.com/login/oauth/authorize" in current_url:
-                # With valid cookies, GitHub should either:
-                # 1. Auto-submit the authorization
-                # 2. Show an "Authorize" button that we need to click
-                # 3. Show a reauthorization page with a disabled button that becomes enabled
+        # After 2FA, we may land on:
+        # 1. OAuth authorize page (need to click Authorize)
+        # 2. Directly back to the app (auto-authorized)
+        current_url = self.page.url
+        if "github.com/login/oauth/authorize" in current_url:
+            try:
+                self.page.wait_for_url(lambda url: "github.com" not in url, timeout=5000)
+            except Exception:
+                self._handle_oauth_authorize_page()
+        elif "github.com" in current_url:
+            # Wait a bit for any redirects to complete
+            with contextlib.suppress(Exception):
+                self.page.wait_for_url(lambda url: "github.com" not in url, timeout=10000)
 
-                # Wait a moment for page to load and auto-submit
-                try:
-                    # Check if we're redirected automatically (back to app domain, not GitHub)
-                    self.page.wait_for_url(lambda url: "github.com" not in url, timeout=5000)
-                except Exception:
-                    # Still on authorize page - handle both normal and reauthorization flows
-                    with contextlib.suppress(Exception):
-                        # No authorize button - might need username/password
-                        # Fall through to check if we're on login page below
-                        self._handle_oauth_authorize_page()
-
-            # Check if we're on GitHub login page (GitHub cookies expired)
-            current_url = self.page.url
-            if "github.com/login" in current_url and "oauth" not in current_url:
-                # GitHub cookies expired, need to enter username/password
-                # Fill in GitHub credentials
-                self.page.fill('input[name="login"]', github_username)
-                self.page.fill('input[name="password"]', github_password)
-
-                # Submit the form
-                self.page.click('input[type="submit"]')
-
-                # Wait for authentication to complete and redirect back to application
-                self.page.wait_for_url(f"{self.jupyterlab_url}**", timeout=60000)
-
-        # Save storage state for future test runs (whether we authenticated or used existing session)
         self.save_storage_state()
+        logger.info("2FA login complete, storage state saved")
 
     def verify_jupyterlab_accessible(self) -> None:
         """Verify that JupyterLab is accessible and loaded.
@@ -489,11 +470,13 @@ class GitHubOAuth2ProxyApplication:
         """Ensure the user is authenticated, performing login if necessary.
 
         Uses the appropriate login method based on environment:
-        - CI mode (--is-ci): Uses login_without_2fa() with GITHUB_USERNAME/GITHUB_PASSWORD
+        - CI mode (--ci --ci-dir): Uses login_with_2fa() with automated 2FA credentials
         - Local mode: Uses login_with_auth_session() with saved storage state
         """
         if self.is_ci:
-            self.login_without_2fa()
+            if not self._ci_email or not self._ci_password or not self._ci_totp_fn:
+                raise RuntimeError("CI mode requires credentials. Use --ci --ci-dir <path> to provide them.")
+            self.login_with_2fa(self._ci_email, self._ci_password, self._ci_totp_fn)
         else:
             self.login_with_auth_session()
 
