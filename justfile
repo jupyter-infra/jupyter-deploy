@@ -585,12 +585,14 @@ auth-bot-email ci_dir="sandbox-ci":
 auth-bot-username ci_dir="sandbox-ci":
     @just auth-bot-email {{ci_dir}} | cut -d'@' -f1
 
-# Generate .env for base template E2E tests from deployed project + CI infrastructure
-# Reads variables from the project, OAuth creds from CI, and accepts user options
+# Generate .env for base template E2E tests
+# Two modes:
+#   Existing project: reads deployment variables from the project via `jd show -v`
+#   Fresh deploy:     pass "" as project-dir, provide deployment vars as options
 # Usage: just env-setup-base <project-dir> [ci-dir] [oauth-app-num] [options]
 # Options: comma-separated key=value pairs (same format as test-e2e options)
 # Quote options containing [] values (zsh treats brackets as glob patterns)
 # Example: just env-setup-base sandbox-e2e sandbox-ci 4 user=botuser,safe-user=realuser
-# Example: just env-setup-base sandbox-e2e sandbox-ci 4 'allowed-teams=[team1],user=botuser'
+# Example: just env-setup-base "" sandbox-ci 4 'user=botuser,safe-user=realuser'
 env-setup-base project_dir ci_dir="sandbox-ci" oauth_app_num="1" options="":
-    uv run python scripts/env_setup_base.py {{project_dir}} {{ci_dir}} {{oauth_app_num}} "{{options}}"
+    uv run python scripts/env_setup_base.py "{{project_dir}}" {{ci_dir}} {{oauth_app_num}} "{{options}}"

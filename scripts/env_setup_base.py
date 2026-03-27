@@ -1,18 +1,26 @@
 #!/usr/bin/env python3
-"""Generate .env for base template E2E tests from a deployed project and CI infrastructure.
+"""Generate .env for base template E2E tests.
 
-Reads deployment variables from the base project via `jd show -v`,
-fetches OAuth credentials from CI infrastructure (SSM/Secrets Manager),
-and merges user-supplied options. Options override project-derived values.
+Two modes:
+  1. Existing project: reads deployment variables from the project via `jd show -v`
+  2. Fresh deploy: infers domain/subdomain/email from CI OAuth app metadata and bot account
+
+In both modes, OAuth credentials are fetched from CI infrastructure (SSM/Secrets Manager).
 
 Usage: scripts/env_setup_base.py <project-dir> <ci-dir> <oauth-app-num> [options]
 
-Options are comma-separated key=value pairs (same format as `just test-e2e`).
+Pass an empty string for <project-dir> to use fresh-deploy mode. In this mode, domain,
+subdomain, and email are derived from the OAuth app's homepage_url and the bot account
+email. Access control defaults to: allowed_org="", allowed_teams=[], allowed_usernames=[<bot>].
 
 Examples:
+  # From existing project:
   scripts/env_setup_base.py sandbox-e2e sandbox-ci 4
   scripts/env_setup_base.py sandbox-e2e sandbox-ci 4 user=botuser,safe-user=realuser
-  scripts/env_setup_base.py sandbox-e2e sandbox-ci 4 allowed-usernames=[],allowed-org=my-org
+
+  # Fresh deploy (no project):
+  scripts/env_setup_base.py "" sandbox-ci 4
+  scripts/env_setup_base.py "" sandbox-ci 4 user=botuser,safe-user=realuser
 """
 
 from __future__ import annotations
@@ -23,6 +31,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 from ci_helpers import fetch_value, jd_output
 
@@ -44,7 +53,10 @@ PROJECT_VAR_MAP = {
 # These are user-supplied values passed as key=value arguments
 # Options can override both project-derived and test-only variables
 OPTION_MAP = {
-    # Override project-derived access control variables
+    # Deployment variables (required in fresh-deploy mode, override in existing-project mode)
+    "domain": "JD_E2E_VAR_DOMAIN",
+    "subdomain": "JD_E2E_VAR_SUBDOMAIN",
+    "email": "JD_E2E_VAR_EMAIL",
     "allowed-usernames": "JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES",
     "allowed-org": "JD_E2E_VAR_OAUTH_ALLOWED_ORG",
     "allowed-teams": "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
@@ -114,6 +126,47 @@ def jd_variable(var_name: str, project_dir: str) -> str:
     return normalize_list_value(result.stdout.strip())
 
 
+def infer_deployment_vars(ci_dir: str, oauth_app_num: str) -> dict[str, str]:
+    """Infer deployment variables from CI OAuth app metadata and bot account."""
+    # Read OAuth app metadata to get homepage_url → domain/subdomain
+    result = subprocess.run(
+        ["uv", "run", "jd", "show", "-v", f"github_oauth_app_{oauth_app_num}", "--text", "-p", ci_dir],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    app_meta = ast.literal_eval(result.stdout.strip())
+    homepage_url = app_meta["homepage_url"]
+
+    parsed = urlparse(homepage_url)
+    hostname = parsed.hostname or ""
+    parts = hostname.split(".", 1)
+    if len(parts) != 2:
+        print(f"Error: Cannot extract subdomain.domain from homepage_url: {homepage_url}")
+        sys.exit(1)
+    subdomain = parts[0]
+    domain = parts[1]
+
+    # Read bot email
+    result = subprocess.run(
+        ["uv", "run", "jd", "show", "-v", "github_bot_account_email", "--text", "-p", ci_dir],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    bot_email = result.stdout.strip()
+    bot_username = bot_email.split("@")[0] if "@" in bot_email else bot_email
+
+    return {
+        "JD_E2E_VAR_DOMAIN": domain,
+        "JD_E2E_VAR_SUBDOMAIN": subdomain,
+        "JD_E2E_VAR_EMAIL": bot_email,
+        "JD_E2E_VAR_OAUTH_ALLOWED_ORG": "",
+        "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS": "[]",
+        "JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES": json.dumps([bot_username]),
+    }
+
+
 def set_env_var(key: str, value: str) -> None:
     """Update or append a key=value pair in the .env file."""
     if ENV_FILE.exists():
@@ -171,15 +224,38 @@ def main() -> None:
     # Collect env vars that will be overridden by options (to skip project reads)
     option_env_vars = {OPTION_MAP[k] for k in parsed_options}
 
-    # 1. Read deployment variables from the base project
-    print(f"Reading deployment variables from {project_dir}...")
-    for jd_var, env_var in PROJECT_VAR_MAP.items():
-        if env_var in option_env_vars:
-            print(f"  {env_var} — skipped (overridden by option)")
-            continue
-        value = jd_variable(jd_var, project_dir)
-        set_env_var(env_var, value)
-        print(f"  {env_var}={value}")
+    # 1. Read deployment variables from the base project, or infer from CI
+    if project_dir:
+        print(f"Reading deployment variables from {project_dir}...")
+        for jd_var, env_var in PROJECT_VAR_MAP.items():
+            if env_var in option_env_vars:
+                print(f"  {env_var} — skipped (overridden by option)")
+                continue
+            value = jd_variable(jd_var, project_dir)
+            set_env_var(env_var, value)
+            print(f"  {env_var}={value}")
+    else:
+        print(f"Fresh-deploy mode — inferring deployment variables from CI ({ci_dir})...")
+        inferred = infer_deployment_vars(ci_dir, oauth_app_num)
+        for env_var, value in inferred.items():
+            if env_var in option_env_vars:
+                print(f"  {env_var} — skipped (overridden by option)")
+                continue
+            set_env_var(env_var, value)
+            print(f"  {env_var}={value}")
+
+    # 1b. Set bot username as JD_E2E_USER (unless overridden by option)
+    if "JD_E2E_USER" not in option_env_vars:
+        result = subprocess.run(
+            ["uv", "run", "jd", "show", "-v", "github_bot_account_email", "--text", "-p", ci_dir],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        bot_email = result.stdout.strip()
+        bot_username = bot_email.split("@")[0] if "@" in bot_email else bot_email
+        set_env_var("JD_E2E_USER", bot_username)
+        print(f"  JD_E2E_USER={bot_username} (from bot account)")
 
     # 2. Fetch OAuth credentials from CI infrastructure
     print(f"\nFetching OAuth app #{oauth_app_num} credentials from CI ({ci_dir})...")
