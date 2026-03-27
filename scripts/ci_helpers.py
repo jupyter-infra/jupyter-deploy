@@ -64,3 +64,12 @@ def put_secret_value(arn: str, value: str) -> None:
     region = arn_region(arn)
     client: SecretsManagerClient = boto3.client("secretsmanager", region_name=region)
     client.put_secret_value(SecretId=arn, SecretString=value)
+
+
+def run_jd_config(config_args: list[str], project_dir: str) -> None:
+    """Run jd config with the given arguments in a project directory."""
+    subprocess.run(
+        ["uv", "run", "jd", "config", *config_args],
+        cwd=project_dir,
+        check=True,
+    )
