@@ -1,0 +1,118 @@
+name: E2E base template job
+
+on:
+  workflow_call:
+    inputs:
+      oauth-app-num:
+        description: "OAuth app number (1-3)"
+        required: true
+        type: string
+      test-filter:
+        description: "Pytest -k filter (combined with per-job filter)"
+        required: false
+        type: string
+        default: ""
+      test-file-filter:
+        description: "Per-job test file filter (e.g. test_external_volumes)"
+        required: false
+        type: string
+        default: ""
+      mutate:
+        description: "Enable mutating test cases"
+        required: false
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: "Job timeout in minutes"
+        required: false
+        type: number
+        default: 30
+
+jobs:
+  test:
+    name: Run E2E tests
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.5"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # To get this value: uv run jd show -o e2e_iam_role_arn --text -p sandbox-ci
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Restore base project by subdomain
+        run: just ci-restore-base ${{ inputs.oauth-app-num }} sandbox-ci e2e-base
+
+      - name: Generate .env
+        run: just env-setup-base e2e-base sandbox-ci ${{ inputs.oauth-app-num }}
+
+      - name: Import auth state
+        run: just auth-import sandbox-ci
+
+      - name: Ensure host is running
+        run: just ensure-host-running e2e-base
+
+      - name: Build test filter
+        id: filter
+        run: |
+          FILTER=""
+          # Per-job file filter
+          if [ -n "${{ inputs.test-file-filter }}" ]; then
+            FILTER="${{ inputs.test-file-filter }}"
+          fi
+          # User-provided -k filter
+          if [ -n "${{ inputs.test-filter }}" ]; then
+            if [ -n "$FILTER" ]; then
+              FILTER="${FILTER} and ${{ inputs.test-filter }}"
+            else
+              FILTER="${{ inputs.test-filter }}"
+            fi
+          fi
+          echo "filter=${FILTER}" >> "$GITHUB_OUTPUT"
+
+          # Build options
+          OPTIONS="ci-dir=sandbox-ci"
+          if [ "${{ inputs.mutate }}" = "true" ]; then
+            OPTIONS="mutate=true,${OPTIONS}"
+          fi
+          echo "options=${OPTIONS}" >> "$GITHUB_OUTPUT"
+
+      - name: Run E2E tests
+        run: just test-e2e-base e2e-base "${{ steps.filter.outputs.filter }}" "${{ steps.filter.outputs.options }}"
+
+      - name: Export auth state
+        if: always()
+        run: just auth-export sandbox-ci
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ inputs.test-file-filter || 'non-mutating' }}
+          path: test-results/
+          if-no-files-found: ignore

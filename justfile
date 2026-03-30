@@ -553,9 +553,41 @@ config-base-from-ci project_dir ci_dir="sandbox-ci" oauth_app_num="1" allowed_us
 
 # --- CI infrastructure commands ---
 
+# Ensure the host is running (start if stopped)
+# Usage: just ensure-host-running <project-dir>
+ensure-host-running project_dir:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    STATUS=$(uv run jd host status -p {{project_dir}} 2>&1 || true)
+    echo "$STATUS"
+    if echo "$STATUS" | grep -q "running"; then
+        echo "Host is already running."
+    else
+        echo "Host is not running, starting..."
+        uv run jd host start -p {{project_dir}}
+    fi
+
+# Ensure the host is stopped (stop if running)
+# Usage: just ensure-host-stopped <project-dir>
+ensure-host-stopped project_dir:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    STATUS=$(uv run jd host status -p {{project_dir}} 2>&1 || true)
+    echo "$STATUS"
+    if echo "$STATUS" | grep -q "running"; then
+        uv run jd host stop -p {{project_dir}}
+    else
+        echo "Host is not running, skipping stop."
+    fi
+
 # Discover and restore CI project from S3 store
 ci-restore ci_dir="sandbox-ci":
     uv run python scripts/ci_restore.py {{ci_dir}}
+
+# Find and restore a base template project from S3 by OAuth app subdomain
+# Usage: just ci-restore-base <oauth-app-num> [ci-dir] [project-dir]
+ci-restore-base oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-base":
+    uv run python scripts/ci_restore_base.py {{ci_dir}} {{oauth_app_num}} {{project_dir}}
 
 # Export local auth state to Secrets Manager
 auth-export ci_dir="sandbox-ci":

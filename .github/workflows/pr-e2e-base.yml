@@ -1,0 +1,133 @@
+name: E2E base template
+
+on:
+  workflow_dispatch:
+    inputs:
+      oauth-app-num:
+        description: "OAuth app number (1-3) — determines subdomain"
+        required: false
+        type: choice
+        options: ["1", "2", "3"]
+        default: "1"
+      test-filter:
+        description: "Pytest -k filter (applied to all jobs, empty = all tests)"
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  group: e2e-base
+  cancel-in-progress: false
+
+jobs:
+  test-non-mutating:
+    name: "Non-mutating tests"
+    uses: ./.github/workflows/e2e-base-job.yml
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      timeout-minutes: 120
+
+  test-external-volumes:
+    name: "Mutating: external volumes"
+    needs: test-non-mutating
+    uses: ./.github/workflows/e2e-base-job.yml
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      test-file-filter: test_external_volumes
+      mutate: true
+      timeout-minutes: 30
+
+  test-config-apply:
+    name: "Mutating: config apply"
+    needs: test-external-volumes
+    uses: ./.github/workflows/e2e-base-job.yml
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      test-file-filter: test_config_apply
+      mutate: true
+      timeout-minutes: 30
+
+  test-gpu:
+    name: "Mutating: GPU"
+    needs: test-config-apply
+    uses: ./.github/workflows/e2e-base-job.yml
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      test-file-filter: test_gpu
+      mutate: true
+      timeout-minutes: 60
+
+  test-pixi:
+    name: "Mutating: pixi"
+    needs: test-gpu
+    uses: ./.github/workflows/e2e-base-job.yml
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      test-file-filter: test_pixi
+      mutate: true
+      timeout-minutes: 60
+
+  test-uv:
+    name: "Mutating: uv"
+    needs: test-pixi
+    uses: ./.github/workflows/e2e-base-job.yml
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      test-file-filter: test_uv
+      mutate: true
+      timeout-minutes: 60
+
+  cleanup:
+    name: "Cleanup: stop host"
+    needs:
+      - test-non-mutating
+      - test-external-volumes
+      - test-config-apply
+      - test-gpu
+      - test-pixi
+      - test-uv
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.5"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Restore base project
+        run: just ci-restore-base ${{ inputs.oauth-app-num }} sandbox-ci e2e-base
+
+      - name: Stop host
+        run: just ensure-host-stopped e2e-base
