@@ -66,16 +66,16 @@ jobs:
         run: just ci-restore sandbox-ci
 
       - name: Restore base project by subdomain
-        run: just ci-restore-base ${{ inputs.oauth-app-num }} sandbox-ci e2e-base
+        run: just ci-restore-base ${{ inputs.oauth-app-num }} sandbox-ci sandbox-e2e
 
       - name: Generate .env
-        run: just env-setup-base e2e-base sandbox-ci ${{ inputs.oauth-app-num }}
+        run: just env-setup-base sandbox-e2e sandbox-ci ${{ inputs.oauth-app-num }}
 
       - name: Import auth state
         run: just auth-import sandbox-ci
 
       - name: Ensure host is running
-        run: just ensure-host-running e2e-base
+        run: just ensure-host-running sandbox-e2e
 
       - name: Build test filter
         id: filter
@@ -103,7 +103,7 @@ jobs:
           echo "options=${OPTIONS}" >> "$GITHUB_OUTPUT"
 
       - name: Run E2E tests
-        run: just test-e2e-base e2e-base "${{ steps.filter.outputs.filter }}" "${{ steps.filter.outputs.options }}"
+        run: just test-e2e-base sandbox-e2e "${{ steps.filter.outputs.filter }}" "${{ steps.filter.outputs.options }}"
 
       - name: Export auth state
         if: always()

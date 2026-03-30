@@ -16,7 +16,7 @@ on:
         default: ""
 
 concurrency:
-  group: e2e-base
+  group: e2e-${{ inputs.oauth-app-num }}
   cancel-in-progress: false
 
 jobs:
@@ -127,7 +127,7 @@ jobs:
         run: just ci-restore sandbox-ci
 
       - name: Restore base project
-        run: just ci-restore-base ${{ inputs.oauth-app-num }} sandbox-ci e2e-base
+        run: just ci-restore-base ${{ inputs.oauth-app-num }} sandbox-ci sandbox-e2e
 
       - name: Stop host
-        run: just ensure-host-stopped e2e-base
+        run: just ensure-host-stopped sandbox-e2e
