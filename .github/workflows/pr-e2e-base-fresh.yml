@@ -19,6 +19,11 @@ on:
         required: false
         type: boolean
         default: false
+      ref:
+        description: "Git ref to checkout (e.g. refs/pull/185/merge for a fork PR)"
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: e2e-${{ inputs.oauth-app-num }}
@@ -39,6 +44,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Install UV and Python
         uses: ./.github/actions/install-uv
@@ -79,6 +86,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Install UV and Python
         uses: ./.github/actions/install-uv
@@ -150,18 +159,22 @@ jobs:
     name: "Non-mutating tests"
     needs: deploy-gate
     uses: ./.github/workflows/e2e-base-job.yml
+    secrets: inherit
     with:
       oauth-app-num: ${{ inputs.oauth-app-num }}
       test-filter: ${{ inputs.test-filter }}
+      ref: ${{ inputs.ref }}
       timeout-minutes: 120
 
   test-external-volumes:
     name: "Mutating: external volumes"
     needs: test-non-mutating
     uses: ./.github/workflows/e2e-base-job.yml
+    secrets: inherit
     with:
       oauth-app-num: ${{ inputs.oauth-app-num }}
       test-filter: ${{ inputs.test-filter }}
+      ref: ${{ inputs.ref }}
       test-file-filter: test_external_volumes
       mutate: true
       timeout-minutes: 30
@@ -170,9 +183,11 @@ jobs:
     name: "Mutating: config apply"
     needs: test-external-volumes
     uses: ./.github/workflows/e2e-base-job.yml
+    secrets: inherit
     with:
       oauth-app-num: ${{ inputs.oauth-app-num }}
       test-filter: ${{ inputs.test-filter }}
+      ref: ${{ inputs.ref }}
       test-file-filter: test_config_apply
       mutate: true
       timeout-minutes: 30
@@ -181,9 +196,11 @@ jobs:
     name: "Mutating: GPU"
     needs: test-config-apply
     uses: ./.github/workflows/e2e-base-job.yml
+    secrets: inherit
     with:
       oauth-app-num: ${{ inputs.oauth-app-num }}
       test-filter: ${{ inputs.test-filter }}
+      ref: ${{ inputs.ref }}
       test-file-filter: test_gpu
       mutate: true
       timeout-minutes: 60
@@ -192,9 +209,11 @@ jobs:
     name: "Mutating: pixi"
     needs: test-gpu
     uses: ./.github/workflows/e2e-base-job.yml
+    secrets: inherit
     with:
       oauth-app-num: ${{ inputs.oauth-app-num }}
       test-filter: ${{ inputs.test-filter }}
+      ref: ${{ inputs.ref }}
       test-file-filter: test_pixi
       mutate: true
       timeout-minutes: 60
@@ -203,9 +222,11 @@ jobs:
     name: "Mutating: uv"
     needs: test-pixi
     uses: ./.github/workflows/e2e-base-job.yml
+    secrets: inherit
     with:
       oauth-app-num: ${{ inputs.oauth-app-num }}
       test-filter: ${{ inputs.test-filter }}
+      ref: ${{ inputs.ref }}
       test-file-filter: test_uv
       mutate: true
       timeout-minutes: 60
@@ -231,6 +252,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Install UV and Python
         uses: ./.github/actions/install-uv

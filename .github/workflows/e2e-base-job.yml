@@ -27,6 +27,11 @@ on:
         required: false
         type: number
         default: 30
+      ref:
+        description: "Git ref to checkout (default: triggering ref)"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   test:
@@ -40,6 +45,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Install UV and Python
         uses: ./.github/actions/install-uv
