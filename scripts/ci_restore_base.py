@@ -70,13 +70,19 @@ def get_project_subdomain(project_id: str) -> str | None:
     return None
 
 
-def find_project_by_subdomain(subdomain: str) -> str:
-    """Find the project ID whose subdomain matches."""
+def find_project_by_subdomain(subdomain: str, *, allow_missing: bool = False) -> str | None:
+    """Find the project ID whose subdomain matches.
+
+    Returns the project ID, or None if allow_missing is True and no match is found.
+    Exits with an error if allow_missing is False and no match is found.
+    """
     project_ids = list_project_ids()
     # Only check base template projects
     base_projects = [pid for pid in project_ids if pid.startswith("tf-aws-ec2-base-")]
 
     if not base_projects:
+        if allow_missing:
+            return None
         print("Error: No base template projects found in S3 store")
         sys.exit(1)
 
@@ -85,6 +91,8 @@ def find_project_by_subdomain(subdomain: str) -> str:
         if project_subdomain == subdomain:
             return project_id
 
+    if allow_missing:
+        return None
     print(f"Error: No base template project found with subdomain '{subdomain}'")
     print(f"Checked projects: {base_projects}")
     sys.exit(1)
@@ -133,6 +141,7 @@ def main() -> None:
 
     print("Searching for matching project in S3 store...")
     project_id = find_project_by_subdomain(subdomain)
+    assert project_id is not None  # allow_missing=False guarantees this
     print(f"  Found project: {project_id}")
 
     restore_project(project_id, project_dir)

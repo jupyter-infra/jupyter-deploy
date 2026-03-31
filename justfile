@@ -589,6 +589,12 @@ ci-restore ci_dir="sandbox-ci":
 ci-restore-base oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-base":
     uv run python scripts/ci_restore_base.py {{ci_dir}} {{oauth_app_num}} {{project_dir}}
 
+# Find a base template project by subdomain, take it down (jd down), and delete from S3 store
+# Exits successfully if no matching project is found (nothing to take down)
+# Usage: just find-takedown-base <oauth-app-num> [ci-dir] [project-dir]
+find-takedown-base oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-e2e":
+    uv run python scripts/find_takedown_base.py {{ci_dir}} {{oauth_app_num}} {{project_dir}}
+
 # Export local auth state to Secrets Manager
 auth-export ci_dir="sandbox-ci":
     uv run python scripts/sync_auth_state.py export {{ci_dir}}

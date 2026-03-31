@@ -1,0 +1,262 @@
+name: E2E base template (fresh deploy)
+
+on:
+  workflow_dispatch:
+    inputs:
+      oauth-app-num:
+        description: "OAuth app number (1-3) — determines subdomain"
+        required: false
+        type: choice
+        options: ["1", "2", "3"]
+        default: "1"
+      test-filter:
+        description: "Pytest -k filter (applied to all jobs, empty = all tests)"
+        required: false
+        type: string
+        default: ""
+      skip-deployment:
+        description: "Skip cleanup + deploy, run tests only (project must already be in S3)"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: e2e-${{ inputs.oauth-app-num }}
+  cancel-in-progress: false
+
+jobs:
+  # --- Deploy bookend ---
+
+  cleanup-existing:
+    name: "Cleanup existing deployment"
+    if: ${{ !inputs.skip-deployment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.5"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Find and take down previous deployment
+        run: just find-takedown-base ${{ inputs.oauth-app-num }} sandbox-ci sandbox-e2e
+
+  deploy:
+    name: "Deploy from scratch"
+    needs: cleanup-existing
+    if: ${{ !inputs.skip-deployment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.5"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Generate .env (fresh deploy mode)
+        run: just env-setup-base "" sandbox-ci ${{ inputs.oauth-app-num }}
+
+      - name: Import auth state
+        run: just auth-import sandbox-ci
+
+      - name: Deploy and verify
+        run: just test-e2e-base sandbox-e2e "test_deployment" "mutate=true,ci-dir=sandbox-ci"
+
+      - name: Export auth state
+        if: always()
+        run: just auth-export sandbox-ci
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-deploy
+          path: test-results/
+          if-no-files-found: ignore
+
+  # --- Gate: allows test chain to start when deploy succeeded or was skipped ---
+
+  deploy-gate:
+    name: "Deploy gate"
+    needs: [cleanup-existing, deploy]
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Check deploy result
+        run: |
+          if [ "${{ inputs.skip-deployment }}" = "true" ]; then
+            echo "Deployment skipped — proceeding to tests"
+          elif [ "${{ needs.deploy.result }}" = "success" ]; then
+            echo "Deployment succeeded — proceeding to tests"
+          else
+            echo "Deployment failed or was cancelled — aborting test chain"
+            exit 1
+          fi
+
+  # --- Test chain (same as pr-e2e-base.yml) ---
+
+  test-non-mutating:
+    name: "Non-mutating tests"
+    needs: deploy-gate
+    uses: ./.github/workflows/e2e-base-job.yml
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      timeout-minutes: 120
+
+  test-external-volumes:
+    name: "Mutating: external volumes"
+    needs: test-non-mutating
+    uses: ./.github/workflows/e2e-base-job.yml
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      test-file-filter: test_external_volumes
+      mutate: true
+      timeout-minutes: 30
+
+  test-config-apply:
+    name: "Mutating: config apply"
+    needs: test-external-volumes
+    uses: ./.github/workflows/e2e-base-job.yml
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      test-file-filter: test_config_apply
+      mutate: true
+      timeout-minutes: 30
+
+  test-gpu:
+    name: "Mutating: GPU"
+    needs: test-config-apply
+    uses: ./.github/workflows/e2e-base-job.yml
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      test-file-filter: test_gpu
+      mutate: true
+      timeout-minutes: 60
+
+  test-pixi:
+    name: "Mutating: pixi"
+    needs: test-gpu
+    uses: ./.github/workflows/e2e-base-job.yml
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      test-file-filter: test_pixi
+      mutate: true
+      timeout-minutes: 60
+
+  test-uv:
+    name: "Mutating: uv"
+    needs: test-pixi
+    uses: ./.github/workflows/e2e-base-job.yml
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      test-file-filter: test_uv
+      mutate: true
+      timeout-minutes: 60
+
+  # --- Cleanup: stop host (deployment stays in S3 for auditability) ---
+
+  cleanup:
+    name: "Cleanup: stop host"
+    needs:
+      - test-non-mutating
+      - test-external-volumes
+      - test-config-apply
+      - test-gpu
+      - test-pixi
+      - test-uv
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.5"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Restore base project
+        run: just ci-restore-base ${{ inputs.oauth-app-num }} sandbox-ci sandbox-e2e
+
+      - name: Stop host
+        run: just ensure-host-stopped sandbox-e2e
