@@ -77,7 +77,6 @@ resource "aws_secretsmanager_secret_policy" "bot_auth_restricted" {
           "secretsmanager:PutSecretValue",
           "secretsmanager:UpdateSecret",
           "secretsmanager:DeleteSecret",
-          "secretsmanager:ListSecretVersionIds",
           "secretsmanager:RestoreSecret",
           "secretsmanager:TagResource",
           "secretsmanager:UntagResource",
@@ -97,7 +96,10 @@ resource "aws_secretsmanager_secret_policy" "bot_auth_restricted" {
   })
 }
 
-# Bot protected secrets (recovery codes): deny all access to everyone except maintainers
+# Bot protected secrets (recovery codes): deny secret value and writes to
+# everyone except maintainers. DescribeSecret and ListSecretVersionIds are not
+# denied — CI roles need DescribeSecret for Terraform state refresh during
+# jd config, and ListSecretVersionIds is read-only metadata.
 resource "aws_secretsmanager_secret_policy" "bot_protected_restricted" {
   for_each   = local.bot_account_protected_secret_arns_map
   secret_arn = each.value
@@ -106,20 +108,30 @@ resource "aws_secretsmanager_secret_policy" "bot_protected_restricted" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "DenyAllExceptMaintainers"
+        Sid       = "DenyReadExceptMaintainers"
         Effect    = "Deny"
         Principal = "*"
-        # Explicit action list instead of secretsmanager:* — deliberately
-        # excludes PutResourcePolicy/DeleteResourcePolicy to avoid locking
-        # out access permanently (policy-edit is denied on GitHub roles via
-        # identity-based policy instead).
         Action = [
           "secretsmanager:GetSecretValue",
+        ]
+        Resource = "*"
+        Condition = {
+          ArnNotLike = {
+            "aws:PrincipalArn" = local.secrets_admin_principal_arns
+          }
+        }
+      },
+      {
+        # Explicit action list — deliberately excludes PutResourcePolicy/DeleteResourcePolicy
+        # (to avoid locking out access permanently; policy-edit is denied on GitHub roles
+        # via identity-based policy).
+        Sid       = "DenyWriteExceptMaintainers"
+        Effect    = "Deny"
+        Principal = "*"
+        Action = [
           "secretsmanager:PutSecretValue",
           "secretsmanager:UpdateSecret",
           "secretsmanager:DeleteSecret",
-          "secretsmanager:DescribeSecret",
-          "secretsmanager:ListSecretVersionIds",
           "secretsmanager:RestoreSecret",
           "secretsmanager:TagResource",
           "secretsmanager:UntagResource",

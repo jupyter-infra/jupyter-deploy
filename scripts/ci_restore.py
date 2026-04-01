@@ -55,13 +55,19 @@ def fetch_secrets_and_configure(ci_dir: Path) -> None:
     ci_dir_str = str(ci_dir)
     config_args: list[str] = []
 
-    # Fetch bot account secrets
-    for var in ("github_bot_account_password", "github_bot_account_recovery_codes", "github_bot_account_totp_secret"):
+    # Fetch bot account secrets (recovery codes excluded — protected by explicit deny,
+    # and not needed at runtime; only used as break-glass for account recovery)
+    for var in ("github_bot_account_password", "github_bot_account_totp_secret"):
         arn = jd_output(f"{var}_secret_arn", ci_dir_str)
         val = fetch_value(arn)
         flag = f"--{var.replace('_', '-')}"
         config_args.extend([flag, val])
         print(f"  Fetched {var}")
+
+    # Recovery codes: pass masked placeholder — the actual value is protected by
+    # an explicit deny policy and isn't needed for E2E operations
+    config_args.extend(["--github-bot-account-recovery-codes", "****"])
+    print("  Skipped github_bot_account_recovery_codes (protected secret)")
 
     # Fetch OAuth app client secrets
     for i in range(1, 6):

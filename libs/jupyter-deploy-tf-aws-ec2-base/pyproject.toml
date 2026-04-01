@@ -89,7 +89,10 @@ docstring-code-format = true
 docstring-code-line-length = 40
 
 [tool.pytest.ini_options]
-addopts = "--cov=jupyter_deploy_tf_aws_ec2_base --cov-report=term-missing --cov-report=xml --cov-report=html --browser firefox"
+# Do NOT add --browser here — the justfile passes it for E2E runs, and
+# duplicating it causes pytest-playwright to parametrize every test twice
+# ([firefox0] + [firefox1]), doubling execution time.
+addopts = "--cov=jupyter_deploy_tf_aws_ec2_base --cov-report=term-missing --cov-report=xml --cov-report=html"
 testpaths = [
     "tests/unit",
 ]

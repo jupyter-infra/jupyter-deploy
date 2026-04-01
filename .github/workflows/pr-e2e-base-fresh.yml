@@ -25,6 +25,10 @@ on:
         type: string
         default: ""
 
+permissions:
+  id-token: write
+  contents: read
+
 concurrency:
   group: e2e-${{ inputs.oauth-app-num }}
   cancel-in-progress: false

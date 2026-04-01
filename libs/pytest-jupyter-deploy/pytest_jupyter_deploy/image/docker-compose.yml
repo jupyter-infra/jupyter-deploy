@@ -33,7 +33,11 @@ services:
       # broken region instead of falling back to ~/.aws/config. The justfile resolves
       # this from `aws configure get region` and writes it to .env.
       - AWS_REGION=${AWS_REGION}
-      - AWS_PROFILE=${AWS_PROFILE:-default}
+      # Bare passthrough: set in container only if defined on host. Do NOT default
+      # to "default" — boto3 raises ProfileNotFound when AWS_PROFILE is explicitly
+      # set but ~/.aws/config doesn't exist (e.g. CI runners). When unset, boto3
+      # falls back to the default profile gracefully or uses env var credentials.
+      - AWS_PROFILE
       - AWS_CONFIG_FILE=/home/testuser/.aws/config
       - AWS_SHARED_CREDENTIALS_FILE=/home/testuser/.aws/credentials
     network_mode: host
