@@ -268,9 +268,11 @@ class TestInitHandler(unittest.TestCase):
 
 
 class TestInitHandlerRestore(unittest.TestCase):
+    @patch("jupyter_deploy.handlers.init_handler.write_store_config")
     @patch("jupyter_deploy.handlers.init_handler.StoreManagerFactory")
-    def test_restore_pulls_from_store(self, mock_factory: Mock) -> None:
+    def test_restore_pulls_from_store(self, mock_factory: Mock, mock_write_store_config: Mock) -> None:
         mock_store_manager = Mock()
+        mock_store_manager.resolve_store.return_value = Mock(store_id="discovered-bucket")
         mock_factory.get_manager.return_value = mock_store_manager
 
         result = InitHandler.restore(
@@ -284,9 +286,11 @@ class TestInitHandlerRestore(unittest.TestCase):
         mock_store_manager.pull.assert_called_once_with("tpl-abc123", Path("/tmp/restored"), ANY)
         self.assertEqual(result, Path("/tmp/restored").resolve())
 
+    @patch("jupyter_deploy.handlers.init_handler.write_store_config")
     @patch("jupyter_deploy.handlers.init_handler.StoreManagerFactory")
-    def test_restore_passes_store_id(self, mock_factory: Mock) -> None:
+    def test_restore_passes_store_id(self, mock_factory: Mock, mock_write_store_config: Mock) -> None:
         mock_store_manager = Mock()
+        mock_store_manager.resolve_store.return_value = Mock(store_id="my-bucket")
         mock_factory.get_manager.return_value = mock_store_manager
 
         InitHandler.restore(
@@ -298,3 +302,48 @@ class TestInitHandlerRestore(unittest.TestCase):
         )
 
         mock_factory.get_manager.assert_called_once_with(store_type=StoreType.S3_ONLY, store_id="my-bucket")
+
+    @patch("jupyter_deploy.handlers.init_handler.write_store_config")
+    @patch("jupyter_deploy.handlers.init_handler.StoreManagerFactory")
+    def test_restore_writes_store_config(self, mock_factory: Mock, mock_write_store_config: Mock) -> None:
+        mock_store_manager = Mock()
+        mock_store_manager.resolve_store.return_value = Mock(store_id="discovered-bucket")
+        mock_factory.get_manager.return_value = mock_store_manager
+
+        InitHandler.restore(
+            project_dir="/tmp/restored",
+            project_id="tpl-abc123",
+            store_type=StoreType.S3_ONLY,
+            display_manager=NullDisplay(),
+        )
+
+        mock_write_store_config.assert_called_once_with(
+            Path("/tmp/restored"),
+            store_type="s3-only",
+            store_id="discovered-bucket",
+            project_id="tpl-abc123",
+        )
+
+    @patch("jupyter_deploy.handlers.init_handler.write_store_config")
+    @patch("jupyter_deploy.handlers.init_handler.StoreManagerFactory")
+    def test_restore_writes_store_config_with_explicit_store_id(
+        self, mock_factory: Mock, mock_write_store_config: Mock
+    ) -> None:
+        mock_store_manager = Mock()
+        mock_store_manager.resolve_store.return_value = Mock(store_id="my-bucket")
+        mock_factory.get_manager.return_value = mock_store_manager
+
+        InitHandler.restore(
+            project_dir="/tmp/restored",
+            project_id="tpl-abc123",
+            store_type=StoreType.S3_ONLY,
+            display_manager=NullDisplay(),
+            store_id="my-bucket",
+        )
+
+        mock_write_store_config.assert_called_once_with(
+            Path("/tmp/restored"),
+            store_type="s3-only",
+            store_id="my-bucket",
+            project_id="tpl-abc123",
+        )

@@ -112,12 +112,14 @@ class UpHandler(BaseProjectHandler):
         if not self._store_access_manager.is_configured():
             self._store_access_manager.configure(store_info, project_id, self.display_manager)
 
-        store_manager.push(self.project_path, project_id, self.display_manager)
-
-        # Persist discovered store-id and project-id to .jd/store.yaml
+        # Persist store-id and project-id to .jd/store.yaml BEFORE push,
+        # so the S3 snapshot includes it and restored projects get a complete
+        # store config without needing a second jd up.
         write_store_config(
             self.project_path,
             store_type=store_type.value,
             store_id=store_info.store_id,
             project_id=project_id,
         )
+
+        store_manager.push(self.project_path, project_id, self.display_manager)

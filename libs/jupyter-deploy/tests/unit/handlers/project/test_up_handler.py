@@ -480,8 +480,8 @@ class TestUpHandlerPushToStore(unittest.TestCase):
         with self.assertRaises(PermissionError):
             handler.push_to_store()
 
-        # Push should have been called before write_store_config
-        mock_store_manager.push.assert_called_once()
+        # write_store_config runs before push, so push should NOT have been called
+        mock_store_manager.push.assert_not_called()
 
     @patch("jupyter_deploy.handlers.project.up_handler.StoreManagerFactory")
     @patch("jupyter_deploy.handlers.project.up_handler.TerraformOutputsHandler")
@@ -515,6 +515,7 @@ class TestUpHandlerPushToStore(unittest.TestCase):
 
         mock_store_factory.get_manager.assert_not_called()
 
+    @patch("jupyter_deploy.handlers.project.up_handler.write_store_config")
     @patch("jupyter_deploy.handlers.project.up_handler.StoreManagerFactory")
     @patch("jupyter_deploy.handlers.project.up_handler.TerraformOutputsHandler")
     @patch("jupyter_deploy.engine.terraform.tf_up.TerraformUpHandler")
@@ -527,6 +528,7 @@ class TestUpHandlerPushToStore(unittest.TestCase):
         mock_tf_handler_cls: Mock,
         mock_outputs_cls: Mock,
         mock_store_factory: Mock,
+        mock_write_config: Mock,
     ) -> None:
         handler = self._setup_handler(mock_cwd, mock_retrieve_manifest, mock_tf_handler_cls)
         handler._store_access_manager = Mock()
@@ -545,3 +547,5 @@ class TestUpHandlerPushToStore(unittest.TestCase):
             handler.push_to_store()
 
         self.assertEqual(str(ctx.exception), "S3 upload failed")
+        # write_store_config should have been called before push
+        mock_write_config.assert_called_once()

@@ -121,6 +121,9 @@ e2e-sync:
     echo "Installing Playwright browsers..."
     {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} exec e2e bash -c "cd /workspace && uv run playwright install firefox"
 
+    # Make Playwright's Firefox discoverable by Python's webbrowser module (used by `jd open`)
+    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} exec e2e bash -c "mkdir -p ~/.local/bin && ln -sf ~/.cache/ms-playwright/firefox-*/firefox/firefox ~/.local/bin/firefox"
+
     echo "✓ E2E container synced successfully"
 
 # Run E2E tests in containerized environment
@@ -346,7 +349,7 @@ test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-te
     echo "Test filter: {{test_filter}}"
     echo "================================================"
 
-    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} exec -e XAUTHORITY=/home/testuser/.Xauthority e2e bash -c "cd /workspace && uv run pytest $PYTEST_ARGS"
+    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} exec -e XAUTHORITY=/home/testuser/.Xauthority e2e bash -c "cd /workspace && xvfb-run --auto-servernum uv run pytest $PYTEST_ARGS"
 
 # Setup GitHub OAuth authentication (one-time, requires X11 forwarding)
 # Usage: just auth-setup <project-dir> [display]

@@ -4,6 +4,7 @@ from jupyter_deploy import fs_utils
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.enum import StoreType
+from jupyter_deploy.handlers.base_project_handler import write_store_config
 from jupyter_deploy.handlers.docs_generator import DocsGenerator
 from jupyter_deploy.infrastructure.enum import AWSInfrastructureType, InfrastructureType
 from jupyter_deploy.provider.enum import ProviderType
@@ -107,4 +108,16 @@ class InitHandler:
         dest_path = Path(project_dir)
         store_manager = StoreManagerFactory.get_manager(store_type=store_type, store_id=store_id)
         store_manager.pull(project_id, dest_path, display_manager)
+
+        # Persist store origin to .jd/store.yaml so that subsequent commands
+        # (jd show --info, jd config, jd up) can resolve the store without
+        # rediscovery.  The store_id is resolved during pull().
+        resolved_store_info = store_manager.resolve_store()
+        write_store_config(
+            dest_path,
+            store_type=store_type.value,
+            store_id=resolved_store_info.store_id,
+            project_id=project_id,
+        )
+
         return dest_path.resolve()

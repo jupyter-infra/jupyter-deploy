@@ -50,6 +50,7 @@ class EndToEndDeployment:
         self.destroy_timeout_seconds = destroy_timeout_seconds
         self._cli: JDCli | None = None
         self._is_deployed = False
+        self._has_up_history = False
         self._owns_project_resources = False
 
     @property
@@ -119,6 +120,20 @@ class EndToEndDeployment:
             # (since the file system inside the container sees it), and it is clean (empty)
             # we can proceed
             self._deploy_e2e_project()
+
+    def ensure_up_history(self) -> None:
+        """Ensure that `jd history list up` has at least one entry.
+
+        Restored projects have config history (from the restore's `jd config`)
+        but no up history. This runs a no-op `jd up -y` to create an up log
+        entry. The result is cached so the cost is paid at most once per run.
+        """
+        if self._has_up_history:
+            return
+
+        self.ensure_deployed()
+        self.cli.run_command(["jupyter-deploy", "up", "-y"], timeout_seconds=self.deploy_timeout_seconds)
+        self._has_up_history = True
 
     def ensure_host_running(self) -> None:
         """Call host status, attempts to call host start if not running."""
@@ -272,6 +287,7 @@ class EndToEndDeployment:
         self.cli.run_command(["jupyter-deploy", "up", "-y"], timeout_seconds=self.deploy_timeout_seconds)
 
         self._is_deployed = True
+        self._has_up_history = True
 
     def ensure_destroyed(self) -> None:
         """Ensure the deployment is torn down."""
@@ -527,6 +543,7 @@ class EndToEndDeployment:
         # Run jd up to apply changes
         timeout = timeout_seconds if timeout_seconds is not None else self.deploy_timeout_seconds
         self.cli.run_command(["jupyter-deploy", "up", "-y"], timeout_seconds=timeout)
+        self._has_up_history = True
 
     def get_str_variable_value(self, variable_name: str) -> str:
         """Call jupyter-deploy show CLI, return the parsed response as str."""

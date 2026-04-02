@@ -1,4 +1,4 @@
-# E2E test container for jupyter-deploy templates
+# E2E test container for jupyter-deploy templates (AWS)
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 # Install system dependencies
@@ -18,7 +18,7 @@ RUN apt-get update && \
 RUN wget -qO- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg && \
     echo 'deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com bookworm main' | tee /etc/apt/sources.list.d/hashicorp.list && \
     apt-get update && \
-    apt-get install -y terraform && \
+    apt-get install -y terraform=1.5.7-1 && \
     rm -rf /var/lib/apt/lists/*
 
 # Install AWS CLI
@@ -90,6 +90,9 @@ RUN apt-get update && \
 
 # Switch to testuser
 USER testuser
+
+# Ensure ~/.local/bin is on PATH so symlinked tools (e.g. Playwright Firefox) are discoverable
+ENV PATH="/home/testuser/.local/bin:${PATH}"
 
 # Keep container running
 CMD ["sleep", "infinity"]

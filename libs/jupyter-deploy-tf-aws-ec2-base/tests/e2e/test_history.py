@@ -43,14 +43,14 @@ def test_history_list_up_shows_existing_logs(e2e_deployment: EndToEndDeployment)
     """Test that jd history list up shows existing logs with expected format.
 
     This test:
-    1. Ensures deployment exists with some history
+    1. Ensures deployment exists with up history (runs no-op jd up if needed)
     2. Runs jd history list up (table format)
     3. Verifies output is non-empty
     4. Verifies table contains expected columns
     5. Runs jd history list up --text
     6. Verifies plain text output shows file paths
     """
-    e2e_deployment.ensure_deployed()
+    e2e_deployment.ensure_up_history()
 
     # Run jd history list up (table format)
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "history", "list", "up"])
@@ -130,12 +130,12 @@ def test_history_show_up_command(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd history show up displays latest up log.
 
     This test:
-    1. Ensures deployment exists with up history
+    1. Ensures deployment exists with up history (runs no-op jd up if needed)
     2. Runs jd history show up
     3. Verifies output displays log content
     4. Verifies content contains terraform-related keywords
     """
-    e2e_deployment.ensure_deployed()
+    e2e_deployment.ensure_up_history()
 
     # Run jd history show up
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "history", "show", "up"])
@@ -158,12 +158,12 @@ def test_history_show_up_command_slice(e2e_deployment: EndToEndDeployment) -> No
     """Test that jd history show up with -l and -s flags correctly slices log output.
 
     This test:
-    1. Ensures deployment exists with up history
+    1. Ensures deployment exists with up history (runs no-op jd up if needed)
     2. Runs jd history show up -l 20 -s 10
     3. Verifies output displays sliced log content
     4. Verifies output has expected line count (at most 20 lines)
     """
-    e2e_deployment.ensure_deployed()
+    e2e_deployment.ensure_up_history()
 
     # Run jd history show up -l 20 -s 10
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "history", "show", "up", "-l", "20", "-s", "10"])
