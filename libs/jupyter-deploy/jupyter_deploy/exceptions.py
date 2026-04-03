@@ -428,6 +428,24 @@ class ProjectStoreAccessConfigurationError(JupyterDeployError, RuntimeError):
     pass
 
 
+class ProjectStoreReadError(JupyterDeployError, RuntimeError):
+    """Raised when reading from the project store fails (e.g., AccessDenied on remote state).
+
+    Attributes:
+        hint: Actionable hint for the user
+        store_type: The store type (if available)
+        store_id: The store ID (if available)
+    """
+
+    def __init__(
+        self, message: str, hint: str | None = None, store_type: str | None = None, store_id: str | None = None
+    ) -> None:
+        self.hint = hint
+        self.store_type = store_type
+        self.store_id = store_id
+        super().__init__(message)
+
+
 class ProjectNotFoundInStoreError(JupyterDeployError, RuntimeError):
     """Raised when a project is not found in the remote store.
 

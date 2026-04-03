@@ -337,7 +337,31 @@ def verify_executed_and_no_cell_error(cells_info: list[dict[str, str]], notebook
         raise RuntimeError(f"Notebook {notebook_path} execution failed with errors.")
 
 
-def copy_and_clean_notebook(base_url: str, notebook_path: str, suffix: str = "-clean") -> str:
+def _build_session_with_cookies(page: Page) -> requests.Session:
+    """Build a requests.Session with cookies from the Playwright browser context.
+
+    The Jupyter API is behind an OAuth2 proxy that requires authentication cookies.
+    This extracts cookies from the browser (which has already authenticated) and
+    attaches them to a requests session for server-side API calls.
+
+    Args:
+        page: Playwright Page instance (authenticated)
+
+    Returns:
+        A requests.Session with the browser's cookies attached
+    """
+    session = requests.Session()
+    for cookie in page.context.cookies():
+        session.cookies.set(
+            cookie["name"],
+            cookie["value"],
+            domain=cookie.get("domain", ""),
+            path=cookie.get("path", "/"),
+        )
+    return session
+
+
+def copy_and_clean_notebook(base_url: str, notebook_path: str, page: Page, suffix: str = "-clean") -> str:
     """Copy a notebook and clean its execution state using the Jupyter Contents API.
 
     This creates a fresh copy of the notebook with:
@@ -351,6 +375,7 @@ def copy_and_clean_notebook(base_url: str, notebook_path: str, suffix: str = "-c
     Args:
         base_url: The base URL of the Jupyter server
         notebook_path: Path to the notebook relative to /home/jovyan (e.g., "e2e-test/application_simple.ipynb")
+        page: Playwright Page instance (used to extract authentication cookies)
         suffix: Suffix to append to the filename before the extension (default: "-clean")
 
     Returns:
@@ -359,11 +384,13 @@ def copy_and_clean_notebook(base_url: str, notebook_path: str, suffix: str = "-c
     Raises:
         requests.HTTPError: If the GET or PUT request fails
     """
+    session = _build_session_with_cookies(page)
+
     # 1. GET the original notebook
     get_url = f"{base_url}/api/contents/{notebook_path}"
     logger.info(f"Fetching notebook via API: {get_url}")
 
-    response = requests.get(get_url)
+    response = session.get(get_url)
     response.raise_for_status()
 
     notebook_data = response.json()
@@ -396,7 +423,7 @@ def copy_and_clean_notebook(base_url: str, notebook_path: str, suffix: str = "-c
 
     put_body = {"type": "notebook", "format": "json", "content": content}
 
-    put_response = requests.put(put_url, json=put_body)
+    put_response = session.put(put_url, json=put_body)
     put_response.raise_for_status()
 
     logger.info(f"Successfully created cleaned notebook copy: {clean_path}")

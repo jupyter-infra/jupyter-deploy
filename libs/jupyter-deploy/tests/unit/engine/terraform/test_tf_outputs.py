@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition, TemplateOutputDefinition
 from jupyter_deploy.engine.terraform.tf_outputs import TerraformOutputsHandler
 from jupyter_deploy.enum import ValueSource
+from jupyter_deploy.exceptions import ProjectStoreReadError
 
 
 class TestTerraformOutputsHandler(unittest.TestCase):
@@ -56,6 +57,47 @@ class TestRunOutputCmd(unittest.TestCase):
             handler._run_output_cmd()
 
         mock_run_cmd.assert_called_once()
+
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.retrieve_store_config")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.cmd_utils.run_cmd_and_capture_output")
+    def test_raises_project_store_read_error_on_failed_to_load_state(
+        self, mock_run_cmd: Mock, mock_retrieve_store_config: Mock
+    ) -> None:
+        state_error = subprocess.CalledProcessError(1, "terraform output -json")
+        state_error.stderr = "Error refreshing state: Failed to load state: AccessDenied: Access Denied"
+        mock_run_cmd.side_effect = state_error
+
+        mock_store_config = Mock()
+        mock_store_config.store_type = "s3"
+        mock_store_config.store_id = "my-bucket"
+        mock_retrieve_store_config.return_value = mock_store_config
+
+        handler = TerraformOutputsHandler(Path("/mock/project"), Mock())
+        with self.assertRaises(ProjectStoreReadError) as ctx:
+            handler._run_output_cmd()
+
+        self.assertIn("Failed to load remote state", str(ctx.exception))
+        self.assertIn("credentials", ctx.exception.hint or "")
+        self.assertEqual(ctx.exception.store_type, "s3")
+        self.assertEqual(ctx.exception.store_id, "my-bucket")
+        mock_run_cmd.assert_called_once()
+
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.retrieve_store_config")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.cmd_utils.run_cmd_and_capture_output")
+    def test_raises_project_store_read_error_without_store_config(
+        self, mock_run_cmd: Mock, mock_retrieve_store_config: Mock
+    ) -> None:
+        state_error = subprocess.CalledProcessError(1, "terraform output -json")
+        state_error.stderr = "Error refreshing state: Failed to load state: AccessDenied: Access Denied"
+        mock_run_cmd.side_effect = state_error
+        mock_retrieve_store_config.return_value = None
+
+        handler = TerraformOutputsHandler(Path("/mock/project"), Mock())
+        with self.assertRaises(ProjectStoreReadError) as ctx:
+            handler._run_output_cmd()
+
+        self.assertIsNone(ctx.exception.store_type)
+        self.assertIsNone(ctx.exception.store_id)
 
     @patch("jupyter_deploy.engine.terraform.tf_outputs.cmd_utils.run_cmd_and_capture_output")
     def test_does_not_retry_on_unrelated_error(self, mock_run_cmd: Mock) -> None:

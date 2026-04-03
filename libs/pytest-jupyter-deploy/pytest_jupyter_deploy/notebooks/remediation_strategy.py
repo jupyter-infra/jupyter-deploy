@@ -110,7 +110,7 @@ class CopyCleanStrategy(RemediationStrategy):
 
         # Copy notebook to new path with cleaned execution state
         # This creates a new Y-doc room, avoiding corrupted session state
-        clean_path = copy_and_clean_notebook(base_url, notebook_path)
+        clean_path = copy_and_clean_notebook(base_url, notebook_path, page)
         logger.info(f"Created clean copy: {clean_path}")
 
         # Dismiss any error dialogs and close all tabs

@@ -13,9 +13,12 @@ from jupyter_deploy.engine.terraform.tf_constants import (
     TF_OUTPUT_CMD,
     TF_OUTPUTS_FILENAME,
 )
+from jupyter_deploy.exceptions import ProjectStoreReadError
+from jupyter_deploy.handlers.base_project_handler import retrieve_store_config
 from jupyter_deploy.manifest import JupyterDeployManifest
 
 _BACKEND_INIT_ERROR = "Backend initialization required"
+_FAILED_TO_LOAD_STATE = "Failed to load state"
 
 
 class TerraformOutputsHandler(EngineOutputsHandler):
@@ -38,7 +41,16 @@ class TerraformOutputsHandler(EngineOutputsHandler):
         try:
             return cmd_utils.run_cmd_and_capture_output(output_cmd, exec_dir=self.engine_dir_path)
         except subprocess.CalledProcessError as e:
-            if _BACKEND_INIT_ERROR not in (e.stderr or "") or not (self.engine_dir_path / TF_BACKEND_FILENAME).exists():
+            stderr = e.stderr or ""
+            if _FAILED_TO_LOAD_STATE in stderr:
+                store_config = retrieve_store_config(self.project_path)
+                raise ProjectStoreReadError(
+                    "Failed to load remote state.",
+                    hint="Verify that your credentials have access to the project store.",
+                    store_type=store_config.store_type if store_config else None,
+                    store_id=store_config.store_id if store_config else None,
+                ) from e
+            if _BACKEND_INIT_ERROR not in stderr or not (self.engine_dir_path / TF_BACKEND_FILENAME).exists():
                 raise
             init_cmd = TF_INIT_CMD + [TF_INIT_RECONFIGURE_CMD_OPTION]
             cmd_utils.run_cmd_and_capture_output(init_cmd, exec_dir=self.engine_dir_path)

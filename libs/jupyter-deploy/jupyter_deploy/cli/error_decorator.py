@@ -34,6 +34,7 @@ from jupyter_deploy.exceptions import (
     ProjectNotFoundInStoreError,
     ProjectStoreAccessConfigurationError,
     ProjectStoreNotFoundError,
+    ProjectStoreReadError,
     ProviderPermissionError,
     ReadConfigurationError,
     ReadManifestError,
@@ -251,6 +252,17 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         else:
             hint_cmd += " <type>"
         console.print(f":bulb: Use [bold cyan]{hint_cmd}[/] to see available projects.")
+        raise typer.Exit(code=1) from None
+
+    except ProjectStoreReadError as e:
+        console.print(f":x: {e}", style="bold red")
+        console.line()
+        if e.hint:
+            console.print(f":bulb: {e.hint}", style="dim")
+        if e.store_type:
+            console.print(f"Store type: {e.store_type}", style="dim")
+        if e.store_id:
+            console.print(f"Store ID: {e.store_id}", style="dim")
         raise typer.Exit(code=1) from None
 
     except ProjectStoreAccessConfigurationError as e:
