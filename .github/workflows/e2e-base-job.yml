@@ -76,7 +76,9 @@ jobs:
         run: just ci-restore-base ${{ inputs.oauth-app-num }} sandbox-ci sandbox-e2e
 
       - name: Generate .env
-        run: just env-setup-base sandbox-e2e sandbox-ci ${{ inputs.oauth-app-num }}
+        run: >-
+          just env-setup-base sandbox-e2e sandbox-ci ${{ inputs.oauth-app-num }}
+          "safe-user=ellisonbg,org=jupyter-infra,safe-org=jupyter-server,team=jupyter-deploy-e2e-app-access,safe-team=jupyter-deploy-e2e-app-no-access,larger-instance=t3.xlarge,larger-log-retention-days=270,cpu-instance=t3.medium,gpu-instance=g6.xlarge"
 
       - name: Import auth state
         run: just auth-import sandbox-ci
