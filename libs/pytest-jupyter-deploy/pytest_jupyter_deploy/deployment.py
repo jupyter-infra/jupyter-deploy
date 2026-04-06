@@ -157,13 +157,18 @@ class EndToEndDeployment:
             if not self._is_host_stopped():
                 raise RuntimeError("Host is not stopped")
 
-    def ensure_server_running(self) -> None:
+    def ensure_server_running(self, wait_after_restart: bool = False) -> None:
         """Ensure the Jupyter server is running.
 
         This method attempts to get the server into a running state by:
         1. Checking if server is already available (fast path)
         2. If server check fails (host not running), start the host first
         3. If server is not available but host is running, restart the server
+
+        Args:
+            wait_after_restart: If True, poll for IN_SERVICE after a restart
+                instead of checking once. Useful in CI where containers may
+                need extra time to initialize after a cold start.
 
         Raises:
             RuntimeError: If the server cannot be made available
@@ -187,7 +192,10 @@ class EndToEndDeployment:
 
         # Step 3: Attempt to restart the server
         self.cli.run_command(["jupyter-deploy", "server", "restart"])
-        if not self._is_server_available():
+
+        if wait_after_restart:
+            self._wait_for_server_in_service()
+        elif not self._is_server_available():
             raise RuntimeError("Jupyter Server failed to start after restart")
 
     def ensure_server_stopped_and_host_is_running(self) -> None:
@@ -314,6 +322,25 @@ class EndToEndDeployment:
         """Return True if the server is available (IN_SERVICE), False otherwise."""
         status = self.cli.get_server_status()
         return status == "IN_SERVICE"
+
+    def _wait_for_server_in_service(self, timeout_seconds: int = 180, interval_seconds: int = 10) -> None:
+        """Poll server status until IN_SERVICE or timeout.
+
+        Args:
+            timeout: Maximum wait time in seconds (default: 5 minutes)
+            interval: Seconds between polls (default: 10)
+
+        Raises:
+            RuntimeError: If the server does not reach IN_SERVICE within timeout
+        """
+        elapsed = 0
+        while elapsed < timeout_seconds:
+            if self._is_server_available():
+                return
+            time.sleep(interval_seconds)
+            elapsed += interval_seconds
+        status = self.cli.get_server_status()
+        raise RuntimeError(f"Server did not reach IN_SERVICE within {timeout_seconds}s (last status: {status})")
 
     def _is_server_stopped(self) -> bool:
         """Return True if the server is stopped (STOPPED), False otherwise."""

@@ -358,6 +358,11 @@ def _build_session_with_cookies(page: Page) -> requests.Session:
             domain=cookie.get("domain", ""),
             path=cookie.get("path", "/"),
         )
+        # Jupyter requires the _xsrf cookie value echoed back as a header on
+        # mutating requests (PUT/POST/DELETE). GET is exempt, but without this
+        # header write operations return 403.
+        if cookie["name"] == "_xsrf":
+            session.headers["X-XSRFToken"] = cookie["value"]
     return session
 
 

@@ -44,9 +44,9 @@ PROJECT_VAR_MAP = {
     "domain": "JD_E2E_VAR_DOMAIN",
     "subdomain": "JD_E2E_VAR_SUBDOMAIN",
     "letsencrypt_email": "JD_E2E_VAR_EMAIL",
-    "oauth_allowed_org": "JD_E2E_VAR_OAUTH_ALLOWED_ORG",
-    "oauth_allowed_teams": "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
-    "oauth_allowed_usernames": "JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES",
+    # Auth variables (org, teams, usernames) are intentionally omitted —
+    # they're reset to clean defaults in step 1b to avoid reading stale
+    # state left by a previous failed test run.
 }
 
 # Mapping from option keys to env var names
@@ -244,18 +244,32 @@ def main() -> None:
             set_env_var(env_var, value)
             print(f"  {env_var}={value}")
 
-    # 1b. Set bot username as JD_E2E_USER (unless overridden by option)
+    # 1b. Derive bot username from CI and set JD_E2E_USER + allowed usernames
+    result = subprocess.run(
+        ["uv", "run", "jd", "show", "-v", "github_bot_account_email", "--text", "-p", ci_dir],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    bot_email = result.stdout.strip()
+    bot_username = bot_email.split("@")[0] if "@" in bot_email else bot_email
+
     if "JD_E2E_USER" not in option_env_vars:
-        result = subprocess.run(
-            ["uv", "run", "jd", "show", "-v", "github_bot_account_email", "--text", "-p", ci_dir],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        bot_email = result.stdout.strip()
-        bot_username = bot_email.split("@")[0] if "@" in bot_email else bot_email
         set_env_var("JD_E2E_USER", bot_username)
         print(f"  JD_E2E_USER={bot_username} (from bot account)")
+
+    if "JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES" not in option_env_vars:
+        allowed_usernames = json.dumps([bot_username])
+        set_env_var("JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES", allowed_usernames)
+        print(f"  JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES={allowed_usernames} (from bot account)")
+
+    if "JD_E2E_VAR_OAUTH_ALLOWED_ORG" not in option_env_vars:
+        set_env_var("JD_E2E_VAR_OAUTH_ALLOWED_ORG", "")
+        print("  JD_E2E_VAR_OAUTH_ALLOWED_ORG= (reset to empty)")
+
+    if "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS" not in option_env_vars:
+        set_env_var("JD_E2E_VAR_OAUTH_ALLOWED_TEAMS", "[]")
+        print("  JD_E2E_VAR_OAUTH_ALLOWED_TEAMS=[] (reset to empty)")
 
     # 2. Fetch OAuth credentials from CI infrastructure
     print(f"\nFetching OAuth app #{oauth_app_num} credentials from CI ({ci_dir})...")

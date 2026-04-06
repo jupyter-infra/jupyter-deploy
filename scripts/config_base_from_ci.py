@@ -39,7 +39,7 @@ def main() -> None:
     if len(sys.argv) < 4:
         print("Usage: scripts/config_base.py <project-dir> <ci-dir> <oauth-app-num> [allowed-usernames]")
         print()
-        print("  project-dir:       Path to the base template project (from `just init-base`)")
+        print("  project-dir:       Path to the base template project (from `jd init`)")
         print("  ci-dir:            Path to the CI infrastructure project (from `just ci-restore`)")
         print("  oauth-app-num:     OAuth app number (1-5)")
         print("  allowed-usernames: JSON array of GitHub usernames (default: bot account email)")

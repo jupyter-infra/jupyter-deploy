@@ -209,7 +209,6 @@ locals {
       content      = local.sync_acme_file
       content_type = "text/x-shellscript"
     }
-
     # Docker and service configuration files
     "deployment-docker/docker-compose.yml" = {
       content      = local.docker_compose_file
@@ -276,6 +275,11 @@ locals {
   # Compute hash of all deployment script files
   # This hash triggers SSM association re-execution when scripts change
   scripts_files_hash = sha256(join("\n", [for k, v in local.all_script_files : v.content]))
+
+  # Compute hash of SSM-embedded scripts (cloud-init + volume-init)
+  # These are not in all_script_files but are embedded directly in the SSM document.
+  # Changes to these (e.g. volume configuration) must also trigger re-execution.
+  ssm_embedded_hash = sha256(join("\n", [local.cloud_init_file, local.cloudinit_volumes_script]))
 }
 
 # Generate the cloudinit_volumes_script directly in services.tf
@@ -494,6 +498,7 @@ resource "aws_ssm_document" "instance_startup" {
 resource "terraform_data" "scripts_files_trigger" {
   input = {
     scripts_files_hash = local.scripts_files_hash
+    ssm_embedded_hash  = local.ssm_embedded_hash
     instance_type      = var.instance_type
   }
 }

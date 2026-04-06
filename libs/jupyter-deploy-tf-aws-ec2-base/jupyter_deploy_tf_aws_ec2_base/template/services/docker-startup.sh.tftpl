@@ -57,7 +57,6 @@ tee /opt/docker/.env >/dev/null << EOFENV
 SERVICE_UID=$(id -u service-user)
 SERVICE_GID=$(id -g service-user)
 DOCKER_GID=$(getent group docker | cut -d: -f3)
-GITHUB_CLIENT_SECRET=$${GITHUB_CLIENT_SECRET}
 JUPYTER_MEM_LIMIT_MB=$${JUPYTER_MEM_LIMIT_MB}
 JUPYTER_MEM_RESERVATION_MB=$${JUPYTER_MEM_RESERVATION_MB}
 AUTHED_USERS_CONTENT=$${AUTHED_USERS_CONTENT}
@@ -65,6 +64,13 @@ AUTHED_ORG_CONTENT=$${AUTHED_ORG_CONTENT}
 AUTHED_TEAMS_CONTENT=$${AUTHED_TEAMS_CONTENT}
 EOFENV
 echo "Saved environment file /opt/docker/.env"
+
+echo "Writing oauth app client secret to /opt/docker/secrets/..."
+mkdir -p /opt/docker/secrets
+printf '%s' "$${GITHUB_CLIENT_SECRET}" > /opt/docker/secrets/client-secret
+chown service-user:service-user /opt/docker/secrets/client-secret
+chmod 600 /opt/docker/secrets/client-secret
+echo "Wrote oauth app client secret"
 
 echo "Generating OAuth cookie secret..."
 sh /usr/local/bin/refresh-oauth-cookie.sh

@@ -543,17 +543,6 @@ test-e2e-ci project_dir="sandbox-e2e-ci" test_filter="" options="":
 auth-setup-base project_dir display="${DISPLAY:-}":
     @just auth-setup {{project_dir}} "{{display}}"
 
-# Initialize a new base template project directory
-init-base project_dir:
-    uv run jd init {{project_dir}}
-
-# Configure a base template project using CI OAuth app settings
-# Usage: just config-base-from-ci <project-dir> [ci-dir] [oauth-app-num] [allowed-usernames]
-# Example: just config-base-from-ci sandbox-base sandbox-ci 1
-# Example: just config-base-from-ci sandbox-base sandbox-ci 1 '["bot-user","admin"]'
-config-base-from-ci project_dir ci_dir="sandbox-ci" oauth_app_num="1" allowed_usernames="":
-    uv run python scripts/config_base_from_ci.py {{project_dir}} {{ci_dir}} {{oauth_app_num}} "{{allowed_usernames}}"
-
 # --- CI infrastructure commands ---
 
 # Ensure the host is running (start if stopped)
@@ -582,6 +571,30 @@ ensure-host-stopped project_dir:
     else
         echo "Host is not running, skipping stop."
     fi
+
+# Initialize a new CI infrastructure project
+# Usage: just init-ci [ci-dir]
+# Example: just init-ci sandbox-ci
+init-ci ci_dir="sandbox-ci":
+    mkdir -p {{ci_dir}}
+    uv run jd init {{ci_dir}} --engine terraform --provider aws --infrastructure iam --template ci
+
+# Deploy a new base template project from scratch using CI infrastructure
+# Usage: just ci-deploy-base <oauth-app-num> [ci-dir] [project-dir]
+# Example: just ci-deploy-base 3
+# Example: just ci-deploy-base 3 sandbox-ci sandbox-base
+ci-deploy-base oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-base":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -d "{{project_dir}}" ] && [ "$(ls -A {{project_dir}})" ]; then
+        echo "Error: {{project_dir}} already exists and is not empty."
+        echo "Remove it first to avoid overwriting an existing deployment."
+        exit 1
+    fi
+    mkdir -p {{project_dir}}
+    uv run jd init {{project_dir}}
+    uv run python scripts/config_base_from_ci.py {{project_dir}} {{ci_dir}} {{oauth_app_num}}
+    uv run jd up -y -p {{project_dir}}
 
 # Discover and restore CI project from S3 store
 ci-restore ci_dir="sandbox-ci":

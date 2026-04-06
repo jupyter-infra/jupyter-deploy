@@ -96,10 +96,14 @@ services:
       start_period: 5s
     volumes:
       - ./static:/var/www/static:ro
+      - ./secrets:/var/run/secrets:ro
     labels:
       - "traefik.enable=true"
       # Main service definition
       - "traefik.http.services.oauth.loadbalancer.server.port=4180"
+      - "traefik.http.services.oauth.loadbalancer.healthcheck.path=/ping"
+      - "traefik.http.services.oauth.loadbalancer.healthcheck.interval=5s"
+      - "traefik.http.services.oauth.loadbalancer.healthcheck.timeout=3s"
       # oauth-middleware
       - "traefik.http.middlewares.oauth-auth.forwardauth.address=http://oauth:4180/oauth2/auth"
       - "traefik.http.middlewares.oauth-auth.forwardauth.trustForwardHeader=true"
@@ -142,7 +146,7 @@ services:
     environment:
       - OAUTH2_PROXY_PROVIDER=${oauth_provider}
       - OAUTH2_PROXY_CLIENT_ID=${github_client_id}
-      - OAUTH2_PROXY_CLIENT_SECRET=$${GITHUB_CLIENT_SECRET}
+      - OAUTH2_PROXY_CLIENT_SECRET_FILE=/var/run/secrets/client-secret
       - OAUTH2_PROXY_SCOPE=read:user,user:email,read:org
       # This allows any email domain, but access is restricted by org/team/user restrictions below
       # Safety checks in docker-startup.sh prevent empty auth restrictions
@@ -153,8 +157,9 @@ services:
       - OAUTH2_PROXY_REDIRECT_URL=https://${full_domain}/oauth2/callback
       - OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180
       - OAUTH2_PROXY_COOKIE_DOMAINS=${full_domain}
-      - OAUTH2_PROXY_COOKIE_SECRET=$${OAUTH_SECRET}
+      - OAUTH2_PROXY_COOKIE_SECRET_FILE=/var/run/secrets/cookie-secret
       - OAUTH2_PROXY_COOKIE_SECURE=true
+      - OAUTH2_PROXY_COOKIE_REFRESH=1h
       - OAUTH2_PROXY_REVERSE_PROXY=true
       - OAUTH2_PROXY_UPSTREAMS=https://${full_domain}/,file:///var/www/static/#/oauth2-static/
       - OAUTH2_PROXY_WHITELIST_DOMAINS=${full_domain}

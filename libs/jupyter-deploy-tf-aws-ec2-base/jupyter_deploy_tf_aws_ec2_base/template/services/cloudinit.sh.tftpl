@@ -155,14 +155,18 @@ chmod 600 /opt/docker/acme.json
 
 mkdir -p /var/log/services
 
-# Create the AUTHED_ENTITIES file
-echo "[org]" > /etc/AUTHED_ENTITIES
-echo "${allowed_github_org}" >> /etc/AUTHED_ENTITIES
-echo "" >> /etc/AUTHED_ENTITIES
-echo "[teams]" >> /etc/AUTHED_ENTITIES
-echo "${allowed_github_teams}" >> /etc/AUTHED_ENTITIES
-echo "" >> /etc/AUTHED_ENTITIES
-echo "[users]" >> /etc/AUTHED_ENTITIES
-echo "${allowed_github_usernames}" >> /etc/AUTHED_ENTITIES
-chmod 600 /etc/AUTHED_ENTITIES
-chown service-user:service-user /etc/AUTHED_ENTITIES
+# Create the AUTHED_ENTITIES file only on first boot.
+# Runtime changes (jd users/organization/teams commands) modify this file
+# directly via update-auth.sh and must survive host restarts.
+if [ ! -f /etc/AUTHED_ENTITIES ]; then
+    echo "[org]" > /etc/AUTHED_ENTITIES
+    echo "${allowed_github_org}" >> /etc/AUTHED_ENTITIES
+    echo "" >> /etc/AUTHED_ENTITIES
+    echo "[teams]" >> /etc/AUTHED_ENTITIES
+    echo "${allowed_github_teams}" >> /etc/AUTHED_ENTITIES
+    echo "" >> /etc/AUTHED_ENTITIES
+    echo "[users]" >> /etc/AUTHED_ENTITIES
+    echo "${allowed_github_usernames}" >> /etc/AUTHED_ENTITIES
+    chmod 600 /etc/AUTHED_ENTITIES
+    chown service-user:service-user /etc/AUTHED_ENTITIES
+fi
