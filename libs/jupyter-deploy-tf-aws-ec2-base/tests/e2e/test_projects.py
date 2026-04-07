@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-import boto3
+import yaml
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 
 
@@ -20,21 +20,6 @@ def _get_store_type(e2e_deployment: EndToEndDeployment) -> str:
     store_type = result.stdout.strip()
     assert store_type and store_type != "N/A", f"Expected a valid store type, got '{store_type}'"
     return store_type
-
-
-def _get_output(e2e_deployment: EndToEndDeployment, output_name: str) -> str:
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "show", "-o", output_name, "--text"])
-    value = result.stdout.strip()
-    assert value and value != "N/A", f"Expected a valid value for output '{output_name}', got '{value}'"
-    return value
-
-
-def _fetch_secret(secret_arn: str) -> str:
-    """Fetch a secret value from AWS Secrets Manager."""
-    region = secret_arn.split(":")[3]
-    client = boto3.client("secretsmanager", region_name=region)
-    response = client.get_secret_value(SecretId=secret_arn)
-    return response["SecretString"]
 
 
 def test_projects_list_contains_deployed_project(e2e_deployment: EndToEndDeployment) -> None:
@@ -90,49 +75,44 @@ def test_projects_show_returns_deployed_project_details(e2e_deployment: EndToEnd
     assert len(var_lines) > 0, f"Expected at least one var: line in output. Got: {output}"
 
 
+def _restore_project_to_tmpdir(e2e_deployment: EndToEndDeployment, tmpdir: str) -> Path:
+    """Restore the deployed project into a temporary directory, return the restore path."""
+    project_id = _get_project_id(e2e_deployment)
+    store_type = _get_store_type(e2e_deployment)
+    restore_dir = Path(tmpdir)
+
+    result = subprocess.run(
+        [
+            "jupyter-deploy",
+            "init",
+            str(restore_dir),
+            "--restore-project",
+            project_id,
+            "--store-type",
+            store_type,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"Restore failed: {result.stdout}\n{result.stderr}"
+    return restore_dir
+
+
 def test_restore_project_and_config(e2e_deployment: EndToEndDeployment) -> None:
-    """Test that a project can be restored and reconfigured.
+    """Test that a project can be restored and reconfigured with --restore-secrets.
 
     This test:
     1. Ensures deployment exists
-    2. Gets project ID, store type, and secret ARN from deployed project
-    3. Fetches the OAuth client secret from AWS Secrets Manager
-    4. Restores the project to a temp directory via jd init --restore-project
-    5. Verifies jd show --info succeeds on the restored project
-    6. Verifies jd config --skip-verify succeeds, passing the secret value
-       (sensitive variables are masked in the stored variables.yaml since #171,
-       so they must be re-supplied on restore — see issue #XX)
+    2. Restores the project to a temp directory via jd init --restore-project
+    3. Verifies jd show --info succeeds on the restored project
+    4. Verifies jd config --restore-secrets --skip-verify succeeds
+       (sensitive variables are masked in stored variables.yaml since #171,
+       --restore-secrets fetches them from AWS Secrets Manager — see #177)
     """
     e2e_deployment.ensure_deployed()
 
-    project_id = _get_project_id(e2e_deployment)
-    store_type = _get_store_type(e2e_deployment)
-
-    # Fetch the OAuth client secret from AWS Secrets Manager before restoring.
-    # The stored variables.yaml has this value masked (****) since feat: mask secrets (#171),
-    # so we need to re-supply it to jd config after restore.
-    secret_arn = _get_output(e2e_deployment, "secret_arn")
-    oauth_client_secret = _fetch_secret(secret_arn)
-
     with tempfile.TemporaryDirectory() as tmpdir:
-        restore_dir = Path(tmpdir) / "restored"
-
-        # Restore project
-        result = subprocess.run(
-            [
-                "jupyter-deploy",
-                "init",
-                str(restore_dir),
-                "--restore-project",
-                project_id,
-                "--store-type",
-                store_type,
-            ],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, f"Restore failed: {result.stdout}\n{result.stderr}"
-        assert restore_dir.exists(), "Restore directory should exist"
+        restore_dir = _restore_project_to_tmpdir(e2e_deployment, tmpdir)
 
         # Verify jd show --info works on restored project
         result = subprocess.run(
@@ -145,19 +125,59 @@ def test_restore_project_and_config(e2e_deployment: EndToEndDeployment) -> None:
         assert "Store Type" in result.stdout, "Restored project should show Store Type"
         assert "Store ID" in result.stdout, "Restored project should show Store ID"
 
-        # Verify jd config --skip-verify works on restored project.
-        # Pass the OAuth client secret explicitly since it's masked in variables.yaml.
+        # Verify jd config --restore-secrets --skip-verify works on restored project.
+        # --restore-secrets fetches masked secret values from AWS Secrets Manager.
         result = subprocess.run(
             [
                 "jupyter-deploy",
                 "config",
+                "--restore-secrets",
                 "--skip-verify",
-                "--oauth-app-client-secret",
-                oauth_client_secret,
             ],
             capture_output=True,
             text=True,
             cwd=str(restore_dir),
             timeout=300,
         )
-        assert result.returncode == 0, f"jd config --skip-verify failed: {result.stdout}\n{result.stderr}"
+        assert result.returncode == 0, f"jd config --restore-secrets failed: {result.stdout}\n{result.stderr}"
+
+        # Verify secrets remain masked in variables.yaml after config
+        variables_yaml = yaml.safe_load((restore_dir / "variables.yaml").read_text())
+        secret_value = variables_yaml["required_sensitive"]["oauth_app_client_secret"]
+        assert secret_value == "****", f"Secret should remain masked in variables.yaml, got '{secret_value}'"
+
+
+def test_restore_project_with_named_secret(e2e_deployment: EndToEndDeployment) -> None:
+    """Test that a project can be restored with a specific named secret.
+
+    This test:
+    1. Ensures deployment exists
+    2. Restores the project to a temp directory via jd init --restore-project
+    3. Verifies jd config --restore-secret oauth_app_client_secret --skip-verify succeeds
+       (selective restore of a single named secret — see #177)
+    """
+    e2e_deployment.ensure_deployed()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        restore_dir = _restore_project_to_tmpdir(e2e_deployment, tmpdir)
+
+        # Verify jd config --restore-secret <name> --skip-verify works on restored project.
+        result = subprocess.run(
+            [
+                "jupyter-deploy",
+                "config",
+                "--restore-secret",
+                "oauth_app_client_secret",
+                "--skip-verify",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=str(restore_dir),
+            timeout=300,
+        )
+        assert result.returncode == 0, f"jd config --restore-secret failed: {result.stdout}\n{result.stderr}"
+
+        # Verify secrets remain masked in variables.yaml after config
+        variables_yaml = yaml.safe_load((restore_dir / "variables.yaml").read_text())
+        secret_value = variables_yaml["required_sensitive"]["oauth_app_client_secret"]
+        assert secret_value == "****", f"Secret should remain masked in variables.yaml, got '{secret_value}'"

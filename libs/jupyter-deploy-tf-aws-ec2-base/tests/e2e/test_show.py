@@ -277,3 +277,40 @@ def test_show_info_includes_store_and_project_id(e2e_deployment: EndToEndDeploym
     assert "Project ID" in result.stdout, "Info table should contain Project ID row"
     # On a deployed project, all store fields should have values
     assert "N/A" not in result.stdout, "Store Type, Store ID, and Project ID should not be N/A on a deployed project"
+
+
+def test_show_sensitive_variable_is_masked(e2e_deployment: EndToEndDeployment) -> None:
+    """Test that jd show -v <sensitive_var> --text returns masked value.
+
+    This test:
+    1. Ensures deployment exists
+    2. Queries the sensitive variable oauth_app_client_secret via jd show --text
+    3. Verifies the output is the masked placeholder ****
+    """
+    e2e_deployment.ensure_deployed()
+
+    result = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "show", "--variable", "oauth_app_client_secret", "--text"]
+    )
+    value = result.stdout.strip()
+
+    assert value == "****", f"Expected masked value '****', got '{value}'"
+
+
+def test_show_reveal_sensitive_variable(e2e_deployment: EndToEndDeployment) -> None:
+    """Test that jd show -v <sensitive_var> --reveal --text returns the real secret.
+
+    This test:
+    1. Ensures deployment exists
+    2. Queries the sensitive variable with --reveal --text
+    3. Verifies the output is a non-empty value that is not the masked placeholder
+    """
+    e2e_deployment.ensure_deployed()
+
+    result = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "show", "--variable", "oauth_app_client_secret", "--reveal", "--text"]
+    )
+    value = result.stdout.strip()
+
+    assert value, "Revealed secret should not be empty"
+    assert value != "****", "Revealed secret should not be the masked placeholder"
