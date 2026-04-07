@@ -132,6 +132,7 @@ This project:
 | Name | Description |
 |---|---|
 | `deployment_id` | Unique identifier for this deployment |
+| `region` | Name of the AWS region where the resources are deployed |
 | `e2e_iam_role_arn` | ARN of the IAM role for E2E test workflows |
 | `release_iam_role_arn` | ARN of the IAM role for release workflows |
 | `auth_state_secret_arn` | ARN of the Secrets Manager secret for Playwright auth state |
