@@ -19,8 +19,8 @@ from pathlib import Path
 from ci_restore_base import (
     find_project_by_subdomain,
     get_subdomain_from_ci,
-    reconfigure_secret,
     restore_project,
+    restore_secrets,
 )
 
 
@@ -73,8 +73,8 @@ def main() -> None:
 
     restore_project(project_id, project_dir)
 
-    print("\nRe-populating OAuth client secret from CI...")
-    reconfigure_secret(ci_dir, oauth_app_num, project_dir)
+    print("\nRestoring secrets from cloud provider...")
+    restore_secrets(project_dir)
 
     takedown_project(project_dir)
     delete_project_from_store(project_id)

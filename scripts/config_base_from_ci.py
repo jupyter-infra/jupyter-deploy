@@ -32,7 +32,8 @@ def jd_variable_map(var_name: str, ci_dir: str) -> dict[str, str]:
         text=True,
         check=True,
     )
-    return ast.literal_eval(result.stdout.strip())
+    value: dict[str, str] = ast.literal_eval(result.stdout.strip())
+    return value
 
 
 def main() -> None:

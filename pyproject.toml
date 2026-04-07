@@ -77,13 +77,15 @@ mypy_path = [
     "libs/jupyter-deploy-tf-aws-ec2-base",
     "libs/jupyter-infra-tf-aws-iam-ci",
     "libs/pytest-jupyter-deploy",
+    "scripts",
 ]
 plugins = ["pydantic.mypy"]
 files = [
     "libs/jupyter-deploy",
     "libs/jupyter-deploy-tf-aws-ec2-base",
     "libs/jupyter-infra-tf-aws-iam-ci",
-    "libs/pytest-jupyter-deploy"
+    "libs/pytest-jupyter-deploy",
+    "scripts",
 ]
 # E2E tests excluded: conftest.py (pytest magic name, can't rename) causes
 # "Duplicate module" errors across templates sharing the tests/e2e/ structure.
