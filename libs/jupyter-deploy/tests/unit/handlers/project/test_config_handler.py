@@ -2,13 +2,20 @@ import unittest
 from pathlib import Path
 from unittest.mock import ANY, Mock, patch
 
+from jupyter_deploy.constants import MASKED_SECRET_VALUE
 from jupyter_deploy.engine.supervised_execution import NullDisplay
 from jupyter_deploy.enum import StoreType
-from jupyter_deploy.exceptions import InvalidPresetError, ProjectStoreNotFoundError
+from jupyter_deploy.exceptions import (
+    CommandNotImplementedError,
+    InvalidPresetError,
+    ProjectStoreNotFoundError,
+    SecretNotFoundError,
+)
 from jupyter_deploy.handlers.project.config_handler import ConfigHandler
 from jupyter_deploy.manifest import JupyterDeployManifestV1, JupyterDeployProjectStoreV1
 from jupyter_deploy.provider.store.store_manager import StoreInfo
 from jupyter_deploy.store_config import JupyterDeployStoreConfigV1
+from jupyter_deploy.variables_config import JupyterDeployVariablesConfig
 from jupyter_deploy.verify_utils import ToolRequiredError
 
 
@@ -563,3 +570,121 @@ class TestConfigHandler(unittest.TestCase):
         handler.mask_secrets()
 
         tf_mock_handler_instance.variables_handler.mask_secrets.assert_called_once()
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
+    def test_restore_secrets_raises_for_invalid_variable_name(
+        self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
+    ) -> None:
+        mock_retrieve_manifest.return_value = self.mock_manifest
+        tf_mock_handler_instance, _ = self.get_mock_handler_and_fns()
+        mock_tf_handler.return_value = tf_mock_handler_instance
+
+        # Set up variables_handler to return a config with no sensitive vars
+        mock_vars_config = JupyterDeployVariablesConfig(
+            schema_version=1,
+            required={"domain": "example.com"},
+            required_sensitive={},
+        )
+        tf_mock_handler_instance.variables_handler.variables_config = mock_vars_config
+
+        handler = ConfigHandler(display_manager=NullDisplay())
+        with self.assertRaises(SecretNotFoundError):
+            handler.restore_secrets(restore_names=["nonexistent_var"])
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
+    def test_restore_secrets_raises_when_no_reveal_command(
+        self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
+    ) -> None:
+        mock_retrieve_manifest.return_value = self.mock_manifest
+        tf_mock_handler_instance, _ = self.get_mock_handler_and_fns()
+        mock_tf_handler.return_value = tf_mock_handler_instance
+
+        mock_vars_config = JupyterDeployVariablesConfig(
+            schema_version=1,
+            required={},
+            required_sensitive={"my_secret": MASKED_SECRET_VALUE},
+        )
+        tf_mock_handler_instance.variables_handler.variables_config = mock_vars_config
+
+        handler = ConfigHandler(display_manager=NullDisplay())
+        with self.assertRaises(CommandNotImplementedError):
+            handler.restore_secrets(restore_all=True)
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ManifestCommandRunner")
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler._create_outputs_handler")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
+    def test_restore_secrets_fetches_and_writes_secret(
+        self,
+        mock_tf_handler: Mock,
+        mock_retrieve_manifest: Mock,
+        mock_create_outputs: Mock,
+        mock_cmd_runner_class: Mock,
+    ) -> None:
+        # Build manifest with secrets and secret.reveal command
+        manifest_data = {
+            "schema_version": 1,
+            "template": {"name": "test", "engine": "terraform", "version": "1.0.0"},
+            "secrets": [{"name": "oauth_secret", "source": "output", "source-key": "secret_arn"}],
+            "commands": [
+                {
+                    "cmd": "secret.reveal",
+                    "sequence": [
+                        {
+                            "api-name": "aws.secretsmanager.get-secret-value",
+                            "arguments": [{"api-attribute": "secret-id", "source": "cli", "source-key": "secret-id"}],
+                        }
+                    ],
+                    "results": [{"result-name": "secret-value", "source": "result", "source-key": "[0].SecretString"}],
+                }
+            ],
+        }
+        manifest = JupyterDeployManifestV1(**manifest_data)  # type: ignore
+        mock_retrieve_manifest.return_value = manifest
+
+        tf_mock_handler_instance, _ = self.get_mock_handler_and_fns()
+        mock_tf_handler.return_value = tf_mock_handler_instance
+
+        mock_vars_config = JupyterDeployVariablesConfig(
+            schema_version=1,
+            required={},
+            required_sensitive={"oauth_secret": MASKED_SECRET_VALUE},
+        )
+        tf_mock_handler_instance.variables_handler.variables_config = mock_vars_config
+
+        # Mock outputs handler with secret ARN
+        mock_outputs_handler: Mock = Mock()
+        mock_output_def: Mock = Mock()
+        mock_output_def.value = "arn:aws:secretsmanager:us-west-2:123:secret:test"
+        mock_outputs_handler.get_full_project_outputs.return_value = {
+            "secret_arn": mock_output_def,
+        }
+        mock_create_outputs.return_value = mock_outputs_handler
+
+        # Mock command runner
+        mock_runner: Mock = Mock()
+        mock_cmd_runner_class.return_value = mock_runner
+        mock_runner.run_command_sequence.return_value = (True, {})
+        mock_runner.get_result_value.return_value = "the-real-secret"
+
+        handler = ConfigHandler(display_manager=NullDisplay())
+        handler.restore_secrets(restore_all=True)
+
+        mock_runner.run_command_sequence.assert_called_once()
+        mock_runner.get_result_value.assert_called_once()
+        tf_mock_handler_instance.variables_handler.sync_project_variables_config.assert_called_once_with(
+            {"oauth_secret": "the-real-secret"}
+        )
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
+    def test_restore_secrets_noop_when_no_flags(self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock) -> None:
+        mock_retrieve_manifest.return_value = self.mock_manifest
+        tf_mock_handler_instance, _ = self.get_mock_handler_and_fns()
+        mock_tf_handler.return_value = tf_mock_handler_instance
+
+        handler = ConfigHandler(display_manager=NullDisplay())
+        # Should return immediately without error
+        handler.restore_secrets()

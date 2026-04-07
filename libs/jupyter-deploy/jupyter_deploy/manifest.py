@@ -6,12 +6,18 @@ from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.enum import (
     InstructionArgumentSource,
     ResultSource,
+    SecretSource,
     StoreType,
     TransformType,
     UpdateSource,
     ValueSource,
 )
-from jupyter_deploy.exceptions import CommandNotImplementedError, InvalidServiceError, InvalidStoreTypeError
+from jupyter_deploy.exceptions import (
+    CommandNotImplementedError,
+    InvalidServiceError,
+    InvalidStoreTypeError,
+    SecretNotFoundError,
+)
 
 
 class JupyterDeployTemplateV1(BaseModel):
@@ -30,6 +36,17 @@ class JupyterDeployValueV1(BaseModel):
     def get_source_type(self) -> ValueSource:
         """Return the declaration source type."""
         return ValueSource.from_string(self.source)
+
+
+class JupyterDeploySecretV1(BaseModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    name: str
+    source: str
+    source_key: str = Field(alias="source-key")
+
+    def get_source_type(self) -> SecretSource:
+        """Return the secret source type."""
+        return SecretSource.from_string(self.source)
 
 
 class JupyterDeployRequirementV1(BaseModel):
@@ -241,6 +258,7 @@ class JupyterDeployManifestV1(BaseModel):
     values: list[JupyterDeployValueV1] | None = None
     services: list[str] | None = None
     commands: list[JupyterDeployCommandV1] | None = None
+    secrets: list[JupyterDeploySecretV1] | None = None
     supervised_execution: JupyterDeploySupervisedExecutionV1 | None = Field(alias="supervised-execution", default=None)
     project_store: JupyterDeployProjectStoreV1 | None = Field(alias="project-store", default=None)
 
@@ -306,6 +324,21 @@ class JupyterDeployManifestV1(BaseModel):
         """Return true if the manifest defines the command, false otherwise."""
         command = next((cmd for cmd in (self.commands or []) if cmd.cmd == cmd_name), None)
         return command is not None
+
+    def get_secret(self, name: str) -> JupyterDeploySecretV1:
+        """Return the secret definition for the given variable name.
+
+        Raises:
+            SecretNotFoundError if the secret is not found in the manifest.
+        """
+        secret = next((s for s in (self.secrets or []) if s.name == name), None)
+        if not secret:
+            raise SecretNotFoundError(name, "no secret definition found in manifest")
+        return secret
+
+    def get_secrets(self) -> list[JupyterDeploySecretV1]:
+        """Return all declared secrets."""
+        return self.secrets or []
 
     def get_requirements(self) -> list[JupyterDeployRequirementV1]:
         """Return the list of requirements as declared in the manifest."""

@@ -90,6 +90,18 @@ class OutputNotFoundError(JupyterDeployError, KeyError):
         super().__init__(f"Output '{output_name}' not found.")
 
 
+class SecretNotFoundError(JupyterDeployError, RuntimeError):
+    """Raised when a secret cannot be restored from the cloud provider.
+
+    Attributes:
+        variable_name: The sensitive variable whose secret could not be restored
+    """
+
+    def __init__(self, variable_name: str, reason: str) -> None:
+        self.variable_name = variable_name
+        super().__init__(f"Cannot restore secret for '{variable_name}': {reason}")
+
+
 class InvalidPresetError(JupyterDeployError, ValueError):
     """Raised when an invalid preset name is provided.
 

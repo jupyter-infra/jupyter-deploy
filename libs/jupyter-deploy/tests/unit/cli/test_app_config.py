@@ -6,7 +6,12 @@ from typer.testing import CliRunner
 from jupyter_deploy.cli.app import runner as app_runner
 from jupyter_deploy.cli.simple_display import SimpleDisplayManager
 from jupyter_deploy.enum import StoreType
-from jupyter_deploy.exceptions import InvalidPresetError, LogCleanupError, SupervisedExecutionError
+from jupyter_deploy.exceptions import (
+    InvalidPresetError,
+    LogCleanupError,
+    SecretNotFoundError,
+    SupervisedExecutionError,
+)
 from jupyter_deploy.verify_utils import ToolRequiredError
 
 
@@ -29,6 +34,8 @@ class TestConfigCommand(unittest.TestCase):
         mock_has_used_preset = Mock()
 
         mock_reset_store_id = Mock()
+        mock_restore_secrets = Mock()
+        mock_mask_secrets = Mock()
 
         mock_config_handler.has_recorded_variables = mock_has_recorded_variables
         mock_config_handler.verify_preset_exists = mock_verify_preset_exists
@@ -43,6 +50,8 @@ class TestConfigCommand(unittest.TestCase):
         mock_config_handler.record = mock_record
         mock_config_handler.has_used_preset = mock_has_used_preset
         mock_config_handler.reset_store_id = mock_reset_store_id
+        mock_config_handler.restore_secrets = mock_restore_secrets
+        mock_config_handler.mask_secrets = mock_mask_secrets
 
         mock_has_recorded_variables.return_value = False
         mock_verify_preset_exists.return_value = True
@@ -66,6 +75,8 @@ class TestConfigCommand(unittest.TestCase):
             "record": mock_record,
             "has_used_preset": mock_has_used_preset,
             "reset_store_id": mock_reset_store_id,
+            "restore_secrets": mock_restore_secrets,
+            "mask_secrets": mock_mask_secrets,
         }
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
@@ -91,6 +102,7 @@ class TestConfigCommand(unittest.TestCase):
         mock_config_fns["record"].assert_called_once()
         mock_config_fns["reset_recorded_variables"].assert_not_called()
         mock_config_fns["reset_recorded_secrets"].assert_not_called()
+        mock_config_fns["restore_secrets"].assert_not_called()
         mock_config_fns["has_used_preset"].assert_called_with("all")
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
@@ -200,6 +212,7 @@ class TestConfigCommand(unittest.TestCase):
         mock_config_fns["record"].assert_not_called()
         mock_config_fns["reset_recorded_variables"].assert_not_called()
         mock_config_fns["reset_recorded_secrets"].assert_not_called()
+        mock_config_fns["restore_secrets"].assert_not_called()
         mock_config_fns["has_used_preset"].assert_not_called()
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
@@ -224,6 +237,7 @@ class TestConfigCommand(unittest.TestCase):
         mock_config_fns["record"].assert_not_called()
         mock_config_fns["reset_recorded_variables"].assert_not_called()
         mock_config_fns["reset_recorded_secrets"].assert_not_called()
+        mock_config_fns["restore_secrets"].assert_not_called()
         mock_config_fns["has_used_preset"].assert_not_called()
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
@@ -249,6 +263,7 @@ class TestConfigCommand(unittest.TestCase):
         mock_config_fns["record"].assert_not_called()
         mock_config_fns["reset_recorded_variables"].assert_not_called()
         mock_config_fns["reset_recorded_secrets"].assert_not_called()
+        mock_config_fns["restore_secrets"].assert_not_called()
         mock_config_fns["has_used_preset"].assert_not_called()
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
@@ -287,6 +302,7 @@ class TestConfigCommand(unittest.TestCase):
         mock_config_fns["set_preset"].assert_called_once_with("all")
         mock_config_fns["reset_recorded_variables"].assert_called_once()
         mock_config_fns["reset_recorded_secrets"].assert_called_once()
+        mock_config_fns["restore_secrets"].assert_not_called()
         mock_config_fns["verify"].assert_called_once()
         mock_config_fns["configure"].assert_called_once()
         mock_config_fns["record"].assert_called_once()
@@ -357,6 +373,7 @@ class TestConfigCommand(unittest.TestCase):
         mock_config_fns["record"].assert_called_once()
         mock_config_fns["reset_recorded_variables"].assert_not_called()
         mock_config_fns["reset_recorded_secrets"].assert_not_called()
+        mock_config_fns["restore_secrets"].assert_not_called()
         mock_config_fns["has_used_preset"].assert_called_once()
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
@@ -448,3 +465,83 @@ class TestConfigCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_config_fns["reset_store_id"].assert_not_called()
+
+    # --restore-secrets and --restore-secret tests
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    def test_config_restore_secrets_calls_handler(self, mock_config_handler: Mock) -> None:
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "--restore-secrets"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_config_fns["restore_secrets"].assert_called_once_with(restore_all=True, restore_names=None)
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    def test_config_restore_secret_single_calls_handler(self, mock_config_handler: Mock) -> None:
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "--restore-secret", "my_secret"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_config_fns["restore_secrets"].assert_called_once_with(restore_all=False, restore_names=["my_secret"])
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    def test_config_restore_secret_multiple_calls_handler(self, mock_config_handler: Mock) -> None:
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app_runner.app, ["config", "--restore-secret", "secret_a", "--restore-secret", "secret_b"]
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        mock_config_fns["restore_secrets"].assert_called_once_with(
+            restore_all=False, restore_names=["secret_a", "secret_b"]
+        )
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    def test_config_restore_secrets_and_restore_secret_are_mutually_exclusive(self, mock_config_handler: Mock) -> None:
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "--restore-secrets", "--restore-secret", "my_secret"])
+
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn("Cannot use --restore-secrets and --restore-secret", result.output)
+        mock_config_fns["restore_secrets"].assert_not_called()
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    def test_config_restore_secrets_runs_before_configure(self, mock_config_handler: Mock) -> None:
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        call_order: list[str] = []
+        mock_config_fns["restore_secrets"].side_effect = lambda **kw: call_order.append("restore_secrets")
+        mock_config_fns["ensure_store"].side_effect = lambda **kw: call_order.append("ensure_store")
+        mock_config_fns["configure"].side_effect = lambda **kw: call_order.append("configure")
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "--restore-secrets"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(call_order, ["restore_secrets", "ensure_store", "configure"])
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    def test_config_restore_secrets_error_stops_execution(self, mock_config_handler: Mock) -> None:
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+        mock_config_fns["restore_secrets"].side_effect = SecretNotFoundError("my_secret", "not found")
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "--restore-secrets"])
+
+        self.assertEqual(result.exit_code, 1)
+        mock_config_fns["restore_secrets"].assert_called_once()
+        mock_config_fns["configure"].assert_not_called()

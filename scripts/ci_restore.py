@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ci_helpers import fetch_value, jd_output, run_jd_config
+from ci_helpers import run_jd_config
 
 
 def discover_project_id() -> str:
@@ -50,33 +50,24 @@ def restore_project(project_id: str, ci_dir: Path) -> None:
     )
 
 
-def fetch_secrets_and_configure(ci_dir: Path) -> None:
-    """Fetch sensitive variables from AWS and pass them to jd config."""
-    ci_dir_str = str(ci_dir)
+def restore_secrets_and_configure(ci_dir: Path) -> None:
+    """Restore masked secrets via jd config --restore-secret and run config."""
+    # Restore all secrets EXCEPT github_bot_account_recovery_codes, which is
+    # protected by an explicit deny policy and not needed for E2E operations.
+    restore_names = [
+        "github_bot_account_password",
+        "github_bot_account_totp_secret",
+        *(f"github_oauth_app_client_secret_{i}" for i in range(1, 6)),
+    ]
+
     config_args: list[str] = []
+    for name in restore_names:
+        config_args.extend(["--restore-secret", name])
 
-    # Fetch bot account secrets (recovery codes excluded — protected by explicit deny,
-    # and not needed at runtime; only used as break-glass for account recovery)
-    for var in ("github_bot_account_password", "github_bot_account_totp_secret"):
-        arn = jd_output(f"{var}_secret_arn", ci_dir_str)
-        val = fetch_value(arn)
-        flag = f"--{var.replace('_', '-')}"
-        config_args.extend([flag, val])
-        print(f"  Fetched {var}")
-
-    # Recovery codes: pass masked placeholder — the actual value is protected by
-    # an explicit deny policy and isn't needed for E2E operations
+    # Keep recovery codes masked
     config_args.extend(["--github-bot-account-recovery-codes", "****"])
-    print("  Skipped github_bot_account_recovery_codes (protected secret)")
 
-    # Fetch OAuth app client secrets
-    for i in range(1, 6):
-        arn = jd_output(f"github_oauth_app_client_secret_{i}_arn", ci_dir_str)
-        val = fetch_value(arn)
-        config_args.extend([f"--github-oauth-app-client-secret-{i}", val])
-        print(f"  Fetched github_oauth_app_client_secret_{i}")
-
-    print("Running jd config with fetched secrets...")
+    print("Running jd config with --restore-secret for each restorable secret...")
     run_jd_config(config_args, str(ci_dir))
 
 
@@ -94,8 +85,8 @@ def main() -> None:
     restore_project(project_id, ci_dir)
 
     print()
-    print("Fetching secrets from AWS to re-populate sensitive variables...")
-    fetch_secrets_and_configure(ci_dir)
+    print("Restoring secrets and configuring...")
+    restore_secrets_and_configure(ci_dir)
 
     print(f"CI project restored and configured at {ci_dir}")
 

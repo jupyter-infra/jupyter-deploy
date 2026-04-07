@@ -1371,3 +1371,106 @@ class TestShowCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 1)
         self.assertIn("Cannot use display mode flags", result.output)
+
+    # --reveal flag tests
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_with_variable_and_reveal(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_fns["get_variable_str_value_and_description"].return_value = ("real-secret", "A secret")
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "-v", "my_secret", "--reveal"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_show_fns["get_variable_str_value_and_description"].assert_called_once_with("my_secret", reveal=True)
+        self.assertIn("real-secret", result.output)
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_with_variable_and_reveal_and_text(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_fns["get_variable_str_value_and_description"].return_value = ("real-secret", "A secret")
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "-v", "my_secret", "--reveal", "--text"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_show_fns["get_variable_str_value_and_description"].assert_called_once_with("my_secret", reveal=True)
+        self.assertIn("real-secret", result.output)
+        self.assertNotIn("[bold", result.output)
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_without_reveal_passes_false(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, mock_show_fns = self.get_mock_show_handler()
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "-v", "my_var"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_show_fns["get_variable_str_value_and_description"].assert_called_once_with("my_var", reveal=False)
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_reveal_without_variable_raises_error(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, _ = self.get_mock_show_handler()
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "--reveal"])
+
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn("--reveal can only be used with --variable", result.output)
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_reveal_with_description_raises_error(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, _ = self.get_mock_show_handler()
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "-v", "my_secret", "--reveal", "--description"])
+
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn("--reveal and --description cannot be used together", result.output)
+
+    @patch("jupyter_deploy.cli.app.ShowHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_show_command_reveal_with_output_raises_error(
+        self, mock_project_ctx_manager: Mock, mock_show_handler_cls: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestShowCommand.mock_project_dir
+
+        mock_show_handler_instance, _ = self.get_mock_show_handler()
+        mock_show_handler_cls.return_value = mock_show_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["show", "-o", "some_output", "--reveal"])
+
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn("--reveal can only be used with --variable", result.output)

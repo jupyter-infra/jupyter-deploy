@@ -56,6 +56,25 @@ class ResultSource(str, Enum):
         raise ValueError(f"No ResultSource found for '{source_str}'")
 
 
+class SecretSource(str, Enum):
+    """Enum to list the possible sources for a secret identifier."""
+
+    TEMPLATE_OUTPUT = "output"
+
+    @classmethod
+    def from_string(cls, source_str: str) -> "SecretSource":
+        """Return the enum value, ignoring case.
+
+        Raises:
+            ValueError: If no matching enum value is found.
+        """
+        source_lower = source_str.lower()
+        for source in cls:
+            if source.value.lower() == source_lower:
+                return source
+        raise ValueError(f"No SecretSource found for '{source_str}'")
+
+
 class ValueSource(str, Enum):
     """Enum to list the possible sources for a declared value."""
 

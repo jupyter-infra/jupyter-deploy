@@ -4,6 +4,11 @@ output "deployment_id" {
   value       = local.doc_postfix
 }
 
+output "region" {
+  description = "Name of the AWS region where the resources are deployed."
+  value       = data.aws_region.current.id
+}
+
 # IAM role ARNs
 output "e2e_iam_role_arn" {
   description = "ARN of the IAM role for E2E test workflows."

@@ -10,5 +10,45 @@ values:
 - name: deployment_id
   source: output
   source-key: deployment_id
+- name: aws_region
+  source: output
+  source-key: region
+secrets:
+- name: github_bot_account_password
+  source: output
+  source-key: github_bot_account_password_secret_arn
+- name: github_bot_account_recovery_codes
+  source: output
+  source-key: github_bot_account_recovery_codes_secret_arn
+- name: github_bot_account_totp_secret
+  source: output
+  source-key: github_bot_account_totp_secret_secret_arn
+- name: github_oauth_app_client_secret_1
+  source: output
+  source-key: github_oauth_app_client_secret_1_arn
+- name: github_oauth_app_client_secret_2
+  source: output
+  source-key: github_oauth_app_client_secret_2_arn
+- name: github_oauth_app_client_secret_3
+  source: output
+  source-key: github_oauth_app_client_secret_3_arn
+- name: github_oauth_app_client_secret_4
+  source: output
+  source-key: github_oauth_app_client_secret_4_arn
+- name: github_oauth_app_client_secret_5
+  source: output
+  source-key: github_oauth_app_client_secret_5_arn
+commands:
+- cmd: secret.reveal
+  sequence:
+  - api-name: aws.secretsmanager.get-secret-value
+    arguments:
+    - api-attribute: secret_id
+      source: cli
+      source-key: secret-id
+  results:
+  - result-name: secret-value
+    source: result
+    source-key: '[0].SecretString'
 project-store:
   store-type: s3-only

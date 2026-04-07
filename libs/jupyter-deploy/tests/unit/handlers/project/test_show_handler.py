@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition
 from jupyter_deploy.enum import StoreType
-from jupyter_deploy.exceptions import ProjectIdNotAvailableError
+from jupyter_deploy.exceptions import ProjectIdNotAvailableError, SecretNotFoundError
 from jupyter_deploy.handlers.project.show_handler import ShowHandler
 from jupyter_deploy.manifest import JupyterDeployManifestV1, JupyterDeployProjectStoreV1
 from jupyter_deploy.store_config import JupyterDeployStoreConfigV1
@@ -612,3 +612,80 @@ class TestShowHandler(unittest.TestCase):
         handler = ShowHandler()
 
         self.assertEqual(handler.get_resolved_store_id(), "my-bucket")
+
+    # --- reveal tests ---
+
+    @patch("jupyter_deploy.handlers.project.show_handler.ManifestCommandRunner")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    def test_reveal_sensitive_variable_fetches_real_value(
+        self, mock_retrieve_manifest: Mock, mock_cmd_runner_class: Mock
+    ) -> None:
+        manifest = JupyterDeployManifestV1(
+            **{  # type: ignore
+                "schema_version": 1,
+                "template": {"name": "test", "engine": "terraform", "version": "1.0.0"},
+                "secrets": [{"name": "my_secret", "source": "output", "source-key": "secret_arn"}],
+                "commands": [
+                    {
+                        "cmd": "secret.reveal",
+                        "sequence": [
+                            {
+                                "api-name": "aws.secretsmanager.get-secret-value",
+                                "arguments": [
+                                    {"api-attribute": "secret-id", "source": "cli", "source-key": "secret-id"}
+                                ],
+                            }
+                        ],
+                        "results": [
+                            {"result-name": "secret-value", "source": "result", "source-key": "[0].SecretString"}
+                        ],
+                    }
+                ],
+            }
+        )
+        mock_retrieve_manifest.return_value = manifest
+        handler = ShowHandler()
+
+        # Mock variable
+        mock_var: Mock = Mock()
+        mock_var.sensitive = True
+        mock_var.get_cli_description = Mock(return_value="A secret")
+        mock_vars = {"my_secret": mock_var}
+
+        # Mock output (ARN)
+        mock_output: Mock = Mock()
+        mock_output.value = "arn:aws:secretsmanager:us-west-2:123:secret:test"
+        mock_outputs = {"secret_arn": mock_output}
+
+        # Mock command runner
+        mock_runner: Mock = Mock()
+        mock_cmd_runner_class.return_value = mock_runner
+        mock_runner.run_command_sequence.return_value = (True, {})
+        mock_runner.get_result_value.return_value = "the-real-secret"
+
+        with (
+            patch.object(handler._variables_handler, "get_template_variables", return_value=mock_vars),
+            patch.object(handler._variables_handler, "sync_engine_varfiles_with_project_variables_config"),
+            patch.object(handler._outputs_handler, "get_full_project_outputs", return_value=mock_outputs),
+        ):
+            value, description = handler.get_variable_str_value_and_description("my_secret", reveal=True)
+
+        self.assertEqual(value, "the-real-secret")
+        self.assertEqual(description, "A secret")
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    def test_reveal_raises_when_no_secret_definition(self, mock_retrieve_manifest: Mock) -> None:
+        mock_retrieve_manifest.return_value = self.get_mock_manifest()
+        handler = ShowHandler()
+
+        mock_var: Mock = Mock()
+        mock_var.sensitive = True
+        mock_var.get_cli_description = Mock(return_value="A secret")
+        mock_vars = {"my_secret": mock_var}
+
+        with (
+            patch.object(handler._variables_handler, "get_template_variables", return_value=mock_vars),
+            patch.object(handler._variables_handler, "sync_engine_varfiles_with_project_variables_config"),
+            self.assertRaises(SecretNotFoundError),
+        ):
+            handler.get_variable_str_value_and_description("my_secret", reveal=True)

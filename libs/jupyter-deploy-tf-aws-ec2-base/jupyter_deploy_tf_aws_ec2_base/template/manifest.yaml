@@ -26,6 +26,10 @@ services:
 - jupyter
 - traefik
 - oauth
+secrets:
+- name: oauth_app_client_secret
+  source: output
+  source-key: secret_arn
 commands:
 - cmd: host.status
   sequence:
@@ -449,6 +453,17 @@ commands:
   - result-name: organization.get
     source: result
     source-key: '[0].StandardOutputContent'
+- cmd: secret.reveal
+  sequence:
+  - api-name: aws.secretsmanager.get-secret-value
+    arguments:
+    - api-attribute: secret_id
+      source: cli
+      source-key: secret-id
+  results:
+  - result-name: secret-value
+    source: result
+    source-key: '[0].SecretString'
 supervised-execution:
   config:
     config.terraform-plan:

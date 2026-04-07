@@ -463,6 +463,17 @@ commands:
       - variable-name: "organization_varname"
         source: "result"
         source-key: "[0].StandardOutputContent"
+  - cmd: "secret.reveal"
+    sequence:
+      - api-name: "aws.secretsmanager.get-secret-value"
+        arguments:
+          - api-attribute: "secret-id"
+            source: "cli"
+            source-key: "secret-id"
+    results:
+      - result-name: "secret-value"
+        source: "result"
+        source-key: "[0].SecretString"
   - cmd: "organization.get"
     sequence:
       - api-name: "aws.ssm.wait-command-sync"
@@ -480,6 +491,13 @@ commands:
       - result-name: "organization.get"
         source: "result"
         source-key: "[0].StandardOutputContent"
+secrets:
+  - name: oauth_app_client_secret
+    source: output
+    source-key: secret_arn
+  - name: another_secret
+    source: output
+    source-key: another_secret_arn
 supervised-execution:
   config:
     config.terraform-init:

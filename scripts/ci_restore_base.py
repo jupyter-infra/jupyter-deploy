@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-from ci_helpers import fetch_value, jd_output, run_jd_config
+from ci_helpers import run_jd_config
 
 
 def get_subdomain_from_ci(ci_dir: str, oauth_app_num: str) -> str:
@@ -110,12 +110,9 @@ def restore_project(project_id: str, project_dir: Path) -> None:
     )
 
 
-def reconfigure_secret(ci_dir: str, oauth_app_num: str, project_dir: Path) -> None:
-    """Re-populate the OAuth client secret from CI secrets (masked after restore)."""
-    client_secret_arn = jd_output(f"github_oauth_app_client_secret_{oauth_app_num}_arn", ci_dir)
-    client_secret = fetch_value(client_secret_arn)
-    print("  Fetched OAuth client secret from CI")
-    run_jd_config(["--oauth-app-client-secret", client_secret], str(project_dir))
+def restore_secrets(project_dir: Path) -> None:
+    """Restore all masked secrets in the base project via jd config --restore-secrets."""
+    run_jd_config(["--restore-secrets"], str(project_dir))
 
 
 def main() -> None:
@@ -147,8 +144,8 @@ def main() -> None:
     restore_project(project_id, project_dir)
 
     print()
-    print("Re-populating OAuth client secret from CI...")
-    reconfigure_secret(ci_dir, oauth_app_num, project_dir)
+    print("Restoring secrets from cloud provider...")
+    restore_secrets(project_dir)
 
     print(f"\nBase project restored at {project_dir} (subdomain: {subdomain})")
 

@@ -261,6 +261,14 @@ def config(
         str | None,
         typer.Option("--store-id", help="Pin a specific store."),
     ] = None,
+    restore_secrets: Annotated[
+        bool,
+        typer.Option("--restore-secrets", help="Restore all masked secret variable value."),
+    ] = False,
+    restore_secret: Annotated[
+        list[str] | None,
+        typer.Option("--restore-secret", help="Restore the specific variable secret value."),
+    ] = None,
     reset_store_id: Annotated[
         bool,
         typer.Option("--reset-store-id", help="Clear the pinned store ID and rediscover the store."),
@@ -345,6 +353,24 @@ def config(
             handler.reset_store_id()
             if verbose:
                 console.print(":white_check_mark: Store ID cleared from .jd/store.yaml")
+
+        # Validate --restore-secrets / --restore-secret are mutually exclusive
+        if restore_secrets and restore_secret:
+            err_console = Console(stderr=True)
+            err_console.print(
+                ":x: Cannot use --restore-secrets and --restore-secret at the same time.",
+                style="red",
+            )
+            raise typer.Exit(code=1)
+
+        # Restore secrets from its store if requested
+        if restore_secrets or restore_secret:
+            if verbose:
+                console.rule("[bold]jupyter-deploy:[/] restoring secrets")
+                handler.restore_secrets(restore_all=restore_secrets, restore_names=restore_secret)
+            else:
+                with display_manager.spinner("Restoring secrets..."):
+                    handler.restore_secrets(restore_all=restore_secrets, restore_names=restore_secret)
 
         if run_configure:
             if verbose:
@@ -656,6 +682,10 @@ def show(
         bool,
         typer.Option("--list", help="List names only (with --variables or --outputs)."),
     ] = False,
+    reveal: Annotated[
+        bool,
+        typer.Option("--reveal", help="Reveal the actual value of a sensitive variable."),
+    ] = False,
     text: Annotated[
         bool,
         typer.Option("--text", help="Output plain text without Rich markup."),
@@ -705,6 +735,16 @@ def show(
         err_console.print(":x: --description can only be used with --variable or --output.", style="red")
         raise typer.Exit(code=1)
 
+    if reveal and not variable:
+        err_console = Console(stderr=True)
+        err_console.print(":x: --reveal can only be used with --variable.", style="red")
+        raise typer.Exit(code=1)
+
+    if reveal and description:
+        err_console = Console(stderr=True)
+        err_console.print(":x: --reveal and --description cannot be used together.", style="red")
+        raise typer.Exit(code=1)
+
     if list_names and not (variables or outputs):
         err_console = Console(stderr=True)
         err_console.print(":x: --list can only be used with --variables or --outputs.", style="red")
@@ -721,18 +761,24 @@ def show(
         )
         raise typer.Exit(code=1)
 
-    console = Console(emoji=False, highlight=False)
+    console = Console()
+    output_console = Console(emoji=False, highlight=False)
+    display_manager = SimpleDisplayManager(console=console, pass_through=False)
     with handle_cli_errors(console), cmd_utils.project_dir(project_dir):
-        handler = ShowHandler()
+        handler = ShowHandler(display_manager=display_manager)
 
         # Handle single variable query
         if variable:
-            var_value, var_description = handler.get_variable_str_value_and_description(variable)
+            if reveal and not text:
+                with display_manager.spinner("Fetching secret value..."):
+                    var_value, var_description = handler.get_variable_str_value_and_description(variable, reveal=reveal)
+            else:
+                var_value, var_description = handler.get_variable_str_value_and_description(variable, reveal=reveal)
             display_text = var_description if description else var_value
             if text:
-                console.out(display_text)
+                output_console.out(display_text)
             else:
-                console.print(f"[bold cyan]{display_text}[/]")
+                output_console.print(f"[bold cyan]{display_text}[/]")
             return
 
         # Handle single output query
@@ -740,61 +786,61 @@ def show(
             out_value, out_description = handler.get_output_str_value_and_description(output)
             display_text = out_description if description else out_value
             if text:
-                console.out(display_text)
+                output_console.out(display_text)
             else:
-                console.print(f"[bold cyan]{display_text}[/]")
+                output_console.print(f"[bold cyan]{display_text}[/]")
             return
 
         # Handle template queries
         if template_name:
             result = handler.get_template_name()
             if text:
-                console.out(result)
+                output_console.out(result)
             else:
-                console.print(f"[bold cyan]{result}[/]")
+                output_console.print(f"[bold cyan]{result}[/]")
             return
 
         if template_version:
             result = handler.get_template_version()
             if text:
-                console.out(result)
+                output_console.out(result)
             else:
-                console.print(f"[bold cyan]{result}[/]")
+                output_console.print(f"[bold cyan]{result}[/]")
             return
 
         if template_engine:
             result = handler.get_template_engine()
             if text:
-                console.out(result)
+                output_console.out(result)
             else:
-                console.print(f"[bold cyan]{result}[/]")
+                output_console.print(f"[bold cyan]{result}[/]")
             return
 
         # Handle store/project queries
         if project_id:
             result = handler.get_project_id()
             if text:
-                console.out(result)
+                output_console.out(result)
             else:
-                console.print(f"[bold cyan]{result}[/]")
+                output_console.print(f"[bold cyan]{result}[/]")
             return
 
         if store_type:
             resolved = handler.get_resolved_store_type()
             result = "N/A" if resolved is None else resolved.value
             if text:
-                console.out(result)
+                output_console.out(result)
             else:
-                console.print(f"[bold cyan]{result}[/]")
+                output_console.print(f"[bold cyan]{result}[/]")
             return
 
         if store_id:
             resolved_id = handler.get_resolved_store_id()
             result = "N/A" if resolved_id is None else resolved_id
             if text:
-                console.out(result)
+                output_console.out(result)
             else:
-                console.print(f"[bold cyan]{result}[/]")
+                output_console.print(f"[bold cyan]{result}[/]")
             return
 
         # Handle list mode with --variables or --outputs (list names only)
@@ -802,18 +848,18 @@ def show(
             if variables and not info and not outputs:
                 names = handler.list_variable_names()
                 if text:
-                    console.out(",".join(names))
+                    output_console.out(",".join(names))
                 else:
                     for name in names:
-                        console.print(f"[bold cyan]{name}[/]")
+                        output_console.print(f"[bold cyan]{name}[/]")
                 return
             if outputs and not info and not variables:
                 names = handler.list_output_names()
                 if text:
-                    console.out(",".join(names))
+                    output_console.out(",".join(names))
                 else:
                     for name in names:
-                        console.print(f"[bold cyan]{name}[/]")
+                        output_console.print(f"[bold cyan]{name}[/]")
                 return
 
         # Handle normal display mode - get all data and format in CLI
@@ -828,9 +874,9 @@ def show(
 
         # Display basic info
         if show_info:
-            console.line()
-            console.print("Jupyter Deploy Project Information", style="bold cyan")
-            console.line()
+            output_console.line()
+            output_console.print("Jupyter Deploy Project Information", style="bold cyan")
+            output_console.line()
 
             info_table = Table(show_header=True, header_style="bold magenta")
             info_table.add_column("Property", style="cyan", no_wrap=True)
@@ -851,16 +897,16 @@ def show(
             resolved_project_id = handler.get_project_id_from_config()
             info_table.add_row("Project ID", resolved_project_id if resolved_project_id else "N/A")
 
-            console.print(info_table)
-            console.line()
+            output_console.print(info_table)
+            output_console.line()
 
         # Display variables
         if show_variables:
             all_variables = handler.get_full_variables()
 
-            console.line()
-            console.print("Project Variables", style="bold cyan")
-            console.line()
+            output_console.line()
+            output_console.print("Project Variables", style="bold cyan")
+            output_console.line()
 
             variables_table = Table(show_header=True, header_style="bold magenta")
             variables_table.add_column("Variable Name", style="cyan", no_wrap=True)
@@ -875,7 +921,7 @@ def show(
                     assigned_value = "****"
                 variables_table.add_row(var_name, assigned_value, var_desc)
 
-            console.print(variables_table)
+            output_console.print(variables_table)
 
         # Display outputs
         if show_outputs:
@@ -887,9 +933,9 @@ def show(
                 console.print("This is normal if the project has not been deployed yet.", style="yellow")
                 console.line()
             else:
-                console.line()
-                console.print("Project Outputs", style="bold cyan")
-                console.line()
+                output_console.line()
+                output_console.print("Project Outputs", style="bold cyan")
+                output_console.line()
 
                 output_table = Table(show_header=True, header_style="bold magenta")
                 output_table.add_column("Output Name", style="cyan", no_wrap=True)
@@ -901,7 +947,7 @@ def show(
                     out_val = str(out_def.value) if hasattr(out_def, "value") and out_def.value is not None else "N/A"
                     output_table.add_row(out_name, out_val, out_desc)
 
-                console.print(output_table)
+                output_console.print(output_table)
 
 
 class JupyterDeployApp(JupyterApp):

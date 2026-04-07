@@ -6,7 +6,7 @@ import yaml
 
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.enum import StoreType
-from jupyter_deploy.exceptions import InvalidStoreTypeError
+from jupyter_deploy.exceptions import InvalidStoreTypeError, SecretNotFoundError
 from jupyter_deploy.manifest import (
     InvalidServiceError,
     JupyterDeployManifestV1,
@@ -76,6 +76,46 @@ class TestJupyterDeployManifestV1(unittest.TestCase):
             **self.manifest_v1_parsed_content  # type: ignore
         )
         self.assertFalse(manifest.has_command("i.do.not.exist"))
+
+    def test_manifest_v1_get_secrets(self) -> None:
+        manifest = JupyterDeployManifestV1(
+            **self.manifest_v1_parsed_content  # type: ignore
+        )
+        secrets = manifest.get_secrets()
+        self.assertEqual(len(secrets), 2)
+        self.assertEqual(secrets[0].name, "oauth_app_client_secret")
+        self.assertEqual(secrets[0].source_key, "secret_arn")
+
+    def test_manifest_v1_get_secret_found(self) -> None:
+        manifest = JupyterDeployManifestV1(
+            **self.manifest_v1_parsed_content  # type: ignore
+        )
+        secret = manifest.get_secret("oauth_app_client_secret")
+        self.assertEqual(secret.name, "oauth_app_client_secret")
+        self.assertEqual(secret.source, "output")
+        self.assertEqual(secret.source_key, "secret_arn")
+
+    def test_manifest_v1_get_secret_raises_when_not_found(self) -> None:
+        manifest = JupyterDeployManifestV1(
+            **self.manifest_v1_parsed_content  # type: ignore
+        )
+        with self.assertRaises(SecretNotFoundError):
+            manifest.get_secret("i_do_not_exist")
+
+    def test_manifest_v1_get_secrets_empty_when_not_declared(self) -> None:
+        manifest = JupyterDeployManifestV1(
+            schema_version=1,
+            template={"name": "test", "engine": "terraform", "version": "1.0.0"},  # type: ignore
+        )
+        self.assertEqual(manifest.get_secrets(), [])
+        with self.assertRaises(SecretNotFoundError):
+            manifest.get_secret("anything")
+
+    def test_manifest_v1_has_secret_reveal_command(self) -> None:
+        manifest = JupyterDeployManifestV1(
+            **self.manifest_v1_parsed_content  # type: ignore
+        )
+        self.assertTrue(manifest.has_command("secret.reveal"))
 
     def test_manifest_v1_get_services(self) -> None:
         manifest = JupyterDeployManifestV1(
