@@ -110,6 +110,35 @@ variable "create_oidc_provider" {
   type        = bool
 }
 
+variable "test_results_bucket_prefix" {
+  description = <<-EOT
+    Prefix for the S3 bucket that stores E2E test results (screenshots from failed tests).
+
+    Terraform will append the deployment ID and AWS will append a random suffix
+    to ensure global uniqueness across all AWS accounts.
+
+    Must be lowercase alphanumeric with hyphens, 3-28 characters, cannot start or end with hyphen.
+
+    Example: jd-ci-e2e-results
+  EOT
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]+$", var.test_results_bucket_prefix))
+    error_message = "The test_results_bucket_prefix must contain only lowercase alphanumeric characters and hyphens."
+  }
+
+  validation {
+    condition     = can(regex("^[a-z0-9].*[a-z0-9]$", var.test_results_bucket_prefix))
+    error_message = "The test_results_bucket_prefix cannot start or end with a hyphen."
+  }
+
+  validation {
+    condition     = length(var.test_results_bucket_prefix) >= 3 && length(var.test_results_bucket_prefix) <= 28
+    error_message = "The test_results_bucket_prefix must be between 3 and 28 characters to allow for the deployment ID suffix (max 37 characters for bucket_prefix)."
+  }
+}
+
 variable "github_bot_account_email" {
   description = <<-EOT
     Email address of the GitHub bot account used by E2E CI.

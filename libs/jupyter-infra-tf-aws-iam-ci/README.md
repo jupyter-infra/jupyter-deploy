@@ -3,7 +3,8 @@
 The Jupyter Deploy AWS IAM CI template is an open-source infrastructure template that manages
 AWS resources needed by the E2E CI pipeline for [jupyter-deploy](https://github.com/jupyter-infra/jupyter-deploy).
 It uses Terraform as the infrastructure-as-code engine and creates IAM roles for GitHub Actions OIDC federation,
-Secrets Manager secrets for sensitive CI data, and SSM parameters for non-secret configuration.
+Secrets Manager secrets for sensitive CI data, SSM parameters for non-secret configuration,
+ECR repositories for pre-built E2E test images, and an S3 bucket for test result storage.
 
 This template creates two IAM roles (E2E and release), each scoped to a specific GitHub Actions environment
 via OIDC trust policies. The roles are hardened with deny statements that prevent self-modification
@@ -75,6 +76,8 @@ This project:
 - seeds secret values via `local-exec` provisioner to keep them out of Terraform state
 - applies resource-based deny policies on OAuth client secrets (deny write except maintainers)
 - applies resource-based deny policies on bot account secrets (deny all except maintainers)
+- creates 5 ECR repositories for pre-built E2E test container images (one per OAuth app, KMS-encrypted, lifecycle policy keeps last 5 images)
+- creates an S3 bucket for E2E test result uploads (KMS-encrypted, public access blocked, 90-day object expiration)
 - tags all resources with `Source`, `Template`, `Version`, and `DeploymentId`
 
 ## Requirements
@@ -94,6 +97,8 @@ This project:
 | `iam_role` | `template/engine/modules/iam_role` |
 | `secret` | `template/engine/modules/secret` |
 | `ssm_parameter` | `template/engine/modules/ssm_parameter` |
+| `ecr_repository` | `template/engine/modules/ecr_repository` |
+| `s3_bucket` | `template/engine/modules/s3_bucket` |
 
 ## Resources
 | Name | Type |
@@ -106,6 +111,12 @@ This project:
 | [aws_secretsmanager_secret_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret_policy) | resource |
 | [aws_ssm_parameter](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ssm_parameter) | resource |
 | [null_resource](https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource) | resource |
+| [aws_ecr_repository](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecr_repository) | resource |
+| [aws_ecr_lifecycle_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecr_lifecycle_policy) | resource |
+| [aws_s3_bucket](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
+| [aws_s3_bucket_server_side_encryption_configuration](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
+| [aws_s3_bucket_public_access_block](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
+| [aws_s3_bucket_lifecycle_configuration](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_lifecycle_configuration) | resource |
 | [aws_caller_identity](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_partition](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/partition) | data source |
 | [aws_region](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
@@ -127,6 +138,7 @@ This project:
 | github_bot_account_totp_secret | `string` | Required (sensitive) | TOTP seed (base32) for the GitHub bot account 2FA |
 | github_oauth_app_1..5 | `map(string)` | Required | OAuth app metadata: client_id, app_id, app_url, callback_url |
 | github_oauth_app_client_secret_1..5 | `string` | Required (sensitive) | GitHub OAuth app client secrets |
+| test_results_bucket_prefix | `string` | `jd-ci-e2e-results` | Prefix for the S3 bucket that stores E2E test results (3-28 chars) |
 
 ## Outputs
 | Name | Description |
@@ -142,6 +154,8 @@ This project:
 | `github_bot_account_email_arn` | ARN of the SSM parameter for GitHub bot account email |
 | `github_oauth_app_client_id_1..5_arn` | ARNs of the SSM parameters for OAuth app client IDs |
 | `github_oauth_app_client_secret_1..5_arn` | ARNs of the secrets for OAuth app client secrets |
+| `ecr_repository_url_1..5` | URLs of the ECR repositories for pre-built E2E test images |
+| `test_results_bucket_name` | Name of the S3 bucket for E2E test result uploads |
 
 ## License
 

@@ -37,3 +37,4 @@ defaults:
   iam_managed_policies_e2e: ["AdministratorAccess"]
   iam_managed_policies_release: ["AdministratorAccess"]
   maintainer_roles: ["Admin"]
+  test_results_bucket_prefix: jd-ci-e2e-results

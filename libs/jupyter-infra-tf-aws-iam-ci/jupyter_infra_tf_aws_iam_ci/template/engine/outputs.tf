@@ -99,3 +99,35 @@ output "github_oauth_app_client_secret_5_arn" {
   description = "ARN of the Secrets Manager secret for GitHub OAuth app #5 client secret."
   value       = module.github_oauth_app_client_secret_5.secret_arn
 }
+
+# ECR repositories for pre-built E2E images (x5)
+output "ecr_repository_url_1" {
+  description = "URL of the ECR repository for E2E image (OAuth app #1)."
+  value       = module.ecr_e2e_image_1.repository_url
+}
+
+output "ecr_repository_url_2" {
+  description = "URL of the ECR repository for E2E image (OAuth app #2)."
+  value       = module.ecr_e2e_image_2.repository_url
+}
+
+output "ecr_repository_url_3" {
+  description = "URL of the ECR repository for E2E image (OAuth app #3)."
+  value       = module.ecr_e2e_image_3.repository_url
+}
+
+output "ecr_repository_url_4" {
+  description = "URL of the ECR repository for E2E image (OAuth app #4)."
+  value       = module.ecr_e2e_image_4.repository_url
+}
+
+output "ecr_repository_url_5" {
+  description = "URL of the ECR repository for E2E image (OAuth app #5)."
+  value       = module.ecr_e2e_image_5.repository_url
+}
+
+# S3 bucket for E2E test results
+output "test_results_bucket_name" {
+  description = "Name of the S3 bucket for E2E test result uploads."
+  value       = module.test_results_bucket.bucket_name
+}

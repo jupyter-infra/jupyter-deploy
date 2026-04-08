@@ -122,8 +122,10 @@ resource "aws_secretsmanager_secret_policy" "bot_protected_restricted" {
         }
       },
       {
-        # Explicit action list — deliberately excludes PutResourcePolicy/DeleteResourcePolicy
-        # (to avoid locking out access permanently; policy-edit is denied on GitHub roles
+        # Explicit action list — deliberately excludes DescribeSecret (needed
+        # by CI for Terraform state refresh), ListSecretVersionIds (read-only
+        # metadata), and PutResourcePolicy/DeleteResourcePolicy (to avoid
+        # locking out access permanently; policy-edit is denied on GitHub roles
         # via identity-based policy).
         Sid       = "DenyWriteExceptMaintainers"
         Effect    = "Deny"
