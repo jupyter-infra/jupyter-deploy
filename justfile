@@ -204,9 +204,13 @@ test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-te
         fi
     fi
 
-    # Parse ci-dir from options early (needed for override file)
+    # Parse skip-build and ci-dir from options early (needed before compose up)
+    SKIP_BUILD="false"
     CI_DIR=""
     OPTIONS_STR_EARLY="{{options}}"
+    if echo "$OPTIONS_STR_EARLY" | grep -q "skip-build=true"; then
+        SKIP_BUILD="true"
+    fi
     if echo "$OPTIONS_STR_EARLY" | grep -qE "ci-dir="; then
         CI_DIR=$(echo "$OPTIONS_STR_EARLY" | grep -oE "ci-dir=[^,]+" | cut -d'=' -f2)
         if [ ! -d "$CI_DIR" ]; then
@@ -234,9 +238,13 @@ test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-te
     {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} down
     {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} -f "$OVERRIDE_FILE" up -d
 
-    # Re-sync files after restart (container loses synced files when restarted)
-    echo "Re-syncing project files after mount..."
-    just e2e-sync
+    if [ "$SKIP_BUILD" != "true" ]; then
+        # Re-sync files after restart (container loses synced files when restarted)
+        echo "Re-syncing project files after mount..."
+        just e2e-sync
+    else
+        echo "Skipping e2e-sync (using pre-built image)"
+    fi
 
     # Check if container is running
     if ! {{container-tool}} ps --filter "name={{e2e-container-name}}" --format "{{{{.Status}}}}" | grep -q "Up"; then
@@ -291,7 +299,7 @@ test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-te
         echo "Options: $OPTIONS_STR"
 
         # List of recognized options (for validation)
-        RECOGNIZED_OPTIONS="mutate destroy log-level ci-dir"
+        RECOGNIZED_OPTIONS="mutate destroy log-level ci-dir skip-build"
 
         # Validate all options are recognized
         IFS=',' read -ra OPTS <<< "$OPTIONS_STR"
@@ -339,6 +347,12 @@ test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-te
         if [ -n "$CI_DIR" ]; then
             PYTEST_ARGS="$PYTEST_ARGS --ci --ci-dir $CI_DIR"
             echo "  - CI mode: enabled (ci-dir=$CI_DIR)"
+        fi
+
+        # Parse skip-build option (use pre-built image, skip docker build + e2e-sync)
+        if echo "$OPTIONS_STR" | grep -q "skip-build=true"; then
+            SKIP_BUILD="true"
+            echo "  - skip-build: enabled (using pre-built image)"
         fi
     fi
 
@@ -638,6 +652,115 @@ auth-bot-email ci_dir="sandbox-ci":
 # Print the GitHub bot account username (email prefix before @)
 auth-bot-username ci_dir="sandbox-ci":
     @just auth-bot-email {{ci_dir}} | cut -d'@' -f1
+
+# Get the ECR repository URL for a given OAuth app number
+ci-e2e-ecr-url oauth_app_num ci_dir="sandbox-ci":
+    @uv run jd show -o ecr_repository_url_{{oauth_app_num}} --text -p {{ci_dir}}
+
+# Get the test results S3 bucket name
+ci-test-results-bucket ci_dir="sandbox-ci":
+    @uv run jd show -o test_results_bucket_name --text -p {{ci_dir}}
+
+# Upload test results to S3
+# Usage: just ci-upload-test-results <oauth-app-num> [ci-dir] [results-dir]
+ci-upload-test-results oauth_app_num ci_dir="sandbox-ci" results_dir="test-results":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [ ! -d "{{results_dir}}" ] || [ -z "$(ls -A {{results_dir}} 2>/dev/null)" ]; then
+        echo "No test results to upload ({{results_dir}} is empty or missing)"
+        exit 0
+    fi
+
+    TIMESTAMP=$(date -u +"%Y-%m-%d-%H-%M")
+    BUCKET=$(just ci-test-results-bucket {{ci_dir}})
+    S3_PATH="s3://${BUCKET}/${TIMESTAMP}/{{oauth_app_num}}/"
+
+    echo "Uploading test results to ${S3_PATH}..."
+    aws s3 cp "{{results_dir}}/" "$S3_PATH" --recursive
+    echo "✓ Uploaded to ${S3_PATH}"
+
+# Build the CI E2E image (base + workspace code + deps + playwright baked in)
+# This replaces `just e2e-up` + `just e2e-sync` with a single self-contained image.
+# Usage: just ci-e2e-build                          # local: no cache
+# Usage: just ci-e2e-build <ecr-url>:latest         # CI: use ECR :latest as layer cache
+ci-e2e-build cache_from="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    BASE_DOCKERFILE=$(uv run python -c \
+        "from pytest_jupyter_deploy.image import IMAGE_PATH; print(IMAGE_PATH / 'Dockerfile')")
+    BASE_DIR=$(dirname "$BASE_DOCKERFILE")
+
+    echo "Building base E2E image..."
+    {{container-tool}} build \
+        -f "$BASE_DOCKERFILE" \
+        --build-arg USER_UID={{HOST_UID}} \
+        --build-arg USER_GID={{HOST_GID}} \
+        -t jupyter-deploy-e2e:base \
+        "$BASE_DIR"
+
+    echo "Building CI E2E image..."
+    CACHE_ARG=""
+    if [ -n "{{cache_from}}" ]; then
+        CACHE_ARG="--cache-from={{cache_from}}"
+        echo "Using cache from: {{cache_from}}"
+    fi
+
+    {{container-tool}} build \
+        -f .github/Dockerfile.e2e \
+        --build-arg BASE_IMAGE=jupyter-deploy-e2e:base \
+        $CACHE_ARG \
+        -t jupyter-deploy-e2e:latest \
+        .
+
+    echo "✓ CI E2E image built: jupyter-deploy-e2e:latest"
+
+# Push the CI E2E image to ECR
+# Usage: just ci-e2e-push <oauth-app-num> [extra-tag]
+# Pushes as :latest, and also as :<extra-tag> if provided (e.g. git sha)
+ci-e2e-push oauth_app_num extra_tag="" ci_dir="sandbox-ci":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    ECR_URL=$(just ci-e2e-ecr-url {{oauth_app_num}} {{ci_dir}})
+    ECR_REGISTRY=$(echo "$ECR_URL" | cut -d'/' -f1)
+    REGION=$(uv run jd show -o region --text -p {{ci_dir}})
+
+    echo "Logging in to ECR..."
+    aws ecr get-login-password --region "$REGION" \
+        | {{container-tool}} login --username AWS --password-stdin "$ECR_REGISTRY"
+
+    echo "Pushing to $ECR_URL..."
+    {{container-tool}} tag jupyter-deploy-e2e:latest "$ECR_URL:latest"
+    {{container-tool}} push "$ECR_URL:latest"
+
+    if [ -n "{{extra_tag}}" ]; then
+        {{container-tool}} tag jupyter-deploy-e2e:latest "$ECR_URL:{{extra_tag}}"
+        {{container-tool}} push "$ECR_URL:{{extra_tag}}"
+        echo "✓ Pushed $ECR_URL:latest and $ECR_URL:{{extra_tag}}"
+    else
+        echo "✓ Pushed $ECR_URL:latest"
+    fi
+
+# Pull a CI E2E image from ECR and tag as jupyter-deploy-e2e:latest
+# Usage: just ci-e2e-pull <oauth-app-num> [tag]
+ci-e2e-pull oauth_app_num tag="latest" ci_dir="sandbox-ci":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    ECR_URL=$(just ci-e2e-ecr-url {{oauth_app_num}} {{ci_dir}})
+    ECR_REGISTRY=$(echo "$ECR_URL" | cut -d'/' -f1)
+    REGION=$(uv run jd show -o region --text -p {{ci_dir}})
+
+    echo "Logging in to ECR..."
+    aws ecr get-login-password --region "$REGION" \
+        | {{container-tool}} login --username AWS --password-stdin "$ECR_REGISTRY"
+
+    echo "Pulling $ECR_URL:{{tag}}..."
+    {{container-tool}} pull "$ECR_URL:{{tag}}"
+    {{container-tool}} tag "$ECR_URL:{{tag}}" jupyter-deploy-e2e:latest
+    echo "✓ Pulled and tagged as jupyter-deploy-e2e:latest"
 
 # Generate .env for base template E2E tests
 # Two modes:

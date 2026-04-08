@@ -1,6 +1,27 @@
 name: E2E base template (fresh deploy)
 
 on:
+  workflow_call:
+    inputs:
+      oauth-app-num:
+        description: "OAuth app number (1-3) — determines subdomain"
+        required: true
+        type: string
+      test-filter:
+        description: "Pytest -k filter (applied to all jobs, empty = all tests)"
+        required: false
+        type: string
+        default: ""
+      skip-deployment:
+        description: "Skip cleanup + deploy, run tests only (project must already be in S3)"
+        required: false
+        type: boolean
+        default: false
+      ref:
+        description: "Git ref to checkout (e.g. refs/pull/185/merge for a fork PR)"
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       oauth-app-num:
@@ -34,6 +55,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # --- Build E2E image (runs in parallel with cleanup) ---
+
+  build-image:
+    name: "Build E2E image"
+    uses: ./.github/workflows/e2e-build-image.yml
+    secrets: inherit
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      ref: ${{ inputs.ref }}
+
   # --- Deploy bookend ---
 
   cleanup-existing:
@@ -79,7 +110,7 @@ jobs:
 
   deploy:
     name: "Deploy from scratch"
-    needs: cleanup-existing
+    needs: [build-image, cleanup-existing]
     if: ${{ !inputs.skip-deployment }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -124,8 +155,11 @@ jobs:
       - name: Import auth state
         run: just auth-import sandbox-ci
 
+      - name: Pull pre-built E2E image
+        run: just ci-e2e-pull ${{ inputs.oauth-app-num }} ${{ needs.build-image.outputs.ecr-tag }}
+
       - name: Deploy and verify
-        run: just test-e2e-base sandbox-e2e "test_deployment" "mutate=true,ci-dir=sandbox-ci"
+        run: just test-e2e-base sandbox-e2e "test_deployment" "mutate=true,skip-build=true,ci-dir=sandbox-ci"
 
       - name: Export auth state
         if: always()
@@ -139,11 +173,16 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
 
+      - name: Upload test results to S3
+        if: failure()
+        continue-on-error: true
+        run: just ci-upload-test-results ${{ inputs.oauth-app-num }}
+
   # --- Gate: allows test chain to start when deploy succeeded or was skipped ---
 
   deploy-gate:
     name: "Deploy gate"
-    needs: [cleanup-existing, deploy]
+    needs: [build-image, cleanup-existing, deploy]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 1
@@ -163,76 +202,82 @@ jobs:
 
   test-non-mutating:
     name: "Non-mutating tests"
-    needs: deploy-gate
+    needs: [build-image, deploy-gate]
     uses: ./.github/workflows/e2e-base-job.yml
     secrets: inherit
     with:
       oauth-app-num: ${{ inputs.oauth-app-num }}
       test-filter: ${{ inputs.test-filter }}
       ref: ${{ inputs.ref }}
+      ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
       timeout-minutes: 120
 
   test-external-volumes:
     name: "Mutating: external volumes"
-    needs: test-non-mutating
+    needs: [build-image, test-non-mutating]
     uses: ./.github/workflows/e2e-base-job.yml
     secrets: inherit
     with:
       oauth-app-num: ${{ inputs.oauth-app-num }}
       test-filter: ${{ inputs.test-filter }}
       ref: ${{ inputs.ref }}
+      ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
       test-file-filter: test_external_volumes
       mutate: true
       timeout-minutes: 30
 
   test-config-apply:
     name: "Mutating: config apply"
-    needs: test-external-volumes
+    needs: [build-image, test-external-volumes]
     uses: ./.github/workflows/e2e-base-job.yml
     secrets: inherit
     with:
       oauth-app-num: ${{ inputs.oauth-app-num }}
       test-filter: ${{ inputs.test-filter }}
       ref: ${{ inputs.ref }}
+      ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
       test-file-filter: test_config_apply
       mutate: true
       timeout-minutes: 30
 
   test-gpu:
     name: "Mutating: GPU"
-    needs: test-config-apply
+    needs: [build-image, test-config-apply]
     uses: ./.github/workflows/e2e-base-job.yml
     secrets: inherit
     with:
       oauth-app-num: ${{ inputs.oauth-app-num }}
       test-filter: ${{ inputs.test-filter }}
       ref: ${{ inputs.ref }}
+      ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
       test-file-filter: test_gpu
       mutate: true
       timeout-minutes: 60
 
   test-pixi:
     name: "Mutating: pixi"
-    needs: test-gpu
+    needs: [build-image, test-gpu]
     uses: ./.github/workflows/e2e-base-job.yml
     secrets: inherit
     with:
       oauth-app-num: ${{ inputs.oauth-app-num }}
       test-filter: ${{ inputs.test-filter }}
       ref: ${{ inputs.ref }}
+      ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
       test-file-filter: test_pixi
       mutate: true
       timeout-minutes: 60
 
   test-uv:
     name: "Mutating: uv"
-    needs: test-pixi
+    needs: [build-image, test-pixi]
     uses: ./.github/workflows/e2e-base-job.yml
     secrets: inherit
     with:
       oauth-app-num: ${{ inputs.oauth-app-num }}
       test-filter: ${{ inputs.test-filter }}
       ref: ${{ inputs.ref }}
+      ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
       test-file-filter: test_uv
       mutate: true
       timeout-minutes: 60

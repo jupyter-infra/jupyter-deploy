@@ -1,0 +1,69 @@
+name: Build E2E image
+
+on:
+  workflow_call:
+    inputs:
+      oauth-app-num:
+        description: "OAuth app number (determines which ECR repo)"
+        required: true
+        type: string
+      ref:
+        description: "Git ref to checkout (default: triggering ref)"
+        required: false
+        type: string
+        default: ""
+    outputs:
+      ecr-tag:
+        description: "ECR image tag for test jobs to pull"
+        value: ${{ jobs.build.outputs.ecr-tag }}
+
+jobs:
+  build:
+    name: Build and push E2E image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      ecr-tag: ${{ github.sha }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Pull previous image for cache
+        run: just ci-e2e-pull ${{ inputs.oauth-app-num }} || true
+
+      - name: Build CI E2E image
+        run: |
+          ECR_URL=$(just ci-e2e-ecr-url ${{ inputs.oauth-app-num }})
+          just ci-e2e-build "$ECR_URL:latest"
+
+      - name: Push to ECR
+        run: just ci-e2e-push ${{ inputs.oauth-app-num }} ${{ github.sha }}

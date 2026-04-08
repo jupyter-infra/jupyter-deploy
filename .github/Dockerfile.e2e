@@ -1,0 +1,44 @@
+# CI-optimized E2E image: extends base image with Python deps, Playwright, and workspace code.
+#
+# Layer strategy (dep-first COPY):
+#   1. Copy dependency manifests only → uv sync (cached when deps unchanged)
+#   2. Install Playwright browsers (cached when version unchanged)
+#   3. Copy full workspace source (cheap, changes every run)
+#
+# The base image is built from libs/pytest-jupyter-deploy (system packages, Terraform, AWS CLI).
+# This image adds everything that `just e2e-sync` would normally install at runtime.
+
+ARG BASE_IMAGE=jupyter-deploy-e2e:latest
+FROM ${BASE_IMAGE}
+
+# --- Dependency layer (cached when uv.lock / pyproject.toml unchanged) ---
+# Copy manifests and create stub files that hatchling validates (LICENSE, README.md).
+# Stubs avoid copying actual content that would bust the cache on every edit.
+USER root
+COPY --chown=testuser:testuser uv.lock pyproject.toml /workspace/
+COPY --chown=testuser:testuser libs/jupyter-deploy/pyproject.toml /workspace/libs/jupyter-deploy/
+COPY --chown=testuser:testuser libs/jupyter-deploy-tf-aws-ec2-base/pyproject.toml /workspace/libs/jupyter-deploy-tf-aws-ec2-base/
+COPY --chown=testuser:testuser libs/jupyter-infra-tf-aws-iam-ci/pyproject.toml /workspace/libs/jupyter-infra-tf-aws-iam-ci/
+COPY --chown=testuser:testuser libs/pytest-jupyter-deploy/pyproject.toml /workspace/libs/pytest-jupyter-deploy/
+RUN for lib in jupyter-deploy jupyter-deploy-tf-aws-ec2-base jupyter-infra-tf-aws-iam-ci pytest-jupyter-deploy; do \
+        touch /workspace/libs/$lib/LICENSE /workspace/libs/$lib/README.md; \
+    done && chown -R testuser /workspace/libs
+USER testuser
+
+RUN cd /workspace && uv sync --all-packages
+
+# --- Playwright layer (cached when playwright version unchanged) ---
+RUN cd /workspace && uv run playwright install firefox && \
+    mkdir -p ~/.local/bin && \
+    ln -sf ~/.cache/ms-playwright/firefox-*/firefox/firefox ~/.local/bin/firefox
+
+# --- Source code layer (changes every run, but cheap) ---
+USER root
+COPY --chown=testuser:testuser . /workspace/
+USER testuser
+
+# Re-run uv sync to register the full source packages (editable installs).
+# The heavy download/build work was done above; this just updates .pth files.
+RUN cd /workspace && uv sync --all-packages
+
+CMD ["sleep", "infinity"]

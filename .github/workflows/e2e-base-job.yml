@@ -32,6 +32,11 @@ on:
         required: false
         type: string
         default: ""
+      ecr-tag:
+        description: "ECR image tag to pull (skip docker build + e2e-sync when set)"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   test:
@@ -86,6 +91,10 @@ jobs:
       - name: Ensure host is running
         run: just ensure-host-running sandbox-e2e
 
+      - name: Pull pre-built E2E image
+        if: inputs.ecr-tag != ''
+        run: just ci-e2e-pull ${{ inputs.oauth-app-num }} ${{ inputs.ecr-tag }}
+
       - name: Build test filter
         id: filter
         run: |
@@ -109,6 +118,9 @@ jobs:
           if [ "${{ inputs.mutate }}" = "true" ]; then
             OPTIONS="mutate=true,${OPTIONS}"
           fi
+          if [ -n "${{ inputs.ecr-tag }}" ]; then
+            OPTIONS="skip-build=true,${OPTIONS}"
+          fi
           echo "options=${OPTIONS}" >> "$GITHUB_OUTPUT"
 
       - name: Run E2E tests
@@ -125,3 +137,8 @@ jobs:
           name: test-results-${{ inputs.test-file-filter || 'non-mutating' }}
           path: test-results/
           if-no-files-found: ignore
+
+      - name: Upload test results to S3
+        if: failure()
+        continue-on-error: true
+        run: just ci-upload-test-results ${{ inputs.oauth-app-num }}
