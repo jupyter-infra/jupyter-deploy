@@ -1,8 +1,9 @@
 import unittest
 from pathlib import Path
 
-import hcl2
+import hcl2  # type: ignore[import-untyped]
 import yaml
+from jupyter_deploy.engine.terraform.tf_varfiles import strip_hcl2_quotes
 from jupyter_deploy.handlers import base_project_handler
 
 from jupyter_infra_tf_aws_iam_ci.template import TEMPLATE_PATH
@@ -31,12 +32,12 @@ class TestVariablesYaml(unittest.TestCase):
         # Read and parse defaults-all.tfvars
         with open(defaults_all_filepath) as defaults_tfvars_file:
             defaults_tfvars_content = defaults_tfvars_file.read()
-            TestVariablesYaml.DEFAULTS_ALL_TFVARS = hcl2.loads(defaults_tfvars_content)
+            TestVariablesYaml.DEFAULTS_ALL_TFVARS = strip_hcl2_quotes(hcl2.loads(defaults_tfvars_content))
 
         # Read and parse variables.tf
         with open(variables_tf_filepath) as variables_tf_file:
             variables_tf_content = variables_tf_file.read()
-            parsed_tf = hcl2.loads(variables_tf_content)
+            parsed_tf = strip_hcl2_quotes(hcl2.loads(variables_tf_content))
 
             tf_variables = {}
             for var in parsed_tf.get("variable", []):

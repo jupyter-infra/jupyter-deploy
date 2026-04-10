@@ -1,9 +1,39 @@
 from typing import Any
 
-import hcl2
+import hcl2  # type: ignore[import-untyped]
 from pydantic import ValidationError
 
 from jupyter_deploy.engine.terraform import tf_plan, tf_vardefs
+
+_HCL2_LITERAL_MAP: dict[str, Any] = {"null": None, "true": True, "false": False}
+
+
+def strip_hcl2_quotes(obj: Any) -> Any:
+    """Normalize python-hcl2 v8+ parsed output to match v7 behavior.
+
+    v8 changes:
+    - Quoted HCL strings keep their quotes: "region" → '"region"' (v7 returned 'region')
+    - HCL literals returned as strings: null → 'null', true → 'true' (v7 returned None/True)
+    - Comments collected in '__comments__' key (v7 discarded them)
+
+    This recursively strips outer quotes, converts literal strings back to Python types,
+    and removes the '__comments__' key.
+    """
+    if isinstance(obj, str):
+        if len(obj) >= 2 and obj[0] == '"' and obj[-1] == '"':
+            return obj[1:-1]
+        if obj in _HCL2_LITERAL_MAP:
+            return _HCL2_LITERAL_MAP[obj]
+        return obj
+    if isinstance(obj, dict):
+        return {
+            strip_hcl2_quotes(k): strip_hcl2_quotes(v)
+            for k, v in obj.items()
+            if k != "__comments__" and k != "__is_block__"
+        }
+    if isinstance(obj, list):
+        return [strip_hcl2_quotes(item) for item in obj]
+    return obj
 
 
 def parse_variables_dot_tf_content(content: str) -> dict[str, tf_vardefs.TerraformVariableDefinition]:
@@ -11,7 +41,7 @@ def parse_variables_dot_tf_content(content: str) -> dict[str, tf_vardefs.Terrafo
     if not content:
         return {}
 
-    parsed_variables_dot_tf = hcl2.loads(content)
+    parsed_variables_dot_tf = strip_hcl2_quotes(hcl2.loads(content))
     parsed_vars = tf_vardefs.ParsedVariablesDotTf(**parsed_variables_dot_tf)
 
     parsed_vars_definitions = parsed_vars.variable
@@ -66,7 +96,7 @@ def parse_dot_tfvars_content_and_add_defaults(
     This method skips the value of all sensitive variables, as defined in the 'variable_defs'
     parameter.
     """
-    parsed_vars_name_default_value_map = hcl2.loads(content)
+    parsed_vars_name_default_value_map = strip_hcl2_quotes(hcl2.loads(content))
 
     for var_name, var_default in parsed_vars_name_default_value_map.items():
         varname = var_name if isinstance(var_name, str) else None
@@ -103,7 +133,7 @@ def parse_and_update_dot_tfvars_content(
     if not content:
         saved_values: dict[str, Any] = {}
     else:
-        saved_values = hcl2.loads(content)
+        saved_values = strip_hcl2_quotes(hcl2.loads(content))
     saved_values.update(varvalues)
     return tf_plan.format_values_for_dot_tfvars(saved_values)
 
@@ -116,7 +146,7 @@ def parse_and_remove_overridden_variables_from_content(
     if not content:
         saved_values: dict[str, Any] = {}
     else:
-        saved_values = hcl2.loads(content)
+        saved_values = strip_hcl2_quotes(hcl2.loads(content))
     for varname in varnames_to_remove:
         if varname in saved_values:
             del saved_values[varname]

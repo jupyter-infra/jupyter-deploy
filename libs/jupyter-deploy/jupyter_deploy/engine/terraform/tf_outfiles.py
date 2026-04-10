@@ -1,6 +1,7 @@
-import hcl2
+import hcl2  # type: ignore[import-untyped]
 
 from jupyter_deploy.engine.terraform import tf_outdefs
+from jupyter_deploy.engine.terraform.tf_varfiles import strip_hcl2_quotes
 
 
 def extract_description_from_dot_tf_content(content: str) -> dict[str, str]:
@@ -8,7 +9,7 @@ def extract_description_from_dot_tf_content(content: str) -> dict[str, str]:
     if not content:
         return {}
 
-    parsed_outputs_dot_tf = hcl2.loads(content)
+    parsed_outputs_dot_tf = strip_hcl2_quotes(hcl2.loads(content))
     parsed_outputs = tf_outdefs.ParsedOutputsDotTf(**parsed_outputs_dot_tf)
     parsed_outputs_definitions = parsed_outputs.output
 
