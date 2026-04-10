@@ -7,9 +7,11 @@
 | `ci.yml` | push/PR | Lint + unit tests |
 | `lint.yml`, `test.yml` | `workflow_call` | Reusable lint/test jobs |
 | `release.yml` | `workflow_dispatch` | Publish one of the packages to PyPI |
-| `pr-e2e-base.yml` | `workflow_dispatch` | E2E tests against an existing deployment |
-| `pr-e2e-base-fresh.yml` | `workflow_dispatch` | Deploy from scratch + full E2E chain |
-| `e2e-base-job.yml` | `workflow_call` | Reusable E2E job (called by the two above) |
+| `e2e-base.yml` | `workflow_dispatch` | E2E tests against an existing deployment |
+| `e2e-base-fresh.yml` | `workflow_dispatch` / `workflow_call` | Deploy from scratch + full E2E chain |
+| `e2e-base-release.yml` | `workflow_call` | Release gate — calls fresh workflow with Test PyPI install |
+| `e2e-base-canary.yml` | `schedule` / `workflow_dispatch` | Weekly canary — calls fresh workflow |
+| `e2e-base-job.yml` | `workflow_call` | Reusable E2E job (called by the above) |
 
 ## Testing Workflow Changes
 

@@ -15,10 +15,11 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Terraform
+ARG TF_VERSION=1.5.7
 RUN wget -qO- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg && \
     echo 'deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com bookworm main' | tee /etc/apt/sources.list.d/hashicorp.list && \
     apt-get update && \
-    apt-get install -y terraform=1.5.7-1 && \
+    apt-get install -y terraform=${TF_VERSION}-1 && \
     rm -rf /var/lib/apt/lists/*
 
 # Install AWS CLI

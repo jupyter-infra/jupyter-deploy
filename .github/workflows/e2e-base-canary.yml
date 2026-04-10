@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   canary:
-    uses: ./.github/workflows/pr-e2e-base-fresh.yml
+    uses: ./.github/workflows/e2e-base-fresh.yml
     with:
       oauth-app-num: "3"
     secrets: inherit

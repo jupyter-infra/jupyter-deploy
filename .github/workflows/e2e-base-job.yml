@@ -93,7 +93,7 @@ jobs:
 
       - name: Pull pre-built E2E image
         if: inputs.ecr-tag != ''
-        run: just ci-e2e-pull ${{ inputs.oauth-app-num }} ${{ inputs.ecr-tag }}
+        run: just ci-e2e-base-pull ${{ inputs.oauth-app-num }} ${{ inputs.ecr-tag }}
 
       - name: Build test filter
         id: filter
@@ -119,7 +119,7 @@ jobs:
             OPTIONS="mutate=true,${OPTIONS}"
           fi
           if [ -n "${{ inputs.ecr-tag }}" ]; then
-            OPTIONS="skip-build=true,${OPTIONS}"
+            OPTIONS="skip-sync=true,${OPTIONS}"
           fi
           echo "options=${OPTIONS}" >> "$GITHUB_OUTPUT"
 

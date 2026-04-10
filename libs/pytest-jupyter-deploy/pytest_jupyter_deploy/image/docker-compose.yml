@@ -6,7 +6,7 @@ services:
       args:
         USER_UID: ${HOST_UID:-1000}
         USER_GID: ${HOST_GID:-1000}
-    image: jupyter-deploy-e2e:latest
+    image: ${E2E_IMAGE:-jupyter-deploy-e2e:latest}
     container_name: jupyter-deploy-e2e
     # Required for X11 forwarding: .Xauthority cookies are hostname-specific
     hostname: ${HOSTNAME:-localhost}

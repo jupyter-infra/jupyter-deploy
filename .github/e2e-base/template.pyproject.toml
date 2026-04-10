@@ -1,0 +1,23 @@
+# Template for release-mode E2E testing.
+# Placeholders are replaced at build time by the Dockerfile:
+#   {{PKG_VERSION}}     — version to pin from EXTRA_INDEX_URL
+#   {{EXTRA_INDEX_URL}} — index for the package under test (default: Test PyPI)
+[project]
+name = "e2e-base-release"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "jupyter-deploy[aws]",
+    "pytest-jupyter-deploy[ui]",
+    "pytest-cov",
+    "jupyter-deploy-tf-aws-ec2-base=={{PKG_VERSION}}",
+]
+
+[[tool.uv.index]]
+name = "extra"
+url = "{{EXTRA_INDEX_URL}}"
+explicit = true
+
+[tool.uv.sources]
+jupyter-deploy-tf-aws-ec2-base = { index = "extra" }
+pytest-jupyter-deploy = { path = "libs/pytest-jupyter-deploy", editable = true }

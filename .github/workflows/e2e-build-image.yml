@@ -12,6 +12,16 @@ on:
         required: false
         type: string
         default: ""
+      install-mode:
+        description: "Install mode: workspace (default) or release (Test PyPI)"
+        required: false
+        type: string
+        default: "workspace"
+      pkg-version:
+        description: "Package version (required when install-mode=release)"
+        required: false
+        type: string
+        default: ""
     outputs:
       ecr-tag:
         description: "ECR image tag for test jobs to pull"
@@ -58,12 +68,16 @@ jobs:
         run: just ci-restore sandbox-ci
 
       - name: Pull previous image for cache
-        run: just ci-e2e-pull ${{ inputs.oauth-app-num }} || true
+        run: just ci-e2e-base-pull ${{ inputs.oauth-app-num }} || true
 
       - name: Build CI E2E image
         run: |
-          ECR_URL=$(just ci-e2e-ecr-url ${{ inputs.oauth-app-num }})
-          just ci-e2e-build "$ECR_URL:latest"
+          ECR_URL=$(just ci-e2e-base-ecr-url ${{ inputs.oauth-app-num }})
+          BUILD_ARGS="--build-arg INSTALL_MODE=${{ inputs.install-mode }}"
+          if [ "${{ inputs.install-mode }}" = "release" ]; then
+            BUILD_ARGS="$BUILD_ARGS --build-arg PKG_VERSION=${{ inputs.pkg-version }}"
+          fi
+          just ci-e2e-base-build "$ECR_URL:latest" "$BUILD_ARGS"
 
       - name: Push to ECR
-        run: just ci-e2e-push ${{ inputs.oauth-app-num }} ${{ github.sha }}
+        run: just ci-e2e-base-push ${{ inputs.oauth-app-num }} ${{ github.sha }}

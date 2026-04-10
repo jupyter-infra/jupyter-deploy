@@ -1,0 +1,22 @@
+name: E2E release gate (base template)
+
+on:
+  workflow_call:
+    inputs:
+      pkg-version:
+        description: "Package version (from build job)"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  e2e-release:
+    uses: ./.github/workflows/e2e-base-fresh.yml
+    with:
+      oauth-app-num: "2"
+      install-mode: release
+      pkg-version: ${{ inputs.pkg-version }}
+    secrets: inherit

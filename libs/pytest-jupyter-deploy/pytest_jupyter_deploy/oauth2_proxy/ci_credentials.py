@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from collections.abc import Callable
 
@@ -17,6 +18,13 @@ def _run(args: list[str]) -> str:
     return result.stdout.strip()
 
 
+def _cmd(tool: str) -> list[str]:
+    """Return command prefix: use tool directly if on PATH, else via `uv run`."""
+    if shutil.which(tool):
+        return [tool]
+    return ["uv", "run", tool]
+
+
 def fetch_ci_credentials(ci_dir: str) -> tuple[str, str, Callable[[], str]]:
     """Fetch bot credentials from the CI project directory.
 
@@ -29,10 +37,12 @@ def fetch_ci_credentials(ci_dir: str) -> tuple[str, str, Callable[[], str]]:
     Returns:
         Tuple of (email, password, totp_fn) where totp_fn generates fresh TOTP codes
     """
-    email = _run(["uv", "run", "jd", "show", "-v", "github_bot_account_email", "--text", "--path", ci_dir])
-    password = _run(["uv", "run", "python", "scripts/auth_bot_secret.py", ci_dir, "password"])
+    jd = _cmd("jd")
+    python = _cmd("python")
+    email = _run([*jd, "show", "-v", "github_bot_account_email", "--text", "--path", ci_dir])
+    password = _run([*python, "scripts/auth_bot_secret.py", ci_dir, "password"])
 
     def totp_fn() -> str:
-        return _run(["uv", "run", "python", "scripts/auth_bot_secret.py", ci_dir, "totp"])
+        return _run([*_cmd("python"), "scripts/auth_bot_secret.py", ci_dir, "totp"])
 
     return email, password, totp_fn

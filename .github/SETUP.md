@@ -94,13 +94,15 @@ this, org-based and team-based E2E tests will fail with "Authorization Failure".
 
 To grant access using `auth-setup`:
 
-1. Ensure a base template project is deployed and the E2E container is running
+1. Allowlist the admin's GitHub username on the deployment:
+   `jd users add <admin-github-username> -p <project-dir>`
+2. Ensure a base template project is deployed and the E2E container is running
    (`just e2e-up`)
-2. Run `just auth-setup-base <project-dir>` — this opens a browser window
-3. Log in with the **admin's** GitHub account (not the bot)
-4. On the GitHub OAuth authorization page, find the target organization
+3. Run `just auth-setup-base <project-dir>` — this opens a browser window
+4. Log in with the **admin's** GitHub account (not the bot)
+5. On the GitHub OAuth authorization page, find the target organization
    and click **Grant**
-5. Close the browser (Ctrl+C) — you do NOT need to save this auth state,
+6. Close the browser (Ctrl+C) — you do NOT need to save this auth state,
    only the grant matters
 
 Alternatively, an org admin can approve the app from the org settings:
