@@ -1,6 +1,6 @@
 [project]
 name = "jupyter-deploy"
-version = "0.4.2"
+version = "0.5.0"
 description = "CLI based tool to deploy Jupyter applications that integrates with infrastructure as code frameworks."
 readme = "README.md"
 license = { file = "LICENSE" }

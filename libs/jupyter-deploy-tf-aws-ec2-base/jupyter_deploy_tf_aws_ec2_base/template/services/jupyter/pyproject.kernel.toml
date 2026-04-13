@@ -1,6 +1,6 @@
 [project]
 name = "jupyter-kernel"
-version = "0.4.2"
+version = "0.5.0"
 description = "A placeholder additional jupyter kernel configuration"
 requires-python = ">=3.12"
 dependencies = []

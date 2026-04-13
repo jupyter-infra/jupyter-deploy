@@ -4,4 +4,4 @@ Relies on traefik for proxy, letsencrypt to generate the TLS certificate
 and external oauth provider.
 """
 
-__version__ = "0.4.2"
+__version__ = "0.5.0"

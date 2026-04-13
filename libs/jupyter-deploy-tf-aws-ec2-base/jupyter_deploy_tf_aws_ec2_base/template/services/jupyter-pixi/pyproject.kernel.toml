@@ -1,6 +1,6 @@
 [project]
 name = "jupyter-uv-kernel"
-version = "0.4.2"
+version = "0.5.0"
 description = "A jupyter kernel configuration managed by UV"
 requires-python = ">=3.12"
 dependencies = [

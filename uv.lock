@@ -367,7 +367,7 @@ wheels = [
 
 [[package]]
 name = "jupyter-deploy"
-version = "0.4.2"
+version = "0.5.0"
 source = { editable = "libs/jupyter-deploy" }
 dependencies = [
     { name = "click" },
@@ -439,7 +439,7 @@ dev = [
 
 [[package]]
 name = "jupyter-deploy-monorepo"
-version = "0.4.2"
+version = "0.5.0"
 source = { virtual = "." }
 dependencies = [
     { name = "jupyter-deploy", extra = ["aws"] },
@@ -486,7 +486,7 @@ dev = [
 
 [[package]]
 name = "jupyter-deploy-tf-aws-ec2-base"
-version = "0.4.2"
+version = "0.5.0"
 source = { editable = "libs/jupyter-deploy-tf-aws-ec2-base" }
 dependencies = [
     { name = "boto3" },
@@ -981,7 +981,7 @@ wheels = [
 
 [[package]]
 name = "pytest-jupyter-deploy"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "libs/pytest-jupyter-deploy" }
 dependencies = [
     { name = "jupyter-deploy" },
