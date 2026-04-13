@@ -116,7 +116,7 @@ e2e-sync:
     {{container-tool}} exec -i {{e2e-container-name}} tar -xf - -C /workspace
 
     echo "Running uv sync..."
-    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} exec e2e bash -c "cd /workspace && uv sync --all-packages"
+    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} exec e2e bash -c "cd /workspace && uv sync --all-packages --no-lock"
 
     echo "Installing Playwright browsers..."
     {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} exec e2e bash -c "cd /workspace && uv run playwright install firefox"

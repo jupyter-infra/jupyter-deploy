@@ -18,11 +18,12 @@ ARG INSTALL_MODE=workspace
 ARG PKG_VERSION=""
 ARG EXTRA_INDEX_URL=https://test.pypi.org/simple/
 
-# --- Dependency layer (cached when uv.lock / pyproject.toml unchanged) ---
+# --- Dependency layer (cached when pyproject.toml unchanged) ---
 # Copy manifests and create stub files that hatchling validates (LICENSE, README.md).
 # Stubs avoid copying actual content that would bust the cache on every edit.
+# No uv.lock — resolve deps freely to match what users get on `pip install`.
 USER root
-COPY --chown=testuser:testuser uv.lock pyproject.toml /workspace/
+COPY --chown=testuser:testuser pyproject.toml /workspace/
 COPY --chown=testuser:testuser libs/jupyter-deploy/pyproject.toml /workspace/libs/jupyter-deploy/
 COPY --chown=testuser:testuser libs/jupyter-deploy-tf-aws-ec2-base/pyproject.toml /workspace/libs/jupyter-deploy-tf-aws-ec2-base/
 COPY --chown=testuser:testuser libs/jupyter-infra-tf-aws-iam-ci/pyproject.toml /workspace/libs/jupyter-infra-tf-aws-iam-ci/
@@ -53,7 +54,7 @@ COPY --chown=testuser:testuser .github/e2e-base/template.pyproject.toml /workspa
 # package under test from the configured index), then install Playwright.
 RUN if [ "$INSTALL_MODE" = "release" ]; then \
         cd /workspace && \
-        rm -rf .venv uv.lock && \
+        rm -rf .venv && \
         sed -e "s|{{PKG_VERSION}}|${PKG_VERSION}|g" \
             -e "s|{{EXTRA_INDEX_URL}}|${EXTRA_INDEX_URL}|g" \
             .github/e2e-base/template.pyproject.toml > pyproject.toml && \
