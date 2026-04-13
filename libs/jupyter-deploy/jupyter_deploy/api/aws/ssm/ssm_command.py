@@ -1,6 +1,5 @@
 import time
 
-import botocore
 import botocore.exceptions
 from mypy_boto3_ssm.client import SSMClient
 from mypy_boto3_ssm.literals import CommandInvocationStatusType
