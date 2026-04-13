@@ -166,6 +166,7 @@ jobs:
   mark-release:
     name: Create GitHub Release
     needs: [prod-pypi-publish, build]
+    if: always() && needs.prod-pypi-publish.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
