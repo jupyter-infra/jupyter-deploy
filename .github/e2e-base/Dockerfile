@@ -61,6 +61,7 @@ COPY --chown=testuser:testuser .github/e2e-base/pyproject.canary.toml /workspace
 RUN if [ "$INSTALL_MODE" = "pypi" ]; then \
         cd /workspace && \
         rm -rf .venv && \
+        uv cache clean && \
         if [ "$INSTALL_VARIANT" = "canary" ]; then \
             mv .github/e2e-base/pyproject.canary.toml pyproject.toml && \
             rm -f .github/e2e-base/pyproject.release.toml; \
