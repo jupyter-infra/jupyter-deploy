@@ -1,0 +1,13 @@
+# Template for canary E2E testing.
+# All packages installed from prod PyPI — no version pins, no placeholders.
+# The solver picks the latest compatible versions, same as a user running `pip install`.
+[project]
+name = "e2e-canary"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "jupyter-deploy[aws]",
+    "jupyter-deploy-tf-aws-ec2-base",
+    "pytest-jupyter-deploy[ui]",
+    "pytest-cov",
+]

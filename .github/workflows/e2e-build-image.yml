@@ -13,12 +13,17 @@ on:
         type: string
         default: ""
       install-mode:
-        description: "Install mode: workspace (default) or release (Test PyPI)"
+        description: "Install mode: workspace (default) or pypi (from package index)"
         required: false
         type: string
         default: "workspace"
+      install-variant:
+        description: "Install variant when install-mode=pypi: release (default) or canary"
+        required: false
+        type: string
+        default: "release"
       pkg-version:
-        description: "Package version (required when install-mode=release)"
+        description: "Package version (required when install-mode=pypi, variant=release)"
         required: false
         type: string
         default: ""
@@ -74,7 +79,8 @@ jobs:
         run: |
           ECR_URL=$(just ci-e2e-base-ecr-url ${{ inputs.oauth-app-num }})
           BUILD_ARGS="--build-arg INSTALL_MODE=${{ inputs.install-mode }}"
-          if [ "${{ inputs.install-mode }}" = "release" ]; then
+          if [ "${{ inputs.install-mode }}" = "pypi" ]; then
+            BUILD_ARGS="$BUILD_ARGS --build-arg INSTALL_VARIANT=${{ inputs.install-variant }}"
             BUILD_ARGS="$BUILD_ARGS --build-arg PKG_VERSION=${{ inputs.pkg-version }}"
           fi
           just ci-e2e-base-build "$ECR_URL:latest" "$BUILD_ARGS"

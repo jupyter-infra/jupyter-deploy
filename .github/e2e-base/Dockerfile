@@ -12,9 +12,12 @@ ARG BASE_IMAGE=jupyter-deploy-e2e:latest
 FROM ${BASE_IMAGE}
 
 # Install mode: "workspace" (default) installs from local source via uv sync.
-# "release" installs published packages from PyPI, then overrides the package
-# under test from EXTRA_INDEX_URL (defaults to Test PyPI).
+# "pypi" installs published packages from PyPI using a template pyproject.
 ARG INSTALL_MODE=workspace
+# Install variant (only applies when INSTALL_MODE=pypi):
+#   "release" (default) — renders pyproject.release.toml with placeholders
+#   "canary" — uses pyproject.canary.toml (all from prod PyPI, no pins)
+ARG INSTALL_VARIANT=release
 ARG PKG_VERSION=""
 ARG EXTRA_INDEX_URL=https://test.pypi.org/simple/
 
@@ -46,25 +49,36 @@ COPY --chown=testuser:testuser . /workspace/
 USER testuser
 
 # Release mode: replace workspace pyproject.toml with a rendered template that
-# declares PyPI deps + the package under test pinned from EXTRA_INDEX_URL.
-COPY --chown=testuser:testuser .github/e2e-base/template.pyproject.toml /workspace/.github/e2e-base/template.pyproject.toml
+# declares PyPI deps. Which template is selected by INSTALL_VARIANT.
+COPY --chown=testuser:testuser .github/e2e-base/pyproject.release.toml /workspace/.github/e2e-base/pyproject.release.toml
+COPY --chown=testuser:testuser .github/e2e-base/pyproject.canary.toml /workspace/.github/e2e-base/pyproject.canary.toml
 
 # Workspace mode: re-run uv sync to register editable packages.
 # Release mode: render template, uv sync (resolves everything including the
 # package under test from the configured index), then install Playwright.
-RUN if [ "$INSTALL_MODE" = "release" ]; then \
+#   release variant: sed-render placeholders from pyproject.release.toml
+#   canary variant: copy pyproject.canary.toml as-is (no placeholders)
+RUN if [ "$INSTALL_MODE" = "pypi" ]; then \
         cd /workspace && \
         rm -rf .venv && \
-        sed -e "s|{{PKG_VERSION}}|${PKG_VERSION}|g" \
-            -e "s|{{EXTRA_INDEX_URL}}|${EXTRA_INDEX_URL}|g" \
-            .github/e2e-base/template.pyproject.toml > pyproject.toml && \
-        # Strip workspace source — uv errors on it outside workspace context
-        sed -i '/\[tool\.uv\.sources\.jupyter-deploy\]/,+1d' libs/pytest-jupyter-deploy/pyproject.toml && \
+        if [ "$INSTALL_VARIANT" = "canary" ]; then \
+            mv .github/e2e-base/pyproject.canary.toml pyproject.toml && \
+            rm -f .github/e2e-base/pyproject.release.toml; \
+        else \
+            sed -e "s|{{PKG_VERSION}}|${PKG_VERSION}|g" \
+                -e "s|{{EXTRA_INDEX_URL}}|${EXTRA_INDEX_URL}|g" \
+                .github/e2e-base/pyproject.release.toml > pyproject.toml && \
+            rm -f .github/e2e-base/pyproject.canary.toml && \
+            # Strip workspace source — uv errors on it outside workspace context
+            sed -i '/\[tool\.uv\.sources\.jupyter-deploy\]/,+1d' libs/pytest-jupyter-deploy/pyproject.toml; \
+        fi && \
         uv sync && \
         .venv/bin/playwright install firefox && \
         ln -sf ~/.cache/ms-playwright/firefox-*/firefox/firefox ~/.local/bin/firefox; \
     else \
-        cd /workspace && uv sync --all-packages; \
+        cd /workspace && \
+        rm -f .github/e2e-base/pyproject.release.toml .github/e2e-base/pyproject.canary.toml && \
+        uv sync --all-packages; \
     fi
 
 CMD ["sleep", "infinity"]

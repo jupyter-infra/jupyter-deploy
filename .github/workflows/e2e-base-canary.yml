@@ -15,4 +15,6 @@ jobs:
     uses: ./.github/workflows/e2e-base-fresh.yml
     with:
       oauth-app-num: "3"
+      install-mode: pypi
+      install-variant: canary
     secrets: inherit

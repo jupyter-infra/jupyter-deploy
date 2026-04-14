@@ -17,6 +17,6 @@ jobs:
     uses: ./.github/workflows/e2e-base-fresh.yml
     with:
       oauth-app-num: "2"
-      install-mode: release
+      install-mode: pypi
       pkg-version: ${{ inputs.pkg-version }}
     secrets: inherit

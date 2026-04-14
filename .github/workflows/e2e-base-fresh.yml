@@ -18,12 +18,17 @@ on:
         type: boolean
         default: false
       install-mode:
-        description: "Install mode: workspace (default) or release (install from Test PyPI)"
+        description: "Install mode: workspace (default) or pypi (from package index)"
         required: false
         type: string
         default: "workspace"
+      install-variant:
+        description: "Install variant when install-mode=pypi: release (default) or canary"
+        required: false
+        type: string
+        default: "release"
       pkg-version:
-        description: "Package version (required when install-mode=release)"
+        description: "Package version (required when install-mode=pypi, variant=release)"
         required: false
         type: string
         default: ""
@@ -75,6 +80,7 @@ jobs:
       oauth-app-num: ${{ inputs.oauth-app-num }}
       ref: ${{ inputs.ref }}
       install-mode: ${{ inputs.install-mode || 'workspace' }}
+      install-variant: ${{ inputs.install-variant || 'release' }}
       pkg-version: ${{ inputs.pkg-version }}
 
   # --- Deploy bookend ---
