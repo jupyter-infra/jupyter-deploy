@@ -253,9 +253,9 @@ class TestPollInstanceStatus(unittest.TestCase):
     @patch("time.sleep")
     @patch("jupyter_deploy.api.aws.ec2.ec2_instance.describe_instance_status")
     def test_raises_on_incorrect_terminal_state(self, mock_describe_instance_status: Mock, mock_sleep: Mock) -> None:
-        # Setup
+        # Setup — terminated is never tolerated
         mock_ec2_client = Mock()
-        mock_describe_instance_status.return_value = {"InstanceState": {"Name": "stopped", "Code": 80}}
+        mock_describe_instance_status.return_value = {"InstanceState": {"Name": "terminated", "Code": 48}}
 
         # Execute & Assert
         with self.assertRaises(ValueError) as context:
@@ -263,6 +263,50 @@ class TestPollInstanceStatus(unittest.TestCase):
 
         mock_sleep.assert_called_once()
         self.assertIn("Unexpected terminal state", str(context.exception))
+
+    @patch("time.time")
+    @patch("time.sleep")
+    @patch("jupyter_deploy.api.aws.ec2.ec2_instance.describe_instance_status")
+    def test_tolerates_stopped_when_waiting_for_running(
+        self, mock_describe_instance_status: Mock, mock_sleep: Mock, mock_time: Mock
+    ) -> None:
+        # After StartInstances, the API may still report 'stopped' briefly
+        mock_ec2_client = Mock()
+        mock_describe_instance_status.side_effect = [
+            {"InstanceState": {"Name": "stopped", "Code": 80}},
+            {"InstanceState": {"Name": "pending", "Code": 0}},
+            {"InstanceState": {"Name": "running", "Code": 16}},
+        ]
+        mock_time.side_effect = [0, 5, 10, 15]
+
+        result = poll_for_instance_status(
+            mock_ec2_client, "i-123", Ec2InstanceState.RUNNING, NullDisplay(), timeout_seconds=100
+        )
+
+        self.assertEqual(result["InstanceState"]["Name"], "running")
+        self.assertEqual(mock_describe_instance_status.call_count, 3)
+
+    @patch("time.time")
+    @patch("time.sleep")
+    @patch("jupyter_deploy.api.aws.ec2.ec2_instance.describe_instance_status")
+    def test_tolerates_running_when_waiting_for_stopped(
+        self, mock_describe_instance_status: Mock, mock_sleep: Mock, mock_time: Mock
+    ) -> None:
+        # After StopInstances, the API may still report 'running' briefly
+        mock_ec2_client = Mock()
+        mock_describe_instance_status.side_effect = [
+            {"InstanceState": {"Name": "running", "Code": 16}},
+            {"InstanceState": {"Name": "stopping", "Code": 64}},
+            {"InstanceState": {"Name": "stopped", "Code": 80}},
+        ]
+        mock_time.side_effect = [0, 5, 10, 15]
+
+        result = poll_for_instance_status(
+            mock_ec2_client, "i-123", Ec2InstanceState.STOPPED, NullDisplay(), timeout_seconds=100
+        )
+
+        self.assertEqual(result["InstanceState"]["Name"], "stopped")
+        self.assertEqual(mock_describe_instance_status.call_count, 3)
 
     @patch("time.time")
     @patch("time.sleep")

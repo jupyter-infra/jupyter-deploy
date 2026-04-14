@@ -94,6 +94,14 @@ _INSTANCE_CODE_MAP: dict[Ec2InstanceState, int] = {
 }
 _INSTANCE_REVERSE_CODE_MAP: dict[int, Ec2InstanceState] = {v: k for k, v in _INSTANCE_CODE_MAP.items()}
 
+# Terminal states to tolerate while polling, keyed by desired state.
+# After StartInstances the API may still report 'stopped' before transitioning to 'pending'.
+# After StopInstances the API may still report 'running' before transitioning to 'stopping'.
+_TOLERATED_PRE_TRANSITION: dict[Ec2InstanceState, set[Ec2InstanceState]] = {
+    Ec2InstanceState.RUNNING: {Ec2InstanceState.STOPPED},
+    Ec2InstanceState.STOPPED: {Ec2InstanceState.RUNNING},
+}
+
 
 def describe_instance_status(
     ec2_client: EC2Client, instance_id: str, check_status_first: bool = True
@@ -142,7 +150,10 @@ def poll_for_instance_status(
     wait_after_seconds: int = 2,
     poll_interval_seconds: int = 5,
 ) -> InstanceStatusTypeDef:
-    """Synchronously poll EC2:GetInstanceStatus until the instance reaches a terminal state.
+    """Synchronously poll EC2:GetInstanceStatus until the instance reaches the desired state.
+
+    Tolerates the "previous" terminal state while the transition takes effect
+    (e.g. ``stopped`` when waiting for ``running`` right after ``StartInstances``).
 
     Args:
         ec2_client: EC2 client to use
@@ -154,8 +165,11 @@ def poll_for_instance_status(
         poll_interval_seconds: Polling interval in seconds
 
     Raises:
-        ValueError if the instance reaches a terminal state that is not the desired state
+        ValueError if the instance reaches a terminal state that cannot lead to the desired state
     """
+    # States that are expected before the transition kicks in — keep polling.
+    tolerated_states = _TOLERATED_PRE_TRANSITION.get(desired_state, set())
+
     # allow instance to change state
     if wait_after_seconds > 0:
         time.sleep(wait_after_seconds)
@@ -170,7 +184,7 @@ def poll_for_instance_status(
         if state == desired_state:
             display_manager.success(f"Instance reached desired state: '{desired_state.value}'")
             return response
-        elif state.is_terminal():
+        elif state.is_terminal() and state not in tolerated_states:
             raise ValueError(f"Unexpected terminal state for instance '{instance_id}': '{state.value}'")
         elif curr_time - start_time > timeout_seconds:
             raise TimeoutError(f"Timed out polling state of instance '{instance_id}', end state '{state.value}'")
