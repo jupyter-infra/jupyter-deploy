@@ -1,0 +1,11 @@
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+test-results
+.git
+.ruff_cache
+.mypy_cache
+sandbox*
+.auth
+.env
