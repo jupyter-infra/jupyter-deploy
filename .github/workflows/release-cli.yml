@@ -1,23 +1,9 @@
-name: release
+name: Release CLI (jupyter-deploy)
 
-run-name: Release ${{ inputs.working-directory }}
+run-name: Release jupyter-deploy
 
 on:
-  workflow_call:
-    inputs:
-      working-directory:
-        required: true
-        type: string
-        description: "From which folder this pipeline executes"
   workflow_dispatch:
-    inputs:
-      working-directory:
-        required: true
-        type: choice
-        options:
-          - libs/jupyter-deploy
-          - libs/jupyter-deploy-tf-aws-ec2-base
-          - libs/pytest-jupyter-deploy
 
 permissions:
   id-token: write
@@ -42,13 +28,13 @@ jobs:
 
       - name: Build package
         run: |
-          cd ${{ inputs.working-directory }}
+          cd libs/jupyter-deploy
           uv build
 
       - name: Get package version
         id: get-version
         run: |
-          cd ${{ inputs.working-directory }}
+          cd libs/jupyter-deploy
           echo version=$(uv version --short) >> $GITHUB_OUTPUT
           echo pkg-name="$(uv version | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
 
@@ -61,19 +47,17 @@ jobs:
 
   lint:
     name: Run linters
-    needs:
-      - build
+    needs: [build]
     uses: ./.github/workflows/lint.yml
     with:
-      working-directory: ${{ inputs.working-directory }}
+      working-directory: libs/jupyter-deploy
 
   test:
     name: Run tests
-    needs:
-      - lint
+    needs: [lint]
     uses: ./.github/workflows/test.yml
     with:
-      working-directory: ${{ inputs.working-directory }}
+      working-directory: libs/jupyter-deploy
 
   test-pypi-publish:
     name: Publish to Test PyPI
@@ -114,32 +98,27 @@ jobs:
       - name: Setup UV
         uses: astral-sh/setup-uv@v3
 
-      - name: Test installation from Test PyPi
+      - name: Test installation from Test PyPI
         run: |
           uv venv
           # Wait a bit for the package to be available
-          sleep 30
+          sleep 60
           uv pip install \
             --extra-index-url https://test.pypi.org/simple/ \
             --index-strategy unsafe-best-match \
             ${{ env.PKG_NAME }}==${{ env.VERSION }}
 
-  e2e-base-release:
-    name: E2E release gate (base template)
+  e2e-cli-release:
+    name: E2E release gate (CLI)
     needs: [test-pypi-install, build]
-    if: inputs.working-directory == 'libs/jupyter-deploy-tf-aws-ec2-base'
-    uses: ./.github/workflows/e2e-base-release.yml
+    uses: ./.github/workflows/e2e-cli.yml
     secrets: inherit
     with:
       pkg-version: ${{ needs.build.outputs.version }}
 
   prod-pypi-publish:
     name: Publish to PyPI
-    needs: [e2e-base-release, test-pypi-install, build]
-    if: >-
-      always() &&
-      needs.test-pypi-install.result == 'success' &&
-      (needs.e2e-base-release.result == 'success' || needs.e2e-base-release.result == 'skipped')
+    needs: [e2e-cli-release, build]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
