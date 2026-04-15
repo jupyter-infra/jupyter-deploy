@@ -101,6 +101,8 @@ pythonpath = [
   "libs/pytest-jupyter-deploy"
 ]
 markers = [
-  "e2e: marks tests as end-to-end tests (deselect with '-m \"not e2e\"')"
+  "e2e: marks tests as end-to-end tests (deselect with '-m \"not e2e\"')",
+  "cli: Non-mutating CLI tests for release validation (select with '-m cli')",
+  "bare: Tests requiring the bare install track with no AWS deps (select with '-m bare')",
 ]
 addopts = "-m 'not e2e' --import-mode=importlib"

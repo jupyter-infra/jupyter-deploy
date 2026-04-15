@@ -1,9 +1,11 @@
 """E2E tests for CLI behavior with undeployed projects."""
 
+import pytest
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.undeployed_project import undeployed_project
 
 
+@pytest.mark.cli
 def test_open_does_not_error(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd open does not error when project is not deployed.
 
@@ -24,6 +26,7 @@ def test_open_does_not_error(e2e_deployment: EndToEndDeployment) -> None:
         assert "jd up" in result.stdout, "Expected suggestion to run 'jd up'"
 
 
+@pytest.mark.cli
 def test_show_does_not_error(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show does not error when project is not deployed.
 
@@ -42,6 +45,7 @@ def test_show_does_not_error(e2e_deployment: EndToEndDeployment) -> None:
         assert "No outputs available." in result.stdout, "Expected 'No outputs available.' message in output"
 
 
+@pytest.mark.cli
 def test_show_info_on_undeployed_project(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show --info populates template fields but shows N/A for store/project IDs.
 
@@ -64,6 +68,7 @@ def test_show_info_on_undeployed_project(e2e_deployment: EndToEndDeployment) -> 
         assert result.stdout.strip() == "N/A", f"Expected N/A for --store-id, got '{result.stdout.strip()}'"
 
 
+@pytest.mark.cli
 def test_show_variable_instance_type_does_not_error(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show --variable instance_type returns None when project is not deployed.
 

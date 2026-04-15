@@ -1,9 +1,11 @@
 """E2E tests for jd show command."""
 
+import pytest
 from jupyter_deploy.enum import ValueSource
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 
 
+@pytest.mark.cli
 def test_show_variables_list_matches_config(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show --variables --list matches variables.yaml content.
 
@@ -44,6 +46,7 @@ def test_show_variables_list_matches_config(e2e_deployment: EndToEndDeployment) 
     )
 
 
+@pytest.mark.cli
 def test_show_outputs_list_returns_expected_outputs(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show --outputs --list returns expected terraform outputs.
 
@@ -77,6 +80,7 @@ def test_show_outputs_list_returns_expected_outputs(e2e_deployment: EndToEndDepl
     )
 
 
+@pytest.mark.cli
 def test_show_variable_domain_matches_config(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show --variable domain returns value from variables.yaml.
 
@@ -101,6 +105,7 @@ def test_show_variable_domain_matches_config(e2e_deployment: EndToEndDeployment)
     assert actual_domain == expected_domain, f"Expected domain '{expected_domain}', got '{actual_domain}'"
 
 
+@pytest.mark.cli
 def test_show_output_jupyter_url_matches_variables(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show --output jupyter_url returns URL matching variables.
 
@@ -128,6 +133,7 @@ def test_show_output_jupyter_url_matches_variables(e2e_deployment: EndToEndDeplo
     assert actual_url == expected_url, f"Expected URL '{expected_url}', got '{actual_url}'"
 
 
+@pytest.mark.cli
 def test_show_default_does_not_error(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show (no flags) executes successfully.
 
@@ -151,6 +157,7 @@ def test_show_default_does_not_error(e2e_deployment: EndToEndDeployment) -> None
     assert "Project Outputs" in result.stdout, "Expected outputs section"
 
 
+@pytest.mark.cli
 def test_show_template_name_matches_manifest(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show --template-name returns value from manifest.yaml.
 
@@ -174,6 +181,7 @@ def test_show_template_name_matches_manifest(e2e_deployment: EndToEndDeployment)
     assert actual_name == expected_name, f"Expected template name '{expected_name}', got '{actual_name}'"
 
 
+@pytest.mark.cli
 def test_show_template_version_matches_manifest(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show --template-version returns value from manifest.yaml.
 
@@ -197,6 +205,7 @@ def test_show_template_version_matches_manifest(e2e_deployment: EndToEndDeployme
     assert actual_version == expected_version, f"Expected template version '{expected_version}', got '{actual_version}'"
 
 
+@pytest.mark.cli
 def test_show_project_id_returns_nonempty_value(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show --project-id returns a non-empty project ID on a deployed project.
 
@@ -219,6 +228,7 @@ def test_show_project_id_returns_nonempty_value(e2e_deployment: EndToEndDeployme
     )
 
 
+@pytest.mark.cli
 def test_show_store_type_matches_manifest(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show --store-type returns the store type from manifest.
 
@@ -242,6 +252,7 @@ def test_show_store_type_matches_manifest(e2e_deployment: EndToEndDeployment) ->
     )
 
 
+@pytest.mark.cli
 def test_show_store_id_returns_nonempty_value(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show --store-id returns a non-empty store ID on a deployed project.
 
@@ -259,6 +270,7 @@ def test_show_store_id_returns_nonempty_value(e2e_deployment: EndToEndDeployment
     assert actual_store_id != "N/A", "Store ID should not be 'N/A' on a deployed project"
 
 
+@pytest.mark.cli
 def test_show_info_includes_store_and_project_id(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show --info displays Store Type, Store ID, and Project ID rows.
 
@@ -279,6 +291,7 @@ def test_show_info_includes_store_and_project_id(e2e_deployment: EndToEndDeploym
     assert "N/A" not in result.stdout, "Store Type, Store ID, and Project ID should not be N/A on a deployed project"
 
 
+@pytest.mark.cli
 def test_show_sensitive_variable_is_masked(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show -v <sensitive_var> --text returns masked value.
 
@@ -297,6 +310,7 @@ def test_show_sensitive_variable_is_masked(e2e_deployment: EndToEndDeployment) -
     assert value == "****", f"Expected masked value '****', got '{value}'"
 
 
+@pytest.mark.cli
 def test_show_reveal_sensitive_variable(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd show -v <sensitive_var> --reveal --text returns the real secret.
 

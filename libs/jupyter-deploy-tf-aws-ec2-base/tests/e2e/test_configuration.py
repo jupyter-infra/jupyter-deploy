@@ -3,12 +3,14 @@
 import re
 import subprocess
 
+import pytest
 import yaml
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 from pytest_jupyter_deploy.undeployed_project import undeployed_project
 
 
+@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
@@ -50,6 +52,7 @@ def test_project_is_configurable(e2e_deployment: EndToEndDeployment) -> None:
         assert engine_dir.exists(), f"Engine directory should exist after config: {engine_dir}"
 
 
+@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
@@ -92,6 +95,7 @@ def test_gitignore_generated_after_init(e2e_deployment: EndToEndDeployment) -> N
         )
 
 
+@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
@@ -118,6 +122,7 @@ def test_troubleshoot_md_exists_after_init(e2e_deployment: EndToEndDeployment) -
         assert "# Troubleshooting Guide" in troubleshoot_content, "Should have main heading"
 
 
+@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
@@ -174,6 +179,7 @@ def test_agent_md_generated_after_init(e2e_deployment: EndToEndDeployment) -> No
         assert "}}" not in agent_content, "Should not contain template placeholders"
 
 
+@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
@@ -210,6 +216,7 @@ def test_store_config_written_after_config(e2e_deployment: EndToEndDeployment) -
         assert store_config["store-id"], "store-id should not be empty"
 
 
+@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
@@ -239,6 +246,7 @@ def test_show_store_type_after_config(e2e_deployment: EndToEndDeployment) -> Non
         assert actual_store_type == "s3-only", f"Expected store type 's3-only', got '{actual_store_type}'"
 
 
+@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
@@ -269,6 +277,7 @@ def test_show_store_id_after_config(e2e_deployment: EndToEndDeployment) -> None:
         assert actual_store_id != "N/A", "Store ID should not be 'N/A' after config"
 
 
+@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
@@ -305,6 +314,7 @@ def test_show_project_id_fails_on_unconfigured_project(e2e_deployment: EndToEndD
         assert "Traceback" not in result.stderr, "Should not show a stack trace in stderr"
 
 
+@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",

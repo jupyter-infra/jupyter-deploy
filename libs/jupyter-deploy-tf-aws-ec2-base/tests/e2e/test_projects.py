@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import pytest
 import yaml
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 
@@ -22,6 +23,7 @@ def _get_store_type(e2e_deployment: EndToEndDeployment) -> str:
     return store_type
 
 
+@pytest.mark.cli
 def test_projects_list_contains_deployed_project(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd projects list includes the currently deployed project.
 
@@ -44,6 +46,7 @@ def test_projects_list_contains_deployed_project(e2e_deployment: EndToEndDeploym
     assert project_id in project_ids, f"Expected project '{project_id}' in list output. Got: {project_ids}"
 
 
+@pytest.mark.cli
 def test_projects_show_returns_deployed_project_details(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd projects show returns details for the deployed project.
 
@@ -98,6 +101,7 @@ def _restore_project_to_tmpdir(e2e_deployment: EndToEndDeployment, tmpdir: str) 
     return restore_dir
 
 
+@pytest.mark.cli
 def test_restore_project_and_config(e2e_deployment: EndToEndDeployment) -> None:
     """Test that a project can be restored and reconfigured with --restore-secrets.
 
@@ -147,6 +151,7 @@ def test_restore_project_and_config(e2e_deployment: EndToEndDeployment) -> None:
         assert secret_value == "****", f"Secret should remain masked in variables.yaml, got '{secret_value}'"
 
 
+@pytest.mark.cli
 def test_restore_project_with_named_secret(e2e_deployment: EndToEndDeployment) -> None:
     """Test that a project can be restored with a specific named secret.
 

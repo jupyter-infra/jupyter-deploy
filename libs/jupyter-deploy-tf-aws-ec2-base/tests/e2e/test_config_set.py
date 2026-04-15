@@ -2,10 +2,12 @@
 
 import ast
 
+import pytest
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 
 
+@pytest.mark.cli
 def test_config_help_show_variables(e2e_deployment: EndToEndDeployment) -> None:
     """Test that config help retrieves the list of variables."""
     e2e_deployment.ensure_deployed()
@@ -30,6 +32,7 @@ def test_config_help_show_variables(e2e_deployment: EndToEndDeployment) -> None:
         assert var in result.stdout, f"Expected variable '{var}' in config help output"
 
 
+@pytest.mark.cli
 def test_config_set_string_variable(e2e_deployment: EndToEndDeployment) -> None:
     """Test that config can set a simple variable of type str."""
     e2e_deployment.ensure_deployed()
@@ -65,6 +68,7 @@ def test_config_set_string_variable(e2e_deployment: EndToEndDeployment) -> None:
     )
 
 
+@pytest.mark.cli
 @skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_SAFE_USER"])
 def test_config_set_list_string_variable(e2e_deployment: EndToEndDeployment, logged_user: str, safe_user: str) -> None:
     """Test that config can set a variable of type list[str]."""
@@ -130,6 +134,7 @@ def test_config_set_list_string_variable(e2e_deployment: EndToEndDeployment, log
     # Step 6: Leave as is (no revert)
 
 
+@pytest.mark.cli
 def test_config_set_list_of_dict_variable(e2e_deployment: EndToEndDeployment) -> None:
     """Test that config can set variable of type list of dict[str, str]."""
     e2e_deployment.ensure_deployed()
@@ -201,6 +206,7 @@ def test_config_set_list_of_dict_variable(e2e_deployment: EndToEndDeployment) ->
     )
 
 
+@pytest.mark.cli
 def test_config_set_string_variable_with_verbose(e2e_deployment: EndToEndDeployment) -> None:
     """Test that config --verbose shows full terraform output without progress bar artifacts."""
     e2e_deployment.ensure_deployed()

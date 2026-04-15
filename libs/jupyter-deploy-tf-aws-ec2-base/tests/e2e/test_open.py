@@ -5,6 +5,7 @@ import re
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 
 
+# Not marked @pytest.mark.cli — requires a running host and browser, not available in headless CLI containers
 def test_open_show_correct_url(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd open displays the correct URL and the URL is accessible.
 

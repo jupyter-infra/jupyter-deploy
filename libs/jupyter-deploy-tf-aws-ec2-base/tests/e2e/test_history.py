@@ -1,8 +1,10 @@
 """E2E tests for jd history commands."""
 
+import pytest
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 
 
+@pytest.mark.cli
 def test_history_list_config_shows_existing_logs(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd history list config shows existing logs with expected format.
 
@@ -39,6 +41,7 @@ def test_history_list_config_shows_existing_logs(e2e_deployment: EndToEndDeploym
     assert ".log" in result_text.stdout, "Expected .log file paths in plain text output"
 
 
+@pytest.mark.cli
 def test_history_list_up_shows_existing_logs(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd history list up shows existing logs with expected format.
 
@@ -75,6 +78,7 @@ def test_history_list_up_shows_existing_logs(e2e_deployment: EndToEndDeployment)
     assert ".log" in result_text.stdout, "Expected .log file paths in plain text output"
 
 
+@pytest.mark.cli
 def test_history_show_latest_without_command(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd history show displays most recent log across all commands.
 
@@ -100,6 +104,7 @@ def test_history_show_latest_without_command(e2e_deployment: EndToEndDeployment)
     assert len(result.stdout) > 100, "Expected substantial log content (>100 chars)"
 
 
+@pytest.mark.cli
 def test_history_show_config_command(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd history show config displays latest config log.
 
@@ -126,6 +131,7 @@ def test_history_show_config_command(e2e_deployment: EndToEndDeployment) -> None
     assert "terraform" in stdout_lower, "Expected 'terraform' keyword in config log"
 
 
+@pytest.mark.cli
 def test_history_show_up_command(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd history show up displays latest up log.
 
@@ -154,6 +160,7 @@ def test_history_show_up_command(e2e_deployment: EndToEndDeployment) -> None:
     )
 
 
+@pytest.mark.cli
 def test_history_show_up_command_slice(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd history show up with -l and -s flags correctly slices log output.
 
@@ -184,6 +191,7 @@ def test_history_show_up_command_slice(e2e_deployment: EndToEndDeployment) -> No
     assert len(lines) > 0, "Expected at least some lines in sliced output"
 
 
+@pytest.mark.cli
 def test_history_clear_with_high_keep_value(e2e_deployment: EndToEndDeployment) -> None:
     """Test that jd history clear -k 100 succeeds without errors.
 

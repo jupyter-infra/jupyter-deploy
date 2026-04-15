@@ -4,6 +4,7 @@ import ast
 import os
 
 import pexpect
+import pytest
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 from pytest_jupyter_deploy.undeployed_project import undeployed_project
@@ -20,6 +21,7 @@ REQUIRED_DEPLOYMENT_VARS = [
 ]
 
 
+@pytest.mark.cli
 @skip_if_testvars_not_set(REQUIRED_DEPLOYMENT_VARS)
 def test_config_interactive(e2e_deployment: EndToEndDeployment) -> None:
     """Test that terraform prompts work correctly in interactive mode.
@@ -153,6 +155,7 @@ def test_config_interactive(e2e_deployment: EndToEndDeployment) -> None:
         )
 
 
+@pytest.mark.cli
 @skip_if_testvars_not_set(REQUIRED_DEPLOYMENT_VARS)
 def test_config_interactive_verbose(e2e_deployment: EndToEndDeployment) -> None:
     """Test that terraform prompts work correctly in interactive mode with --verbose flag.
