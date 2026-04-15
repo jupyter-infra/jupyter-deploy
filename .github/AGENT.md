@@ -6,10 +6,13 @@
 |----------|---------|---------|
 | `ci.yml` | push/PR | Lint + unit tests |
 | `lint.yml`, `test.yml` | `workflow_call` | Reusable lint/test jobs |
-| `release.yml` | `workflow_dispatch` | Publish one of the packages to PyPI |
+| `release-cli.yml` | `workflow_dispatch` | Release `jupyter-deploy` CLI to PyPI (with E2E gate) |
+| `release-base.yml` | `workflow_dispatch` | Release `jupyter-deploy-tf-aws-ec2-base` to PyPI (with E2E gate) |
+| `release-plugin.yml` | `workflow_dispatch` | Release `pytest-jupyter-deploy` to PyPI |
+| `e2e-cli.yml` | `workflow_call` | CLI release E2E gate — smoke tests + functional tests against app #2 |
 | `e2e-base.yml` | `workflow_dispatch` | E2E tests against an existing deployment |
 | `e2e-base-fresh.yml` | `workflow_dispatch` / `workflow_call` | Deploy from scratch + full E2E chain |
-| `e2e-base-release.yml` | `workflow_call` | Release gate — calls fresh workflow with Test PyPI install |
+| `e2e-base-release.yml` | `workflow_call` | Base template release E2E gate — calls fresh workflow with Test PyPI install |
 | `e2e-base-canary.yml` | `schedule` / `workflow_dispatch` | Weekly canary — calls fresh workflow |
 | `e2e-base-job.yml` | `workflow_call` | Reusable E2E job (called by the above) |
 

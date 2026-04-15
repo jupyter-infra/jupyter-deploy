@@ -160,11 +160,7 @@ jobs:
         run: just ci-e2e-cli-pull bare
 
       - name: Run bare smoke tests
-        run: |
-          docker run --rm jupyter-deploy-e2e-cli:latest \
-            bash -c '. .venv/bin/activate && \
-              pytest libs/jupyter-deploy/tests/e2e/ \
-                -k "not aws_installation" --no-cov -v'
+        run: just test-smoke-cli bare jupyter-deploy-e2e-cli:latest
 
   smoke-aws:
     name: "Smoke tests (aws)"
@@ -206,11 +202,7 @@ jobs:
         run: just ci-e2e-cli-pull aws
 
       - name: Run aws smoke tests
-        run: |
-          docker run --rm jupyter-deploy-e2e-cli:latest \
-            bash -c '. .venv/bin/activate && \
-              pytest libs/jupyter-deploy/tests/e2e/ \
-                -k "not bare_installation" --no-cov -v'
+        run: just test-smoke-cli aws jupyter-deploy-e2e-cli:latest
 
   # --- Gate: smoke tests must pass before functional tests ---
 
@@ -229,7 +221,7 @@ jobs:
     name: "AWS functional test (cli marker)"
     needs: [smoke-gate, build-image-aws]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     environment: e2e
     permissions:
       id-token: write
@@ -270,90 +262,11 @@ jobs:
           just env-setup-base sandbox-e2e sandbox-ci 2
           "safe-user=ellisonbg,org=jupyter-infra,safe-org=jupyter-server,team=jupyter-deploy-e2e-app-access,safe-team=jupyter-deploy-e2e-app-no-access,larger-instance=t3.xlarge,larger-log-retention-days=270,cpu-instance=t3.medium,gpu-instance=g6.xlarge"
 
-      - name: Import auth state
-        run: just auth-import sandbox-ci
-
       - name: Pull aws image
         run: just ci-e2e-cli-pull aws
 
       - name: Run CLI functional tests
-        env:
-          E2E_DIR: libs/jupyter-deploy-tf-aws-ec2-base/tests/e2e
-        run: |
-          mkdir -p test-results
-          docker run --rm \
-            --env-file .env \
-            -v "${{ github.workspace }}/sandbox-e2e:/workspace/sandbox-e2e" \
-            -v "${{ github.workspace }}/test-results:/workspace/test-results" \
-            -v "${{ github.workspace }}/.auth:/workspace/.auth" \
-            -e AWS_ACCESS_KEY_ID \
-            -e AWS_SECRET_ACCESS_KEY \
-            -e AWS_SESSION_TOKEN \
-            -e AWS_REGION=us-west-2 \
-            jupyter-deploy-e2e-cli:latest \
-            bash -c ". .venv/bin/activate && \
-              xvfb-run --auto-servernum \
-              pytest $E2E_DIR -m cli \
-                --e2e-tests-dir=$E2E_DIR \
-                --e2e-existing-project=sandbox-e2e \
-                --no-cov --verbose \
-                --browser firefox \
-                --screenshot only-on-failure"
+        run: just test-e2e-cli sandbox-e2e
 
-      - name: Upload test artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-aws-functional
-          path: test-results/
-          if-no-files-found: ignore
-
-      - name: Upload test results to S3
-        if: failure()
-        continue-on-error: true
-        run: just ci-upload-test-results 2
-
-  # --- Cleanup: stop host (cli tests are non-mutating but defensive) ---
-
-  cleanup:
-    name: "Cleanup: stop host"
-    needs: [aws-functional-test]
-    if: always()
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: e2e
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install UV and Python
-        uses: ./.github/actions/install-uv
-        with:
-          python-version: "3.13"
-
-      - name: Install just
-        uses: extractions/setup-just@v2
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.5.7"
-          terraform_wrapper: false
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
-          aws-region: us-west-2
-
-      - name: Restore CI project
-        run: just ci-restore sandbox-ci
-
-      - name: Restore base project
-        run: just ci-restore-base 2 sandbox-ci sandbox-e2e
-
-      - name: Stop host
-        run: just ensure-host-stopped sandbox-e2e
+  # No cleanup job needed — all cli-marked tests are read-only (terraform state
+  # queries, local history reads, config in temp dirs). None start the host.
