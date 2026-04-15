@@ -781,6 +781,90 @@ ci-e2e-base-pull oauth_app_num tag="latest" ci_dir="sandbox-ci":
     {{container-tool}} tag "$ECR_URL:{{tag}}" jupyter-deploy-e2e-base:latest
     echo "✓ Pulled and tagged as jupyter-deploy-e2e-base:latest"
 
+# --- CLI release E2E commands ---
+
+# Build the CLI release E2E image
+# Reuses the same base image as ci-e2e-base-build, but layers .github/e2e-cli/Dockerfile.
+# Usage: just ci-e2e-cli-build                           # local: no cache, workspace mode
+# Usage: just ci-e2e-cli-build <ecr-url>:jd-aws          # CI: use ECR tag as layer cache
+# Usage: just ci-e2e-cli-build "" "--build-arg INSTALL_MODE=pypi --build-arg INSTALL_VARIANT=bare --build-arg PKG_VERSION=..."
+ci-e2e-cli-build cache_from="" extra_args="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    BASE_DOCKERFILE=$(uv run python -c \
+        "from pytest_jupyter_deploy.image import IMAGE_PATH; print(IMAGE_PATH / 'Dockerfile')")
+    BASE_DIR=$(dirname "$BASE_DOCKERFILE")
+
+    echo "Building base E2E image..."
+    {{container-tool}} build \
+        -f "$BASE_DOCKERFILE" \
+        --build-arg USER_UID={{HOST_UID}} \
+        --build-arg USER_GID={{HOST_GID}} \
+        -t jupyter-deploy-e2e:base \
+        "$BASE_DIR"
+
+    echo "Building CLI E2E image..."
+    CACHE_ARG=""
+    if [ -n "{{cache_from}}" ]; then
+        CACHE_ARG="--cache-from={{cache_from}}"
+        echo "Using cache from: {{cache_from}}"
+    fi
+
+    {{container-tool}} build \
+        -f .github/e2e-cli/Dockerfile \
+        --build-arg BASE_IMAGE=jupyter-deploy-e2e:base \
+        $CACHE_ARG \
+        {{extra_args}} \
+        -t jupyter-deploy-e2e-cli:latest \
+        .
+
+    echo "✓ CLI E2E image built: jupyter-deploy-e2e-cli:latest"
+
+# Push the CLI E2E image to ECR (reuses e2e-image-2 repo with jd-bare/jd-aws tags)
+# Usage: just ci-e2e-cli-push <variant> [ci-dir]
+# Example: just ci-e2e-cli-push bare
+# Example: just ci-e2e-cli-push aws
+ci-e2e-cli-push variant ci_dir="sandbox-ci":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    ECR_URL=$(just ci-e2e-base-ecr-url 2 {{ci_dir}})
+    ECR_REGISTRY=$(echo "$ECR_URL" | cut -d'/' -f1)
+    REGION=$(uv run jd show -o region --text -p {{ci_dir}})
+    TAG="jd-{{variant}}"
+
+    echo "Logging in to ECR..."
+    aws ecr get-login-password --region "$REGION" \
+        | {{container-tool}} login --username AWS --password-stdin "$ECR_REGISTRY"
+
+    echo "Pushing to $ECR_URL:$TAG..."
+    {{container-tool}} tag jupyter-deploy-e2e-cli:latest "$ECR_URL:$TAG"
+    {{container-tool}} push "$ECR_URL:$TAG"
+    echo "✓ Pushed $ECR_URL:$TAG"
+
+# Pull a CLI E2E image from ECR and tag as jupyter-deploy-e2e-cli:latest
+# Usage: just ci-e2e-cli-pull <variant> [ci-dir]
+# Example: just ci-e2e-cli-pull bare
+# Example: just ci-e2e-cli-pull aws
+ci-e2e-cli-pull variant ci_dir="sandbox-ci":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    ECR_URL=$(just ci-e2e-base-ecr-url 2 {{ci_dir}})
+    ECR_REGISTRY=$(echo "$ECR_URL" | cut -d'/' -f1)
+    REGION=$(uv run jd show -o region --text -p {{ci_dir}})
+    TAG="jd-{{variant}}"
+
+    echo "Logging in to ECR..."
+    aws ecr get-login-password --region "$REGION" \
+        | {{container-tool}} login --username AWS --password-stdin "$ECR_REGISTRY"
+
+    echo "Pulling $ECR_URL:$TAG..."
+    {{container-tool}} pull "$ECR_URL:$TAG"
+    {{container-tool}} tag "$ECR_URL:$TAG" jupyter-deploy-e2e-cli:latest
+    echo "✓ Pulled and tagged as jupyter-deploy-e2e-cli:latest"
+
 # Generate .env for base template E2E tests
 # Two modes:
 #   Existing project: reads deployment variables from the project via `jd show -v`

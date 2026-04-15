@@ -3,7 +3,7 @@
 #   {{PKG_VERSION}}     — version to pin from EXTRA_INDEX_URL
 #   {{EXTRA_INDEX_URL}} — index for the package under test (default: Test PyPI)
 [project]
-name = "e2e-jd-release-aws"
+name = "e2e-cli-release-aws"
 version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
