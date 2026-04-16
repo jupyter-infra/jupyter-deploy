@@ -1,6 +1,7 @@
 # IAM role assumed by GitHub Actions via OIDC
 resource "aws_iam_role" "this" {
-  name = var.role_name
+  name                 = var.role_name
+  max_session_duration = 7200
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

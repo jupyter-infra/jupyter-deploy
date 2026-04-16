@@ -73,6 +73,7 @@ jobs:
           # To get this value: uv run jd show -o e2e_iam_role_arn --text -p sandbox-ci
           role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
           aws-region: us-west-2
+          role-duration-seconds: 7200
 
       - name: Restore CI project
         run: just ci-restore sandbox-ci
