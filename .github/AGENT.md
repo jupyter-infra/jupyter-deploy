@@ -14,6 +14,7 @@
 | `e2e-base-fresh.yml` | `workflow_dispatch` / `workflow_call` | Deploy from scratch + full E2E chain |
 | `e2e-base-release.yml` | `workflow_call` | Base template release E2E gate — calls fresh workflow with Test PyPI install |
 | `e2e-base-canary.yml` | `schedule` / `workflow_dispatch` | Weekly canary — calls fresh workflow |
+| `e2e-build-image.yml` | `workflow_call` | Reusable build-and-push E2E image to ECR |
 | `e2e-base-job.yml` | `workflow_call` | Reusable E2E job (called by the above) |
 
 ## Testing Workflow Changes

@@ -1,27 +1,35 @@
 # Jupyter Deploy
 
-This monorepo contains packages for deploying Jupyter applications to various cloud providers.
+This monorepo contains packages for deploying Jupyter and interactive applications to various cloud providers.
 
 ## Packages
 
-- [jupyter-deploy](./libs/jupyter-deploy/README.md): Core package providing a command line interface tool (CLI) that you can use to deploy JupyterLab applications to remote compute instances provided by a Cloud provider.
+- [jupyter-deploy](./libs/jupyter-deploy/README.md): Core package providing a command line interface tool (CLI) that you can use to deploy Jupyter and interactive applications to remote compute instances provided by a Cloud provider.
 - [jupyter-deploy-tf-aws-ec2-base](./libs/jupyter-deploy-tf-aws-ec2-base/README.md): A Terraform template for Jupyter deployment on AWS EC2 with a Traefik proxy.
+- [jupyter-infra-tf-aws-iam-ci](./libs/jupyter-infra-tf-aws-iam-ci/README.md): A Terraform template for CI configuration of AWS resources.
+- [pytest-jupyter-deploy](./libs/pytest-jupyter-deploy/README.md): A pytest plugin for E2E tests that uses Playwright.
 
 ### Installation
 
-The project uses [uv](https://github.com/astral-sh/uv) for dependency management.
+We recommend using [uv](https://github.com/astral-sh/uv) for dependency management.
 
-After cloning the repository, run the following commands from the repository root:
 ```bash
-uv sync
+# prepare your virtual environment
+uv init . --bare
+uv venv
+source .venv/bin/activate
+
+# install the CLI and the base template
+uv add jupyter-deploy[aws]
+uv add jupyter-deploy-tf-aws-ec2-base
 ```
 
 ### Usage
 
-To get started, run from the same environment:
+To get started, run from the uv virtual environment:
 
 ```bash
-uv run jupyter-deploy --help
+jd --help
 ```
 
 ## Contributing
