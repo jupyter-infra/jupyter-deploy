@@ -1,3 +1,4 @@
+import importlib.metadata
 import subprocess
 import sys
 from pathlib import Path
@@ -34,6 +35,12 @@ from jupyter_deploy.infrastructure.enum import AWSInfrastructureType, Infrastruc
 from jupyter_deploy.provider.enum import ProviderType
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(importlib.metadata.version("jupyter-deploy"))
+        raise typer.Exit()
+
+
 class JupyterDeployCliRunner:
     """Wrapper class for Typer app."""
 
@@ -54,7 +61,15 @@ class JupyterDeployCliRunner:
 
     def _setup_basic_commands(self) -> None:
         """Register the basic commands."""
-        pass
+
+        @self.app.callback()
+        def app_callback(
+            version: Annotated[
+                bool,
+                typer.Option("--version", "-V", help="Show the version.", callback=_version_callback, is_eager=True),
+            ] = False,
+        ) -> None:
+            pass
 
     def run(self) -> None:
         """Execute the CLI."""

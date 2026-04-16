@@ -1,5 +1,6 @@
 """CLI help smoke tests — validate every subcommand responds to --help."""
 
+import re
 import subprocess
 
 import pytest
@@ -20,6 +21,17 @@ _HELP_COMMANDS: list[list[str]] = [
     ["jd", "history", "--help"],
     ["jd", "projects", "--help"],
 ]
+
+
+_SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+@pytest.mark.parametrize("flag", ["--version", "-V"])
+def test_version(flag: str) -> None:
+    """jd --version / -V prints a semver string and exits 0."""
+    result = subprocess.run(["jd", flag], capture_output=True, text=True)
+    assert result.returncode == 0, f"jd {flag} failed: {result.stderr}"
+    assert _SEMVER_PATTERN.match(result.stdout.strip()), f"Expected <major>.<minor>.<patch>, got: {result.stdout!r}"
 
 
 @pytest.mark.parametrize("cmd", _HELP_COMMANDS, ids=[" ".join(c) for c in _HELP_COMMANDS])

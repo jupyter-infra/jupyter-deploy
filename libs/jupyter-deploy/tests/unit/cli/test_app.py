@@ -4,12 +4,43 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from unittest.mock import MagicMock, Mock, patch
 
+import typer
 from typer.testing import CliRunner
 
-from jupyter_deploy.cli.app import JupyterDeployApp, JupyterDeployCliRunner, main
+from jupyter_deploy.cli.app import JupyterDeployApp, JupyterDeployCliRunner, _version_callback, main
 from jupyter_deploy.cli.app import runner as app_runner
 from jupyter_deploy.cli.simple_display import SimpleDisplayManager
 from jupyter_deploy.handlers.command_history_handler import LogCleanupError
+
+
+class TestVersionCallback(unittest.TestCase):
+    """Test cases for the --version flag."""
+
+    @patch("jupyter_deploy.cli.app.importlib.metadata.version", return_value="1.2.3")
+    def test_version_flag(self, mock_version: Mock) -> None:
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["--version"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("1.2.3", result.stdout)
+        mock_version.assert_called_once_with("jupyter-deploy")
+
+    @patch("jupyter_deploy.cli.app.importlib.metadata.version", return_value="1.2.3")
+    def test_version_short_flag(self, mock_version: Mock) -> None:
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["-V"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("1.2.3", result.stdout)
+
+    @patch("jupyter_deploy.cli.app.importlib.metadata.version", return_value="0.5.0")
+    def test_version_callback_prints_and_exits(self, mock_version: Mock) -> None:
+        with self.assertRaises(typer.Exit):
+            _version_callback(True)
+
+    def test_version_callback_noop_when_false(self) -> None:
+        # Should not raise or print anything
+        _version_callback(False)
 
 
 class TestJupyterDeployCliRunner(unittest.TestCase):
