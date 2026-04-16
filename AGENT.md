@@ -67,7 +67,7 @@ Primary template used by the CLI, referred to as "base template".
 
 All variables MUST be defined in `variables.tf` without default values.
 Default values MUST be set in `presets/defaults-all.tfvars`.
-There MUST BE be any `variable` blocks in files other than `variables.tf`.
+There MUST NOT BE be any `variable` blocks in files other than `variables.tf`.
 
 IMPORTANT: Do not copy files to `/home/jovyan` during Docker build time.
 The EBS volume for Jupyter data is mounted at runtime, and any files copied during build will be hidden by this mount.
