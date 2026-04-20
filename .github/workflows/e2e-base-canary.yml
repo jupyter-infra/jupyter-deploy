@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   canary:
+    if: github.repository == 'jupyter-infra/jupyter-deploy'
     uses: ./.github/workflows/e2e-base-fresh.yml
     with:
       oauth-app-num: "3"
