@@ -32,7 +32,7 @@
   <div class="step">
     <p>Download and run the setup script:</p>
     <a class="btn" href="/get-started/set-kubeconfig.sh" download>Download set-kubeconfig.sh</a>
-    <pre>./set-kubeconfig.sh</pre>
+    <pre>sh set-kubeconfig.sh</pre>
     <p>This configures your kubeconfig to authenticate via GitHub OAuth. On first <code>kubectl</code> command, a browser window opens for login.</p>
   </div>
 
@@ -45,9 +45,9 @@
   <h2>Find your Workspaces</h2>
   <div class="step">
     <pre>kubectl get Workspaces</pre>
-    <p>To view a workspace's details and access URL:</p>
-    <pre>kubectl get Workspace my-workspace -o yaml</pre>
-    <p>Once the workspace is <code>Available</code>, open the access URL shown in the status.</p>
+    <p>To get a workspace's access URL:</p>
+    <pre>kubectl get Workspace my-workspace -o jsonpath='{.spec.accessURL}'; echo</pre>
+    <p>Once the workspace is <code>Available</code>, open the access URL in your browser.</p>
   </div>
 
   <h2>Create a Workspace</h2>
