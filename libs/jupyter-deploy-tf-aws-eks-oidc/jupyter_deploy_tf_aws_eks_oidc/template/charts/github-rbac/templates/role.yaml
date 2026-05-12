@@ -1,0 +1,18 @@
+{{- range $ns := .Values.namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: github-workspace-role
+  namespace: {{ $ns }}
+rules:
+  - apiGroups: ["workspace.jupyter.org"]
+    resources: ["workspaces"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["connection.workspace.jupyter.org"]
+    resources: ["workspaceconnections"]
+    verbs: ["create"]
+  - apiGroups: ["workspace.jupyter.org"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+{{- end }}

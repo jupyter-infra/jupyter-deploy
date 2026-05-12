@@ -1,0 +1,17 @@
+# -- Prefix Dex adds to OIDC group claims. Subjects in Role/ClusterRoleBindings
+# are matched as "<prefix><org>:<team>".
+oidcGroupPrefix: "github:"
+
+# -- GitHub organizations and teams granted workspace permissions.
+# Members of listed teams receive namespace-scoped Roles (workspace CRUD)
+# and a ClusterRole (self-subject access reviews for kubelogin).
+orgs: []
+  # - name: my-org
+  #   teams:
+  #     - team-a
+
+# -- Namespaces where workspace Roles and RoleBindings are created.
+# Each namespace gets a Role allowing workspace CRUD and a RoleBinding
+# for every org/team above.
+namespaces:
+  - default
