@@ -216,6 +216,28 @@ variable "node_groups" {
   }
 }
 
+variable "workspace_rbac_namespaces" {
+  description = <<-EOT
+    List of Kubernetes namespaces where GitHub teams are granted workspace permissions.
+
+    Each namespace gets a Role and RoleBinding allowing members of oauth_allowed_teams
+    to create, manage, and access workspaces.
+
+    Example: ["default"]
+  EOT
+  type        = list(string)
+
+  validation {
+    condition     = length(var.workspace_rbac_namespaces) >= 1
+    error_message = "workspace_rbac_namespaces must contain at least one namespace."
+  }
+
+  validation {
+    condition     = alltrue([for ns in var.workspace_rbac_namespaces : can(regex("^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$", ns))])
+    error_message = "Each namespace must be a valid Kubernetes namespace (lowercase letters, digits, hyphens; 2-63 characters)."
+  }
+}
+
 variable "admin_role_names" {
   description = <<-EOT
     List of IAM role names to grant EKS cluster admin and workspace admin permissions.

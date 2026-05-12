@@ -1,8 +1,7 @@
 locals {
-  workspace_namespace       = "default"
-  access_strategy_name      = "oauth-access-strategy"
-  access_strategy_namespace = var.workspace_shared_namespace
-  workspace_storage_class   = "ebs-sc"
+  workspace_namespace     = "default"
+  access_strategy_name    = "oauth-access-strategy"
+  workspace_storage_class = "ebs-sc"
 }
 
 resource "kubernetes_namespace" "shared" {
@@ -16,6 +15,38 @@ resource "kubernetes_namespace" "shared" {
   depends_on = [module.eks_cluster]
 }
 
+resource "helm_release" "github_rbac" {
+  name             = "github-rbac"
+  chart            = "${path.module}/../charts/github-rbac"
+  namespace        = var.workspace_shared_namespace
+  create_namespace = false
+
+  set = concat(
+    [
+      for idx, ns in var.workspace_rbac_namespaces : {
+        name  = "namespaces[${idx}]"
+        value = ns
+      }
+    ],
+    [
+      for idx, org in local.github_orgs_unique : {
+        name  = "orgs[${idx}].name"
+        value = org
+      }
+    ],
+    flatten([
+      for org_index, org in local.github_orgs_unique : [
+        for team_index, t in [for t in local.oauth_teams_parsed : t.team if t.org == org] : {
+          name  = "orgs[${org_index}].teams[${team_index}]"
+          value = t
+        }
+      ]
+    ]),
+  )
+
+  depends_on = [kubernetes_namespace.shared, helm_release.workspace_router]
+}
+
 resource "helm_release" "workspace_defaults" {
   name             = "workspace-defaults"
   chart            = "${path.module}/../charts/workspace-defaults"
@@ -24,20 +55,8 @@ resource "helm_release" "workspace_defaults" {
 
   set = [
     {
-      name  = "domain"
-      value = local.full_domain
-    },
-    {
       name  = "sharedNamespace"
       value = var.workspace_shared_namespace
-    },
-    {
-      name  = "routerNamespace"
-      value = var.workspace_router_namespace
-    },
-    {
-      name  = "operatorNamespace"
-      value = var.workspace_operator_namespace
     },
     {
       name  = "accessStrategy.name"

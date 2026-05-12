@@ -29,16 +29,25 @@ defaults:
       min_size: "1"
       max_size: "5"
       desired_size: "1"
+  workspace_rbac_namespaces:
+    - default
+  admin_role_names:
+    - Admin
   cluster_log_retention_days: 30
   custom_tags: {}
   workspace_operator_namespace: jupyter-k8s-system
   workspace_router_namespace: jupyter-k8s-router
   workspace_shared_namespace: jupyter-k8s-shared
   workspace_operator_chart_oci: oci://ghcr.io/jupyter-infra/charts/jupyter-k8s
-  workspace_operator_chart_version: "0.1.0-rc.2"
+  workspace_operator_chart_version: "0.1.0"
   workspace_router_chart_oci: oci://ghcr.io/jupyter-infra/charts/jupyter-k8s-aws-oidc
-  workspace_router_chart_version: "0.1.0-rc.2"
+  workspace_router_chart_version: "0.1.0-rc.3"
   traefik_crd_chart_version: "1.15.0"
+  workspaces_default_access_type: OwnerOnly
+  workspaces_default_ownership_type: OwnerOnly
+  workspaces_idle_shutdown_enabled: true
+  workspaces_idle_shutdown_timeout_default: 60
+  workspaces_idle_shutdown_timeout_max: 480
   workspace_app_jupyterlab_use: true
   workspace_app_jupyterlab_app_type: jupyterlab
   workspace_app_jupyterlab_image_name: jupyterlab-v0.1.0

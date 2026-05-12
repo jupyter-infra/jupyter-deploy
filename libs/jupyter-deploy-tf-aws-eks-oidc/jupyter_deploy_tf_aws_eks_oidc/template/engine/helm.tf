@@ -106,6 +106,8 @@ resource "helm_release" "workspace_router" {
         value = "components"
       },
     ],
+    # Dex GitHub connector: controls which org/team members can authenticate via OIDC.
+    # Separate from RBAC — see helm_release.github_rbac for K8s authorization.
     [
       for idx, org in local.github_orgs_unique : {
         name  = "github.orgs[${idx}].name"
@@ -121,19 +123,23 @@ resource "helm_release" "workspace_router" {
       ]
     ]),
     [
-      for idx, org in local.github_orgs_unique : {
-        name  = "githubRbac.orgs[${idx}].name"
-        value = org
-      }
+      {
+        name  = "accessStrategy.createOAuth"
+        value = "true"
+      },
+      {
+        name  = "accessStrategy.namespace"
+        value = var.workspace_shared_namespace
+      },
+      {
+        name  = "accessStrategy.createNamespace"
+        value = "false"
+      },
+      {
+        name  = "githubRbac.create"
+        value = "false"
+      },
     ],
-    flatten([
-      for org_index, org in local.github_orgs_unique : [
-        for team_index, t in [for t in local.oauth_teams_parsed : t.team if t.org == org] : {
-          name  = "githubRbac.orgs[${org_index}].teams[${team_index}]"
-          value = t
-        }
-      ]
-    ]),
   )
 
   set_sensitive = [
