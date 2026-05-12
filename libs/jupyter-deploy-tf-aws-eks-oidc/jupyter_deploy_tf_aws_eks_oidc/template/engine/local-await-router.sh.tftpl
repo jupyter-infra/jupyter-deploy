@@ -126,6 +126,48 @@ restart_crashed_pods() {
     return 0
 }
 
+# CronJobs with concurrencyPolicy=Forbid silently stop scheduling if a Job is stuck.
+# A single bad image tag can block rotation for days with no visible alert.
+verify_cronjobs_healthy() {
+    echo "Checking CronJob health in $ROUTER_NAMESPACE..."
+
+    local cronjobs
+    cronjobs=$(kubectl get cronjobs -n "$ROUTER_NAMESPACE" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null)
+
+    if [ -z "$cronjobs" ]; then
+        echo "No CronJobs found in $ROUTER_NAMESPACE, skipping."
+        return 0
+    fi
+
+    local failed=0
+    for cj in $cronjobs; do
+        # Check for stuck active Jobs with failing pods (ImagePullBackOff, CrashLoopBackOff, etc.)
+        local active_jobs
+        active_jobs=$(kubectl get cronjob "$cj" -n "$ROUTER_NAMESPACE" \
+            -o jsonpath='{range .status.active[*]}{.name}{"\n"}{end}' 2>/dev/null)
+
+        for job in $active_jobs; do
+            local bad_pods
+            bad_pods=$(kubectl get pods -n "$ROUTER_NAMESPACE" -l "job-name=$job" \
+                -o jsonpath='{range .items[*]}{range .status.containerStatuses[*]}{.state.waiting.reason}{end}{"\n"}{end}' 2>/dev/null | grep -v '^$')
+
+            if [ -n "$bad_pods" ]; then
+                echo "ERROR: CronJob $cj has a stuck Job ($job) with failing pods: $bad_pods"
+                echo "  Deleting stuck Job to unblock future runs..."
+                kubectl delete job "$job" -n "$ROUTER_NAMESPACE" 2>&1
+                failed=$((failed + 1))
+            fi
+        done
+    done
+
+    if [ $failed -gt 0 ]; then
+        echo "WARNING: Cleaned up $failed stuck CronJob(s). Next scheduled run should succeed."
+    else
+        echo "All CronJobs healthy."
+    fi
+    return 0
+}
+
 wait_for_deployments_ready() {
     local MAX_WAIT_SECONDS=300
     local SLEEP_INTERVAL=15
@@ -199,6 +241,7 @@ main() {
     if dns_already_resolves; then
         # Domain resolves — skip DNS wait and CoreDNS flush, just verify health
         wait_for_deployments_ready
+        verify_cronjobs_healthy
         return $?
     fi
 
@@ -217,6 +260,7 @@ main() {
     fi
 
     wait_for_deployments_ready
+    verify_cronjobs_healthy
 }
 
 main
