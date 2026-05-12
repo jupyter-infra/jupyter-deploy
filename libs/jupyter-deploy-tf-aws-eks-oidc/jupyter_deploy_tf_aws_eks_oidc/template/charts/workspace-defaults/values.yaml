@@ -1,22 +1,36 @@
-domain: ""
+# -- Namespace where the WorkspaceTemplate are created.
 sharedNamespace: jupyter-k8s-shared
-routerNamespace: jupyter-k8s-router
-operatorNamespace: jupyter-k8s-system
 
+# -- Name of the WorkspaceAccessStrategy to reference in the WorkspaceTemplate.
+# Must match the strategy created by the aws-oidc chart (accessStrategy.createOAuth).
 accessStrategy:
   name: oauth-access-strategy
 
+# -- Default WorkspaceTemplate definition. Configures the workspace image, storage,
+# access controls, and idle shutdown behavior for new workspaces.
 workspaceTemplate:
+  # -- Kubernetes resource name for the WorkspaceTemplate.
   name: jupyterlab
+  # -- Whether this is the default template for new workspaces.
   isDefault: "true"
+  # -- Human-readable name shown in the workspace UI.
   displayName: JupyterLab
+  # -- Human-readable description shown in the workspace UI.
   description: "JupyterLab workspace with persistent EBS storage"
+  # -- Container image URI for workspace pods.
   imageUri: ""
+  # -- Application type identifier (e.g. jupyterlab, code-server).
   appType: jupyterlab
+  # -- Who can access the workspace: OwnerOnly or TeamShared.
   accessType: OwnerOnly
+  # -- Who owns the workspace: OwnerOnly or TeamShared.
   ownershipType: OwnerOnly
+  # -- StorageClass for the workspace persistent volume.
   storageClassName: ebs-sc
   idleShutdown:
+    # -- Whether to automatically stop idle workspaces.
     enabled: true
+    # -- Default idle timeout in minutes before a workspace is stopped.
     timeoutMinutes: 60
+    # -- Maximum idle timeout users can configure, in minutes.
     maxTimeoutMinutes: 480
