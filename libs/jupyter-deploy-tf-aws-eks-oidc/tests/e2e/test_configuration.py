@@ -3,6 +3,7 @@
 import re
 
 import pytest
+import yaml
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 from pytest_jupyter_deploy.undeployed_project import undeployed_project
@@ -80,3 +81,33 @@ def test_agent_md_generated_after_init(e2e_deployment: EndToEndDeployment) -> No
         assert "# Jupyter-deploy: Terraform AWS EKS OIDC template" in agent_content
         assert "{{ " not in agent_content, "Should not contain template placeholders"
         assert " }}" not in agent_content, "Should not contain template placeholders"
+
+
+@pytest.mark.cli
+@skip_if_testvars_not_set(
+    [
+        "JD_E2E_VAR_DOMAIN",
+        "JD_E2E_VAR_EMAIL",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
+        "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
+        "JD_E2E_VAR_SUBDOMAIN",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_SECRET",
+    ]
+)
+def test_store_config_written_after_config(e2e_deployment: EndToEndDeployment) -> None:
+    """Test that .jd/store.yaml is created after jd config with correct store type."""
+    with undeployed_project(e2e_deployment.suite_config) as (project_path, cli):
+        e2e_deployment.configure_project(cli=cli)
+
+        store_config_path = project_path / ".jd" / "store.yaml"
+        assert store_config_path.exists(), f".jd/store.yaml should exist after config: {store_config_path}"
+
+        with open(store_config_path) as f:
+            store_config = yaml.safe_load(f)
+
+        assert "store-type" in store_config, ".jd/store.yaml should contain store-type"
+        assert store_config["store-type"] == "s3-only", (
+            f"Expected store-type 's3-only', got '{store_config['store-type']}'"
+        )
+        assert "store-id" in store_config, ".jd/store.yaml should contain store-id"
+        assert store_config["store-id"], "store-id should not be empty"
