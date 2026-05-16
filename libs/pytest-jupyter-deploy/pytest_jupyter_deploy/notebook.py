@@ -29,7 +29,13 @@ from pytest_jupyter_deploy.notebooks.notebook_utils import (
 logger = logging.getLogger(__name__)
 
 
-def upload_notebook(deployment: EndToEndDeployment, src_path: str | Path, target_path: str) -> str:
+def upload_notebook(
+    deployment: EndToEndDeployment,
+    src_path: str | Path,
+    target_path: str,
+    name: str | None = None,
+    scope: str | None = None,
+) -> str:
     """Upload a notebook to the Jupyter server with a unique path.
 
     A UUID suffix is appended to the target filename to ensure each upload creates a
@@ -43,6 +49,8 @@ def upload_notebook(deployment: EndToEndDeployment, src_path: str | Path, target
         target_path: Base target path on the server (relative to /home/jovyan,
             e.g., "e2e-test/application_simple.ipynb"). A UUID is appended before
             the extension to create the actual unique path.
+        name: Server/workspace name (for multi-server templates like EKS)
+        scope: Namespace scope (for multi-server templates like EKS)
 
     Returns:
         The actual unique path the notebook was uploaded to
@@ -78,7 +86,14 @@ def upload_notebook(deployment: EndToEndDeployment, src_path: str | Path, target
         f"open('/home/jovyan/{unique_target}', 'wb').write(data)\""
     )
 
-    deployment.cli.run_command(["jupyter-deploy", "server", "exec", "--", python_cmd])
+    cmd = ["jupyter-deploy", "server", "exec"]
+    if name is not None:
+        cmd.extend(["--name", name])
+    if scope is not None:
+        cmd.extend(["--scope", scope])
+    cmd.extend(["--", python_cmd])
+
+    deployment.cli.run_command(cmd)
     return unique_target
 
 
@@ -333,13 +348,27 @@ def _verify_executed_and_no_cell_error(cells_info: list[dict[str, str]], noteboo
         raise RuntimeError(f"Notebook {notebook_path} execution failed with errors.")
 
 
-def delete_notebook(deployment: EndToEndDeployment, target_path: str, home_path: str = "/home/jovyan") -> None:
+def delete_notebook(
+    deployment: EndToEndDeployment,
+    target_path: str,
+    home_path: str = "/home/jovyan",
+    name: str | None = None,
+    scope: str | None = None,
+) -> None:
     """Delete a notebook from the Jupyter server.
 
     Args:
         deployment: The deployment instance
         target_path: Path to the notebook on the server (relative to home dir, e.g., "work/test.ipynb")
         home_path: Path to the home dir in the jupyterlab container (default: /home/jovyan)
+        name: Server/workspace name (for multi-server templates like EKS)
+        scope: Namespace scope (for multi-server templates like EKS)
     """
     full_cmd = f"rm -f {home_path}/{target_path}"
-    deployment.cli.run_command(["jupyter-deploy", "server", "exec", "--", full_cmd])
+    cmd = ["jupyter-deploy", "server", "exec"]
+    if name is not None:
+        cmd.extend(["--name", name])
+    if scope is not None:
+        cmd.extend(["--scope", scope])
+    cmd.extend(["--", full_cmd])
+    deployment.cli.run_command(cmd)
