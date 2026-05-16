@@ -13,6 +13,7 @@ from pytest_jupyter_deploy import constants
 from pytest_jupyter_deploy.constants import DEPLOY_TIMEOUT_SECONDS, DESTROY_TIMEOUT_SECONDS
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.oauth2_proxy.ci_credentials import fetch_ci_credentials
+from pytest_jupyter_deploy.oauth2_proxy.dex import DexGitHubOAuth2ProxyApplication
 from pytest_jupyter_deploy.oauth2_proxy.github import GitHubOAuth2ProxyApplication
 from pytest_jupyter_deploy.suite_config import SuiteConfig
 
@@ -309,6 +310,40 @@ def github_oauth_app(
         ci_email, ci_password, ci_totp_fn = fetch_ci_credentials(ci_dir)
 
     return GitHubOAuth2ProxyApplication(
+        page=page,
+        jupyterlab_url=jupyterlab_url,
+        storage_state_path=storage_state_path,
+        is_ci=is_ci,
+        ci_email=ci_email,
+        ci_password=ci_password,
+        ci_totp_fn=ci_totp_fn,
+    )
+
+
+@pytest.fixture(scope="function")
+def dex_oauth_app(
+    page: Page, e2e_deployment: EndToEndDeployment, request: pytest.FixtureRequest
+) -> DexGitHubOAuth2ProxyApplication:
+    """Create a Dex-aware OAuth2 Proxy application helper.
+
+    Same as github_oauth_app but for templates that use Dex as the OIDC provider
+    (e.g. EKS OIDC). Handles the Dex consent page in the OAuth flow.
+    """
+    e2e_deployment.ensure_deployed()
+    jupyterlab_url = e2e_deployment.cli.get_jupyterlab_url()
+    storage_state_path = Path.cwd() / constants.AUTH_DIR / constants.GITHUB_OAUTH_STATE_FILE
+
+    is_ci = request.config.getoption("--ci", default=False)
+    ci_email: str | None = None
+    ci_password: str | None = None
+    ci_totp_fn: Callable[[], str] | None = None
+    if is_ci:
+        ci_dir = request.config.getoption("--ci-dir")
+        if not ci_dir:
+            raise pytest.UsageError("--ci requires --ci-dir <path> for credential fetching")
+        ci_email, ci_password, ci_totp_fn = fetch_ci_credentials(ci_dir)
+
+    return DexGitHubOAuth2ProxyApplication(
         page=page,
         jupyterlab_url=jupyterlab_url,
         storage_state_path=storage_state_path,
