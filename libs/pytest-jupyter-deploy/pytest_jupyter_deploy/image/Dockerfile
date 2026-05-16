@@ -14,13 +14,11 @@ RUN apt-get update && \
     oathtool \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Terraform
+# Install Terraform (direct binary — HashiCorp removed older versions from their apt repo)
 ARG TF_VERSION=1.5.7
-RUN wget -qO- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg && \
-    echo 'deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com bookworm main' | tee /etc/apt/sources.list.d/hashicorp.list && \
-    apt-get update && \
-    apt-get install -y terraform=${TF_VERSION}-1 && \
-    rm -rf /var/lib/apt/lists/*
+RUN wget -qO /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" && \
+    unzip -o /tmp/terraform.zip -d /usr/local/bin/ && \
+    rm /tmp/terraform.zip
 
 # Install AWS CLI
 RUN curl -s 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o 'awscliv2.zip' && \
