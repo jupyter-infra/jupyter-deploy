@@ -1254,7 +1254,7 @@ wheels = [
 
 [[package]]
 name = "pytest-jupyter-deploy"
-version = "0.2.1"
+version = "0.2.2"
 source = { editable = "libs/pytest-jupyter-deploy" }
 dependencies = [
     { name = "jupyter-deploy" },
