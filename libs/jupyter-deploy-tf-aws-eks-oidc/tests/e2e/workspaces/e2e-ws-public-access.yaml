@@ -1,0 +1,10 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-ws-public-access
+  namespace: default
+spec:
+  displayName: "E2E Public Access"
+  desiredStatus: Running
+  ownershipType: Public
+  accessType: Public

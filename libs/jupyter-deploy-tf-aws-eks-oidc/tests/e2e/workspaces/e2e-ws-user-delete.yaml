@@ -1,0 +1,10 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-ws-user-delete
+  namespace: default
+spec:
+  displayName: "E2E User Delete"
+  desiredStatus: Running
+  ownershipType: OwnerOnly
+  accessType: OwnerOnly

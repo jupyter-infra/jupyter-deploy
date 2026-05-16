@@ -1,0 +1,10 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-ws-admin-delete-private
+  namespace: default
+spec:
+  displayName: "E2E Admin Delete Private"
+  desiredStatus: Running
+  ownershipType: OwnerOnly
+  accessType: OwnerOnly

@@ -1,0 +1,10 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-ws-private-access
+  namespace: default
+spec:
+  displayName: "E2E Private Access"
+  desiredStatus: Running
+  ownershipType: OwnerOnly
+  accessType: OwnerOnly

@@ -1,0 +1,10 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-ws-stop-start
+  namespace: default
+spec:
+  displayName: "E2E Stop Start"
+  desiredStatus: Running
+  ownershipType: Public
+  accessType: Public

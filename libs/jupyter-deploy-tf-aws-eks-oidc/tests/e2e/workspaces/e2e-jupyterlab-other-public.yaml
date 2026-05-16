@@ -1,0 +1,10 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-jupyterlab-other-public
+  namespace: default
+spec:
+  displayName: "E2E JupyterLab Other User Public"
+  desiredStatus: Running
+  ownershipType: Public
+  accessType: Public
