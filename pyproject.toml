@@ -126,3 +126,4 @@ markers = [
   "bare: Tests requiring the bare install track with no AWS deps (select with '-m bare')",
 ]
 addopts = "-m 'not e2e' --import-mode=importlib"
+norecursedirs = ["**/tests/e2e"]

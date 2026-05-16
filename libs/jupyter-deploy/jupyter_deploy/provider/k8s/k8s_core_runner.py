@@ -1,4 +1,5 @@
 import json
+import shlex
 import subprocess
 from enum import Enum
 
@@ -188,7 +189,7 @@ class K8sCoreRunner(InstructionRunner):
             raise ValueError("Either 'name' (pod name) or 'deployment_name' must be provided")
 
         container = container_arg.value if container_arg.value and container_arg.value != "default" else None
-        command_parts = command_arg.value.split()
+        command_parts = shlex.split(command_arg.value)
         self.display_manager.info(f"Executing command on pod: {pod_name}")
         result = k8s_core.exec_pod(
             self.core_api,
