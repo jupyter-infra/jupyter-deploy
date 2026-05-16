@@ -593,7 +593,7 @@ def down(
 
 @runner.app.command()
 def open(
-    server_name: Annotated[str | None, typer.Option("--name", help="Name of the server to open.")] = None,
+    server_name: Annotated[str | None, typer.Option("--server-name", help="Name of the server to open.")] = None,
     scope: Annotated[str, typer.Option("--scope", help="Scope or group the server belongs to.")] = "",
     project_dir: Annotated[Path | None, typer.Option("--path", "-p", help="Directory of the project to open.")] = None,
 ) -> None:
@@ -604,7 +604,7 @@ def open(
 
     Call <jd config> and <jd up> first.
 
-    For a multi-apps template, open a specific app with: <jd open --name SERVER_NAME>.
+    For a multi-apps template, open a specific app with: <jd open --server-name SERVER_NAME>.
     Pass --scope <scope>.
     """
     console = Console()
@@ -616,7 +616,7 @@ def open(
 
         try:
             url = handler.open(name=server_name, scope=scope or None)
-            console.print(f"\nOpening app at: {url}", style="green")
+            console.print(f"\nOpening app at: {url}", style="green", soft_wrap=True)
         except UrlNotAvailableError as e:
             # URL not available - show helpful message but don't fail (project not deployed)
             console.print(f":x: {e}", style="bold red")

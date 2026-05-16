@@ -318,6 +318,26 @@ class TestOpenCommand(unittest.TestCase):
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_open_command_url_not_line_wrapped(
+        self, mock_project_ctx_manager: Mock, mock_open_handler_cls: Mock
+    ) -> None:
+        """Test that long URLs are printed on a single line without wrapping."""
+        mock_open_handler_instance, mock_open_fns = self.get_mock_open_handler()
+        long_url = "https://another-long-subsub-domain.some-very-long-subdomain.example.com/workspaces/default/some-long-workspace-name/lab"
+        mock_open_fns["open"].return_value = long_url
+        mock_open_handler_cls.return_value = mock_open_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["open"])
+
+        self.assertEqual(result.exit_code, 0)
+        # The full URL must appear on a single line (soft_wrap=True prevents Rich from breaking it)
+        output_lines = result.output.splitlines()
+        url_lines = [line for line in output_lines if long_url in line]
+        self.assertEqual(len(url_lines), 1, f"URL should appear intact on one line, got output:\n{result.output}")
+
+    @patch("jupyter_deploy.cli.app.OpenHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_open_command_with_server_name(self, mock_project_ctx_manager: Mock, mock_open_handler_cls: Mock) -> None:
         """Test that open command passes server name to handler."""
         mock_open_handler_instance, mock_open_fns = self.get_mock_open_handler()
@@ -325,7 +345,7 @@ class TestOpenCommand(unittest.TestCase):
         mock_open_handler_cls.return_value = mock_open_handler_instance
 
         runner = CliRunner()
-        result = runner.invoke(app_runner.app, ["open", "--name", "my-ws"])
+        result = runner.invoke(app_runner.app, ["open", "--server-name", "my-ws"])
 
         self.assertEqual(result.exit_code, 0)
         mock_open_fns["open"].assert_called_once_with(name="my-ws", scope=None)
@@ -342,7 +362,7 @@ class TestOpenCommand(unittest.TestCase):
         mock_open_handler_cls.return_value = mock_open_handler_instance
 
         runner = CliRunner()
-        result = runner.invoke(app_runner.app, ["open", "--name", "my-ws", "--scope", "team-a"])
+        result = runner.invoke(app_runner.app, ["open", "--server-name", "my-ws", "--scope", "team-a"])
 
         self.assertEqual(result.exit_code, 0)
         mock_open_fns["open"].assert_called_once_with(name="my-ws", scope="team-a")
