@@ -30,7 +30,7 @@ Or with pip:
 pip install jupyter-deploy
 ```
 
-## The `jupyter-deploy` CLI
+## The CLI
 
 ### Entry points
 From a terminal, run:

@@ -55,7 +55,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install just
-        uses: extractions/setup-just@v2
+        uses: ./.github/actions/install-just
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3

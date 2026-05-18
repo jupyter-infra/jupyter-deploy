@@ -59,7 +59,8 @@ jobs:
           python-version: "3.13"
 
       - name: Install just
-        uses: extractions/setup-just@v2
+        id: install-just
+        uses: ./.github/actions/install-just
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -128,7 +129,7 @@ jobs:
         run: just test-e2e-base sandbox-e2e "${{ steps.filter.outputs.filter }}" "${{ steps.filter.outputs.options }}"
 
       - name: Export auth state
-        if: always()
+        if: always() && steps.install-just.outcome == 'success'
         run: just auth-export sandbox-ci
 
       - name: Upload test artifacts

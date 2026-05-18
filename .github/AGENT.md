@@ -41,6 +41,7 @@ jobs:
 ```
 
 - Caller **must** declare `permissions: id-token: write` for OIDC to work in reusable workflows.
+- Only workflows with `workflow_call` trigger can be referenced via `uses:`; for example, `e2e-base.yml` is `workflow_dispatch` only, so inline its jobs instead.
 - Target a fast test (e.g. `test_server_running`) to iterate quickly.
 - GitHub org-level oauth requires careful setup, test it with `test_org_and_teams`
 - Once satisfied, verify the full chain via `workflow_dispatch` on your branch.

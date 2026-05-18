@@ -1,0 +1,16 @@
+name: install-just
+description: 'Install just command runner with retry'
+
+inputs:
+  version:
+    description: 'just version to install'
+    required: false
+    default: '1.40.0'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install just
+      shell: bash
+      # yamllint disable-line rule:line-length
+      run: curl --retry 3 --proto '=https' -fsSL https://just.systems/install.sh | bash -s -- --tag ${{ inputs.version }} --to /usr/local/bin

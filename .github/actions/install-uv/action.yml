@@ -19,9 +19,19 @@ runs:
   using: "composite"
   steps:
     - name: Install uv and python
+      id: uv-primary
       uses: astral-sh/setup-uv@v5
+      continue-on-error: true
       with:
         enable-cache: true
         cache-dependency-glob: "uv.lock"
+        python-version: ${{ inputs.python-version }}
+        version: ${{ inputs.uv-version }}
+
+    - name: Retry uv install (no cache)
+      if: steps.uv-primary.outcome == 'failure'
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: false
         python-version: ${{ inputs.python-version }}
         version: ${{ inputs.uv-version }}
