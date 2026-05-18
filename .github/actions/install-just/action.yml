@@ -12,5 +12,8 @@ runs:
   steps:
     - name: Install just
       shell: bash
-      # yamllint disable-line rule:line-length
-      run: curl --retry 3 --proto '=https' -fsSL https://just.systems/install.sh | bash -s -- --tag ${{ inputs.version }} --to /usr/local/bin
+      # yamllint disable rule:line-length
+      run: |
+        curl --retry 3 --proto '=https' -fsSL https://just.systems/install.sh | bash -s -- --tag ${{ inputs.version }} --to /usr/local/bin
+        just --version
+      # yamllint enable rule:line-length
