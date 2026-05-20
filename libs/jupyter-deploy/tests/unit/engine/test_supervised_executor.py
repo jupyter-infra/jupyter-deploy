@@ -432,6 +432,41 @@ class TestSupervisedExecutor(unittest.TestCase):
         # Verify progress callback was called
         cb_mocks["on_progress"].assert_called()
 
+    def test_parse_output_line_no_active_phase_skips_to_later_phase(self) -> None:
+        """Test that _parse_output_line skips phases whose enter pattern doesn't match."""
+        mock_phase1, phase1_mocks = self._create_mocked_phase_and_mocks()
+        mock_phase2, phase2_mocks = self._create_mocked_phase_and_mocks()
+        cb, cb_mocks = self._create_execution_callback_and_mocks()
+        dft_phase, _ = self._create_mocked_default_phase_and_mocks()
+
+        executor = SupervisedExecutor(
+            exec_dir=Path("/mock/dir"),
+            log_file=Path("/mock/log.txt"),
+            execution_callback=cb,  # type: ignore[arg-type]
+            default_phase=dft_phase,  # type: ignore[arg-type]
+            phases=[mock_phase1, mock_phase2],  # type: ignore[arg-type]
+        )
+
+        executor._active_declared_phase = None
+        executor._next_declared_phase = mock_phase1
+        executor._next_declared_phase_index = 0
+
+        # Phase 1 does NOT match, phase 2 DOES match
+        phase1_mocks["evaluate_enter"].return_value = False
+        phase2_mocks["evaluate_enter"].return_value = True
+
+        executor._parse_output_line("skip to phase 2")
+
+        # Phase 1 was checked and rejected
+        phase1_mocks["evaluate_enter"].assert_called_once_with("skip to phase 2")
+        # Phase 2 was checked and accepted
+        phase2_mocks["evaluate_enter"].assert_called_once_with("skip to phase 2")
+        # Phase 2 is now active
+        self.assertEqual(executor._active_declared_phase, mock_phase2)
+        self.assertEqual(executor._next_declared_phase_index, 1)
+        # Progress callback was called
+        cb_mocks["on_progress"].assert_called()
+
     def test_parse_output_line_no_active_phase_evaluates_default_phase_progress(self) -> None:
         """Test that _parse_output_line tracks default phase progress."""
         mock_phase, phase_mocks = self._create_mocked_phase_and_mocks()

@@ -11,7 +11,7 @@ workspace_shared_namespace       = "jupyter-k8s-shared"
 workspace_operator_chart_oci     = "oci://ghcr.io/jupyter-infra/charts/jupyter-k8s"
 workspace_operator_chart_version = "0.1.0"
 workspace_router_chart_oci       = "oci://ghcr.io/jupyter-infra/charts/jupyter-k8s-aws-oidc"
-workspace_router_chart_version   = "0.1.0-rc.3"
+workspace_router_chart_version   = "0.1.0-rc.4"
 traefik_crd_chart_version        = "1.15.0"
 
 workspaces_default_access_type           = "OwnerOnly"

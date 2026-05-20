@@ -702,31 +702,47 @@ supervised-execution:
   up:
     up.terraform-apply:
       phases:
-      - enter-pattern: 'module.vpc'
-        exit-pattern: 'module.vpc.*Creation complete'
-        label: Creating VPC
-        weight: 5
-      - enter-pattern: 'module.eks_cluster'
-        exit-pattern: 'module.eks_cluster.*Creation complete'
-        label: Creating EKS cluster
-        weight: 40
-      - enter-pattern: 'aws_eks_addon'
-        exit-pattern: 'aws_eks_addon.*Creation complete'
-        label: Installing EKS add-ons
-        weight: 20
-      - enter-pattern: 'helm_release.jupyter_k8s'
-        exit-pattern: 'helm_release.jupyter_k8s.*Creation complete'
-        label: Deploying Jupyter K8s operator
+      - enter-pattern: '(module\.|aws_eks_(addon|pod_identity)|time_sleep|null_resource\.build)'
+        exit-pattern: 'helm_release\.(traefik_crds|jupyter_k8s|workspace_router)'
+        label: Creating infrastructure
+        weight: 55
+        progress-pattern: '(Creation complete|Still creating)'
+        progress-events-estimate: 120
+        phases:
+        - enter-pattern: 'module\.vpc'
+          label: Creating VPC
+          weight: 5
+        - enter-pattern: 'null_resource\.build_trigger'
+          label: Building application image
+          weight: 5
+        - enter-pattern: 'module\.eks_cluster\.aws_eks_cluster'
+          label: Creating EKS cluster
+          weight: 50
+        - enter-pattern: '(module\.node_group|aws_eks_addon|time_sleep)'
+          label: Provisioning nodes and add-ons
+          weight: 40
+      - enter-pattern: 'helm_release\.(traefik_crds|jupyter_k8s|workspace_router)'
+        exit-pattern: 'helm_release\.workspace_router.*(Creation|Modifications) complete'
+        label: Deploying platform
         weight: 10
-      - enter-pattern: 'helm_release.workspace_router'
-        exit-pattern: 'helm_release.workspace_router.*Creation complete'
-        label: Deploying OIDC routing
-        weight: 15
-      - enter-pattern: 'null_resource.wait_for_routing_ready'
-        exit-pattern: 'null_resource.wait_for_routing_ready.*Creation complete'
-        label: Waiting for routing to be ready
-        weight: 10
-      - enter-pattern: 'helm_release.workspace_defaults'
-        exit-pattern: 'helm_release.workspace_defaults.*Creation complete'
+        progress-pattern: 'helm_release\.\w+.*(Creation|Modifications) complete'
+        progress-events-estimate: 4
+      - enter-pattern: '(aws_eks_identity_provider_config|null_resource\.wait_for_routing_ready)'
+        exit-pattern: 'null_resource\.wait_for_routing_ready.*Creation complete'
+        label: Waiting for routing readiness
+        weight: 25
+        progress-pattern: '(Still creating|local-exec)'
+        progress-events-estimate: 60
+        phases:
+        - enter-pattern: 'aws_eks_identity_provider_config'
+          label: Registering OIDC provider
+          weight: 40
+        - enter-pattern: 'null_resource\.wait_for_routing_ready'
+          label: Verifying routing health
+          weight: 60
+      - enter-pattern: 'helm_release\.(workspace_defaults|github_rbac|console)'
+        exit-pattern: 'helm_release\.(workspace_defaults|github_rbac).*(Creation|Modifications) complete'
         label: Creating workspace defaults
-        weight: 5
+        weight: 10
+        progress-pattern: '(Creation|Modifications) complete'
+        progress-events-estimate: 3

@@ -262,12 +262,15 @@ class SupervisedExecutor:
 
         else:
             # Case 2: No declared phase is active (in default phase)
-            # 2.1: Check if next declared phase can be entered
-            if self._next_declared_phase and self._next_declared_phase.evaluate_enter(line):
-                # Enter declared phase (default phase continues to track in background)
-                self._active_declared_phase = self._next_declared_phase
-                self._emit_current_progress()
-                return
+            # 2.1: Check if any remaining declared phase can be entered (phase-skip)
+            for i in range(self._next_declared_phase_index, len(self._declared_phases)):
+                phase = self._declared_phases[i]
+                if phase.evaluate_enter(line):
+                    self._active_declared_phase = phase
+                    self._next_declared_phase_index = i
+                    self._next_declared_phase = phase
+                    self._emit_current_progress()
+                    return
 
             # 2.2: Otherwise evaluate default phase progress
             if self._default_phase.evaluate_progress(line):
