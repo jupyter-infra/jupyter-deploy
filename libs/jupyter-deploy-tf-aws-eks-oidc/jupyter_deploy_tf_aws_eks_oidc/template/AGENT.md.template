@@ -102,6 +102,8 @@ It handles the DNS race condition on fresh deploys because:
 The script waits for all routing deployments (traefik, dex, oauth2-proxy, authmiddleware) to become ready,
 and triggers on domain, cluster name, or router chart version/revision changes.
 
+All `local-exec` provisioners MUST set `interpreter = ["/bin/bash", "-c"]` — Terraform defaults to `/bin/sh` which breaks bash features (`[[`, `set -o pipefail`).
+
 ## The deployed EKS cluster
 
 ### Accessing the cluster

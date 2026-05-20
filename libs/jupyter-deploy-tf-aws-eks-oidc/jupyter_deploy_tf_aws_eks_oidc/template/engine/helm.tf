@@ -30,7 +30,9 @@ resource "helm_release" "traefik_crds" {
   namespace        = var.workspace_router_namespace
   create_namespace = true
 
-  depends_on = [aws_eks_addon.cert_manager]
+  # Access policy associations must outlive all K8s resources — without them the
+  # K8s/Helm provider loses authorization and destroy operations fail with "forbidden".
+  depends_on = [aws_eks_addon.cert_manager, aws_eks_access_policy_association.admin, aws_eks_access_policy_association.caller]
 }
 
 resource "helm_release" "jupyter_k8s" {
@@ -157,7 +159,5 @@ resource "helm_release" "workspace_router" {
     },
   ]
 
-  depends_on = [helm_release.jupyter_k8s, aws_eks_addon.cert_manager, helm_release.traefik_crds]
+  depends_on = [helm_release.jupyter_k8s, aws_eks_addon.cert_manager, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup]
 }
-
-

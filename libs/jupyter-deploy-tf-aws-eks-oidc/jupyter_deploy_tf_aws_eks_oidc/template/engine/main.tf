@@ -91,6 +91,36 @@ module "vpc" {
   combined_tags        = local.combined_tags
 }
 
+# On destroy: cleans up resources NOT in Terraform state that block VPC deletion.
+# 1. Deletes Route53 records created by external-dns (dies with cluster, can't self-clean)
+# 2. Waits for NLBs provisioned by the cloud controller to be fully removed
+#
+# Destroy ordering (via depends_on):
+#   helm_release.workspace_router destroyed
+#     → this script runs (DNS cleanup + NLB poll/force-delete)
+#       → module.vpc destroyed (IGW detaches cleanly)
+resource "null_resource" "wait_for_lb_cleanup" {
+  triggers = {
+    vpc_id         = module.vpc.vpc_id
+    igw_id         = module.vpc.igw_id
+    region         = var.region
+    hosted_zone_id = data.aws_route53_zone.domain.zone_id
+    full_domain    = local.full_domain
+    script = templatefile("${path.module}/local-destroy-cleanup.sh.tftpl", {
+      vpc_id         = module.vpc.vpc_id
+      region         = var.region
+      hosted_zone_id = data.aws_route53_zone.domain.zone_id
+      full_domain    = local.full_domain
+    })
+  }
+
+  provisioner "local-exec" {
+    when        = destroy
+    interpreter = ["/bin/bash", "-c"]
+    command     = self.triggers.script
+  }
+}
+
 module "eks_cluster" {
   source                     = "./modules/eks_cluster"
   cluster_name               = local.cluster_name
@@ -101,26 +131,48 @@ module "eks_cluster" {
   private_subnet_ids         = module.vpc.private_subnet_ids
   public_subnet_ids          = module.vpc.public_subnet_ids
   combined_tags              = local.combined_tags
+
+  depends_on = [terraform_data.caller_access_check]
 }
 
+data "aws_iam_role" "admin" {
+  for_each = toset(var.admin_role_names)
+  name     = each.value
+}
+
+# Caller identity detection: EKS access entries use different ARN formats for
+# IAM roles vs users/federated/root-account principals, and duplicate entries cause 409 errors.
+# Roles are managed via admin_role_names; other principals get a separate entry.
 locals {
-  admin_role_arns = {
-    for name in var.admin_role_names :
-    name => "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${name}"
+  caller_is_role       = can(regex("assumed-role/", data.aws_caller_identity.current.arn))
+  caller_role_name     = local.caller_is_role ? element(split("/", data.aws_caller_identity.current.arn), 1) : ""
+  caller_principal_arn = local.caller_is_role ? "" : "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:${regex("^arn:[^:]+:[^:]+::[^:]+:(.+)$", data.aws_caller_identity.current.arn)[0]}"
+}
+
+# Role callers MUST be in admin_role_names — otherwise the role gets no access entry
+# and is locked out immediately (bootstrap_cluster_creator_admin_permissions = false).
+# terraform_data with precondition produces a hard plan-time error, unlike `check`
+# blocks which only warn and let apply proceed into a broken state.
+resource "terraform_data" "caller_access_check" {
+  lifecycle {
+    precondition {
+      condition     = !local.caller_is_role || contains(var.admin_role_names, local.caller_role_name)
+      error_message = "The caller role '${local.caller_role_name}' is not in admin_role_names. Fix: set admin_role_names = ${jsonencode(concat(var.admin_role_names, [local.caller_role_name]))} and rerun jd config."
+    }
   }
 }
 
 resource "aws_eks_access_entry" "admin" {
-  for_each          = local.admin_role_arns
+  for_each          = data.aws_iam_role.admin
   cluster_name      = module.eks_cluster.cluster_name
-  principal_arn     = each.value
+  principal_arn     = each.value.arn
   kubernetes_groups = ["cluster-workspace-admin"]
 }
 
 resource "aws_eks_access_policy_association" "admin" {
-  for_each      = local.admin_role_arns
+  for_each      = data.aws_iam_role.admin
   cluster_name  = module.eks_cluster.cluster_name
-  principal_arn = each.value
+  principal_arn = each.value.arn
   policy_arn    = "arn:${data.aws_partition.current.partition}:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
 
   access_scope {
@@ -128,6 +180,28 @@ resource "aws_eks_access_policy_association" "admin" {
   }
 
   depends_on = [aws_eks_access_entry.admin]
+}
+
+# Non-role callers (IAM users, SSO federated users) need their own access entry
+# since they won't appear in admin_role_names. Skipped for roles to avoid duplicates.
+resource "aws_eks_access_entry" "caller" {
+  count             = local.caller_is_role ? 0 : 1
+  cluster_name      = module.eks_cluster.cluster_name
+  principal_arn     = local.caller_principal_arn
+  kubernetes_groups = ["cluster-workspace-admin"]
+}
+
+resource "aws_eks_access_policy_association" "caller" {
+  count         = local.caller_is_role ? 0 : 1
+  cluster_name  = module.eks_cluster.cluster_name
+  principal_arn = local.caller_principal_arn
+  policy_arn    = "arn:${data.aws_partition.current.partition}:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.caller]
 }
 
 module "node_group" {

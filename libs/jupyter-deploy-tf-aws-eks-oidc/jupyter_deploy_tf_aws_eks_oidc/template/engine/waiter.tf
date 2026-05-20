@@ -19,8 +19,9 @@ resource "null_resource" "wait_for_routing_ready" {
   }
 
   provisioner "local-exec" {
-    quiet   = true
-    command = <<DOC
+    interpreter = ["/bin/bash", "-c"]
+    quiet       = true
+    command     = <<DOC
       ${local.await_router_indented}
     DOC
   }

@@ -64,6 +64,13 @@ resource "aws_eks_addon" "external_dns" {
   addon_name   = "external-dns"
   tags         = local.combined_tags
 
+  # Stable owner ID tied to the subdomain — a new deployment on the same subdomain
+  # takes ownership of existing DNS records instead of conflicting with them.
+  configuration_values = jsonencode({
+    txtOwnerId    = local.full_domain
+    domainFilters = [var.domain]
+  })
+
   pod_identity_association {
     role_arn        = module.external_dns_role[0].role_arn
     service_account = "external-dns"

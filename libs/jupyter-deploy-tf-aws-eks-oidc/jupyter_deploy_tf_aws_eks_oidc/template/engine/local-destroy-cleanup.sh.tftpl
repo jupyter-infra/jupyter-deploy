@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Destroy-time script: cleans up AWS resources NOT in Terraform state.
+#
+# 1. Route53 records — created by external-dns from K8s Service annotations.
+#    external-dns dies with the cluster and can't self-clean; stale records with
+#    old ownership TXT entries block redeployments on the same subdomain.
+#
+# 2. NLBs — provisioned by the AWS cloud controller for K8s LoadBalancer Services.
+#    Deleting the helm release triggers async NLB cleanup. If the IGW detaches
+#    before ENIs are released, destroy fails with DependencyViolation.
+
+VPC_ID="${vpc_id}"
+REGION="${region}"
+HOSTED_ZONE_ID="${hosted_zone_id}"
+FULL_DOMAIN="${full_domain}"
+MAX_WAIT_SECONDS=60
+SLEEP_INTERVAL=10
+
+# --- Phase 1: DNS record cleanup ---
+
+echo "Cleaning up Route53 records for $FULL_DOMAIN..."
+
+# Match: <domain>, aaaa-<domain>, cname-<domain> (external-dns ownership records)
+# Exclude: NS and SOA records
+domain_dot="$FULL_DOMAIN."
+jq_filter='[.ResourceRecordSets[] | select(
+    (.Name == $d or .Name == ("aaaa-" + $d) or .Name == ("cname-" + $d))
+    and (.Type != "NS" and .Type != "SOA")
+) | {Action: "DELETE", ResourceRecordSet: .}]'
+
+records_json=$(aws route53 list-resource-record-sets \
+    --hosted-zone-id "$HOSTED_ZONE_ID" \
+    --region "$REGION" \
+    --output json 2>/dev/null)
+
+changes=$(echo "$records_json" | jq --arg d "$domain_dot" "$jq_filter")
+record_count=$(echo "$changes" | jq 'length')
+
+if [ "$record_count" -gt 0 ]; then
+    echo "  Deleting $record_count record(s)..."
+    change_batch=$(echo "$changes" | jq '{Changes: .}')
+    aws route53 change-resource-record-sets \
+        --hosted-zone-id "$HOSTED_ZONE_ID" \
+        --change-batch "$change_batch" \
+        --region "$REGION" \
+        --output text 2>&1 || true
+    echo "  DNS cleanup complete."
+else
+    echo "  No DNS records found, nothing to clean up."
+fi
+
+# --- Phase 2: NLB cleanup ---
+
+echo "Waiting for load balancers in VPC $VPC_ID to be deleted..."
+
+waited=0
+while true; do
+    nlb_count=$(aws elbv2 describe-load-balancers \
+        --region "$REGION" \
+        --query "LoadBalancers[?VpcId=='$VPC_ID'] | length(@)" \
+        --output text 2>/dev/null || echo "0")
+
+    if [ "$nlb_count" = "0" ]; then
+        echo "All load balancers in VPC removed."
+        exit 0
+    fi
+
+    if [ $waited -ge $MAX_WAIT_SECONDS ]; then
+        echo "WARNING: $nlb_count load balancer(s) still present after $${MAX_WAIT_SECONDS}s."
+        echo "Attempting forced deletion..."
+
+        arns=$(aws elbv2 describe-load-balancers \
+            --region "$REGION" \
+            --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
+            --output text 2>/dev/null)
+
+        for arn in $arns; do
+            sleep 5
+            echo "Deleting load balancer: $arn"
+            aws elbv2 delete-load-balancer --load-balancer-arn "$arn" --region "$REGION" 2>&1 || true
+        done
+
+        # NLB deletion is itself async — ENIs take ~30s to release after the LB
+        # transitions to "deleting" state.
+        echo "Waiting 30s for ENI release..."
+        sleep 30
+        exit 0
+    fi
+
+    echo "  $nlb_count load balancer(s) remaining, waiting... ($${waited}s / $${MAX_WAIT_SECONDS}s)"
+    sleep $SLEEP_INTERVAL
+    waited=$((waited + SLEEP_INTERVAL))
+done

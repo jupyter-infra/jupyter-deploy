@@ -12,7 +12,10 @@ resource "kubernetes_namespace" "shared" {
     }
   }
 
-  depends_on = [module.eks_cluster]
+  # Access entries and their policy associations must outlive all K8s resources —
+  # without them the K8s/Helm provider loses authorization and destroy operations
+  # fail with "Unauthorized" or "forbidden".
+  depends_on = [module.eks_cluster, aws_eks_access_policy_association.admin, aws_eks_access_policy_association.caller]
 }
 
 resource "helm_release" "github_rbac" {

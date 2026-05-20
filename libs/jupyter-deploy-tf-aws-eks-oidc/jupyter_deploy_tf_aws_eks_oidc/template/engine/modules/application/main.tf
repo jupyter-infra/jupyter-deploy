@@ -61,7 +61,8 @@ resource "null_resource" "build_trigger" {
   }
 
   provisioner "local-exec" {
-    command = <<-EOT
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
       set -euo pipefail
       echo "Starting CodeBuild for ${var.image_name}:${var.image_build}..."
 

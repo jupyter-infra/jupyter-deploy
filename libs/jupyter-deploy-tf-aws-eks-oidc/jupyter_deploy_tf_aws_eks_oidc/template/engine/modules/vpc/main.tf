@@ -49,6 +49,14 @@ resource "aws_subnet" "private" {
 }
 
 # --- Internet Gateway ---
+#
+# Destroy ordering for the IGW is managed from outside this module:
+#   helm_release.workspace_router destroyed (NLB deletion triggered async)
+#     → null_resource.wait_for_lb_cleanup (polls until NLBs gone, via igw_id output dep)
+#       → this IGW detaches cleanly
+#
+# Subnets are protected by a separate chain:
+#   EKS cluster references subnet_ids → subnets can't destroy until cluster is gone
 
 resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id
