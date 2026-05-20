@@ -194,28 +194,28 @@ test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-te
     trap cleanup EXIT
 
     # Determine if this is a deployment from scratch
+    # A project dir that doesn't exist or is empty triggers fresh deploy mode.
+    # Only sandbox-* directories are eligible (avoids accidental deploys).
     IS_DEPLOYMENT_FROM_SCRATCH="false"
-    if [ "{{project_dir}}" = "sandbox-e2e" ] || [ "{{project_dir}}" = "sandbox-e2e-ci" ]; then
-        # Check if sandbox-e2e exists and is not empty
-        if [ -d "{{project_dir}}" ] && [ -n "$(ls -A {{project_dir}} 2>/dev/null)" ]; then
-            # sandbox-e2e exists and is not empty - treat as existing project
-            IS_DEPLOYMENT_FROM_SCRATCH="false"
+    case "{{project_dir}}" in
+        sandbox-*)
+            if [ -d "{{project_dir}}" ] && [ -n "$(ls -A {{project_dir}} 2>/dev/null)" ]; then
+                IS_DEPLOYMENT_FROM_SCRATCH="false"
+                echo "Mode: Test existing project ({{project_dir}})"
+            else
+                IS_DEPLOYMENT_FROM_SCRATCH="true"
+                mkdir -p "{{project_dir}}"
+                echo "Mode: Deploy from scratch ({{project_dir}})"
+            fi
+            ;;
+        *)
+            if [ ! -d "{{project_dir}}" ]; then
+                echo "Error: Project directory '{{project_dir}}' does not exist"
+                exit 1
+            fi
             echo "Mode: Test existing project ({{project_dir}})"
-        else
-            # sandbox-e2e is empty or doesn't exist - deploy from scratch
-            IS_DEPLOYMENT_FROM_SCRATCH="true"
-            # Create empty directory for mounting (will be populated by tests)
-            mkdir -p "{{project_dir}}"
-            echo "Mode: Deploy from scratch ({{project_dir}})"
-        fi
-    else
-        # Validate existing project directory exists
-        if [ ! -d "{{project_dir}}" ]; then
-            echo "Error: Project directory '{{project_dir}}' does not exist"
-            exit 1
-        fi
-        echo "Mode: Test existing project ({{project_dir}})"
-    fi
+            ;;
+    esac
 
     # Always mount project directory dynamically
     echo "Mounting project directory: {{project_dir}}"
@@ -357,7 +357,7 @@ test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-te
         echo "Options: $OPTIONS_STR"
 
         # List of recognized options (for validation)
-        RECOGNIZED_OPTIONS="mutate destroy log-level ci-dir skip-sync marker image"
+        RECOGNIZED_OPTIONS="mutate destroy full-deploy log-level ci-dir skip-sync marker image"
 
         # Validate all options are recognized
         IFS=',' read -ra OPTS <<< "$OPTIONS_STR"
@@ -387,6 +387,12 @@ test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-te
         if echo "$OPTIONS_STR" | grep -q "mutate=true"; then
             PYTEST_ARGS="$PYTEST_ARGS --with-mutating-cases"
             echo "  - mutating tests: enabled"
+        fi
+
+        # Parse full-deploy=true option
+        if echo "$OPTIONS_STR" | grep -q "full-deploy=true"; then
+            PYTEST_ARGS="$PYTEST_ARGS --with-full-deployment"
+            echo "  - full deployment tests: enabled"
         fi
 
         # Parse destroy=true option
@@ -690,11 +696,22 @@ ci-restore ci_dir="sandbox-ci":
 ci-restore-base oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-base":
     uv run python scripts/ci_restore_base.py {{ci_dir}} {{oauth_app_num}} {{project_dir}}
 
+# Find and restore an EKS OIDC template project from S3 by OAuth app subdomain
+# Usage: just ci-restore-eks <oauth-app-num> [ci-dir] [project-dir]
+ci-restore-eks oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-eks":
+    uv run python scripts/ci_restore_eks.py {{ci_dir}} {{oauth_app_num}} {{project_dir}}
+
 # Find a base template project by subdomain, take it down (jd down), and delete from S3 store
 # Exits successfully if no matching project is found (nothing to take down)
 # Usage: just find-takedown-base <oauth-app-num> [ci-dir] [project-dir]
 find-takedown-base oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-e2e":
     uv run python scripts/find_takedown_base.py {{ci_dir}} {{oauth_app_num}} {{project_dir}}
+
+# Find an EKS OIDC template project by subdomain, take it down (jd down), and delete from S3 store
+# Exits successfully if no matching project is found (nothing to take down)
+# Usage: just find-takedown-eks <oauth-app-num> [ci-dir] [project-dir]
+find-takedown-eks oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-eks":
+    uv run python scripts/find_takedown_eks.py {{ci_dir}} {{oauth_app_num}} {{project_dir}}
 
 # Export local auth state to Secrets Manager
 auth-export ci_dir="sandbox-ci":
@@ -819,6 +836,25 @@ ci-e2e-base-push oauth_app_num extra_tag="" ci_dir="sandbox-ci":
 # Pull a CI E2E image from ECR and tag as jupyter-deploy-e2e-base:latest
 # Usage: just ci-e2e-base-pull <oauth-app-num> [tag]
 ci-e2e-base-pull oauth_app_num tag="latest" ci_dir="sandbox-ci":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    ECR_URL=$(just ci-e2e-base-ecr-url {{oauth_app_num}} {{ci_dir}})
+    ECR_REGISTRY=$(echo "$ECR_URL" | cut -d'/' -f1)
+    REGION=$(uv run jd show -o region --text -p {{ci_dir}})
+
+    echo "Logging in to ECR..."
+    aws ecr get-login-password --region "$REGION" \
+        | {{container-tool}} login --username AWS --password-stdin "$ECR_REGISTRY"
+
+    echo "Pulling $ECR_URL:{{tag}}..."
+    {{container-tool}} pull "$ECR_URL:{{tag}}"
+    {{container-tool}} tag "$ECR_URL:{{tag}}" jupyter-deploy-e2e-base:latest
+    echo "✓ Pulled and tagged as jupyter-deploy-e2e-base:latest"
+
+# Pull a CI E2E image from ECR for EKS tests and tag as jupyter-deploy-e2e-base:latest
+# Usage: just ci-e2e-eks-pull <oauth-app-num> [tag]
+ci-e2e-eks-pull oauth_app_num tag="latest" ci_dir="sandbox-ci":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -985,3 +1021,14 @@ test-e2e-cli project_dir test_filter="" options="":
 # Example: just env-setup-base "" sandbox-ci 4 'user=botuser,safe-user=realuser'
 env-setup-base project_dir ci_dir="sandbox-ci" oauth_app_num="1" options="":
     uv run python scripts/env_setup_base.py "{{project_dir}}" {{ci_dir}} {{oauth_app_num}} "{{options}}"
+
+# Generate .env for EKS OIDC template E2E tests
+# Two modes:
+#   Existing project: reads deployment variables from the project via `jd show -v`
+#   Fresh deploy:     pass "" as project-dir, provide deployment vars as options
+# Usage: just env-setup-eks <project-dir> [ci-dir] [oauth-app-num] [options]
+# Options: comma-separated key=value pairs (same format as test-e2e options)
+# Example: just env-setup-eks sandbox-eks sandbox-ci 4 org=jupyter-infra,team=my-team,rbac-team=my-team
+# Example: just env-setup-eks "" sandbox-ci 4 'org=jupyter-infra,team=my-team,rbac-team=my-team'
+env-setup-eks project_dir ci_dir="sandbox-ci" oauth_app_num="4" options="":
+    uv run python scripts/env_setup_eks.py "{{project_dir}}" {{ci_dir}} {{oauth_app_num}} "{{options}}"
