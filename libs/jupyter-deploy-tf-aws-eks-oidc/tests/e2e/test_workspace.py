@@ -13,6 +13,7 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.oauth2_proxy.dex import DexGitHubOAuth2ProxyApplication
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
@@ -25,6 +26,8 @@ from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_patch_workspace,
     kubectl_poll_workspace_status,
 )
+
+pytestmark = pytest.mark.usefixtures("cluster_login")
 
 NAMESPACE = "default"
 WORKSPACES_DIR = Path(__file__).parent / "workspaces"

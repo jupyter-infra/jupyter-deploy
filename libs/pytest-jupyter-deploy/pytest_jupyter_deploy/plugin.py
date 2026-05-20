@@ -117,6 +117,12 @@ def pytest_addoption(parser: Any) -> None:
         help="Include mutating tests (tests that change infrastructure config)",
     )
     add_option_if_not_exists(
+        "--with-full-deployment",
+        action="store_true",
+        default=False,
+        help="Include full_deployment tests even when using an existing project",
+    )
+    add_option_if_not_exists(
         "--destroy-after",
         action="store_true",
         default=False,
@@ -142,10 +148,11 @@ def pytest_collection_modifyitems(config: Any, items: list) -> None:
     """
     existing_project = config.getoption("--e2e-existing-project")
     with_mutating_cases = config.getoption("--with-mutating-cases")
+    with_full_deployment = config.getoption("--with-full-deployment")
 
-    if existing_project:
-        # Using existing project - skip deployment tests
-        skip_deployment = pytest.mark.skip(reason="Skipping full deployment test (using existing project)")
+    if existing_project and not with_full_deployment:
+        reason = "Skipping full deployment test (use --with-full-deployment to include)"
+        skip_deployment = pytest.mark.skip(reason=reason)
         for item in items:
             if "full_deployment" in item.keywords:
                 item.add_marker(skip_deployment)

@@ -55,24 +55,28 @@ def browser_context_args(browser_context_args: dict[str, Any], request: pytest.F
 
 
 @pytest.fixture(scope="session")
-def seeded_cluster(e2e_deployment: EndToEndDeployment) -> Generator[dict[str, list[str]], None, None]:
+def cluster_login(e2e_deployment: EndToEndDeployment) -> None:
+    """Configure kubectl for admin access via `jd cluster login`."""
+    e2e_deployment.ensure_deployed()
+    e2e_deployment.cli.run_command(["jupyter-deploy", "cluster", "login"])
+
+
+@pytest.fixture(scope="session")
+def seeded_cluster(
+    cluster_login: None, e2e_deployment: EndToEndDeployment
+) -> Generator[dict[str, list[str]], None, None]:
     """Seed the cluster with admin and impersonated workspaces.
 
-    Runs `jd cluster login` to configure kubectl, then creates:
+    Creates:
     - Admin workspaces (as the current IAM identity)
     - Impersonated workspaces (as a synthetic user via --as/--as-group)
 
     Yields a dict: {"admin": [...], "seeded": [...]}
     Tears down all workspaces on session end.
     """
-    e2e_deployment.ensure_deployed()
-
     group = _get_impersonation_group()
     if not group:
         pytest.skip("JD_E2E_ORG and JD_E2E_RBAC_TEAM required for cluster seeding")
-
-    # Configure kubectl for admin access
-    e2e_deployment.cli.run_command(["jupyter-deploy", "cluster", "login"])
 
     created: dict[str, list[str]] = {"admin": [], "seeded": []}
 
@@ -94,9 +98,7 @@ def seeded_cluster(e2e_deployment: EndToEndDeployment) -> Generator[dict[str, li
 
     yield created
 
-    # Configure kubectl for admin access
     e2e_deployment.cli.run_command(["jupyter-deploy", "cluster", "login"])
-
     for name in all_workspaces:
         kubectl_delete_workspace(name)
 

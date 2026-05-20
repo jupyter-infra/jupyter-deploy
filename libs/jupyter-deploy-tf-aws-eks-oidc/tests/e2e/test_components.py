@@ -245,6 +245,7 @@ def test_component_show_not_found(e2e_deployment: EndToEndDeployment) -> None:
 # ── component logs ──────────────────────────────────────────────────────────
 
 
+@pytest.mark.usefixtures("cluster_login")
 def test_component_logs_no_args(e2e_deployment: EndToEndDeployment) -> None:
     """Verify logs returns output for a Deployment component with no extra args."""
     e2e_deployment.ensure_deployed()
@@ -254,6 +255,7 @@ def test_component_logs_no_args(e2e_deployment: EndToEndDeployment) -> None:
     assert result.stdout.strip(), f"Expected non-empty log output for {name}"
 
 
+@pytest.mark.usefixtures("cluster_login")
 def test_component_logs_valid_flags(e2e_deployment: EndToEndDeployment) -> None:
     """Verify logs with valid kubectl flags (--tail) works and produces less output."""
     e2e_deployment.ensure_deployed()
@@ -267,6 +269,7 @@ def test_component_logs_valid_flags(e2e_deployment: EndToEndDeployment) -> None:
     assert len(tail_result.stdout) <= len(full_result.stdout), "Expected --tail=5 to produce less or equal output"
 
 
+@pytest.mark.usefixtures("cluster_login")
 def test_component_logs_bad_flag(e2e_deployment: EndToEndDeployment) -> None:
     """Verify logs with an invalid kubectl flag fails with a clean error."""
     e2e_deployment.ensure_deployed()
@@ -279,6 +282,7 @@ def test_component_logs_bad_flag(e2e_deployment: EndToEndDeployment) -> None:
     )
 
 
+@pytest.mark.usefixtures("cluster_login")
 def test_component_logs_not_found(e2e_deployment: EndToEndDeployment) -> None:
     """Verify logs for a non-existent component fails gracefully."""
     e2e_deployment.ensure_deployed()

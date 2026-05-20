@@ -1,4 +1,4 @@
-"""Dex OIDC consent and authentication handling for E2E testing."""
+"""Dex OIDC authentication handling for E2E testing."""
 
 import contextlib
 import logging
@@ -6,45 +6,17 @@ import time
 from collections.abc import Callable
 from urllib.parse import urlparse
 
-from playwright.sync_api import Page, expect
+from playwright.sync_api import expect
 
 from pytest_jupyter_deploy.oauth2_proxy.github import GitHubOAuth2ProxyApplication
 
 logger = logging.getLogger(__name__)
 
 
-def handle_dex_consent_if_present(page: Page, timeout_ms: int = 3000) -> bool:
-    """Click "Grant Access" on the Dex consent page if it appears.
-
-    Dex shows a consent screen after GitHub OAuth completes, asking the user
-    to grant access to profile, email, and groups. This function detects and
-    dismisses it.
-
-    Args:
-        page: Playwright Page instance
-        timeout_ms: How long to wait for the Grant Access button to appear
-
-    Returns:
-        True if the consent page was detected and granted, False otherwise
-    """
-    try:
-        grant_button = page.locator("button.dex-btn:has-text('Grant Access')")
-        if not grant_button.is_visible(timeout=timeout_ms):
-            return False
-    except Exception:
-        return False
-
-    logger.debug("Dex consent page detected, clicking Grant Access")
-    grant_button.click()
-    page.wait_for_load_state("load", timeout=30000)
-    logger.debug(f"Dex consent granted, now at: {page.url}")
-    return True
-
-
 class DexGitHubOAuth2ProxyApplication(GitHubOAuth2ProxyApplication):
     """OAuth2 Proxy application behind Dex (skip-provider-button flow).
 
-    Flow: app → oauth2-proxy (auto-redirect) → Dex → GitHub → Dex consent → app.
+    Flow: app → oauth2-proxy (auto-redirect) → Dex → GitHub → app.
     Reuses the parent's GitHub authorize/reauthorize handling.
     """
 
@@ -56,8 +28,8 @@ class DexGitHubOAuth2ProxyApplication(GitHubOAuth2ProxyApplication):
     def _complete_oauth_flow(self) -> bool:
         """Handle OAuth redirects after navigating to a protected URL.
 
-        Handles: GitHub authorize/reauthorize page, Dex consent, cookie-based
-        auto-completion. Call after page.goto() to a protected resource.
+        Handles: GitHub authorize/reauthorize page, cookie-based auto-completion.
+        Call after page.goto() to a protected resource.
 
         Returns True if we end up back on the app domain.
         """
@@ -72,8 +44,6 @@ class DexGitHubOAuth2ProxyApplication(GitHubOAuth2ProxyApplication):
                 self.page.wait_for_url(lambda url: urlparse(url).hostname != "github.com", timeout=5000)
             except Exception:
                 self._handle_oauth_authorize_page()
-
-        handle_dex_consent_if_present(self.page)
 
         if self._is_on_app_domain():
             return True
@@ -98,9 +68,8 @@ class DexGitHubOAuth2ProxyApplication(GitHubOAuth2ProxyApplication):
         return False
 
     def login_with_2fa(self, email: str, password: str, totp_fn: Callable[[], str]) -> None:
-        """Login with 2FA, then handle Dex consent page after GitHub redirects back."""
+        """Login with 2FA via GitHub, then save session if redirected back."""
         super().login_with_2fa(email, password, totp_fn)
-        handle_dex_consent_if_present(self.page)
         if self._is_on_app_domain():
             self.save_storage_state()
 
@@ -123,8 +92,6 @@ class DexGitHubOAuth2ProxyApplication(GitHubOAuth2ProxyApplication):
         if not self._is_on_app_domain():
             self._complete_oauth_flow()
 
-        handle_dex_consent_if_present(self.page)
-
         if "/auth" in self.page.url:
             content = self.page.content()
             if "Bad Gateway" in content or "502" in content:
@@ -135,7 +102,6 @@ class DexGitHubOAuth2ProxyApplication(GitHubOAuth2ProxyApplication):
                     self.page.wait_for_url(lambda url: "/auth" not in url, timeout=30000)
                 if not self._is_on_app_domain():
                     self._complete_oauth_flow()
-                handle_dex_consent_if_present(self.page)
 
         if "/auth" in self.page.url:
             workspace_root = self.page.url.rsplit("/auth", 1)[0] + "/"
@@ -169,10 +135,6 @@ class DexGitHubOAuth2ProxyApplication(GitHubOAuth2ProxyApplication):
             if self._is_unauthorized_page():
                 raise AssertionError(f"Still unauthorized after auth retry at {self.page.url}")
             self.save_storage_state()
-
-        # Handle Dex consent page that may appear after workspace auth redirect
-        if "/dex/approval" in self.page.url:
-            handle_dex_consent_if_present(self.page)
 
         logger.info(f"After auth, page URL: {self.page.url}")
         jupyterlab_locator = self.page.locator("#jp-top-panel, #jp-main-dock-panel, #jp-main-content-panel")
