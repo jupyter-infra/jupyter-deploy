@@ -73,6 +73,16 @@ IMPORTANT: Do not copy files to `/home/jovyan` during Docker build time.
 The EBS volume for Jupyter data is mounted at runtime, and any files copied during build will be hidden by this mount.
 Instead, copy files to a location like `/opt` during build and then copy them to `/home/jovyan` in startup scripts.
 
+## EKS OIDC template package
+Code: `./libs/jupyter-deploy-tf-aws-eks-oidc`
+
+- infrastructure-as-code engine: `terraform`
+- cloud provider: `aws`
+- identity provider: `github` (via Dex OIDC)
+
+All `local-exec` provisioners MUST set `interpreter = ["/bin/bash", "-c"]` — Terraform defaults to `/bin/sh`.
+With `bootstrap_cluster_creator_admin_permissions = false`, the caller's IAM role MUST be listed in `admin_role_names` to retain cluster access. A `check` block validates this at plan time.
+
 ## CI infrastructure template package
 Code: `./libs/jupyter-infra-tf-aws-iam-ci`
 

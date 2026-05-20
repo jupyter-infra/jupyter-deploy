@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import re
 import subprocess
 import sys
@@ -47,6 +48,7 @@ OPTION_MAP = {
     "subdomain": "JD_E2E_VAR_SUBDOMAIN",
     "email": "JD_E2E_VAR_EMAIL",
     "allowed-teams": "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
+    "admin-roles": "JD_E2E_VAR_ADMIN_ROLE_NAMES",
     "user": "JD_E2E_USER",
     "org": "JD_E2E_ORG",
     "team": "JD_E2E_TEAM",
@@ -224,6 +226,13 @@ def main() -> None:
         allowed_teams = json.dumps([f"{org}:{team}"]) if org and team else "[]"
         set_env_var("JD_E2E_VAR_OAUTH_ALLOWED_TEAMS", allowed_teams)
         print(f"  JD_E2E_VAR_OAUTH_ALLOWED_TEAMS={allowed_teams}")
+
+    # 1d. Set admin_role_names — use option if provided, otherwise require env value
+    if "JD_E2E_VAR_ADMIN_ROLE_NAMES" in option_env_vars:
+        pass  # handled in step 3 with other options
+    elif not os.environ.get("JD_E2E_VAR_ADMIN_ROLE_NAMES"):
+        print("Error: JD_E2E_VAR_ADMIN_ROLE_NAMES not set and no admin-roles option provided")
+        sys.exit(1)
 
     # 2. Fetch OAuth credentials from CI infrastructure
     print(f"\nFetching OAuth app #{oauth_app_num} credentials from CI ({ci_dir})...")

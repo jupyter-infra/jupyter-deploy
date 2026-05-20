@@ -1,0 +1,292 @@
+name: E2E EKS OIDC template (fresh deploy)
+
+on:
+  workflow_call:
+    inputs:
+      oauth-app-num:
+        description: "OAuth app number (4-5) — determines subdomain"
+        required: true
+        type: string
+      test-filter:
+        description: "Pytest -k filter (applied to all jobs, empty = all tests)"
+        required: false
+        type: string
+        default: ""
+      skip-deployment:
+        description: "Skip cleanup + deploy, run tests only (project must already be in S3)"
+        required: false
+        type: boolean
+        default: false
+      destroy-after:
+        description: "Destroy the cluster after tests pass"
+        required: false
+        type: boolean
+        default: false
+      install-mode:
+        description: "Install mode: workspace (default) or pypi (from package index)"
+        required: false
+        type: string
+        default: "workspace"
+      install-variant:
+        description: "Install variant when install-mode=pypi: release (default) or canary"
+        required: false
+        type: string
+        default: "release"
+      pkg-version:
+        description: "Package version (required when install-mode=pypi, variant=release)"
+        required: false
+        type: string
+        default: ""
+      ref:
+        description: "Git ref to checkout (e.g. refs/pull/185/merge for a fork PR)"
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      oauth-app-num:
+        description: "OAuth app number (4-5). Fresh deploys consume a LE cert (limit: 5/subdomain/week)"
+        required: false
+        type: choice
+        options: ["4", "5"]
+        default: "4"
+      test-filter:
+        description: "Pytest -k filter (applied to all jobs, empty = all tests)"
+        required: false
+        type: string
+        default: ""
+      skip-deployment:
+        description: "Skip cleanup + deploy, run tests only (project must already be in S3)"
+        required: false
+        type: boolean
+        default: false
+      destroy-after:
+        description: "Destroy the cluster after tests pass"
+        required: false
+        type: boolean
+        default: false
+      ref:
+        description: "Git ref to checkout (e.g. refs/pull/185/merge for a fork PR)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: e2e-eks-${{ inputs.oauth-app-num }}
+  cancel-in-progress: false
+
+jobs:
+  # --- Build E2E image (runs in parallel with cleanup) ---
+
+  build-image:
+    name: "Build E2E image"
+    uses: ./.github/workflows/e2e-build-image.yml
+    secrets: inherit
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      ref: ${{ inputs.ref }}
+      install-mode: ${{ inputs.install-mode || 'workspace' }}
+      install-variant: ${{ inputs.install-variant || 'release' }}
+      pkg-version: ${{ inputs.pkg-version }}
+
+  # --- Deploy bookend ---
+
+  cleanup-existing:
+    name: "Cleanup existing deployment"
+    if: ${{ !inputs.skip-deployment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Find and take down previous deployment
+        run: just find-takedown-eks ${{ inputs.oauth-app-num }} sandbox-ci sandbox-eks
+
+  deploy:
+    name: "Deploy from scratch"
+    needs: [build-image, cleanup-existing]
+    if: ${{ !inputs.skip-deployment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        id: install-just
+        uses: ./.github/actions/install-just
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+          role-duration-seconds: 7200
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Generate .env (fresh deploy mode)
+        run: >-
+          just env-setup-eks "" sandbox-ci ${{ inputs.oauth-app-num }}
+          "org=jupyter-infra,team=jupyter-deploy-e2e-app-access,rbac-team=jupyter-deploy-e2e-app-access,admin-roles=[\"Admin\",\"DeployRole\",\"jupyter-infra-ci-e2e-6a3e2625\"]"
+
+      - name: Import auth state
+        run: just auth-import sandbox-ci
+
+      - name: Pull pre-built E2E image
+        run: just ci-e2e-eks-pull ${{ inputs.oauth-app-num }} ${{ needs.build-image.outputs.ecr-tag }}
+
+      - name: Deploy and verify
+        run: just test-e2e-eks-oidc sandbox-eks "test_deployment" "mutate=true,skip-sync=true,ci-dir=sandbox-ci"
+
+      - name: Export auth state
+        if: always() && steps.install-just.outcome == 'success'
+        run: just auth-export sandbox-ci
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-deploy
+          path: test-results/
+          if-no-files-found: ignore
+
+      - name: Upload test results to S3
+        if: failure()
+        continue-on-error: true
+        run: just ci-upload-test-results ${{ inputs.oauth-app-num }}
+
+  # --- Gate: allows test chain to start when deploy succeeded or was skipped ---
+
+  deploy-gate:
+    name: "Deploy gate"
+    needs: [build-image, cleanup-existing, deploy]
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Check deploy result
+        run: |
+          if [ "${{ inputs.skip-deployment }}" = "true" ]; then
+            echo "Deployment skipped — proceeding to tests"
+          elif [ "${{ needs.deploy.result }}" = "success" ]; then
+            echo "Deployment succeeded — proceeding to tests"
+          else
+            echo "Deployment failed or was cancelled — aborting test chain"
+            exit 1
+          fi
+
+  # --- Test chain ---
+
+  test-non-mutating:
+    name: "Non-mutating tests"
+    needs: [build-image, deploy-gate]
+    uses: ./.github/workflows/e2e-eks-oidc-job.yml
+    secrets: inherit
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      ref: ${{ inputs.ref }}
+      ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
+      timeout-minutes: 120
+
+  # --- Cleanup: destroy cluster (only if all tests passed) ---
+
+  cleanup:
+    name: "Cleanup: destroy cluster"
+    needs: [test-non-mutating]
+    if: success() && inputs.destroy-after
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+          role-duration-seconds: 7200
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Restore EKS project
+        run: just ci-restore-eks ${{ inputs.oauth-app-num }} sandbox-ci sandbox-eks
+
+      - name: Destroy cluster
+        run: just test-e2e-eks-oidc sandbox-eks "" "destroy=true,skip-sync=true,ci-dir=sandbox-ci"

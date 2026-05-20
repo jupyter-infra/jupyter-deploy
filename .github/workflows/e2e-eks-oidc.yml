@@ -1,0 +1,50 @@
+name: E2E EKS OIDC template
+
+on:
+  workflow_dispatch:
+    inputs:
+      oauth-app-num:
+        description: "OAuth app number (4-5) — determines subdomain"
+        required: false
+        type: choice
+        options: ["4", "5"]
+        default: "4"
+      test-filter:
+        description: "Pytest -k filter (applied to all jobs, empty = all tests)"
+        required: false
+        type: string
+        default: ""
+      ref:
+        description: "Git ref to checkout (e.g. refs/pull/185/merge for a fork PR)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: e2e-eks-${{ inputs.oauth-app-num }}
+  cancel-in-progress: false
+
+jobs:
+  build-image:
+    name: "Build E2E image"
+    uses: ./.github/workflows/e2e-build-image.yml
+    secrets: inherit
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      ref: ${{ inputs.ref }}
+
+  test-non-mutating:
+    name: "Non-mutating tests"
+    needs: build-image
+    uses: ./.github/workflows/e2e-eks-oidc-job.yml
+    secrets: inherit
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      ref: ${{ inputs.ref }}
+      ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
+      timeout-minutes: 120

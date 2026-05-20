@@ -1,0 +1,145 @@
+name: E2E EKS OIDC template job
+
+on:
+  workflow_call:
+    inputs:
+      oauth-app-num:
+        description: "OAuth app number (4-5)"
+        required: true
+        type: string
+      test-filter:
+        description: "Pytest -k filter (combined with per-job filter)"
+        required: false
+        type: string
+        default: ""
+      test-file-filter:
+        description: "Per-job test file filter (e.g. test_workspace)"
+        required: false
+        type: string
+        default: ""
+      mutate:
+        description: "Enable mutating test cases"
+        required: false
+        type: boolean
+        default: false
+      timeout-minutes:
+        description: "Job timeout in minutes"
+        required: false
+        type: number
+        default: 30
+      ref:
+        description: "Git ref to checkout (default: triggering ref)"
+        required: false
+        type: string
+        default: ""
+      ecr-tag:
+        description: "ECR image tag to pull (skip docker build + e2e-sync when set)"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  test:
+    name: Run E2E tests
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        id: install-just
+        uses: ./.github/actions/install-just
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+          role-duration-seconds: 7200
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Restore EKS project
+        run: just ci-restore-eks ${{ inputs.oauth-app-num }} sandbox-ci sandbox-eks
+
+      - name: Generate .env
+        run: >-
+          just env-setup-eks sandbox-eks sandbox-ci ${{ inputs.oauth-app-num }}
+          "org=jupyter-infra,team=jupyter-deploy-e2e-app-access,rbac-team=jupyter-deploy-e2e-app-access,admin-roles=[\"Admin\",\"DeployRole\",\"jupyter-infra-ci-e2e-6a3e2625\"]"
+
+      - name: Import auth state
+        run: just auth-import sandbox-ci
+
+      - name: Pull pre-built E2E image
+        if: inputs.ecr-tag != ''
+        run: just ci-e2e-eks-pull ${{ inputs.oauth-app-num }} ${{ inputs.ecr-tag }}
+
+      - name: Build test filter
+        id: filter
+        run: |
+          FILTER=""
+          # Per-job file filter
+          if [ -n "${{ inputs.test-file-filter }}" ]; then
+            FILTER="${{ inputs.test-file-filter }}"
+          fi
+          # User-provided -k filter
+          if [ -n "${{ inputs.test-filter }}" ]; then
+            if [ -n "$FILTER" ]; then
+              FILTER="${FILTER} and ${{ inputs.test-filter }}"
+            else
+              FILTER="${{ inputs.test-filter }}"
+            fi
+          fi
+          echo "filter=${FILTER}" >> "$GITHUB_OUTPUT"
+
+          # Build options
+          OPTIONS="ci-dir=sandbox-ci"
+          if [ "${{ inputs.mutate }}" = "true" ]; then
+            OPTIONS="mutate=true,${OPTIONS}"
+          fi
+          if [ -n "${{ inputs.ecr-tag }}" ]; then
+            OPTIONS="skip-sync=true,${OPTIONS}"
+          fi
+          echo "options=${OPTIONS}" >> "$GITHUB_OUTPUT"
+
+      - name: Run E2E tests
+        run: >-
+          just test-e2e-eks-oidc sandbox-eks
+          "${{ steps.filter.outputs.filter }}"
+          "${{ steps.filter.outputs.options }}"
+
+      - name: Export auth state
+        if: always() && steps.install-just.outcome == 'success'
+        run: just auth-export sandbox-ci
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ inputs.test-file-filter || 'non-mutating' }}
+          path: test-results/
+          if-no-files-found: ignore
+
+      - name: Upload test results to S3
+        if: failure()
+        continue-on-error: true
+        run: just ci-upload-test-results ${{ inputs.oauth-app-num }}
