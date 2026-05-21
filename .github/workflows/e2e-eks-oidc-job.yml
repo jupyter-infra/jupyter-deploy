@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       oauth-app-num:
-        description: "OAuth app number (4-5)"
+        description: "OAuth app number (4-6)"
         required: true
         type: string
       test-filter:
@@ -79,11 +79,11 @@ jobs:
         run: just ci-restore sandbox-ci
 
       - name: Restore EKS project
-        run: just ci-restore-eks ${{ inputs.oauth-app-num }} sandbox-ci sandbox-eks
+        run: just ci-restore-eks ${{ inputs.oauth-app-num }} sandbox-ci sandbox-e2e
 
       - name: Generate .env
         run: >-
-          just env-setup-eks sandbox-eks sandbox-ci ${{ inputs.oauth-app-num }}
+          just env-setup-eks sandbox-e2e sandbox-ci ${{ inputs.oauth-app-num }}
           "org=jupyter-infra,team=jupyter-deploy-e2e-app-access,rbac-team=jupyter-deploy-e2e-app-access,admin-roles=[\"Admin\",\"DeployRole\",\"jupyter-infra-ci-e2e-6a3e2625\"]"
 
       - name: Import auth state
@@ -123,7 +123,7 @@ jobs:
 
       - name: Run E2E tests
         run: >-
-          just test-e2e-eks-oidc sandbox-eks
+          just test-e2e-eks-oidc sandbox-e2e
           "${{ steps.filter.outputs.filter }}"
           "${{ steps.filter.outputs.options }}"
 

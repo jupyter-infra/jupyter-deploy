@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       oauth-app-num:
-        description: "OAuth app number (4-5) — determines subdomain"
+        description: "OAuth app number (4-6) — determines subdomain"
         required: true
         type: string
       test-filter:
@@ -45,10 +45,10 @@ on:
   workflow_dispatch:
     inputs:
       oauth-app-num:
-        description: "OAuth app number (4-5). Fresh deploys consume a LE cert (limit: 5/subdomain/week)"
+        description: "OAuth app number (4-6). Fresh deploys consume a LE cert (limit: 5/subdomain/week)"
         required: false
         type: choice
-        options: ["4", "5"]
+        options: ["4", "5", "6"]
         default: "4"
       test-filter:
         description: "Pytest -k filter (applied to all jobs, empty = all tests)"
@@ -134,7 +134,7 @@ jobs:
         run: just ci-restore sandbox-ci
 
       - name: Find and take down previous deployment
-        run: just find-takedown-eks ${{ inputs.oauth-app-num }} sandbox-ci sandbox-eks
+        run: just find-takedown-eks ${{ inputs.oauth-app-num }} sandbox-ci sandbox-e2e
 
   deploy:
     name: "Deploy from scratch"
@@ -185,11 +185,32 @@ jobs:
       - name: Import auth state
         run: just auth-import sandbox-ci
 
+      - name: Initialize project
+        run: |
+          mkdir -p sandbox-e2e
+          uv run jd init -E terraform -P aws -I eks -T oidc sandbox-e2e
+
+      - name: Prepare configuration
+        run: |
+          set -a
+          source .env
+          set +a
+          envsubst < libs/jupyter-deploy-tf-aws-eks-oidc/tests/e2e/configurations/base.yaml > sandbox-e2e/variables.yaml
+
+      - name: Configure project
+        run: cd sandbox-e2e && uv run jd config -v
+
+      - name: Deploy
+        id: deploy
+        run: cd sandbox-e2e && uv run jd up -y -v
+
       - name: Pull pre-built E2E image
+        if: success()
         run: just ci-e2e-eks-pull ${{ inputs.oauth-app-num }} ${{ needs.build-image.outputs.ecr-tag }}
 
-      - name: Deploy and verify
-        run: just test-e2e-eks-oidc sandbox-eks "test_deployment" "mutate=true,skip-sync=true,ci-dir=sandbox-ci"
+      - name: Verify deployment
+        if: success()
+        run: just test-e2e-eks-oidc sandbox-e2e "test_deployment" "full-deploy=true,skip-sync=true,ci-dir=sandbox-ci"
 
       - name: Export auth state
         if: always() && steps.install-just.outcome == 'success'
@@ -286,7 +307,7 @@ jobs:
         run: just ci-restore sandbox-ci
 
       - name: Restore EKS project
-        run: just ci-restore-eks ${{ inputs.oauth-app-num }} sandbox-ci sandbox-eks
+        run: just ci-restore-eks ${{ inputs.oauth-app-num }} sandbox-ci sandbox-e2e
 
-      - name: Destroy cluster
-        run: just test-e2e-eks-oidc sandbox-eks "" "destroy=true,skip-sync=true,ci-dir=sandbox-ci"
+      - name: Take down the deployment
+        run: cd sandbox-e2e && uv run jd down -y -v

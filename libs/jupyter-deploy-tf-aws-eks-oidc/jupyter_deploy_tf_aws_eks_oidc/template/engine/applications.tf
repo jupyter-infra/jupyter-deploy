@@ -18,4 +18,9 @@ module "app_jupyterlab" {
   build_bucket_arn     = module.build_artifacts_bucket.bucket_arn
   region               = var.region
   combined_tags        = local.combined_tags
+
+  # CodeBuild fails with ACCESS_DENIED on logs:CreateLogStream if the IAM role
+  # policy hasn't propagated yet. EKS cluster creation takes ~10min, which is
+  # more than enough for IAM eventual consistency to settle.
+  depends_on = [module.eks_cluster]
 }

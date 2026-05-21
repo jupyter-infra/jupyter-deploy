@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       oauth-app-num:
-        description: "OAuth app number (4-5) — determines subdomain"
+        description: "OAuth app number (4-6) — determines subdomain"
         required: false
         type: choice
-        options: ["4", "5"]
+        options: ["4", "5", "6"]
         default: "4"
       test-filter:
         description: "Pytest -k filter (applied to all jobs, empty = all tests)"

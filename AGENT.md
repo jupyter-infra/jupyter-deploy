@@ -204,9 +204,9 @@ The test container saves screenshots of failed tests to `./test-results`, use th
 ### Running EKS OIDC Template E2E Tests
 Run E2E tests: `just test-e2e-eks-oidc <project-dir> TEST-SELECTOR`
 
-Examples (for project-dir == sandbox-eks):
-- Run all tests: `just test-e2e-eks-oidc sandbox-eks "" mutate=true,full-deploy=true`
-- Run workspace tests only: `just test-e2e-eks-oidc sandbox-eks test_workspace mutate=true,full-deploy=true`
+Examples (for project-dir == sandbox-e2e):
+- Run all tests: `just test-e2e-eks-oidc sandbox-e2e "" mutate=true,full-deploy=true`
+- Run workspace tests only: `just test-e2e-eks-oidc sandbox-e2e test_workspace mutate=true,full-deploy=true`
 
 **Gotcha:** `JD_E2E_RBAC_TEAM` in `.env` MUST match the team in `oauth_allowed_teams` that the sandbox was deployed with.
 The RBAC RoleBinding on the cluster grants workspace access to that group — if they don't match, all impersonation-based workspace tests will fail with `Forbidden`.

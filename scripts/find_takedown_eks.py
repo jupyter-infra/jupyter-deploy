@@ -18,15 +18,15 @@ from pathlib import Path
 
 from ci_restore_base import get_subdomain_from_ci
 from ci_restore_eks import find_eks_project_by_subdomain, restore_project, restore_secrets
+from jupyter_deploy.cmd_utils import run_cmd_and_pipe_to_terminal
 
 
 def takedown_project(project_dir: Path) -> None:
     """Run jd down -y to destroy the deployment."""
     print(f"Taking down deployment in {project_dir}...")
-    subprocess.run(
-        ["uv", "run", "jd", "down", "-y", "-p", str(project_dir)],
-        check=True,
-    )
+    retcode, _timed_out = run_cmd_and_pipe_to_terminal(["uv", "run", "jd", "down", "-y", "-v"], exec_dir=project_dir)
+    if retcode != 0:
+        raise SystemExit(retcode)
 
 
 def delete_project_from_store(project_id: str) -> None:

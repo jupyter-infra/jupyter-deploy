@@ -106,11 +106,13 @@ resource "null_resource" "wait_for_lb_cleanup" {
     region         = var.region
     hosted_zone_id = data.aws_route53_zone.domain.zone_id
     full_domain    = local.full_domain
+    cluster_name   = local.cluster_name
     script = templatefile("${path.module}/local-destroy-cleanup.sh.tftpl", {
       vpc_id         = module.vpc.vpc_id
       region         = var.region
       hosted_zone_id = data.aws_route53_zone.domain.zone_id
       full_domain    = local.full_domain
+      cluster_name   = local.cluster_name
     })
   }
 

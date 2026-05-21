@@ -64,47 +64,57 @@ resource "null_resource" "build_trigger" {
     interpreter = ["/bin/bash", "-c"]
     command     = <<-EOT
       set -euo pipefail
-      echo "Starting CodeBuild for ${var.image_name}:${var.image_build}..."
 
-      BUILD_ID=$(aws codebuild start-build \
-        --project-name ${module.build.project_name} \
-        --region ${var.region} \
-        --query 'build.id' \
-        --output text)
-
-      echo "Build started: $BUILD_ID"
-      echo "Waiting for build to complete (timeout: 30m)..."
-
-      SECONDS=0
-      TIMEOUT=1800
-
-      while true; do
-        if [ $SECONDS -ge $TIMEOUT ]; then
-          echo "ERROR: Build timed out after 30 minutes."
-          exit 1
-        fi
-
-        STATUS=$(aws codebuild batch-get-builds \
-          --ids "$BUILD_ID" \
+      run_build() {
+        local BUILD_ID
+        BUILD_ID=$(aws codebuild start-build \
+          --project-name ${module.build.project_name} \
           --region ${var.region} \
-          --query 'builds[0].buildStatus' \
+          --query 'build.id' \
           --output text)
 
-        case "$STATUS" in
-          SUCCEEDED)
-            echo "${var.image_name}:${var.image_build} build succeeded in $(($SECONDS / 60))m $(($SECONDS % 60))s."
-            break
-            ;;
-          FAILED|FAULT|STOPPED|TIMED_OUT)
-            echo "${var.image_name}:${var.image_build} build failed with status: $STATUS"
-            exit 1
-            ;;
-          *)
-            echo "${var.image_name}:${var.image_build} build in progress... ($((SECONDS / 60))m $((SECONDS % 60))s elapsed)"
-            sleep 15
-            ;;
-        esac
-      done
+        echo "Build started: $BUILD_ID"
+        echo "Waiting for build to complete (timeout: 30m)..."
+
+        SECONDS=0
+        TIMEOUT=1800
+
+        while true; do
+          if [ $SECONDS -ge $TIMEOUT ]; then
+            echo "ERROR: Build timed out after 30 minutes."
+            return 1
+          fi
+
+          STATUS=$(aws codebuild batch-get-builds \
+            --ids "$BUILD_ID" \
+            --region ${var.region} \
+            --query 'builds[0].buildStatus' \
+            --output text)
+
+          case "$STATUS" in
+            SUCCEEDED)
+              echo "${var.image_name}:${var.image_build} build succeeded in $(($SECONDS / 60))m $(($SECONDS % 60))s."
+              return 0
+              ;;
+            FAILED|FAULT|STOPPED|TIMED_OUT)
+              echo "${var.image_name}:${var.image_build} build failed with status: $STATUS"
+              return 1
+              ;;
+            *)
+              echo "${var.image_name}:${var.image_build} build in progress... ($((SECONDS / 60))m $((SECONDS % 60))s elapsed)"
+              sleep 15
+              ;;
+          esac
+        done
+      }
+
+      echo "Starting CodeBuild for ${var.image_name}:${var.image_build}..."
+      if ! run_build; then
+        echo "First attempt failed, retrying in 60s..."
+        sleep 60
+        echo "Starting CodeBuild for ${var.image_name}:${var.image_build} (retry)..."
+        run_build
+      fi
     EOT
   }
 

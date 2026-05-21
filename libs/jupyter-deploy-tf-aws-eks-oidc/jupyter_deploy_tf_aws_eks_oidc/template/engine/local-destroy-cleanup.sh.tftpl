@@ -10,11 +10,15 @@ set -euo pipefail
 # 2. NLBs — provisioned by the AWS cloud controller for K8s LoadBalancer Services.
 #    Deleting the helm release triggers async NLB cleanup. If the IGW detaches
 #    before ENIs are released, destroy fails with DependencyViolation.
+#
+# 3. Target groups — created by the AWS cloud controller for K8s Services.
+#    Orphaned when the NLB is deleted; must be removed before VPC deletion.
 
 VPC_ID="${vpc_id}"
 REGION="${region}"
 HOSTED_ZONE_ID="${hosted_zone_id}"
 FULL_DOMAIN="${full_domain}"
+CLUSTER_NAME="${cluster_name}"
 MAX_WAIT_SECONDS=60
 SLEEP_INTERVAL=10
 
@@ -64,7 +68,7 @@ while true; do
 
     if [ "$nlb_count" = "0" ]; then
         echo "All load balancers in VPC removed."
-        exit 0
+        break
     fi
 
     if [ $waited -ge $MAX_WAIT_SECONDS ]; then
@@ -86,10 +90,29 @@ while true; do
         # transitions to "deleting" state.
         echo "Waiting 30s for ENI release..."
         sleep 30
-        exit 0
+        break
     fi
 
     echo "  $nlb_count load balancer(s) remaining, waiting... ($${waited}s / $${MAX_WAIT_SECONDS}s)"
     sleep $SLEEP_INTERVAL
     waited=$((waited + SLEEP_INTERVAL))
 done
+
+# --- Phase 3: Target group cleanup ---
+
+echo "Cleaning up orphaned target groups for cluster $CLUSTER_NAME..."
+
+tg_arns=$(aws elbv2 describe-target-groups \
+    --region "$REGION" \
+    --query "TargetGroups[?VpcId=='$VPC_ID'].TargetGroupArn" \
+    --output text 2>/dev/null)
+
+if [ -n "$tg_arns" ]; then
+    for arn in $tg_arns; do
+        echo "  Deleting target group: $arn"
+        aws elbv2 delete-target-group --target-group-arn "$arn" --region "$REGION" 2>&1 || true
+    done
+    echo "  Target group cleanup complete."
+else
+    echo "  No orphaned target groups found."
+fi
