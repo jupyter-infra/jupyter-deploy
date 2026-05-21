@@ -48,7 +48,7 @@ module "github_bot_account_username" {
   tags        = local.default_tags
 }
 
-# OAuth app client IDs (x5) — stored in SSM Parameter Store (not secret)
+# OAuth app client IDs (x6) — stored in SSM Parameter Store (not secret)
 # App metadata (app_id, app_url, callback_url) stored as tags for reference.
 module "github_oauth_app_client_id_1" {
   source      = "./modules/ssm_parameter"
@@ -90,7 +90,15 @@ module "github_oauth_app_client_id_5" {
   tags        = merge(local.default_tags, var.github_oauth_app_5)
 }
 
-# OAuth app client secrets (x5)
+module "github_oauth_app_client_id_6" {
+  source      = "./modules/ssm_parameter"
+  name        = "/${var.secret_name_prefix}-${local.doc_postfix}/github-oauth-app-client-id-6"
+  description = "GitHub OAuth app #6 client ID"
+  value       = var.github_oauth_app_6.client_id
+  tags        = merge(local.default_tags, var.github_oauth_app_6)
+}
+
+# OAuth app client secrets (x6)
 # App metadata tags applied here too for cross-reference.
 module "github_oauth_app_client_secret_1" {
   source      = "./modules/secret"
@@ -130,4 +138,12 @@ module "github_oauth_app_client_secret_5" {
   description = "GitHub OAuth app #5 client secret"
   value       = var.github_oauth_app_client_secret_5
   tags        = merge(local.default_tags, var.github_oauth_app_5)
+}
+
+module "github_oauth_app_client_secret_6" {
+  source      = "./modules/secret"
+  name        = "${var.secret_name_prefix}-${local.doc_postfix}/github-oauth-app-client-secret-6"
+  description = "GitHub OAuth app #6 client secret"
+  value       = var.github_oauth_app_client_secret_6
+  tags        = merge(local.default_tags, var.github_oauth_app_6)
 }

@@ -42,6 +42,7 @@ locals {
     module.github_oauth_app_client_id_3.parameter_arn,
     module.github_oauth_app_client_id_4.parameter_arn,
     module.github_oauth_app_client_id_5.parameter_arn,
+    module.github_oauth_app_client_id_6.parameter_arn,
   ]
 
   # OAuth client secret ARNs — GitHub roles get read-only
@@ -51,6 +52,7 @@ locals {
     module.github_oauth_app_client_secret_3.secret_arn,
     module.github_oauth_app_client_secret_4.secret_arn,
     module.github_oauth_app_client_secret_5.secret_arn,
+    module.github_oauth_app_client_secret_6.secret_arn,
   ]
 
   # Bot account auth secrets — GitHub roles get read-only (needed for automated login)
@@ -84,6 +86,7 @@ locals {
     client_secret_3 = module.github_oauth_app_client_secret_3.secret_arn
     client_secret_4 = module.github_oauth_app_client_secret_4.secret_arn
     client_secret_5 = module.github_oauth_app_client_secret_5.secret_arn
+    client_secret_6 = module.github_oauth_app_client_secret_6.secret_arn
   }
 
   # Map of bot auth secrets — CI roles get read, resource policy denies all else

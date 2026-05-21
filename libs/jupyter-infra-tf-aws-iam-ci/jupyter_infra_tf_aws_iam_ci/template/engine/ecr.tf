@@ -46,3 +46,12 @@ module "ecr_e2e_image_5" {
     CallbackUrl = var.github_oauth_app_5["callback_url"]
   })
 }
+
+module "ecr_e2e_image_6" {
+  source = "./modules/ecr_repository"
+  name   = "${var.secret_name_prefix}-${local.doc_postfix}/e2e-image-6"
+  tags = merge(local.default_tags, {
+    OAuthAppId  = var.github_oauth_app_6["app_id"]
+    CallbackUrl = var.github_oauth_app_6["callback_url"]
+  })
+}

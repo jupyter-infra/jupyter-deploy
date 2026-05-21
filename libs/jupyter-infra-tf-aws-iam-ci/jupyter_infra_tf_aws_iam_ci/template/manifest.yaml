@@ -38,6 +38,9 @@ secrets:
 - name: github_oauth_app_client_secret_5
   source: output
   source-key: github_oauth_app_client_secret_5_arn
+- name: github_oauth_app_client_secret_6
+  source: output
+  source-key: github_oauth_app_client_secret_6_arn
 commands:
 - cmd: secret.reveal
   sequence:

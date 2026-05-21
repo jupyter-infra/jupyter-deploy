@@ -202,8 +202,8 @@ def main() -> None:
     options_str = sys.argv[4] if len(sys.argv) > 4 else ""
     options = _parse_options(options_str)
 
-    if oauth_app_num not in ("1", "2", "3", "4", "5"):
-        print(f"Error: OAuth app number must be 1-5, got: {oauth_app_num}")
+    if oauth_app_num not in ("1", "2", "3", "4", "5", "6"):
+        print(f"Error: OAuth app number must be 1-6, got: {oauth_app_num}")
         sys.exit(1)
 
     # Validate options

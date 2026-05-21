@@ -29,6 +29,11 @@ required:
     app_id: "100005"
     homepage_url: "https://fake-app-5.example.com"
     callback_url: "https://fake-app-5.example.com/callback"
+  github_oauth_app_6:
+    client_id: "Ff00000000000000test"
+    app_id: "100006"
+    homepage_url: "https://fake-app-6.example.com"
+    callback_url: "https://fake-app-6.example.com/callback"
 required_sensitive:
   github_bot_account_password: "fakebotpassword123"
   github_bot_account_recovery_codes: "fakecodes123"
@@ -38,6 +43,7 @@ required_sensitive:
   github_oauth_app_client_secret_3: "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0"
   github_oauth_app_client_secret_4: "d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0"
   github_oauth_app_client_secret_5: "e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0"
+  github_oauth_app_client_secret_6: "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0"
 overrides:
   # set variable values as <variable-name>: <variable-value>
   # delete or comment out a line to use the default

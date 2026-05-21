@@ -193,7 +193,7 @@ variable "github_bot_account_totp_secret" {
   sensitive   = true
 }
 
-# OAuth apps (x5)
+# OAuth apps (x6)
 # Each is a map with keys: client_id, app_id, homepage_url, callback_url.
 # The client_id is stored in SSM Parameter Store.
 # The remaining keys are stored as tags for reference.
@@ -298,7 +298,27 @@ variable "github_oauth_app_5" {
   }
 }
 
-# OAuth app client secrets (x5)
+variable "github_oauth_app_6" {
+  description = <<-EOT
+    GitHub OAuth app #6 metadata. Keys: client_id, app_id, homepage_url, callback_url.
+
+    - client_id:    20-character alphanumeric OAuth client ID (stored in SSM Parameter Store)
+    - app_id:       numeric GitHub app identifier (stored as tag)
+    - homepage_url: app homepage URL, typically https://<subdomain>.<domain> (stored as tag)
+    - callback_url: OAuth callback URL, typically https://<subdomain>.<domain>/oauth2/callback (stored as tag)
+  EOT
+  type        = map(string)
+  validation {
+    condition     = length(setsubtract(keys(var.github_oauth_app_6), ["client_id", "app_id", "homepage_url", "callback_url"])) == 0
+    error_message = "github_oauth_app_6 keys must be: client_id, app_id, homepage_url, callback_url."
+  }
+  validation {
+    condition     = contains(keys(var.github_oauth_app_6), "client_id") && can(regex("^[a-zA-Z0-9]{20}$", var.github_oauth_app_6["client_id"]))
+    error_message = "github_oauth_app_6 must contain a 'client_id' key with a 20-character alphanumeric value."
+  }
+}
+
+# OAuth app client secrets (x6)
 
 variable "github_oauth_app_client_secret_1" {
   description = <<-EOT
@@ -367,5 +387,19 @@ variable "github_oauth_app_client_secret_5" {
   validation {
     condition     = can(regex("^[a-z0-9]{40}$", var.github_oauth_app_client_secret_5))
     error_message = "github_oauth_app_client_secret_5 must be a 40-character lowercase alphanumeric value."
+  }
+}
+
+variable "github_oauth_app_client_secret_6" {
+  description = <<-EOT
+    GitHub OAuth app #6 client secret.
+
+    Stored in Secrets Manager.
+  EOT
+  type        = string
+  sensitive   = true
+  validation {
+    condition     = can(regex("^[a-z0-9]{40}$", var.github_oauth_app_client_secret_6))
+    error_message = "github_oauth_app_client_secret_6 must be a 40-character lowercase alphanumeric value."
   }
 }

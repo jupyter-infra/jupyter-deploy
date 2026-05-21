@@ -120,7 +120,7 @@ def main() -> None:
         print("Usage: scripts/ci_restore_base.py <ci-dir> <oauth-app-num> [project-dir]")
         print()
         print("  ci-dir:        Path to the CI infrastructure project (from just ci-restore)")
-        print("  oauth-app-num: OAuth app number (1-5) — determines subdomain to match")
+        print("  oauth-app-num: OAuth app number (1-6) — determines subdomain to match")
         print("  project-dir:   Directory to restore into (default: e2e-base)")
         sys.exit(1)
 
@@ -128,8 +128,8 @@ def main() -> None:
     oauth_app_num = sys.argv[2]
     project_dir = Path(sys.argv[3]) if len(sys.argv) > 3 else Path("e2e-base")
 
-    if oauth_app_num not in ("1", "2", "3", "4", "5"):
-        print(f"Error: OAuth app number must be 1-5, got: {oauth_app_num}")
+    if oauth_app_num not in ("1", "2", "3", "4", "5", "6"):
+        print(f"Error: OAuth app number must be 1-6, got: {oauth_app_num}")
         sys.exit(1)
 
     print(f"Looking up subdomain for OAuth app #{oauth_app_num}...")

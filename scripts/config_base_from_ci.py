@@ -42,7 +42,7 @@ def main() -> None:
         print()
         print("  project-dir:       Path to the base template project (from `jd init`)")
         print("  ci-dir:            Path to the CI infrastructure project (from `just ci-restore`)")
-        print("  oauth-app-num:     OAuth app number (1-5)")
+        print("  oauth-app-num:     OAuth app number (1-6)")
         print("  allowed-usernames: JSON array of GitHub usernames (default: bot account email)")
         sys.exit(1)
 
@@ -51,8 +51,8 @@ def main() -> None:
     oauth_app_num = sys.argv[3]
     allowed_usernames_arg = sys.argv[4] if len(sys.argv) > 4 else None
 
-    if oauth_app_num not in ("1", "2", "3", "4", "5"):
-        print(f"Error: OAuth app number must be 1-5, got: {oauth_app_num}")
+    if oauth_app_num not in ("1", "2", "3", "4", "5", "6"):
+        print(f"Error: OAuth app number must be 1-6, got: {oauth_app_num}")
         sys.exit(1)
 
     # 1. Read OAuth app metadata from CI project

@@ -106,6 +106,7 @@ e2e-up no_cache="false":
         {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} build
     fi
 
+    mkdir -p ~/.kube  # must exist before compose up; Docker creates missing bind-mount sources as root
     {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} up -d e2e
     echo "E2E container started. Syncing latest code..."
     just e2e-sync
@@ -287,6 +288,7 @@ test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-te
 
     # Stop and restart container with new mounts (ensures clean mount state)
     echo "Restarting E2E container with project mount..."
+    mkdir -p ~/.kube  # must exist before compose up; Docker creates missing bind-mount sources as root
     {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} down
     {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} -f "$OVERRIDE_FILE" up -d --no-build
 
@@ -508,6 +510,7 @@ auth-setup project_dir display="${DISPLAY:-}":
 
     # Stop and restart container with new mounts (ensures clean mount state)
     echo "Restarting E2E container with project mount..."
+    mkdir -p ~/.kube  # must exist before compose up; Docker creates missing bind-mount sources as root
     {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} down
     {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} -f "$OVERRIDE_FILE" up -d
 
@@ -623,7 +626,7 @@ test-e2e-base project_dir="sandbox-e2e" test_filter="" options="":
     @just test-e2e {{project_dir}} "{{test_filter}}" "{{options}}" tf-aws-ec2-base
 
 # Run E2E tests for the EKS OIDC template (tf-aws-eks-oidc)
-test-e2e-eks-oidc project_dir="sandbox-eks" test_filter="" options="":
+test-e2e-eks-oidc project_dir="sandbox-e2e" test_filter="" options="":
     @just test-e2e {{project_dir}} "{{test_filter}}" "{{options}}" tf-aws-eks-oidc
 
 # Run E2E tests for the CI template (tf-aws-iam-ci)
@@ -696,9 +699,14 @@ ci-restore ci_dir="sandbox-ci":
 ci-restore-base oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-base":
     uv run python scripts/ci_restore_base.py {{ci_dir}} {{oauth_app_num}} {{project_dir}}
 
+# Push a local project to the S3 store (works even after failed deploy)
+# Usage: just ci-save-project <project-dir>
+ci-save-project project_dir:
+    uv run python scripts/ci_save_project.py {{project_dir}}
+
 # Find and restore an EKS OIDC template project from S3 by OAuth app subdomain
 # Usage: just ci-restore-eks <oauth-app-num> [ci-dir] [project-dir]
-ci-restore-eks oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-eks":
+ci-restore-eks oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-e2e":
     uv run python scripts/ci_restore_eks.py {{ci_dir}} {{oauth_app_num}} {{project_dir}}
 
 # Find a base template project by subdomain, take it down (jd down), and delete from S3 store
@@ -710,7 +718,7 @@ find-takedown-base oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-e2e":
 # Find an EKS OIDC template project by subdomain, take it down (jd down), and delete from S3 store
 # Exits successfully if no matching project is found (nothing to take down)
 # Usage: just find-takedown-eks <oauth-app-num> [ci-dir] [project-dir]
-find-takedown-eks oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-eks":
+find-takedown-eks oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-e2e":
     uv run python scripts/find_takedown_eks.py {{ci_dir}} {{oauth_app_num}} {{project_dir}}
 
 # Export local auth state to Secrets Manager
@@ -1028,7 +1036,7 @@ env-setup-base project_dir ci_dir="sandbox-ci" oauth_app_num="1" options="":
 #   Fresh deploy:     pass "" as project-dir, provide deployment vars as options
 # Usage: just env-setup-eks <project-dir> [ci-dir] [oauth-app-num] [options]
 # Options: comma-separated key=value pairs (same format as test-e2e options)
-# Example: just env-setup-eks sandbox-eks sandbox-ci 4 org=jupyter-infra,team=my-team,rbac-team=my-team
+# Example: just env-setup-eks sandbox-e2e sandbox-ci 4 org=jupyter-infra,team=my-team,rbac-team=my-team
 # Example: just env-setup-eks "" sandbox-ci 4 'org=jupyter-infra,team=my-team,rbac-team=my-team'
 env-setup-eks project_dir ci_dir="sandbox-ci" oauth_app_num="4" options="":
     uv run python scripts/env_setup_eks.py "{{project_dir}}" {{ci_dir}} {{oauth_app_num}} "{{options}}"

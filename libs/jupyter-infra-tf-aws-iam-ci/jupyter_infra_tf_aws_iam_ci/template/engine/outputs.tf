@@ -53,7 +53,7 @@ output "github_bot_account_username_arn" {
   value       = module.github_bot_account_username.parameter_arn
 }
 
-# OAuth app client IDs (x5) — SSM parameters
+# OAuth app client IDs (x6) — SSM parameters
 output "github_oauth_app_client_id_1_arn" {
   description = "ARN of the SSM parameter for GitHub OAuth app #1 client ID."
   value       = module.github_oauth_app_client_id_1.parameter_arn
@@ -79,7 +79,12 @@ output "github_oauth_app_client_id_5_arn" {
   value       = module.github_oauth_app_client_id_5.parameter_arn
 }
 
-# OAuth app client secrets (x5)
+output "github_oauth_app_client_id_6_arn" {
+  description = "ARN of the SSM parameter for GitHub OAuth app #6 client ID."
+  value       = module.github_oauth_app_client_id_6.parameter_arn
+}
+
+# OAuth app client secrets (x6)
 output "github_oauth_app_client_secret_1_arn" {
   description = "ARN of the Secrets Manager secret for GitHub OAuth app #1 client secret."
   value       = module.github_oauth_app_client_secret_1.secret_arn
@@ -105,7 +110,12 @@ output "github_oauth_app_client_secret_5_arn" {
   value       = module.github_oauth_app_client_secret_5.secret_arn
 }
 
-# ECR repositories for pre-built E2E images (x5)
+output "github_oauth_app_client_secret_6_arn" {
+  description = "ARN of the Secrets Manager secret for GitHub OAuth app #6 client secret."
+  value       = module.github_oauth_app_client_secret_6.secret_arn
+}
+
+# ECR repositories for pre-built E2E images (x6)
 output "ecr_repository_url_1" {
   description = "URL of the ECR repository for E2E image (OAuth app #1)."
   value       = module.ecr_e2e_image_1.repository_url
@@ -129,6 +139,11 @@ output "ecr_repository_url_4" {
 output "ecr_repository_url_5" {
   description = "URL of the ECR repository for E2E image (OAuth app #5)."
   value       = module.ecr_e2e_image_5.repository_url
+}
+
+output "ecr_repository_url_6" {
+  description = "URL of the ECR repository for E2E image (OAuth app #6)."
+  value       = module.ecr_e2e_image_6.repository_url
 }
 
 # S3 bucket for E2E test results

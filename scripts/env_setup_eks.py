@@ -15,7 +15,7 @@ email. Access control defaults to: allowed_teams=[<org>:<team>] from options.
 
 Examples:
   # From existing project:
-  scripts/env_setup_eks.py sandbox-eks sandbox-ci 5 org=jupyter-infra,team=my-team,rbac-team=my-team
+  scripts/env_setup_eks.py sandbox-e2e sandbox-ci 5 org=jupyter-infra,team=my-team,rbac-team=my-team
 
   # Fresh deploy (no project):
   scripts/env_setup_eks.py "" sandbox-ci 5 org=jupyter-infra,team=my-team,rbac-team=my-team
@@ -161,8 +161,8 @@ def main() -> None:
     options_str = sys.argv[4] if len(sys.argv) > 4 else ""
     options = _parse_options(options_str)
 
-    if oauth_app_num not in ("1", "2", "3", "4", "5"):
-        print(f"Error: OAuth app number must be 1-5, got: {oauth_app_num}")
+    if oauth_app_num not in ("1", "2", "3", "4", "5", "6"):
+        print(f"Error: OAuth app number must be 1-6, got: {oauth_app_num}")
         sys.exit(1)
 
     parsed_options: dict[str, str] = {}
@@ -227,12 +227,25 @@ def main() -> None:
         set_env_var("JD_E2E_VAR_OAUTH_ALLOWED_TEAMS", allowed_teams)
         print(f"  JD_E2E_VAR_OAUTH_ALLOWED_TEAMS={allowed_teams}")
 
-    # 1d. Set admin_role_names — use option if provided, otherwise require env value
+    # 1c-bis. Default JD_E2E_RBAC_TEAM from team option when rbac-team not explicit
+    if "rbac-team" not in parsed_options and team:
+        set_env_var("JD_E2E_RBAC_TEAM", team)
+        print(f"  JD_E2E_RBAC_TEAM={team} (from team option)")
+
+    # 1d. Set admin_role_names — use option if provided, otherwise require env/file value
     if "JD_E2E_VAR_ADMIN_ROLE_NAMES" in option_env_vars:
         pass  # handled in step 3 with other options
     elif not os.environ.get("JD_E2E_VAR_ADMIN_ROLE_NAMES"):
-        print("Error: JD_E2E_VAR_ADMIN_ROLE_NAMES not set and no admin-roles option provided")
-        sys.exit(1)
+        # Check if already present in the .env file
+        env_has_admin_roles = False
+        if ENV_FILE.exists():
+            for line in ENV_FILE.read_text().splitlines():
+                if line.startswith("JD_E2E_VAR_ADMIN_ROLE_NAMES="):
+                    env_has_admin_roles = True
+                    break
+        if not env_has_admin_roles:
+            print("Error: JD_E2E_VAR_ADMIN_ROLE_NAMES not set and no admin-roles option provided")
+            sys.exit(1)
 
     # 2. Fetch OAuth credentials from CI infrastructure
     print(f"\nFetching OAuth app #{oauth_app_num} credentials from CI ({ci_dir})...")

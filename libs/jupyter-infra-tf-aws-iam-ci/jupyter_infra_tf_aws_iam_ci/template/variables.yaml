@@ -11,6 +11,7 @@ required:
   github_oauth_app_3: {}
   github_oauth_app_4: {}
   github_oauth_app_5: {}
+  github_oauth_app_6: {}
 required_sensitive:
   # either assign values below
   # or run 'jd config' to use the interactive experience
@@ -23,6 +24,7 @@ required_sensitive:
   github_oauth_app_client_secret_3: null
   github_oauth_app_client_secret_4: null
   github_oauth_app_client_secret_5: null
+  github_oauth_app_client_secret_6: null
 overrides:
   # set variable values as <variable-name>: <variable-value>
   # delete or comment out a line to use the default
