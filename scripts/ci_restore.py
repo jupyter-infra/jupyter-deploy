@@ -57,7 +57,7 @@ def restore_secrets_and_configure(ci_dir: Path) -> None:
     restore_names = [
         "github_bot_account_password",
         "github_bot_account_totp_secret",
-        *(f"github_oauth_app_client_secret_{i}" for i in range(1, 6)),
+        *(f"github_oauth_app_client_secret_{i}" for i in range(1, 7)),
     ]
 
     config_args: list[str] = []
