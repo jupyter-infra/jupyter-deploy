@@ -699,11 +699,6 @@ ci-restore ci_dir="sandbox-ci":
 ci-restore-base oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-base":
     uv run python scripts/ci_restore_base.py {{ci_dir}} {{oauth_app_num}} {{project_dir}}
 
-# Push a local project to the S3 store (works even after failed deploy)
-# Usage: just ci-save-project <project-dir>
-ci-save-project project_dir:
-    uv run python scripts/ci_save_project.py {{project_dir}}
-
 # Find and restore an EKS OIDC template project from S3 by OAuth app subdomain
 # Usage: just ci-restore-eks <oauth-app-num> [ci-dir] [project-dir]
 ci-restore-eks oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-e2e":
