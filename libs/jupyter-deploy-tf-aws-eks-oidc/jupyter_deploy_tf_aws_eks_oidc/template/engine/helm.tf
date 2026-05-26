@@ -142,6 +142,21 @@ resource "helm_release" "workspace_router" {
         value = "false"
       },
     ],
+    # Kubectl access page: cluster details injected from EKS module outputs
+    [
+      {
+        name  = "webApp.clusterAccess.clusterName"
+        value = module.eks_cluster.cluster_name
+      },
+      {
+        name  = "webApp.clusterAccess.apiServer"
+        value = module.eks_cluster.cluster_endpoint
+      },
+      {
+        name  = "webApp.clusterAccess.caCertBase64"
+        value = module.eks_cluster.cluster_ca_certificate
+      },
+    ],
   )
 
   set_sensitive = [
