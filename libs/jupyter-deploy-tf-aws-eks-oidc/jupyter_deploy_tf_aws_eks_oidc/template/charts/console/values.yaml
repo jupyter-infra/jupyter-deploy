@@ -1,9 +1,0 @@
-domain: ""
-namespace: jupyter-k8s-router
-name: console
-port: 8080
-path: /get-started/
-
-html: ""
-script: ""
-nginxConf: ""

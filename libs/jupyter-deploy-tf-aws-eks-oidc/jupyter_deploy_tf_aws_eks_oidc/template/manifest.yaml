@@ -678,19 +678,6 @@ components:
         method: k8s.core.deployment-logs
       restart:
         method: k8s.apps.rollout-restart
-  console:
-    type: Deployment
-    description: Web console for workspace management
-    scope: workspace_router_namespace
-    verbs:
-      status:
-        method: k8s.apps.get-deployment-status
-      show:
-        method: k8s.apps.get-deployment
-      logs:
-        method: k8s.core.deployment-logs
-      restart:
-        method: k8s.apps.rollout-restart
   workspace-operator:
     type: Deployment
     description: Workspace lifecycle controller
@@ -767,7 +754,7 @@ supervised-execution:
         - enter-pattern: 'null_resource\.wait_for_routing_ready'
           label: Verifying routing health
           weight: 60
-      - enter-pattern: 'helm_release\.(workspace_defaults|github_rbac|console)'
+      - enter-pattern: 'helm_release\.(workspace_defaults|github_rbac)'
         exit-pattern: 'helm_release\.(workspace_defaults|github_rbac).*(Creation|Modifications) complete'
         label: Creating workspace defaults
         weight: 10

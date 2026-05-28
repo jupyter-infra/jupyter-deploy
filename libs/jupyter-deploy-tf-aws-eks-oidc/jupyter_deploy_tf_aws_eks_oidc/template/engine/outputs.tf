@@ -50,8 +50,8 @@ output "workspace_base_url" {
 }
 
 output "get_started_url" {
-  description = "URL to the getting-started page."
-  value       = "https://${local.full_domain}/get-started/"
+  description = "URL to the web UI."
+  value       = "https://${local.full_domain}/"
 }
 
 output "secret_arn" {

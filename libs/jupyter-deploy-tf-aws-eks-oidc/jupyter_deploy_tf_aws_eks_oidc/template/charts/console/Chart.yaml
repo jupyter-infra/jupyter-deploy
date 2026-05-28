@@ -1,5 +1,0 @@
-apiVersion: v2
-name: console
-version: 0.1.0-rc.1
-description: Get-started console page with kubectl OIDC setup instructions
-type: application
