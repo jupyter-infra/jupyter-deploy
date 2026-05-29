@@ -10,8 +10,12 @@ lint:
     terraform fmt -recursive -write=true
     uv run yamllint .
 
+# Generate CLI reference docs from Typer app
+docs-cli-ref:
+    uv run python scripts/generate_cli_ref.py docs/source/reference
+
 # Build documentation locally
-docs-build:
+docs-build: docs-cli-ref
     cd docs && uv run sphinx-build -b html source build
 
 # Serve documentation locally for preview
@@ -31,6 +35,7 @@ docs-diagrams:
     set -euo pipefail
     declare -A TEMPLATE_OUTPUT=(
         ["aws-base-template"]="docs/source/templates/aws-base-template/diagrams"
+        ["aws-eks-oidc-template"]="docs/source/templates/aws-eks-oidc-template/diagrams"
     )
     for template_dir in diagrams/*/; do
         [ -d "$template_dir" ] || continue

@@ -8,7 +8,7 @@ Source files live in `docs/source/`.
 ### Product names in body text
 
 Use bold for product names in running text:
-- **JupyterLab**, **AWS Base Template**, **Fluent Bit**
+- **JupyterLab**, **Jupyter K8s**, **AWS Base Template**, **Fluent Bit**
 
 Use plain text (no bold, no backticks) in headings and `{toctree}` entries:
 - `## JupyterLab` — correct

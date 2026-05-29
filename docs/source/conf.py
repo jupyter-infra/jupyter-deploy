@@ -1,8 +1,4 @@
-import sys
 import time
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent / "_ext"))
 
 project = "Jupyter Deploy"
 copyright = f"2025–{time.localtime().tm_year}, Amazon Web Services"
@@ -14,7 +10,6 @@ extensions = [
     "sphinx_design",
     "sphinx_tabs.tabs",
     "sphinx_copybutton",
-    "sphinx_click",
 ]
 myst_enable_extensions = ["colon_fence"]
 
@@ -41,10 +36,6 @@ html_theme_options = {
         {
             "title": "Templates",
             "url": "templates/index",
-        },
-        {
-            "title": "CLI Reference",
-            "url": "cli-reference/index",
         },
         {
             "title": "Contributor Guide",

@@ -1,0 +1,198 @@
+# EKS OIDC Template — Application Image
+
+vars: {
+  d2-config: {
+    layout-engine: dagre
+  }
+}
+
+classes: {
+  box: {
+    shape: rectangle
+    style: {
+      bold: true
+      stroke-width: 3
+      font-size: 20
+    }
+  }
+
+  green_flow: {
+    style: {
+      stroke: "#2e7d32"
+      stroke-width: 3
+    }
+  }
+
+  blue_flow: {
+    style: {
+      stroke: "#1565c0"
+      stroke-width: 3
+    }
+  }
+}
+
+direction: right
+
+# Admin Environment
+admin: "Admin Environment" {
+  style: {
+    fill: "#e8f5e9"
+    stroke: "#2e7d32"
+    stroke-width: 3
+    bold: true
+    font-size: 20
+  }
+
+  jd_project: "JupyterDeploy Project" {
+    style: {
+      fill: "#c8e6c9"
+      stroke: "#388e3c"
+      stroke-width: 2
+      stroke-dash: 3
+      bold: true
+      font-size: 18
+    }
+
+    dockerfile: "Dockerfile" {
+      class: box
+      icon: ../shared/icons/docker.svg
+      style: {
+        fill: "#c8e6c9"
+        stroke: "#388e3c"
+      }
+    }
+  }
+
+  jd_cli: "JD CLI" {
+    class: box
+    icon: ../shared/icons/jupyter.svg
+    style: {
+      fill: "#c8e6c9"
+      stroke: "#388e3c"
+    }
+  }
+
+  terraform: "Terraform" {
+    class: box
+    icon: ../shared/icons/terraform.svg
+    style: {
+      fill: "#c8e6c9"
+      stroke: "#388e3c"
+    }
+  }
+}
+
+# AWS
+aws: "AWS Account" {
+  style: {
+    fill: "#fff3e0"
+    stroke: "#e65100"
+    stroke-width: 3
+    bold: true
+    font-size: 20
+  }
+
+  codebuild: "CodeBuild" {
+    style: {
+      bold: true
+      stroke-width: 3
+      font-size: 20
+      fill: "#ffe0b2"
+      stroke: "#f57c00"
+    }
+
+    template: "Job Template" {
+      class: box
+      icon: ../shared/icons/codebuild.svg
+      style: {
+        fill: "#ffe0b2"
+        stroke: "#f57c00"
+      }
+    }
+
+    job: "Application\nImage\nBuild Job" {
+      class: box
+      icon: ../shared/icons/codebuild.svg
+      style: {
+        fill: "#ffe0b2"
+        stroke: "#f57c00"
+      }
+    }
+  }
+
+  ecr: "ECR" {
+    style: {
+      bold: true
+      stroke-width: 3
+      font-size: 20
+      fill: "#ffe0b2"
+      stroke: "#f57c00"
+    }
+
+    jupyterlab: "JupyterLab image" {
+      class: box
+      icon: ../shared/icons/docker.svg
+      style: {
+        fill: "#ffe0b2"
+        stroke: "#f57c00"
+      }
+    }
+  }
+
+  eks_cluster: "EKS Cluster" {
+    style: {
+      fill: "#e3f2fd"
+      stroke: "#1565c0"
+      stroke-width: 3
+      bold: true
+      font-size: 20
+    }
+
+    default_ns: "default" {
+      style: {
+        fill: "#f3e5f5"
+        stroke: "#8e24aa"
+        stroke-dash: 3
+      }
+
+      workspace: "Workspace" {
+        class: box
+        icon: ../shared/icons/jupyter.svg
+        style: {
+          fill: "#e1bee7"
+          stroke: "#8e24aa"
+        }
+      }
+    }
+  }
+}
+
+# Flows: build (green)
+admin.jd_cli -> admin.terraform: "jd up" {
+  class: green_flow
+}
+
+admin.terraform -> aws.codebuild.template: "create" {
+  class: green_flow
+}
+
+admin.terraform -> aws.codebuild.template: "trigger" {
+  class: green_flow
+}
+
+aws.codebuild.template -> aws.codebuild.job: "spawn" {
+  class: green_flow
+}
+
+admin.jd_project.dockerfile -> aws.codebuild.job: "build spec" {
+  class: green_flow
+}
+
+aws.codebuild.job -> aws.ecr.jupyterlab: "push image" {
+  class: green_flow
+}
+
+# Flows: deploy (blue)
+aws.eks_cluster.default_ns.workspace -> aws.ecr.jupyterlab: "pull image" {
+  class: blue_flow
+}

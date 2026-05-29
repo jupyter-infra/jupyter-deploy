@@ -1,0 +1,100 @@
+# EKS OIDC Template — Authentication Flow
+
+seq: "" {
+  shape: sequence_diagram
+
+  # Actors
+  Browser {
+    shape: page
+  }
+  Traefik
+  OAuth2 Proxy: "OAuth2 Proxy"
+  Dex: "Dex (OIDC)"
+  Authmiddleware
+  GitHub: "GitHub.com"
+  Workspace
+
+  # ── Flow 1 (blue): First visit — unauthenticated ──
+
+  Browser -> Traefik.visit: "GET /workspace-url" {
+    style.stroke: "#1565c0"
+  }
+  Traefik.visit -> Authmiddleware.check: "ForwardAuth" {
+    style.stroke: "#1565c0"
+  }
+  Authmiddleware.check -> Traefik.visit: "401 (no JWT cookie)" {
+    style.stroke: "#1565c0"
+    style.stroke-dash: 3
+  }
+  Traefik.visit -> Browser: "302 → OAuth2 Proxy /sign_in" {
+    style.stroke: "#1565c0"
+    style.stroke-dash: 3
+  }
+
+  # ── Flow 2 (red): OAuth dance via Dex ──
+
+  Browser -> OAuth2 Proxy.start: "GET /sign_in" {
+    style.stroke: "#c62828"
+  }
+  OAuth2 Proxy.start -> Browser: "302 → Dex /auth" {
+    style.stroke: "#c62828"
+  }
+  Browser -> Dex.auth: "GET /auth (authorize)" {
+    style.stroke: "#c62828"
+  }
+  Dex.auth -> Browser: "302 → GitHub authorize URL" {
+    style.stroke: "#c62828"
+  }
+  Browser -> GitHub.login: "Authenticate + authorize app" {
+    style.stroke: "#c62828"
+  }
+  GitHub.login -> Browser: "302 → Dex /callback?code=..." {
+    style.stroke: "#c62828"
+  }
+  Browser -> Dex.callback: "GET /callback" {
+    style.stroke: "#c62828"
+  }
+  Dex.callback -> GitHub.token: "Exchange code for token" {
+    style.stroke: "#c62828"
+    style.stroke-dash: 3
+  }
+  GitHub.token -> Dex.callback: "Access token + user info" {
+    style.stroke: "#c62828"
+  }
+  Dex.callback -> Browser: "302 → OAuth2 Proxy /callback\n+ ID token" {
+    style.stroke: "#c62828"
+  }
+  Browser -> OAuth2 Proxy.callback: "GET /callback" {
+    style.stroke: "#c62828"
+  }
+  OAuth2 Proxy.callback -> Authmiddleware.issue: "POST /auth/sign-in\n(ID token)" {
+    style.stroke: "#c62828"
+  }
+
+  Authmiddleware.issue.note: "Verify ID token via Dex JWKS\nIssue JWT session cookie"
+
+  Authmiddleware.issue -> OAuth2 Proxy.callback: "200 + Set-Cookie (JWT)" {
+    style.stroke: "#c62828"
+  }
+  OAuth2 Proxy.callback -> Browser: "302 → original URL\n+ Set-Cookie (JWT)" {
+    style.stroke: "#c62828"
+  }
+
+  # ── Flow 3 (green): Authenticated visit ──
+
+  Browser -> Traefik.auth: "GET /workspace-url\n+ JWT cookie" {
+    style.stroke: "#2e7d32"
+  }
+  Traefik.auth -> Authmiddleware.verify: "ForwardAuth\n(JWT cookie)" {
+    style.stroke: "#2e7d32"
+  }
+  Authmiddleware.verify -> Traefik.auth: "200 OK\nX-Forwarded-User" {
+    style.stroke: "#2e7d32"
+  }
+  Traefik.auth -> Workspace: "Proxy to workspace" {
+    style.stroke: "#2e7d32"
+  }
+  Workspace -> Browser: "Application UI" {
+    style.stroke: "#2e7d32"
+  }
+}

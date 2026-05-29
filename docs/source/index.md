@@ -53,6 +53,16 @@ Compatible with any cloud provider and any infrastructure-as-code engine.
 
 getting-started/index
 templates/index
-cli-reference/index
 contributor-guide/index
+```
+
+```{toctree}
+:hidden:
+:caption: Reference
+
+reference/overview
+reference/project-commands
+reference/resource-commands
+reference/access-commands
+reference/store-commands
 ```

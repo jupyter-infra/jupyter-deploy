@@ -3,4 +3,3 @@ shibuya
 sphinx-copybutton
 sphinx-design
 sphinx-tabs
-sphinx-click

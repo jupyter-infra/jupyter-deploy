@@ -30,7 +30,18 @@ When you run `jd init <PROJECT-DIR>`, `jupyter-deploy` discovers available templ
 :maxdepth: 2
 
 AWS Base Template <aws-base-template/index>
+AWS EKS OIDC Template <aws-eks-oidc-template/index>
 ```
+
+## Template Comparison
+
+| | AWS Base Template | AWS EKS OIDC Template |
+|---|---|---|
+| **Architecture** | Single EC2 instance | EKS cluster with managed node groups |
+| **Users** | Single user | Multi-user with isolated workspaces |
+| **Identity** | GitHub OAuth (direct) | GitHub OAuth via Dex (OIDC) |
+| **Scaling** | Vertical (instance type) | Horizontal (node autoscaling) |
+| **Use case** | Personal or small-team notebook | Team or organization workspace platform |
 
 ## The Default Template
 

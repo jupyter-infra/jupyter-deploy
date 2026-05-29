@@ -1,0 +1,210 @@
+# EKS OIDC Template — Platform Components
+
+vars: {
+  d2-config: {
+    layout-engine: dagre
+  }
+}
+
+classes: {
+  box: {
+    shape: rectangle
+    style: {
+      bold: true
+      stroke-width: 3
+      font-size: 20
+    }
+  }
+
+  blue_flow: {
+    style: {
+      stroke: "#1565c0"
+      stroke-width: 3
+    }
+  }
+
+  red_flow: {
+    style: {
+      stroke: "#c62828"
+      stroke-width: 3
+    }
+  }
+
+  green_flow: {
+    style: {
+      stroke: "#2e7d32"
+      stroke-width: 3
+    }
+  }
+
+  namespace: {
+    shape: rectangle
+    style: {
+      bold: true
+      stroke-width: 2
+      stroke-dash: 5
+      font-size: 18
+    }
+  }
+}
+
+direction: down
+
+# External
+browser: "Web Browser" {
+  class: box
+  icon: ../shared/icons/firefox.svg
+  style: {
+    fill: "#e8f5e9"
+    stroke: "#2e7d32"
+  }
+}
+
+github: "GitHub" {
+  class: box
+  icon: ../shared/icons/github.svg
+  style: {
+    fill: "#f5f5f5"
+    stroke: "#24292e"
+  }
+}
+
+# EKS Cluster
+eks_cluster: "EKS Cluster" {
+  style: {
+    fill: "#e3f2fd"
+    stroke: "#1565c0"
+    stroke-width: 3
+    bold: true
+    font-size: 20
+  }
+
+  # Router namespace
+  router_ns: "Router Namespace" {
+    class: namespace
+    style: {
+      fill: "#ffe0b2"
+      stroke: "#f57c00"
+    }
+
+    traefik: "Traefik" {
+      class: box
+      icon: ../shared/icons/traefik.svg
+      style: {
+        fill: "#ffe0b2"
+        stroke: "#f57c00"
+      }
+    }
+
+    oauth2_proxy: "OAuth2 Proxy" {
+      class: box
+      icon: ../shared/icons/oauth2-proxy.svg
+      style: {
+        fill: "#ffe0b2"
+        stroke: "#f57c00"
+      }
+    }
+
+    dex: "Dex (OIDC IdP)" {
+      class: box
+      icon: ../shared/icons/dex.svg
+      style: {
+        fill: "#ffe0b2"
+        stroke: "#f57c00"
+      }
+    }
+
+    authmiddleware: "Authmiddleware" {
+      class: box
+      icon: ../shared/icons/jupyter.svg
+      style: {
+        fill: "#ffe0b2"
+        stroke: "#f57c00"
+      }
+    }
+  }
+
+  # Operator namespace
+  operator_ns: "Operator Namespace" {
+    class: namespace
+    style: {
+      fill: "#bbdefb"
+      stroke: "#1565c0"
+    }
+
+    operator: "JupyterK8s\nOperator" {
+      class: box
+      icon: ../shared/icons/jupyter.svg
+      style: {
+        fill: "#bbdefb"
+        stroke: "#1565c0"
+      }
+    }
+  }
+
+  # Workspace namespace
+  workspace_ns: "Workspace Namespace" {
+    class: namespace
+    style: {
+      fill: "#e1bee7"
+      stroke: "#8e24aa"
+    }
+
+    workspace: "Workspace Pod" {
+      class: box
+      icon: ../shared/icons/jupyter.svg
+      style: {
+        fill: "#e1bee7"
+        stroke: "#8e24aa"
+      }
+    }
+  }
+}
+
+# Flows: request path (blue)
+browser -> eks_cluster.router_ns.traefik: "" {
+  class: blue_flow
+}
+
+eks_cluster.router_ns.traefik -> eks_cluster.router_ns.authmiddleware: "authorize" {
+  class: blue_flow
+}
+
+eks_cluster.router_ns.traefik -> eks_cluster.workspace_ns.workspace: "proxy" {
+  class: blue_flow
+}
+
+# Flows: auth (red)
+eks_cluster.router_ns.traefik -> eks_cluster.router_ns.oauth2_proxy: "authenticate" {
+  class: red_flow
+}
+
+eks_cluster.router_ns.oauth2_proxy -> eks_cluster.router_ns.dex: "OIDC" {
+  class: red_flow
+}
+
+eks_cluster.router_ns.dex -> github: "OAuth2" {
+  class: red_flow
+}
+
+eks_cluster.router_ns.authmiddleware -> eks_cluster.router_ns.dex: "verify token" {
+  class: red_flow
+}
+
+eks_cluster.router_ns.authmiddleware -> eks_cluster.operator_ns.operator: "verify" {
+  class: red_flow
+}
+
+# Flows: set-cookie (red)
+eks_cluster.router_ns.authmiddleware -> eks_cluster.router_ns.traefik: "set workspace-cookie" {
+  class: red_flow
+}
+
+eks_cluster.router_ns.oauth2_proxy -> eks_cluster.router_ns.traefik: "set user-cookie" {
+  class: red_flow
+}
+
+eks_cluster.router_ns.traefik -> browser: "set-cookies" {
+  class: red_flow
+}
+

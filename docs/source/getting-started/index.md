@@ -98,6 +98,7 @@ and serves your **JupyterLab** application to a URL in your domain.
 
 ## What's Next
 
-- Explore the [**AWS Base Template**](../templates/aws-base-template/index) in detail
-- Learn about the [**CLI Reference**](../cli-reference/index) available
+- Explore the [**AWS Base Template**](../templates/aws-base-template/index) for single-instance deployments
+- Explore the [**AWS EKS OIDC Template**](../templates/aws-eks-oidc-template/index) for multi-user workspace platforms
+- Learn about the [**CLI Reference**](../reference/overview) available
 - Read the [**Contributor Guide**](../contributor-guide/index) to get involved

@@ -1,0 +1,184 @@
+# EKS OIDC Template — Access Workspaces
+
+vars: {
+  d2-config: {
+    layout-engine: dagre
+  }
+}
+
+classes: {
+  box: {
+    shape: rectangle
+    style: {
+      bold: true
+      stroke-width: 3
+      font-size: 20
+    }
+  }
+
+  blue_flow: {
+    style: {
+      stroke: "#1565c0"
+      stroke-width: 3
+    }
+  }
+
+  red_flow: {
+    style: {
+      stroke: "#c62828"
+      stroke-width: 3
+    }
+  }
+}
+
+direction: right
+
+# Column 1: User
+user: "User" {
+  style: {
+    fill: "#e8f5e9"
+    stroke: "#2e7d32"
+    stroke-width: 3
+    bold: true
+    font-size: 20
+  }
+
+  browser: "Web Browser" {
+    class: box
+    icon: ../shared/icons/firefox.svg
+    style: {
+      fill: "#c8e6c9"
+      stroke: "#388e3c"
+    }
+  }
+}
+
+# Column 2: AWS
+aws: "AWS Account" {
+  style: {
+    fill: "#fff3e0"
+    stroke: "#e65100"
+    stroke-width: 3
+    bold: true
+    font-size: 20
+  }
+
+  nlb: "Network\nLoad Balancer" {
+    class: box
+    icon: ../shared/icons/aws.svg
+    style: {
+      fill: "#ffe0b2"
+      stroke: "#f57c00"
+    }
+  }
+
+  eks_cluster: "EKS Cluster" {
+    style: {
+      fill: "#e3f2fd"
+      stroke: "#1565c0"
+      stroke-width: 3
+      bold: true
+      font-size: 20
+    }
+
+    router_ns: "jupyter-k8s-router" {
+      style: {
+        fill: "#dce8f5"
+        stroke: "#1565c0"
+        stroke-dash: 3
+      }
+
+      traefik: "Traefik" {
+        class: box
+        icon: ../shared/icons/traefik.svg
+        style: {
+          fill: "#bbdefb"
+          stroke: "#1565c0"
+        }
+      }
+
+      dex: "Dex" {
+        class: box
+        icon: ../shared/icons/dex.svg
+        style: {
+          fill: "#bbdefb"
+          stroke: "#1565c0"
+        }
+      }
+
+      authmiddleware: "Authmiddleware" {
+        class: box
+        icon: ../shared/icons/jupyter.svg
+        style: {
+          fill: "#bbdefb"
+          stroke: "#1565c0"
+        }
+      }
+    }
+
+    default_ns: "default" {
+      style: {
+        fill: "#f3e5f5"
+        stroke: "#8e24aa"
+        stroke-dash: 3
+      }
+
+      ws1: "Workspace" {
+        class: box
+        icon: ../shared/icons/jupyter.svg
+        style: {
+          fill: "#e1bee7"
+          stroke: "#8e24aa"
+        }
+      }
+    }
+  }
+}
+
+# Column 3: GitHub
+github: "GitHub" {
+  style: {
+    stroke: "#24292e"
+    stroke-dash: 5
+    fill: "#fafafa"
+  }
+
+  oauth_app: "OAuth App" {
+    class: box
+    icon: ../shared/icons/github.svg
+    style: {
+      fill: "#f5f5f5"
+      stroke: "#24292e"
+    }
+  }
+}
+
+# Flows: access (blue)
+user.browser -> aws.nlb: "HTTPS" {
+  class: blue_flow
+}
+
+aws.nlb -> aws.eks_cluster.router_ns.traefik: "" {
+  class: blue_flow
+}
+
+aws.eks_cluster.router_ns.traefik -> aws.eks_cluster.default_ns.ws1: "proxy" {
+  class: blue_flow
+}
+
+# Flows: auth (red)
+aws.eks_cluster.router_ns.traefik -> aws.eks_cluster.router_ns.dex: "authenticate" {
+  class: red_flow
+}
+
+aws.eks_cluster.router_ns.dex -> github.oauth_app: "OAuth2" {
+  class: red_flow
+}
+
+aws.eks_cluster.router_ns.traefik -> aws.eks_cluster.router_ns.authmiddleware: "authorize" {
+  class: red_flow
+}
+
+aws.eks_cluster.router_ns.authmiddleware -> aws.eks_cluster.router_ns.traefik: "set-cookie" {
+  class: red_flow
+}
