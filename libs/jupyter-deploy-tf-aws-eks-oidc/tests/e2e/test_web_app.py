@@ -4,7 +4,6 @@ The web UI is gated by oauth2-proxy (Dex OAuth flow).
 Uses the dex_oauth_app fixture to authenticate through oauth2-proxy → Dex → GitHub.
 """
 
-from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.oauth2_proxy.dex import DexGitHubOAuth2ProxyApplication
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 
