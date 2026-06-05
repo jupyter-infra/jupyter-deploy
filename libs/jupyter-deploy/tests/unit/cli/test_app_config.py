@@ -158,6 +158,19 @@ class TestConfigCommand(unittest.TestCase):
         self.assertIsInstance(call_kwargs["display_manager"], SimpleDisplayManager)
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    def test_config_accepts_short_verbose_flag(self, mock_config_handler: Mock) -> None:
+        """-v is an alias for --verbose (parity with <jd up> / <jd down>)."""
+        mock_config_handler_instance, _ = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        # Act
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "-v"])
+
+        # Verify
+        self.assertEqual(result.exit_code, 0)
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
     def test_config_passes_no_preset_when_user_passes_none(self, mock_config_handler: Mock) -> None:
         mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
         mock_config_handler.return_value = mock_config_handler_instance

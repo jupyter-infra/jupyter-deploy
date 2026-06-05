@@ -294,7 +294,7 @@ def config(
         bool,
         typer.Option("--reset-store-id", help="Clear the pinned store ID and rediscover the store."),
     ] = False,
-    verbose: Annotated[bool, typer.Option("--verbose", help="Show full output without progress bar.")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show full output without progress bar.")] = False,
     variables: Annotated[
         dict[str, TemplateVariableDefinition] | None,
         typer.Option("--variables", "-v", help="Will be removed by the decorator."),
