@@ -3,6 +3,14 @@ locals {
   source_zip   = "${path.root}/.terraform/tmp/${var.name}-source.zip"
   image_uri    = "${module.ecr.repository_url}:${var.image_build}"
 
+  # Content-only hash of the build source: sha256 over each file's content hash,
+  # ordered by path. Deterministic across environments — unlike
+  # archive_file.output_md5, which embeds zip packaging artifacts (file modes,
+  # ordering) and so drifts between a CI runner and a local restore even when the
+  # file contents are identical. See issue #240.
+  source_files = sort(tolist(fileset(var.source_dir, "**")))
+  source_hash  = sha256(join("", [for f in local.source_files : filesha256("${var.source_dir}/${f}")]))
+
   buildspec = <<-YAML
     version: 0.2
     phases:
@@ -30,7 +38,9 @@ resource "aws_s3_object" "source" {
   bucket = var.build_bucket_name
   key    = "${var.image_name}/${var.image_build}/source.zip"
   source = data.archive_file.source.output_path
-  etag   = data.archive_file.source.output_md5
+  # Not `etag`: the build bucket uses SSE-KMS, and etag is incompatible with KMS
+  # (the S3 ETag is not the content MD5), which produces a perpetual diff. See #240.
+  source_hash = local.source_hash
 }
 
 module "ecr" {
@@ -57,7 +67,7 @@ resource "null_resource" "build_trigger" {
   triggers = {
     image_tag    = var.image_build
     project_name = module.build.project_name
-    source_hash  = data.archive_file.source.output_md5
+    source_hash  = local.source_hash
   }
 
   provisioner "local-exec" {
