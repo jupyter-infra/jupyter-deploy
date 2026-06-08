@@ -967,8 +967,10 @@ ci-e2e-cli-pull variant ci_dir="sandbox-ci":
 # For the bare track, the default workspace image has all deps (including boto3),
 # so the bare installation tests would fail. When no custom image is provided,
 # this recipe auto-builds a pypi bare image from the published PyPI version.
+# Variants: bare (CLI only), aws (CLI[aws]), aws-k8s (CLI[aws,k8s] + k8s tests).
 # Usage: just test-smoke-cli bare                              # auto-builds pypi bare image
 # Usage: just test-smoke-cli aws                               # uses default workspace image
+# Usage: just test-smoke-cli aws-k8s                           # aws + k8s installation tests
 # Usage: just test-smoke-cli bare my-image:tag                 # custom image (skip build)
 test-smoke-cli variant image="" log_level="INFO":
     #!/usr/bin/env bash
@@ -978,8 +980,10 @@ test-smoke-cli variant image="" log_level="INFO":
         FILTER='-k "not aws_installation and not k8s_installation"'
     elif [ "{{variant}}" = "aws" ]; then
         FILTER='-k "not bare_installation and not k8s_installation"'
+    elif [ "{{variant}}" = "aws-k8s" ]; then
+        FILTER='-k "not bare_installation"'
     else
-        echo "Error: variant must be 'bare' or 'aws', got '{{variant}}'"
+        echo "Error: variant must be 'bare', 'aws' or 'aws-k8s', got '{{variant}}'"
         exit 1
     fi
 
@@ -1017,6 +1021,18 @@ test-e2e-cli project_dir test_filter="" options="":
         CLI_OPTS="$CLI_OPTS,{{options}}"
     fi
     just test-e2e "{{project_dir}}" "{{test_filter}}" "$CLI_OPTS" tf-aws-ec2-base
+
+# Run EKS OIDC CLI functional tests (cli marker) against an existing deployment
+# Mirrors test-e2e-cli but targets the tf-aws-eks-oidc template.
+test-e2e-cli-eks project_dir test_filter="" options="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Prepend CLI-specific options, then append any user-supplied options
+    CLI_OPTS="skip-sync=true,marker=cli,image=jupyter-deploy-e2e-cli"
+    if [ -n "{{options}}" ]; then
+        CLI_OPTS="$CLI_OPTS,{{options}}"
+    fi
+    just test-e2e "{{project_dir}}" "{{test_filter}}" "$CLI_OPTS" tf-aws-eks-oidc
 
 # Generate .env for base template E2E tests
 # Two modes:

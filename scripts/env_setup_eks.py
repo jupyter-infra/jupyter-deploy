@@ -71,10 +71,14 @@ def _parse_options(options_str: str) -> list[str]:
 
 def normalize_list_value(value: str) -> str:
     """Normalize list values to JSON syntax."""
+    # Use compact separators (no space after comma): the generated .env is
+    # `source`d by the fresh-deploy workflow, and a space inside the value would
+    # make bash word-split the assignment (e.g. `KEY=["a", "b"]` runs `"b"]` as
+    # a command). Compact JSON keeps the whole list as a single token.
     try:
         parsed = ast.literal_eval(value)
         if isinstance(parsed, list):
-            return json.dumps(parsed)
+            return json.dumps(parsed, separators=(",", ":"))
     except (ValueError, SyntaxError):
         pass
     m = re.fullmatch(r"\[([^\]]*)\]", value.strip())
@@ -83,7 +87,7 @@ def normalize_list_value(value: str) -> str:
         if not inner:
             return "[]"
         items = [item.strip().strip('"').strip("'") for item in inner.split(",")]
-        return json.dumps(items)
+        return json.dumps(items, separators=(",", ":"))
     return value
 
 
@@ -223,7 +227,7 @@ def main() -> None:
     org = parsed_options.get("org", "")
     team = parsed_options.get("team", "")
     if "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS" not in option_env_vars:
-        allowed_teams = json.dumps([f"{org}:{team}"]) if org and team else "[]"
+        allowed_teams = json.dumps([f"{org}:{team}"], separators=(",", ":")) if org and team else "[]"
         set_env_var("JD_E2E_VAR_OAUTH_ALLOWED_TEAMS", allowed_teams)
         print(f"  JD_E2E_VAR_OAUTH_ALLOWED_TEAMS={allowed_teams}")
 

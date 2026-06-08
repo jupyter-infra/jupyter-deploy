@@ -16,11 +16,10 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
-from ci_helpers import run_jd_config
+from ci_helpers import run_jd, run_jd_config
 from ci_restore_base import get_subdomain_from_ci, list_project_ids
 
 
@@ -36,12 +35,7 @@ def find_eks_project_by_subdomain(subdomain: str, *, allow_missing: bool = False
         sys.exit(1)
 
     for project_id in eks_projects:
-        result = subprocess.run(
-            ["uv", "run", "jd", "projects", "show", project_id, "--store-type", "s3-only", "--text"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        result = run_jd(["projects", "show", project_id, "--store-type", "s3-only", "--text"], capture=True)
         for line in result.stdout.splitlines():
             m = re.match(r"^var:subdomain:\s*(.+)$", line)
             if m and m.group(1).strip() == subdomain:
@@ -60,10 +54,7 @@ def restore_project(project_id: str, project_dir: Path) -> None:
         shutil.rmtree(project_dir)
 
     print(f"Restoring project to {project_dir}...")
-    subprocess.run(
-        ["uv", "run", "jd", "init", str(project_dir), "--restore-project", project_id, "--store-type", "s3-only"],
-        check=True,
-    )
+    run_jd(["init", str(project_dir), "--restore-project", project_id, "--store-type", "s3-only"])
 
 
 def restore_secrets(project_dir: Path) -> None:

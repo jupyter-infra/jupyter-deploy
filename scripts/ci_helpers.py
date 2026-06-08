@@ -12,6 +12,45 @@ import boto3
 from mypy_boto3_secretsmanager import SecretsManagerClient
 from mypy_boto3_ssm import SSMClient
 
+# Backstop timeout for any single `jd` invocation. The canary job cap is 30
+# minutes; a stuck `jd` should fail well before that with a diagnostic rather
+# than silently eating the whole job budget.
+JD_TIMEOUT_SECONDS = 600
+
+
+def run_jd(
+    jd_args: list[str],
+    cwd: str | None = None,
+    capture: bool = False,
+    timeout: int = JD_TIMEOUT_SECONDS,
+) -> subprocess.CompletedProcess[str]:
+    """Run a `jd` CLI command with CI-safe defaults.
+
+    Closes stdin so a no-TTY interactive prompt fails fast instead of hanging,
+    enforces a timeout backstop, and surfaces stderr on failure or timeout.
+    """
+    cmd = ["uv", "run", "jd", *jd_args]
+    try:
+        return subprocess.run(
+            cmd,
+            cwd=cwd,
+            stdin=subprocess.DEVNULL,
+            capture_output=capture,
+            text=True,
+            check=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as e:
+        print(f"Error: `jd {' '.join(jd_args)}` timed out after {timeout}s", file=sys.stderr)
+        if e.stderr:
+            print(e.stderr if isinstance(e.stderr, str) else e.stderr.decode(), file=sys.stderr)
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        print(f"Error: `jd {' '.join(jd_args)}` failed with exit code {e.returncode}", file=sys.stderr)
+        if e.stderr:
+            print(e.stderr, file=sys.stderr)
+        sys.exit(1)
+
 
 def arn_region(arn: str) -> str:
     """Extract the AWS region (field 4) from an ARN."""
@@ -24,12 +63,7 @@ def arn_region(arn: str) -> str:
 
 def jd_output(output_name: str, ci_dir: str) -> str:
     """Read a jd output value as plain text."""
-    result = subprocess.run(
-        ["uv", "run", "jd", "show", "-o", output_name, "--text", "-p", ci_dir],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    result = run_jd(["show", "-o", output_name, "--text", "-p", ci_dir], capture=True)
     return result.stdout.strip().replace("\n", "")
 
 
@@ -68,8 +102,4 @@ def put_secret_value(arn: str, value: str) -> None:
 
 def run_jd_config(config_args: list[str], project_dir: str) -> None:
     """Run jd config with the given arguments in a project directory."""
-    subprocess.run(
-        ["uv", "run", "jd", "config", *config_args],
-        cwd=project_dir,
-        check=True,
-    )
+    run_jd(["config", *config_args], cwd=project_dir)

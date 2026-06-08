@@ -1,7 +1,8 @@
 # Template for CLI release E2E testing — aws track (with [aws] extra + base template).
 # Placeholders are replaced at build time by the Dockerfile:
-#   {{PKG_VERSION}}     — version to pin from EXTRA_INDEX_URL
-#   {{EXTRA_INDEX_URL}} — index for the package under test (default: Test PyPI)
+#   {{PKG_VERSION}}      — version to pin from EXTRA_INDEX_URL
+#   {{EXTRA_INDEX_URL}}  — index for the package under test (default: Test PyPI)
+#   {{INDEX_FORMAT_LINE}} — optional `format = "flat"` for a local wheel dir index
 [project]
 name = "e2e-cli-release-aws"
 version = "0.0.0"
@@ -17,6 +18,7 @@ dependencies = [
 name = "extra"
 url = "{{EXTRA_INDEX_URL}}"
 explicit = true
+{{INDEX_FORMAT_LINE}}
 
 [tool.uv.sources]
 jupyter-deploy = { index = "extra" }

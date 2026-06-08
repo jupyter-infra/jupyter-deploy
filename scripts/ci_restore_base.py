@@ -17,22 +17,16 @@ from __future__ import annotations
 import ast
 import re
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-from ci_helpers import run_jd_config
+from ci_helpers import run_jd, run_jd_config
 
 
 def get_subdomain_from_ci(ci_dir: str, oauth_app_num: str) -> str:
     """Read the expected subdomain from the CI OAuth app's homepage_url."""
-    result = subprocess.run(
-        ["uv", "run", "jd", "show", "-v", f"github_oauth_app_{oauth_app_num}", "--text", "-p", ci_dir],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    result = run_jd(["show", "-v", f"github_oauth_app_{oauth_app_num}", "--text", "-p", ci_dir], capture=True)
     app_meta = ast.literal_eval(result.stdout.strip())
     homepage_url = app_meta["homepage_url"]
     parsed = urlparse(homepage_url)
@@ -46,23 +40,13 @@ def get_subdomain_from_ci(ci_dir: str, oauth_app_num: str) -> str:
 
 def list_project_ids() -> list[str]:
     """List all project IDs in the S3 store."""
-    result = subprocess.run(
-        ["uv", "run", "jd", "projects", "list", "--store-type", "s3-only", "--text"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    result = run_jd(["projects", "list", "--store-type", "s3-only", "--text"], capture=True)
     return [line.strip() for line in result.stdout.strip().splitlines() if line.strip()]
 
 
 def get_project_subdomain(project_id: str) -> str | None:
     """Read the var:subdomain from a project's S3 metadata."""
-    result = subprocess.run(
-        ["uv", "run", "jd", "projects", "show", project_id, "--store-type", "s3-only", "--text"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    result = run_jd(["projects", "show", project_id, "--store-type", "s3-only", "--text"], capture=True)
     for line in result.stdout.splitlines():
         m = re.match(r"^var:subdomain:\s*(.+)$", line)
         if m:
@@ -104,10 +88,7 @@ def restore_project(project_id: str, project_dir: Path) -> None:
         shutil.rmtree(project_dir)
 
     print(f"Restoring project to {project_dir}...")
-    subprocess.run(
-        ["uv", "run", "jd", "init", str(project_dir), "--restore-project", project_id, "--store-type", "s3-only"],
-        check=True,
-    )
+    run_jd(["init", str(project_dir), "--restore-project", project_id, "--store-type", "s3-only"])
 
 
 def restore_secrets(project_dir: Path) -> None:

@@ -8,21 +8,15 @@ Usage: scripts/ci_restore.py <ci-dir>
 from __future__ import annotations
 
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
-from ci_helpers import run_jd_config
+from ci_helpers import run_jd, run_jd_config
 
 
 def discover_project_id() -> str:
     """Discover the CI project ID from S3 store."""
-    result = subprocess.run(
-        ["uv", "run", "jd", "projects", "list", "--store-type", "s3-only", "--text"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    result = run_jd(["projects", "list", "--store-type", "s3-only", "--text"], capture=True)
     matches = [line for line in result.stdout.strip().splitlines() if line.startswith("tf-aws-iam-ci-")]
 
     if not matches:
@@ -44,10 +38,7 @@ def restore_project(project_id: str, ci_dir: Path) -> None:
         shutil.rmtree(ci_dir)
 
     print(f"Restoring CI project to {ci_dir}...")
-    subprocess.run(
-        ["uv", "run", "jd", "init", str(ci_dir), "--restore-project", project_id, "--store-type", "s3-only"],
-        check=True,
-    )
+    run_jd(["init", str(ci_dir), "--restore-project", project_id, "--store-type", "s3-only"])
 
 
 def restore_secrets_and_configure(ci_dir: Path) -> None:

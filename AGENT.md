@@ -137,9 +137,18 @@ Unit tests are located in `libs/<package-name>/tests/unit`
 ## Writing and running smoke tests
 Smoke tests live in `libs/jupyter-deploy/tests/e2e/`. No browser interaction, no deployed template — pure CLI validation.
 They run inside a container built from `.github/e2e-cli/`.
+
+Three variants, each installing a different dependency set and running a matching test track:
+- **bare** — CLI only; tests validate that `boto3` is NOT installed
+- **aws** — `jupyter-deploy[aws]` + base template; runs the aws installation tests
+- **aws-k8s** — `jupyter-deploy[aws,k8s]` + base template; runs the aws AND k8s installation tests
+
+Examples:
 - **aws** (workspace code): `just ci-e2e-cli-build && just test-smoke-cli aws jupyter-deploy-e2e-cli:latest`
 - **bare** (published PyPI): `just test-smoke-cli bare` — auto-builds a pypi image; tests validate that `boto3` is NOT installed
 - **bare** (from Test PyPI): `just ci-e2e-cli-build "" "--build-arg INSTALL_MODE=pypi --build-arg INSTALL_VARIANT=bare --build-arg PKG_VERSION=<version> --build-arg EXTRA_INDEX_URL=https://test.pypi.org/simple/" && just test-smoke-cli bare jupyter-deploy-e2e-cli:latest`
+
+**Pre-publish gate:** `release-cli.yml` runs all three smoke variants from the locally-built wheel (via a `file://` flat uv index, `INDEX_FORMAT=flat`) BEFORE publishing to Test PyPI. This catches packaging-metadata, missing-file, and test-selector regressions without burning a version number. The post-publish gate (`e2e-cli.yml`) re-runs the same three variants against the actual Test PyPI install.
 
 
 ## Writing E2E tests

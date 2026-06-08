@@ -59,9 +59,53 @@ jobs:
     with:
       working-directory: libs/jupyter-deploy
 
+  prepublish-smoke:
+    name: "Pre-publish smoke (${{ matrix.variant }})"
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [bare, aws, aws-k8s]
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: '3.13'
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      # Build the release image from the locally-built wheel (flat file index),
+      # exactly as users install it (INSTALL_MODE=pypi) but without any publish.
+      # Catches packaging-metadata, missing-file, and test-selector regressions
+      # before a version is burned on Test PyPI.
+      - name: Build CLI E2E image from local wheel
+        run: |
+          BUILD_ARGS="--build-arg INSTALL_MODE=pypi"
+          BUILD_ARGS="$BUILD_ARGS --build-arg INSTALL_VARIANT=${{ matrix.variant }}"
+          BUILD_ARGS="$BUILD_ARGS --build-arg PKG_VERSION=${{ env.VERSION }}"
+          BUILD_ARGS="$BUILD_ARGS --build-arg EXTRA_INDEX_URL=file:///workspace/dist"
+          BUILD_ARGS="$BUILD_ARGS --build-arg INDEX_FORMAT=flat"
+          just ci-e2e-cli-build "" "$BUILD_ARGS"
+
+      - name: Run smoke tests
+        run: just test-smoke-cli ${{ matrix.variant }} jupyter-deploy-e2e-cli:latest
+
   test-pypi-publish:
     name: Publish to Test PyPI
-    needs: [test, build]
+    needs: [test, build, prepublish-smoke]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -98,11 +142,24 @@ jobs:
       - name: Setup UV
         uses: astral-sh/setup-uv@v3
 
+      - name: Wait for Test PyPI availability
+        run: |
+          url="https://test.pypi.org/pypi/${PKG_NAME}/${VERSION}/json"
+          echo "Polling ${url}"
+          for i in $(seq 1 20); do
+            if curl -fsS -o /dev/null "${url}"; then
+              echo "${PKG_NAME}==${VERSION} is available on Test PyPI"
+              exit 0
+            fi
+            echo "Attempt ${i}/20: not yet available, retrying in 15s..."
+            sleep 15
+          done
+          echo "::error::${PKG_NAME}==${VERSION} did not appear on Test PyPI within 5 minutes"
+          exit 1
+
       - name: Test installation from Test PyPI
         run: |
           uv venv
-          # Wait a bit for the package to be available
-          sleep 60
           uv pip install \
             --extra-index-url https://test.pypi.org/simple/ \
             --index-strategy unsafe-best-match \

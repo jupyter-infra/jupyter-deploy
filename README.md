@@ -5,6 +5,7 @@
 [![Canary](https://img.shields.io/github/actions/workflow/status/jupyter-infra/jupyter-deploy/e2e-base-canary.yml?label=canary)](https://github.com/jupyter-infra/jupyter-deploy/actions/workflows/e2e-base-canary.yml)
 [![PyPI - jupyter-deploy](https://img.shields.io/pypi/v/jupyter-deploy?label=jupyter-deploy)](https://pypi.org/project/jupyter-deploy/)
 [![PyPI - base template](https://img.shields.io/pypi/v/jupyter-deploy-tf-aws-ec2-base?label=base-template)](https://pypi.org/project/jupyter-deploy-tf-aws-ec2-base/)
+[![PyPI - eks-oidc template](https://img.shields.io/pypi/v/jupyter-deploy-tf-aws-eks-oidc?label=eks-oidc-template)](https://pypi.org/project/jupyter-deploy-tf-aws-eks-oidc/)
 [![PyPI - pytest plugin](https://img.shields.io/pypi/v/pytest-jupyter-deploy?label=pytest-plugin)](https://pypi.org/project/pytest-jupyter-deploy/)
 
 An open-source command line interface (CLI) to deploy interactive applications to the Cloud.

@@ -96,11 +96,15 @@ def normalize_list_value(value: str) -> str:
     - Unquoted brackets from shell (e.g. [a, b] -> ["a", "b"])
     - Already valid JSON is returned as-is
     """
+    # Use compact separators (no space after comma) so the value survives a bash
+    # `source .env`: a space would make bash word-split the assignment (e.g.
+    # `KEY=["a", "b"]` runs `"b"]` as a command). No base workflow sources .env
+    # today, but keeping this aligned with env_setup_eks.py avoids that footgun.
     # Try Python literal first (handles quoted strings)
     try:
         parsed = ast.literal_eval(value)
         if isinstance(parsed, list):
-            return json.dumps(parsed)
+            return json.dumps(parsed, separators=(",", ":"))
     except (ValueError, SyntaxError):
         pass
     # Handle unquoted bracket lists (shell strips quotes)
@@ -111,7 +115,7 @@ def normalize_list_value(value: str) -> str:
         if not inner:
             return "[]"
         items = [item.strip().strip('"').strip("'") for item in inner.split(",")]
-        return json.dumps(items)
+        return json.dumps(items, separators=(",", ":"))
     return value
 
 
@@ -169,7 +173,7 @@ def infer_deployment_vars(ci_dir: str, oauth_app_num: str) -> dict[str, str]:
         "JD_E2E_VAR_EMAIL": bot_email,
         "JD_E2E_VAR_OAUTH_ALLOWED_ORG": "",
         "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS": "[]",
-        "JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES": json.dumps([bot_username]),
+        "JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES": json.dumps([bot_username], separators=(",", ":")),
     }
 
 
@@ -264,7 +268,7 @@ def main() -> None:
         print(f"  JD_E2E_USER={bot_username} (from bot account)")
 
     if "JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES" not in option_env_vars:
-        allowed_usernames = json.dumps([bot_username])
+        allowed_usernames = json.dumps([bot_username], separators=(",", ":"))
         set_env_var("JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES", allowed_usernames)
         print(f"  JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES={allowed_usernames} (from bot account)")
 

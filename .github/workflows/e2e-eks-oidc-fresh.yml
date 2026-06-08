@@ -161,6 +161,13 @@ jobs:
         id: install-just
         uses: ./.github/actions/install-just
 
+      # `jd init` discovers templates via entry points, which only register when
+      # the template package is installed. The eks-oidc package is a workspace
+      # member but not a dependency of the root, so a plain `uv run` won't install
+      # it — sync all workspace packages to register the aws:eks:oidc template.
+      - name: Sync workspace (install template packages)
+        run: uv sync --all-packages
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:

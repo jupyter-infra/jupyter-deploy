@@ -118,7 +118,56 @@ jobs:
       - name: Push to ECR
         run: just ci-e2e-cli-push aws
 
-  # --- Smoke tests (parallel: bare + aws) ---
+  build-image-aws-k8s:
+    name: "Build image (aws-k8s)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Pull previous image for cache
+        run: just ci-e2e-cli-pull aws-k8s || true
+
+      - name: Build CLI E2E image (aws-k8s)
+        run: |
+          ECR_URL=$(just ci-e2e-base-ecr-url 2)
+          BUILD_ARGS="--build-arg INSTALL_MODE=pypi"
+          BUILD_ARGS="$BUILD_ARGS --build-arg INSTALL_VARIANT=aws-k8s"
+          BUILD_ARGS="$BUILD_ARGS --build-arg PKG_VERSION=${{ inputs.pkg-version }}"
+          just ci-e2e-cli-build "$ECR_URL:jd-aws-k8s" "$BUILD_ARGS"
+
+      - name: Push to ECR
+        run: just ci-e2e-cli-push aws-k8s
+
+  # --- Smoke tests (parallel: bare + aws + aws-k8s) ---
 
   smoke-bare:
     name: "Smoke tests (bare)"
@@ -204,16 +253,58 @@ jobs:
       - name: Run aws smoke tests
         run: just test-smoke-cli aws jupyter-deploy-e2e-cli:latest
 
+  smoke-aws-k8s:
+    name: "Smoke tests (aws-k8s)"
+    needs: [build-image-aws-k8s]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Pull aws-k8s image
+        run: just ci-e2e-cli-pull aws-k8s
+
+      - name: Run aws-k8s smoke tests
+        run: just test-smoke-cli aws-k8s jupyter-deploy-e2e-cli:latest
+
   # --- Gate: smoke tests must pass before functional tests ---
 
   smoke-gate:
     name: "Smoke gate"
-    needs: [smoke-bare, smoke-aws]
+    needs: [smoke-bare, smoke-aws, smoke-aws-k8s]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
       - name: All smoke tests passed
-        run: echo "Smoke tests passed for both bare and aws tracks"
+        run: echo "Smoke tests passed for bare, aws and aws-k8s tracks"
 
   # --- Functional tests (aws image against app #2 deployment) ---
 
@@ -267,6 +358,60 @@ jobs:
 
       - name: Run CLI functional tests
         run: just test-e2e-cli sandbox-e2e
+
+  # --- EKS functional tests (aws-k8s image against app #5 deployment) ---
+  # Runs in parallel with aws-functional-test — independent deployment.
+
+  eks-functional-test:
+    name: "EKS functional test (cli marker)"
+    needs: [smoke-gate, build-image-aws-k8s]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Restore EKS project (app 5)
+        run: just ci-restore-eks 5 sandbox-ci sandbox-e2e
+
+      # yamllint disable-line rule:line-length
+      - name: Generate .env
+        run: >-
+          just env-setup-eks sandbox-e2e sandbox-ci 5
+          "org=jupyter-infra,team=jupyter-deploy-e2e-app-access,rbac-team=jupyter-deploy-e2e-app-access,admin-roles=[\"Admin\",\"DeployRole\",\"jupyter-infra-ci-e2e-6a3e2625\"]"
+
+      - name: Pull aws-k8s image
+        run: just ci-e2e-cli-pull aws-k8s
+
+      - name: Run EKS CLI functional tests
+        run: just test-e2e-cli-eks sandbox-e2e
 
   # No cleanup job needed — all cli-marked tests are read-only (terraform state
   # queries, local history reads, config in temp dirs). None start the host.

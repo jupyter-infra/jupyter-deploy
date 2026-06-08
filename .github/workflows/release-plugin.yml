@@ -98,11 +98,24 @@ jobs:
       - name: Setup UV
         uses: astral-sh/setup-uv@v3
 
+      - name: Wait for Test PyPI availability
+        run: |
+          url="https://test.pypi.org/pypi/${PKG_NAME}/${VERSION}/json"
+          echo "Polling ${url}"
+          for i in $(seq 1 20); do
+            if curl -fsS -o /dev/null "${url}"; then
+              echo "${PKG_NAME}==${VERSION} is available on Test PyPI"
+              exit 0
+            fi
+            echo "Attempt ${i}/20: not yet available, retrying in 15s..."
+            sleep 15
+          done
+          echo "::error::${PKG_NAME}==${VERSION} did not appear on Test PyPI within 5 minutes"
+          exit 1
+
       - name: Test installation from Test PyPI
         run: |
           uv venv
-          # Wait a bit for the package to be available
-          sleep 60
           uv pip install \
             --extra-index-url https://test.pypi.org/simple/ \
             --index-strategy unsafe-best-match \
