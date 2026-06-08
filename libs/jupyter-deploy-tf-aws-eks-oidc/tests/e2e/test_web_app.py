@@ -1,14 +1,61 @@
 """E2E tests for the web UI on the EKS OIDC template.
 
+Tests web UI page loads, workspace CRUD via the browser, and access control.
 The web UI is gated by oauth2-proxy (Dex OAuth flow).
 Uses the dex_oauth_app fixture to authenticate through oauth2-proxy → Dex → GitHub.
+
+Auth model:
+- "User A" = the GitHub bot user (github:<JD_E2E_USER>) — same identity as the browser session
 """
 
+import subprocess
+from collections.abc import Generator
+
+import pytest
 from pytest_jupyter_deploy.oauth2_proxy.dex import DexGitHubOAuth2ProxyApplication
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 
+pytestmark = pytest.mark.usefixtures("cluster_login")
 
-@skip_if_testvars_not_set(["JD_E2E_USER"])
+NAMESPACE = "default"
+
+
+@pytest.fixture()
+def create_workspace_via_page(
+    getting_started_url: str,
+    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
+) -> Generator[str, None, None]:
+    """Create a workspace through the UI and yield its name. Deletes on teardown."""
+    dex_oauth_app.ensure_authenticated()
+
+    base_url = getting_started_url.rstrip("/")
+    page = dex_oauth_app.page
+
+    page.goto(base_url + "/create", wait_until="load", timeout=60000)
+
+    name_field = page.get_by_role("textbox", name="Name")
+    name_field.wait_for(state="visible", timeout=10000)
+    workspace_name = name_field.input_value()
+    assert workspace_name != "", "Expected auto-generated workspace name"
+
+    create_button = page.get_by_role("button", name="Create Workspace")
+    create_button.click()
+
+    page.wait_for_url(f"**/{workspace_name}**", timeout=30000)
+    page.get_by_text(workspace_name).wait_for(state="visible", timeout=10000)
+
+    yield workspace_name
+
+    subprocess.run(
+        ["kubectl", "delete", "workspace", workspace_name, "-n", NAMESPACE, "--ignore-not-found"],
+        capture_output=True,
+    )
+
+
+# ── Page load tests ──────────────────────────────────────────────────────────
+
+
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
 def test_web_app_loads_after_oauth(
     getting_started_url: str,
     dex_oauth_app: DexGitHubOAuth2ProxyApplication,
@@ -16,16 +63,14 @@ def test_web_app_loads_after_oauth(
     """Verify the web UI loads successfully behind OAuth."""
     dex_oauth_app.ensure_authenticated()
 
-    # Navigate to root — should show the workspace list page
     base_url = getting_started_url.rstrip("/")
     dex_oauth_app.page.goto(base_url + "/", wait_until="load", timeout=60000)
 
-    # The UI should render the workspace list heading
     heading = dex_oauth_app.page.get_by_role("heading", name="Workspaces")
     assert heading.is_visible(timeout=10000), "Expected 'Workspaces' heading to be visible"
 
 
-@skip_if_testvars_not_set(["JD_E2E_USER"])
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
 def test_web_app_health_endpoint(
     getting_started_url: str,
     dex_oauth_app: DexGitHubOAuth2ProxyApplication,
@@ -40,7 +85,7 @@ def test_web_app_health_endpoint(
     assert response.status == 200
 
 
-@skip_if_testvars_not_set(["JD_E2E_USER"])
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
 def test_web_app_kubectl_page(
     getting_started_url: str,
     dex_oauth_app: DexGitHubOAuth2ProxyApplication,
@@ -55,7 +100,7 @@ def test_web_app_kubectl_page(
     assert heading.is_visible(timeout=10000), "Expected 'Kubectl Access' heading to be visible"
 
 
-@skip_if_testvars_not_set(["JD_E2E_USER"])
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
 def test_web_app_create_page(
     getting_started_url: str,
     dex_oauth_app: DexGitHubOAuth2ProxyApplication,
@@ -69,6 +114,120 @@ def test_web_app_create_page(
     heading = dex_oauth_app.page.get_by_role("heading", name="Create Workspace")
     assert heading.is_visible(timeout=10000), "Expected 'Create Workspace' heading to be visible"
 
-    # Verify the name field has an auto-generated value (not empty)
     name_field = dex_oauth_app.page.get_by_role("textbox", name="Name")
     assert name_field.input_value() != "", "Expected Name field to have auto-generated value"
+
+
+# ── Workspace CRUD ───────────────────────────────────────────────────────────
+
+
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
+def test_create_workspace(
+    getting_started_url: str,
+    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
+    create_workspace_via_page: str,
+) -> None:
+    """Create a workspace through the UI and verify it appears in the list."""
+    workspace_name = create_workspace_via_page
+
+    base_url = getting_started_url.rstrip("/")
+    page = dex_oauth_app.page
+
+    # Navigate to workspace list and verify the workspace shows up
+    page.goto(base_url + "/", wait_until="load", timeout=60000)
+    page.get_by_role("heading", name="Workspaces").wait_for(state="visible", timeout=10000)
+    page.get_by_text(workspace_name).wait_for(state="visible", timeout=10000)
+
+
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
+def test_workspace_detail_page(
+    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
+    create_workspace_via_page: str,
+) -> None:
+    """Create a workspace and verify the detail page shows status and actions."""
+    workspace_name = create_workspace_via_page
+    page = dex_oauth_app.page
+
+    # Detail page should show workspace name (already navigated by fixture)
+    page.get_by_text(workspace_name).wait_for(state="visible", timeout=10000)
+
+    # Should show a status indicator (Starting or Running)
+    status = page.get_by_text("Starting").or_(page.get_by_text("Running"))
+    status.first.wait_for(state="visible", timeout=30000)
+
+
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
+def test_stop_workspace(
+    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
+    create_workspace_via_page: str,
+) -> None:
+    """Create a workspace, wait for Running, then stop it."""
+    _ = create_workspace_via_page
+    page = dex_oauth_app.page
+
+    # Wait for workspace to reach Running
+    page.get_by_text("Running").wait_for(state="visible", timeout=300000)
+
+    # Click stop button
+    page.get_by_role("button", name="Stop").click()
+
+    # Confirm the action in the dialog
+    page.get_by_role("button", name="Confirm").or_(
+        page.get_by_role("button", name="Stop")
+    ).last.click(timeout=5000)
+
+    # Verify workspace transitions to Stopped
+    page.get_by_text("Stopped").wait_for(state="visible", timeout=180000)
+
+
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
+def test_start_stopped_workspace(
+    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
+    create_workspace_via_page: str,
+) -> None:
+    """Create a workspace, stop it, then restart it."""
+    _ = create_workspace_via_page
+    page = dex_oauth_app.page
+
+    # Wait for Running, then stop
+    page.get_by_text("Running").wait_for(state="visible", timeout=300000)
+    page.get_by_role("button", name="Stop").click()
+
+    page.get_by_role("button", name="Confirm").or_(
+        page.get_by_role("button", name="Stop")
+    ).last.click(timeout=5000)
+
+    page.get_by_text("Stopped").wait_for(state="visible", timeout=180000)
+
+    # Restart the workspace
+    page.get_by_role("button", name="Start").click()
+
+    # Verify workspace transitions back to Running
+    page.get_by_text("Running").wait_for(state="visible", timeout=300000)
+
+
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
+def test_delete_workspace(
+    getting_started_url: str,
+    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
+    create_workspace_via_page: str,
+) -> None:
+    """Create a workspace and delete it through the UI."""
+    workspace_name = create_workspace_via_page
+    page = dex_oauth_app.page
+
+    # Wait for workspace to be Running
+    page.get_by_text("Running").wait_for(state="visible", timeout=300000)
+
+    # Click delete button
+    page.get_by_role("button", name="Delete").click()
+
+    # Confirm deletion in the dialog
+    page.get_by_role("button", name="Delete").last.click(timeout=5000)
+
+    # Should redirect to workspace list
+    base_url = getting_started_url.rstrip("/")
+    page.wait_for_url(base_url + "/", timeout=30000)
+
+    # Verify workspace is no longer in the list
+    page.get_by_text(workspace_name).wait_for(state="hidden", timeout=30000)
