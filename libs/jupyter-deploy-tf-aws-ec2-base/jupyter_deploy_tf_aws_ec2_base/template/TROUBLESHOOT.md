@@ -2,4 +2,40 @@
 
 This guide details how to investigate and resolve common issues.
 
-To be added.
+## Service quota limits
+
+`jd up` can fail when an AWS service quota is exhausted. Two common cases:
+
+- **EC2 vCPUs** — `RunInstances` fails with `VcpuLimitExceeded`. New accounts
+  start with a low On-Demand vCPU limit per region, and `0` for accelerated
+  families (GPU/Neuron), so this often blocks a first deployment. Quotas are
+  measured in vCPUs, not instance counts.
+- **Elastic IPs** — `AllocateAddress` fails with `AddressLimitExceeded`. The
+  template uses one EIP per instance; the per-region limit defaults to 5.
+
+Relevant quota codes (service code `ec2`):
+
+| Quota code | Quota |
+|---|---|
+| `L-1216C47A` | Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances |
+| `L-DB2E81BA` | Running On-Demand G and VT instances (most GPU types) |
+| `L-417A185B` | Running On-Demand P instances |
+| `L-1945791B` / `L-2C3B7624` | Running On-Demand Inf / Trn instances (Neuron) |
+| `L-0263D0A3` | EC2-VPC Elastic IPs |
+
+To resolve:
+
+- Pick a smaller `instance_type`, or free EIPs by destroying stale deployments
+  (`jd down --path <project-dir>`), then re-run `jd config` and `jd up`.
+- Or request a higher limit (replace the quota code, value, and region):
+
+  ```bash
+  aws service-quotas request-service-quota-increase \
+    --service-code ec2 --quota-code L-1216C47A \
+    --desired-value <value> --region <region>
+  ```
+
+  Check the current value with `get-service-quota` and track the request with
+  `list-requested-service-quota-change-history-by-quota` (same `--service-code`
+  and `--quota-code`). Increases may require AWS support review and are not
+  instantaneous. The AWS Service Quotas console offers the same actions.
