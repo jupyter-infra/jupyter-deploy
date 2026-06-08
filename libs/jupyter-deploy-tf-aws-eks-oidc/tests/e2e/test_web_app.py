@@ -172,9 +172,7 @@ def test_stop_workspace(
     page.get_by_role("button", name="Stop").click()
 
     # Confirm the action in the dialog
-    page.get_by_role("button", name="Confirm").or_(
-        page.get_by_role("button", name="Stop")
-    ).last.click(timeout=5000)
+    page.get_by_role("button", name="Confirm").or_(page.get_by_role("button", name="Stop")).last.click(timeout=5000)
 
     # Verify workspace transitions to Stopped
     page.get_by_text("Stopped").wait_for(state="visible", timeout=180000)
@@ -193,9 +191,7 @@ def test_start_stopped_workspace(
     page.get_by_text("Running").wait_for(state="visible", timeout=300000)
     page.get_by_role("button", name="Stop").click()
 
-    page.get_by_role("button", name="Confirm").or_(
-        page.get_by_role("button", name="Stop")
-    ).last.click(timeout=5000)
+    page.get_by_role("button", name="Confirm").or_(page.get_by_role("button", name="Stop")).last.click(timeout=5000)
 
     page.get_by_text("Stopped").wait_for(state="visible", timeout=180000)
 
