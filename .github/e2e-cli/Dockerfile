@@ -34,9 +34,10 @@ USER root
 COPY --chown=testuser:testuser pyproject.toml /workspace/
 COPY --chown=testuser:testuser libs/jupyter-deploy/pyproject.toml /workspace/libs/jupyter-deploy/
 COPY --chown=testuser:testuser libs/jupyter-deploy-tf-aws-ec2-base/pyproject.toml /workspace/libs/jupyter-deploy-tf-aws-ec2-base/
+COPY --chown=testuser:testuser libs/jupyter-deploy-tf-aws-eks-oidc/pyproject.toml /workspace/libs/jupyter-deploy-tf-aws-eks-oidc/
 COPY --chown=testuser:testuser libs/jupyter-infra-tf-aws-iam-ci/pyproject.toml /workspace/libs/jupyter-infra-tf-aws-iam-ci/
 COPY --chown=testuser:testuser libs/pytest-jupyter-deploy/pyproject.toml /workspace/libs/pytest-jupyter-deploy/
-RUN for lib in jupyter-deploy jupyter-deploy-tf-aws-ec2-base jupyter-infra-tf-aws-iam-ci pytest-jupyter-deploy; do \
+RUN for lib in jupyter-deploy jupyter-deploy-tf-aws-ec2-base jupyter-deploy-tf-aws-eks-oidc jupyter-infra-tf-aws-iam-ci pytest-jupyter-deploy; do \
         touch /workspace/libs/$lib/LICENSE /workspace/libs/$lib/README.md; \
     done && chown -R testuser /workspace/libs
 USER testuser
@@ -61,8 +62,9 @@ COPY --chown=testuser:testuser .github/e2e-cli/pyproject.aws-k8s.toml /workspace
 # Workspace mode: re-run uv sync to register editable packages.
 # Release mode: render template, uv sync (resolves the CLI from the configured index),
 # then install Playwright.
-#   bare variant: CLI from Test PyPI, plugin from workspace, no AWS deps
-#   aws variant:  CLI[aws] from Test PyPI, base template + plugin from workspace
+#   bare variant:    CLI from Test PyPI, plugin from workspace, no AWS deps
+#   aws variant:     CLI[aws] from Test PyPI, base template + plugin from workspace
+#   aws-k8s variant: CLI[aws,k8s] from Test PyPI, base + EKS OIDC templates + plugin from workspace
 RUN if [ "$INSTALL_MODE" = "pypi" ]; then \
         cd /workspace && \
         rm -rf .venv && \
@@ -76,6 +78,7 @@ RUN if [ "$INSTALL_MODE" = "pypi" ]; then \
         # Strip workspace sources — uv errors on them outside workspace context
         sed -i '/\[tool\.uv\.sources\.jupyter-deploy\]/,+1d' libs/pytest-jupyter-deploy/pyproject.toml && \
         sed -i '/\[tool\.uv\.sources\.\(jupyter-deploy\|pytest-jupyter-deploy\)\]/,+1d' libs/jupyter-deploy-tf-aws-ec2-base/pyproject.toml && \
+        sed -i '/\[tool\.uv\.sources\.\(jupyter-deploy\|pytest-jupyter-deploy\)\]/,+1d' libs/jupyter-deploy-tf-aws-eks-oidc/pyproject.toml && \
         uv sync && \
         .venv/bin/playwright install firefox && \
         ln -sf ~/.cache/ms-playwright/firefox-*/firefox/firefox ~/.local/bin/firefox; \

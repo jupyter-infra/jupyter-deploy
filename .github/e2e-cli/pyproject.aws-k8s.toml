@@ -1,4 +1,4 @@
-# Template for CLI release E2E testing — aws-k8s track ([aws,k8s] extras + base template).
+# Template for CLI release E2E testing — aws-k8s track ([aws,k8s] extras + base + EKS OIDC templates).
 # Placeholders are replaced at build time by the Dockerfile:
 #   {{PKG_VERSION}}      — version to pin from EXTRA_INDEX_URL
 #   {{EXTRA_INDEX_URL}}  — index for the package under test (default: Test PyPI)
@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "jupyter-deploy[aws,k8s]=={{PKG_VERSION}}",
     "jupyter-deploy-tf-aws-ec2-base",
+    "jupyter-deploy-tf-aws-eks-oidc",
     "pytest-jupyter-deploy[ui]",
     "pytest-cov",
 ]
@@ -24,3 +25,4 @@ explicit = true
 jupyter-deploy = { index = "extra" }
 pytest-jupyter-deploy = { path = "libs/pytest-jupyter-deploy", editable = true }
 jupyter-deploy-tf-aws-ec2-base = { path = "libs/jupyter-deploy-tf-aws-ec2-base", editable = true }
+jupyter-deploy-tf-aws-eks-oidc = { path = "libs/jupyter-deploy-tf-aws-eks-oidc", editable = true }
