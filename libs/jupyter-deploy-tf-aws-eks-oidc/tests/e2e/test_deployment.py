@@ -74,17 +74,15 @@ def test_health_all_pass_after_deployment(e2e_deployment: EndToEndDeployment) ->
 @pytest.mark.order(ORDER_DEPLOYMENT + 3)
 @pytest.mark.full_deployment
 @skip_if_testvars_not_set(["JD_E2E_USER"])
-def test_getting_started_accessible_after_deployment(
+def test_web_app_accessible_after_deployment(
     dex_oauth_app: DexGitHubOAuth2ProxyApplication,
     getting_started_url: str,
 ) -> None:
-    """Getting-started page is accessible via OAuth after deploy."""
+    """Web UI is accessible via OAuth after deploy."""
     dex_oauth_app.ensure_authenticated()
     dex_oauth_app.page.goto(getting_started_url, wait_until="load", timeout=60000)
     content = dex_oauth_app.page.content()
-    assert "kubeconfig" in content.lower() or "get-started" in content.lower(), (
-        f"Expected getting-started content, got:\n{content[:500]}"
-    )
+    assert "workspaces" in content.lower(), f"Expected web UI content, got:\n{content[:500]}"
 
 
 @pytest.mark.order(ORDER_DEPLOYMENT + 4)
