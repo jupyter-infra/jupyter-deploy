@@ -18,6 +18,7 @@ MANDATORY_TEMPLATE_STRPATHS: list[str] = [
     "engine/variables.tf",
     "engine/waiter.tf",
     "engine/local-await-router.sh.tftpl",
+    "engine/local-destroy-workspaces.sh.tftpl",
     "charts/workspace-defaults/Chart.yaml",
     "charts/console/Chart.yaml",
     "charts/github-rbac/Chart.yaml",

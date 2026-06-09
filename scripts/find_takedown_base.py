@@ -73,8 +73,11 @@ def main() -> None:
 
     restore_project(project_id, project_dir)
 
+    # Takedown uses destroy.tfvars and never reads the restored secret value, so a
+    # missing secret (e.g. a prior destroy was interrupted after deleting it) must
+    # not block the teardown.
     print("\nRestoring secrets from cloud provider...")
-    restore_secrets(project_dir)
+    restore_secrets(project_dir, required=False)
 
     takedown_project(project_dir)
     delete_project_from_store(project_id)
