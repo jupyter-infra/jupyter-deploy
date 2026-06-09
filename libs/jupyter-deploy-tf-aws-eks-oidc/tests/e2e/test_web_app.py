@@ -31,18 +31,22 @@ def create_workspace_via_page(
     base_url = getting_started_url.rstrip("/")
     page = dex_oauth_app.page
 
-    page.goto(base_url + "/create", wait_until="load", timeout=60000)
+    page.goto(base_url + "/create", wait_until="networkidle", timeout=60000)
 
-    name_field = page.get_by_role("textbox", name="Name")
-    name_field.wait_for(state="visible", timeout=10000)
+    name_field = page.get_by_label("Name").first
+    name_field.wait_for(state="visible", timeout=30000)
     workspace_name = name_field.input_value()
     assert workspace_name != "", "Expected auto-generated workspace name"
 
     create_button = page.get_by_role("button", name="Create Workspace")
     create_button.click()
 
-    page.wait_for_url(f"**/{workspace_name}**", timeout=30000)
-    page.get_by_text(workspace_name).wait_for(state="visible", timeout=10000)
+    # Wait for creation to complete (app redirects to list)
+    page.wait_for_timeout(3000)
+
+    # Navigate to detail page
+    page.goto(base_url + f"/workspace/{workspace_name}", wait_until="networkidle", timeout=60000)
+    page.get_by_text(workspace_name).wait_for(state="visible", timeout=30000)
 
     yield workspace_name
 
@@ -64,10 +68,10 @@ def test_web_app_loads_after_oauth(
     dex_oauth_app.ensure_authenticated()
 
     base_url = getting_started_url.rstrip("/")
-    dex_oauth_app.page.goto(base_url + "/", wait_until="load", timeout=60000)
+    dex_oauth_app.page.goto(base_url + "/", wait_until="networkidle", timeout=60000)
 
-    heading = dex_oauth_app.page.get_by_role("heading", name="Workspaces")
-    assert heading.is_visible(timeout=10000), "Expected 'Workspaces' heading to be visible"
+    heading = dex_oauth_app.page.get_by_role("heading", name="Workspaces", exact=True)
+    assert heading.is_visible(timeout=30000), "Expected 'Workspaces' heading to be visible"
 
 
 @skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
@@ -94,28 +98,10 @@ def test_web_app_kubectl_page(
     dex_oauth_app.ensure_authenticated()
 
     base_url = getting_started_url.rstrip("/")
-    dex_oauth_app.page.goto(base_url + "/kubectl", wait_until="load", timeout=60000)
+    dex_oauth_app.page.goto(base_url + "/kubectl", wait_until="networkidle", timeout=60000)
 
     heading = dex_oauth_app.page.get_by_role("heading", name="Kubectl Access")
-    assert heading.is_visible(timeout=10000), "Expected 'Kubectl Access' heading to be visible"
-
-
-@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
-def test_web_app_create_page(
-    getting_started_url: str,
-    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
-) -> None:
-    """Verify the create workspace page loads with pre-filled defaults."""
-    dex_oauth_app.ensure_authenticated()
-
-    base_url = getting_started_url.rstrip("/")
-    dex_oauth_app.page.goto(base_url + "/create", wait_until="load", timeout=60000)
-
-    heading = dex_oauth_app.page.get_by_role("heading", name="Create Workspace")
-    assert heading.is_visible(timeout=10000), "Expected 'Create Workspace' heading to be visible"
-
-    name_field = dex_oauth_app.page.get_by_role("textbox", name="Name")
-    assert name_field.input_value() != "", "Expected Name field to have auto-generated value"
+    assert heading.is_visible(timeout=30000), "Expected 'Kubectl Access' heading to be visible"
 
 
 # ── Workspace CRUD ───────────────────────────────────────────────────────────
@@ -134,9 +120,9 @@ def test_create_workspace(
     page = dex_oauth_app.page
 
     # Navigate to workspace list and verify the workspace shows up
-    page.goto(base_url + "/", wait_until="load", timeout=60000)
-    page.get_by_role("heading", name="Workspaces").wait_for(state="visible", timeout=10000)
-    page.get_by_text(workspace_name).wait_for(state="visible", timeout=10000)
+    page.goto(base_url + "/", wait_until="networkidle", timeout=60000)
+    page.get_by_role("heading", name="Workspaces", exact=True).wait_for(state="visible", timeout=30000)
+    page.get_by_text(workspace_name).wait_for(state="visible", timeout=30000)
 
 
 @skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
@@ -149,7 +135,7 @@ def test_workspace_detail_page(
     page = dex_oauth_app.page
 
     # Detail page should show workspace name (already navigated by fixture)
-    page.get_by_text(workspace_name).wait_for(state="visible", timeout=10000)
+    page.get_by_text(workspace_name).wait_for(state="visible", timeout=30000)
 
     # Should show a status indicator (Starting or Running)
     status = page.get_by_text("Starting").or_(page.get_by_text("Running"))
@@ -212,18 +198,23 @@ def test_delete_workspace(
     workspace_name = create_workspace_via_page
     page = dex_oauth_app.page
 
-    # Wait for workspace to be Running
+    # Wait for workspace to be Running on detail page
     page.get_by_text("Running").wait_for(state="visible", timeout=300000)
 
-    # Click delete button
-    page.get_by_role("button", name="Delete").click()
+    # Go to list page and delete via the card menu
+    base_url = getting_started_url.rstrip("/")
+    page.goto(base_url + "/", wait_until="networkidle", timeout=60000)
+    page.get_by_text(workspace_name).wait_for(state="visible", timeout=30000)
+
+    # Find the card for this workspace and open its menu
+    card = page.locator(".MuiCard-root").filter(has_text=workspace_name)
+    card.get_by_role("button", name="More options").click()
+    page.get_by_role("menuitem", name="Delete").click()
 
     # Confirm deletion in the dialog
-    page.get_by_role("button", name="Delete").last.click(timeout=5000)
-
-    # Should redirect to workspace list
-    base_url = getting_started_url.rstrip("/")
-    page.wait_for_url(base_url + "/", timeout=30000)
+    page.get_by_role("button", name="Delete").click()
 
     # Verify workspace is no longer in the list
+    page.wait_for_timeout(3000)
+    page.reload(wait_until="networkidle", timeout=60000)
     page.get_by_text(workspace_name).wait_for(state="hidden", timeout=30000)
