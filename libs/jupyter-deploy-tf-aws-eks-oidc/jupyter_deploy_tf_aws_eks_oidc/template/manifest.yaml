@@ -678,6 +678,19 @@ components:
         method: k8s.core.deployment-logs
       restart:
         method: k8s.apps.rollout-restart
+  web-app:
+    type: Deployment
+    description: Web UI for workspace management
+    scope: workspace_router_namespace
+    verbs:
+      status:
+        method: k8s.apps.get-deployment-status
+      show:
+        method: k8s.apps.get-deployment
+      logs:
+        method: k8s.core.deployment-logs
+      restart:
+        method: k8s.apps.rollout-restart
   workspace-operator:
     type: Deployment
     description: Workspace lifecycle controller
@@ -697,6 +710,20 @@ components:
     description: Periodic JWT signing key rotation
     scope: workspace_router_namespace
     query: "app=jwt-rotator"
+    verbs:
+      status:
+        method: k8s.batch.get-cronjob-status
+      show:
+        method: k8s.batch.get-cronjob
+      logs:
+        method: k8s.batch.get-job-logs
+      trigger:
+        method: k8s.batch.create-job-from-cronjob
+  web-app-session-rotator:
+    type: CronJob
+    description: Periodic web-app session key rotation
+    scope: workspace_router_namespace
+    query: "app=web-app-session-rotator"
     verbs:
       status:
         method: k8s.batch.get-cronjob-status
