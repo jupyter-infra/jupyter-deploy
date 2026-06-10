@@ -51,7 +51,7 @@ jd cluster login
 ## Access workspaces
 
 ```bash
-# open the getting-started page
+# open the web UI
 jd open
 
 # open a specific workspace

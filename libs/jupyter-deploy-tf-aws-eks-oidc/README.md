@@ -91,7 +91,7 @@ The first deployment takes approximately 25-30 minutes.
 
 ### User interface
 ```bash
-# open the getting-started page
+# open the web UI
 jd open
 
 # configure kubectl to access your cluster
@@ -292,7 +292,7 @@ The template provides two variable presets:
 | `workspace_router_namespace` | Kubernetes namespace for routing components |
 | `workspace_shared_namespace` | Kubernetes namespace for shared workspace resources |
 | `workspace_base_url` | Base URL for workspace access |
-| `get_started_url` | URL to the getting-started page |
+| `get_started_url` | URL to the web UI |
 | `secret_arn` | ARN of the Secrets Manager secret storing the OAuth app client secret |
 | `jupyterlab_image_uri` | ECR image URI for the JupyterLab workspace image |
 | `kubeconfig_path` | Path to the local kubeconfig file for this cluster |

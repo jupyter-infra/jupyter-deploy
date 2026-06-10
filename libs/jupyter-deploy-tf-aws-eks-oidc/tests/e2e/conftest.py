@@ -117,7 +117,7 @@ def other_user_workspace(seeded_cluster: dict[str, list[str]]) -> str:
 
 @pytest.fixture(scope="session")
 def getting_started_url(e2e_deployment: EndToEndDeployment) -> str:
-    """Return the getting-started URL."""
+    """Return the web UI URL."""
     e2e_deployment.ensure_deployed()
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "show", "--output", "get_started_url", "--text"])
     return result.stdout.strip()

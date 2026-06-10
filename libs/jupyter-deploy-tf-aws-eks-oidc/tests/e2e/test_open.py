@@ -1,7 +1,7 @@
 """E2E tests for the open command URL resolution on the EKS OIDC template.
 
 Verifies that `jd open` returns correct URLs:
-- Default: matches the getting-started URL
+- Default: matches the web UI URL
 - With --server-name: matches the workspace's .status.accessURL
 """
 
@@ -21,7 +21,7 @@ _URL_PATTERN = re.compile(r"Opening app at:\s+(https://\S+)")
 
 
 def test_open_default_matches_getting_started_url(e2e_deployment: EndToEndDeployment, getting_started_url: str) -> None:
-    """Verify that jd open returns the getting-started URL."""
+    """Verify that jd open returns the web UI URL."""
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "open"])
 
     match = _URL_PATTERN.search(result.stdout)
