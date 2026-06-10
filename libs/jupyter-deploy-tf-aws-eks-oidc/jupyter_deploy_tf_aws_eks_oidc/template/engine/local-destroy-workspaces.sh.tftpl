@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+
+# Destroy-time script: removes operator-managed Workspaces and WorkspaceTemplates
+# BEFORE the operator and its nodes are torn down.
+#
+# Why this is needed:
+#   The jupyter-k8s operator protects Workspace and WorkspaceTemplate resources
+#   with finalizers (and Templates that reference an AccessStrategy will soon pin
+#   one on it too). Those finalizers are only cleared by the operator's
+#   controller-manager. On `terraform destroy`, the node groups (which host the
+#   controller-manager) and the Helm releases that ship these CRs are torn down
+#   concurrently — so Helm's uninstall blocks on a finalizer the now-dead operator
+#   can never clear, hits its timeout ("context deadline exceeded"), and aborts
+#   the whole destroy. We delete Workspaces then Templates (every namespace);
+#   WorkspaceAccessStrategy is the top-level construct and is left to Helm.
+#
+#   This null_resource depends_on the operator/CR Helm releases and node groups,
+#   so its destroy provisioner runs FIRST (destroy is reverse-dependency order) —
+#   while the operator is still alive to process finalizer removal. By the time
+#   Helm uninstalls workspace-defaults / workspace-router, the CRs are gone and
+#   the uninstall is a no-op.
+#
+# Best-effort throughout: a destroy must never be blocked by this cleanup. If the
+# operator is already unreachable (e.g. recovering a half-destroyed cluster), we
+# fall back to stripping finalizers directly.
+
+set -uo pipefail
+
+CLUSTER_NAME="${cluster_name}"
+REGION="${region}"
+GRACEFUL_WAIT_SECONDS=120
+SLEEP_INTERVAL=10
+
+# Operator CRDs we tear down, in deletion order. Workspaces reference Templates,
+# so they must go first. WorkspaceAccessStrategy is the top-level construct and is
+# left to the Helm uninstall — but Templates can reference an AccessStrategy, which
+# will soon pin a deletion-blocking finalizer on it, so we must clear ALL Templates
+# (every namespace) before the access-strategy Helm release is uninstalled.
+WORKSPACE_KIND="workspaces.workspace.jupyter.org"
+TEMPLATE_KIND="workspacetemplates.workspace.jupyter.org"
+
+FINALIZER_KINDS="$WORKSPACE_KIND $TEMPLATE_KIND"
+
+setup_kubeconfig() {
+    echo "Configuring kubectl for cluster $CLUSTER_NAME..."
+    if ! aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$REGION" 2>&1; then
+        echo "WARNING: Failed to configure kubeconfig — cluster may already be gone. Skipping CR cleanup."
+        return 1
+    fi
+
+    # Guard against ever acting on the wrong cluster.
+    local current_context
+    current_context=$(kubectl config current-context 2>/dev/null)
+    if [[ "$current_context" != *"$CLUSTER_NAME"* ]] || [[ "$current_context" != *"$REGION"* ]]; then
+        echo "WARNING: kubectl context '$current_context' does not match cluster '$CLUSTER_NAME' in region '$REGION'."
+        echo "Skipping CR cleanup to avoid touching the wrong cluster."
+        return 1
+    fi
+    echo "kubectl configured (context: $current_context)."
+}
+
+# Count remaining instances of all operator CRDs across every namespace.
+count_remaining() {
+    local total=0
+    for kind in $FINALIZER_KINDS; do
+        local n
+        n=$(kubectl get "$kind" --all-namespaces --no-headers 2>/dev/null | wc -l | tr -d ' ')
+        total=$((total + $${n:-0}))
+    done
+    echo "$total"
+}
+
+# Issue a non-blocking delete on every operator CR. Workspaces first.
+delete_custom_resources() {
+    echo "Deleting Workspaces (all namespaces)..."
+    kubectl delete "$WORKSPACE_KIND" --all-namespaces --all --wait=false --ignore-not-found 2>&1 || true
+
+    echo "Deleting WorkspaceTemplates (all namespaces)..."
+    kubectl delete "$TEMPLATE_KIND" --all-namespaces --all --wait=false --ignore-not-found 2>&1 || true
+}
+
+# Wait for the operator to clear finalizers and let the resources disappear.
+wait_for_graceful_deletion() {
+    local waited=0
+    while true; do
+        local remaining
+        remaining=$(count_remaining)
+        if [ "$remaining" -eq 0 ]; then
+            echo "All operator custom resources deleted gracefully."
+            return 0
+        fi
+
+        if [ $waited -ge $GRACEFUL_WAIT_SECONDS ]; then
+            echo "WARNING: $remaining custom resource(s) still present after $${GRACEFUL_WAIT_SECONDS}s."
+            echo "Operator may be unreachable — falling back to finalizer removal."
+            return 1
+        fi
+
+        echo "  $remaining custom resource(s) remaining, waiting... ($${waited}s / $${GRACEFUL_WAIT_SECONDS}s)"
+        sleep $SLEEP_INTERVAL
+        waited=$((waited + SLEEP_INTERVAL))
+    done
+}
+
+# Last resort: the operator can't clear finalizers (its nodes are already gone).
+# Remove the admission webhooks (they have no endpoints and would reject the
+# patches) then strip finalizers so the API server can garbage-collect the CRs.
+force_remove_finalizers() {
+    echo "Removing orphaned operator admission webhooks..."
+    kubectl delete validatingwebhookconfiguration jupyter-k8s-validating-webhook-configuration --ignore-not-found 2>&1 || true
+    kubectl delete mutatingwebhookconfiguration jupyter-k8s-mutating-webhook-configuration --ignore-not-found 2>&1 || true
+
+    for kind in $FINALIZER_KINDS; do
+        # Format: "<namespace> <name>" per line.
+        local resources
+        resources=$(kubectl get "$kind" --all-namespaces \
+            -o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null)
+        [ -z "$resources" ] && continue
+
+        while read -r ns name; do
+            [ -z "$name" ] && continue
+            echo "  Stripping finalizers: $kind $ns/$name"
+            kubectl patch "$kind" "$name" -n "$ns" --type=merge -p '{"metadata":{"finalizers":[]}}' 2>&1 || true
+        done <<< "$resources"
+    done
+}
+
+main() {
+    # If kubeconfig setup fails the cluster is likely already gone — nothing to do.
+    setup_kubeconfig || exit 0
+
+    if [ "$(count_remaining)" -eq 0 ]; then
+        echo "No operator custom resources found, nothing to clean up."
+        exit 0
+    fi
+
+    delete_custom_resources
+
+    if ! wait_for_graceful_deletion; then
+        force_remove_finalizers
+    fi
+
+    exit 0
+}
+
+main

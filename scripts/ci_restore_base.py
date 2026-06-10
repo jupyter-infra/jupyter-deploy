@@ -91,9 +91,16 @@ def restore_project(project_id: str, project_dir: Path) -> None:
     run_jd(["init", str(project_dir), "--restore-project", project_id, "--store-type", "s3-only"])
 
 
-def restore_secrets(project_dir: Path) -> None:
-    """Restore all masked secrets in the base project via jd config --restore-secrets."""
-    run_jd_config(["--restore-secrets"], str(project_dir))
+def restore_secrets(project_dir: Path, required: bool = True) -> None:
+    """Restore all masked secrets in the base project via jd config --restore-secrets.
+
+    With required=False, a failure (e.g. the `secret_arn` output is gone because a
+    prior destroy was interrupted mid-way) is logged and ignored. This is safe for
+    the takedown path, where `jd down` uses destroy.tfvars and never reads the
+    restored secret value.
+    """
+    if not run_jd_config(["--restore-secrets"], str(project_dir), check=required) and not required:
+        print("⚠️  Secret restore failed — continuing (not required for takedown).")
 
 
 def main() -> None:

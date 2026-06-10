@@ -23,11 +23,15 @@ def run_jd(
     cwd: str | None = None,
     capture: bool = False,
     timeout: int = JD_TIMEOUT_SECONDS,
+    check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     """Run a `jd` CLI command with CI-safe defaults.
 
     Closes stdin so a no-TTY interactive prompt fails fast instead of hanging,
     enforces a timeout backstop, and surfaces stderr on failure or timeout.
+
+    With check=False a non-zero exit is returned to the caller instead of
+    terminating the process, so optional steps can fail without aborting.
     """
     cmd = ["uv", "run", "jd", *jd_args]
     try:
@@ -37,7 +41,7 @@ def run_jd(
             stdin=subprocess.DEVNULL,
             capture_output=capture,
             text=True,
-            check=True,
+            check=check,
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as e:
@@ -100,6 +104,11 @@ def put_secret_value(arn: str, value: str) -> None:
     client.put_secret_value(SecretId=arn, SecretString=value)
 
 
-def run_jd_config(config_args: list[str], project_dir: str) -> None:
-    """Run jd config with the given arguments in a project directory."""
-    run_jd(["config", *config_args], cwd=project_dir)
+def run_jd_config(config_args: list[str], project_dir: str, check: bool = True) -> bool:
+    """Run jd config with the given arguments in a project directory.
+
+    Returns True on success. With check=False a non-zero exit returns False
+    instead of aborting, so optional config steps can be skipped on failure.
+    """
+    result = run_jd(["config", *config_args], cwd=project_dir, check=check)
+    return result.returncode == 0
