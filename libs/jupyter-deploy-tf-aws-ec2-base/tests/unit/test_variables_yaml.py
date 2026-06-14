@@ -168,9 +168,7 @@ class TestVariablesYaml(unittest.TestCase):
         preset_vars = set(self.DEFAULTS_ALL_TFVARS.keys())
 
         missing = preset_vars - set(commented_vars.keys())
-        self.assertEqual(
-            len(missing), 0, f"Preset variables missing from commented overrides: {missing}"
-        )
+        self.assertEqual(len(missing), 0, f"Preset variables missing from commented overrides: {missing}")
 
     @classmethod
     def _parse_commented_overrides(cls) -> dict:
@@ -190,10 +188,8 @@ class TestVariablesYaml(unittest.TestCase):
             if stripped.startswith("overrides:"):
                 in_overrides = True
                 continue
-            if in_overrides and not stripped.startswith("#") and stripped:
-                # Hit a non-comment, non-empty line — check if it's a new top-level section
-                if not line.startswith(" "):
-                    break
+            if in_overrides and not stripped.startswith("#") and stripped and not line.startswith(" "):
+                break
             if in_overrides and stripped.startswith("# "):
                 # Skip header comments (no colon or starts with a known header phrase)
                 content_after_hash = stripped[2:]
