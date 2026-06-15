@@ -495,9 +495,7 @@ def test_config_error_recovery_with_cli_variable_fix(e2e_deployment: EndToEndDep
         # Domain was auto-nullified after validation failure
         with open(variables_path) as f:
             config_after_fail = yaml.safe_load(f)
-        assert config_after_fail["required"]["domain"] is None, (
-            "domain should be nullified after validation failure"
-        )
+        assert config_after_fail["required"]["domain"] is None, "domain should be nullified after validation failure"
 
         # --- Second run: fix via CLI --domain flag ---
         result = cli.run_command(["jupyter-deploy", "config", "--domain", domain])
@@ -764,9 +762,7 @@ def test_config_reset_variable_with_inline_value(e2e_deployment: EndToEndDeploym
         cli.run_command(["jupyter-deploy", "config"])
 
         # Reset domain and provide new value in the same command
-        result = cli.run_command(
-            ["jupyter-deploy", "config", "--reset-variable", "domain", "--domain", domain]
-        )
+        result = cli.run_command(["jupyter-deploy", "config", "--reset-variable", "domain", "--domain", domain])
         assert "Your project is ready" in result.stdout
 
         # Verify domain was set to the provided value
