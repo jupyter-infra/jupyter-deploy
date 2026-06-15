@@ -201,7 +201,9 @@ In the case of the base template, this corresponds to the `terraform plan` opera
 To run the configuration test:
 1. ask the user for the `<project-dir>` to use
 2. if testing modified template files, ensure they've been copied to `<project-dir>`
-3. run `just test-e2e-base <project-dir> test_configuration`
+3. run `just test-e2e-base <project-dir> test_project_is_configurable`
+
+Note: `test_configuration` contains many additional error-recovery tests. Use `test_project_is_configurable` for a quick validation that the template works.
 
 ### Running Base Template E2E Tests
 Run E2E tests against an existing deployment: `just test-e2e-base <project-dir> TEST-SELECTOR`
@@ -212,7 +214,7 @@ Examples (for project-dir == sandbox3, ci-dir == sandbox-ci):
 - Run all E2E tests without mutating the project: `just test-e2e-base sandbox3 "" ci-dir=sandbox-ci`
 - Run all E2E tests: `just test-e2e-base sandbox3 "" mutate=true,ci-dir=sandbox-ci`
 - Run specific test file: `just test-e2e-base sandbox3 test_users ci-dir=sandbox-ci` (possibly needs `mutate=true`)
-- Run config-only test (no ci-dir needed): `just test-e2e-base sandbox3 test_configuration`
+- Run config-only test (no ci-dir needed): `just test-e2e-base sandbox3 test_project_is_configurable`
 - Run CI template E2E tests: `just test-e2e-ci sandbox3 ""`
 
 **NOTE:** mutate tests are long, pipe to log stream to file: `just test-e2e <project-dir> TEST-SELECTOR mutate=true,ci-dir=sandbox-ci 2>&1 | tee results.log`   

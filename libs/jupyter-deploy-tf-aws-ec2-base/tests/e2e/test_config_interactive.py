@@ -280,52 +280,140 @@ def test_config_interactive_verbose(e2e_deployment: EndToEndDeployment) -> None:
 
 @pytest.mark.cli
 @skip_if_testvars_not_set(REQUIRED_DEPLOYMENT_VARS)
-def test_config_interactive_error_recovery(e2e_deployment: EndToEndDeployment) -> None:
-    """Test that after a failed config, setting the bad value to null re-prompts only that variable.
+def test_config_interactive_error_recovery_multiple_vars(e2e_deployment: EndToEndDeployment) -> None:
+    """Test that failed variables are auto-nullified and re-prompted on next run.
 
     Flow:
-    1. Set up variables.yaml with all correct values except subdomain (invalid)
-    2. Run `jd config` — fails due to subdomain validation
-    3. Set subdomain to null in variables.yaml (user signals "I want to re-enter this")
-    4. Run `jd config` again — terraform prompts ONLY for subdomain
-    5. Provide the correct value — config succeeds
+    1. Enter ALL values interactively with invalid domain AND invalid subdomain
+    2. Plan fails — good values captured, bad values auto-nullified
+    3. Verify domain and subdomain are null (nullify-on-failure behavior)
+    4. Run `jd config` again — only domain and subdomain are prompted
     """
+    domain = os.environ["JD_E2E_VAR_DOMAIN"]
     subdomain = os.environ["JD_E2E_VAR_SUBDOMAIN"]
+    letsencrypt_email = os.environ["JD_E2E_VAR_EMAIL"]
+    oauth_client_id = os.environ["JD_E2E_VAR_OAUTH_APP_CLIENT_ID"]
+    oauth_client_secret = os.environ["JD_E2E_VAR_OAUTH_APP_CLIENT_SECRET"]
+    oauth_allowed_usernames = os.environ["JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES"]
+    oauth_allowed_teams = os.environ["JD_E2E_VAR_OAUTH_ALLOWED_TEAMS"]
+    oauth_allowed_org = os.environ["JD_E2E_VAR_OAUTH_ALLOWED_ORG"]
+
+    invalid_domain = "bad_domain.com"
     invalid_subdomain = "bad_subdomain"
 
     with undeployed_project(e2e_deployment.suite_config) as (project_path, cli):
-        # Prepare a valid configuration, then inject the bad subdomain
-        e2e_deployment.suite_config.prepare_configuration("base", target_dir=project_path)
+        # --- First run: enter all values with two bad ones ---
+        with cli.spawn_interactive_session("jupyter-deploy config", timeout=120) as session:
+            session.expect(r"var\.domain", timeout=60)
+            session.sendline(invalid_domain)
 
+            session.expect(r"var\.letsencrypt_email", timeout=10)
+            session.sendline(letsencrypt_email)
+
+            session.expect(r"var\.oauth_allowed_org", timeout=10)
+            session.sendline(oauth_allowed_org)
+
+            session.expect(r"var\.oauth_allowed_teams", timeout=10)
+            session.sendline(oauth_allowed_teams)
+
+            session.expect(r"var\.oauth_allowed_usernames", timeout=10)
+            session.sendline(oauth_allowed_usernames)
+
+            session.expect(r"var\.oauth_app_client_id", timeout=10)
+            session.sendline(oauth_client_id)
+
+            session.expect(r"var\.oauth_app_client_secret", timeout=10)
+            session.sendline(oauth_client_secret)
+
+            session.expect(r"var\.subdomain", timeout=10)
+            session.sendline(invalid_subdomain)
+
+            session.expect(pexpect.EOF, timeout=90)
+            session.close()
+            assert session.exitstatus != 0, "Expected config to fail"
+
+        # --- Verify good values were captured AND bad values were auto-nullified ---
         variables_path = project_path / "variables.yaml"
         with open(variables_path) as f:
             config = yaml.safe_load(f)
-        config["required"]["subdomain"] = invalid_subdomain
-        with open(variables_path, "w") as f:
-            yaml.dump(config, f, sort_keys=False)
 
-        # --- First run: should fail due to subdomain validation ---
+        assert config["required"]["letsencrypt_email"] == letsencrypt_email, (
+            "good values should be captured and persisted"
+        )
+        assert config["required"]["domain"] is None, "domain should be auto-nullified after validation failure"
+        assert config["required"]["subdomain"] is None, "subdomain should be auto-nullified after validation failure"
+
+        # --- Second run: only domain and subdomain should be prompted (auto-nullified) ---
         with cli.spawn_interactive_session("jupyter-deploy config", timeout=120) as session:
-            session.expect(pexpect.EOF, timeout=90)
-            session.close()
-            assert session.exitstatus != 0, "Expected config to fail with invalid subdomain"
+            # Terraform prompts in lexicographic order
+            session.expect(r"var\.domain", timeout=60)
+            session.sendline(domain)
 
-        # --- Set the bad subdomain to null to trigger a re-prompt ---
-        with open(variables_path) as f:
-            config = yaml.safe_load(f)
-        config["required"]["subdomain"] = None
-        with open(variables_path, "w") as f:
-            yaml.dump(config, f, sort_keys=False)
-
-        # --- Second run: only subdomain should be prompted ---
-        # All other values are set in variables.yaml and synced to .tfvars.
-        # Terraform only prompts for variables with no value — just subdomain.
-        with cli.spawn_interactive_session("jupyter-deploy config", timeout=120) as session:
-            session.expect(r"var\.subdomain", timeout=60)
+            session.expect(r"var\.subdomain", timeout=10)
             session.sendline(subdomain)
 
             session.expect(pexpect.EOF, timeout=90)
             session.close()
             assert session.exitstatus == 0, (
-                f"Expected config to succeed after fixing subdomain, got exit {session.exitstatus}"
+                f"Expected config to succeed after fixing both vars, got exit {session.exitstatus}"
             )
+
+
+@pytest.mark.cli
+@skip_if_testvars_not_set(REQUIRED_DEPLOYMENT_VARS)
+def test_config_reset_variable(e2e_deployment: EndToEndDeployment) -> None:
+    """Test --reset-variable resets vars and re-prompts required ones.
+
+    Flow:
+    1. Configure with all values set (including custom_tags override)
+    2. Run `jd config --reset-variable domain --reset-variable oauth_app_client_secret --reset-variable custom_tags`
+       - domain (required) → null → terraform prompts
+       - oauth_app_client_secret (sensitive) → null → terraform prompts
+       - custom_tags (override) → restored to preset default {}
+    3. Respond to prompts for domain and oauth_app_client_secret
+    4. Verify custom_tags was restored to default
+    """
+    domain = os.environ["JD_E2E_VAR_DOMAIN"]
+    oauth_client_secret = os.environ["JD_E2E_VAR_OAUTH_APP_CLIENT_SECRET"]
+
+    with undeployed_project(e2e_deployment.suite_config) as (project_path, cli):
+        e2e_deployment.suite_config.prepare_configuration("base", target_dir=project_path)
+
+        # Set custom_tags to a non-default value
+        variables_path = project_path / "variables.yaml"
+        with open(variables_path) as f:
+            config = yaml.safe_load(f)
+        config["overrides"] = config.get("overrides") or {}
+        config["overrides"]["custom_tags"] = {"MyTag": "MyValue"}
+        with open(variables_path, "w") as f:
+            yaml.dump(config, f, sort_keys=False)
+
+        # First config to establish recorded state
+        cli.run_command(["jupyter-deploy", "config"])
+
+        # Reset and re-configure — domain + secret will be prompted
+        cmd = (
+            "jupyter-deploy config"
+            " --reset-variable domain"
+            " --reset-variable oauth_app_client_secret"
+            " --reset-variable custom_tags"
+        )
+        with cli.spawn_interactive_session(cmd, timeout=120) as session:
+            # domain is prompted (required, was reset to null)
+            session.expect(r"var\.domain", timeout=60)
+            session.sendline(domain)
+
+            # oauth_app_client_secret is prompted (sensitive, was reset to null)
+            session.expect(r"var\.oauth_app_client_secret", timeout=10)
+            session.sendline(oauth_client_secret)
+
+            session.expect(pexpect.EOF, timeout=90)
+            session.close()
+            assert session.exitstatus == 0, f"Expected config to succeed, got exit {session.exitstatus}"
+
+        # Verify custom_tags was restored to preset default
+        with open(variables_path) as f:
+            config_after = yaml.safe_load(f)
+        assert config_after["overrides"].get("custom_tags") == {} or "custom_tags" not in config_after.get(
+            "overrides", {}
+        ), "custom_tags should be restored to preset default (empty dict)"

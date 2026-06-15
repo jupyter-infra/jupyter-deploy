@@ -471,8 +471,8 @@ def test_config_error_recovery_with_cli_variable_fix(e2e_deployment: EndToEndDep
     Flow:
     1. Configure with an invalid domain (contains underscore)
     2. `jd config` fails (terraform validation rejects the domain)
-    3. Re-run `jd config --domain CORRECT-DOMAIN` — the CLI flag persists the fix
-       to variables.yaml before plan, and plan succeeds
+    3. Domain is auto-nullified (scalar → reset for re-prompt)
+    4. Re-run `jd config --domain CORRECT-DOMAIN` — the CLI flag provides the fix
     """
     domain = os.environ["JD_E2E_VAR_DOMAIN"]
     invalid_domain = "bad_domain.com"
@@ -492,14 +492,14 @@ def test_config_error_recovery_with_cli_variable_fix(e2e_deployment: EndToEndDep
         with pytest.raises(JDCliError):
             cli.run_command(["jupyter-deploy", "config"])
 
-        # Verify the bad domain is persisted in variables.yaml (not lost)
+        # Domain was auto-nullified after validation failure
         with open(variables_path) as f:
             config_after_fail = yaml.safe_load(f)
-        assert config_after_fail["required"]["domain"] == invalid_domain
+        assert config_after_fail["required"]["domain"] is None, (
+            "domain should be nullified after validation failure"
+        )
 
         # --- Second run: fix via CLI --domain flag ---
-        # The --domain flag writes the correct value to variables.yaml before plan,
-        # so even if we don't manually edit the file, the fix is applied.
         result = cli.run_command(["jupyter-deploy", "config", "--domain", domain])
         assert "Your project is ready" in result.stdout
 
@@ -507,3 +507,268 @@ def test_config_error_recovery_with_cli_variable_fix(e2e_deployment: EndToEndDep
         with open(variables_path) as f:
             config_after_fix = yaml.safe_load(f)
         assert config_after_fix["required"]["domain"] == domain
+
+
+@pytest.mark.cli
+@skip_if_testvars_not_set(
+    [
+        "JD_E2E_VAR_DOMAIN",
+        "JD_E2E_VAR_EMAIL",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
+        "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
+        "JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES",
+        "JD_E2E_VAR_SUBDOMAIN",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_SECRET",
+    ]
+)
+def test_config_error_shows_hint_on_invalid_type(e2e_deployment: EndToEndDeployment) -> None:
+    """Test that a type mismatch in variables.yaml shows a user-friendly error with hint.
+
+    Setting custom_tags to [] (list instead of map) triggers a TypeError during
+    staging. The CLI should show the error + a hint, not a stack trace.
+    """
+    with undeployed_project(e2e_deployment.suite_config) as (project_path, cli):
+        e2e_deployment.suite_config.prepare_configuration("base", target_dir=project_path)
+
+        variables_path = project_path / "variables.yaml"
+        with open(variables_path) as f:
+            config = yaml.safe_load(f)
+
+        config["overrides"] = config.get("overrides") or {}
+        config["overrides"]["custom_tags"] = []
+        with open(variables_path, "w") as f:
+            yaml.dump(config, f, sort_keys=False)
+
+        # Run jd config — should fail with a clean error, not a stack trace
+        result = subprocess.run(
+            ["jupyter-deploy", "config"],
+            cwd=str(project_path),
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+        output = result.stdout + result.stderr
+        assert "Invalid value for variable 'custom_tags'" in output
+        assert "Fix the value in variables.yaml" in output
+        # No stack trace
+        assert "Traceback" not in output
+
+
+@pytest.mark.cli
+@skip_if_testvars_not_set(
+    [
+        "JD_E2E_VAR_DOMAIN",
+        "JD_E2E_VAR_EMAIL",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
+        "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
+        "JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES",
+        "JD_E2E_VAR_SUBDOMAIN",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_SECRET",
+    ]
+)
+def test_config_error_shows_hint_on_invalid_yaml(e2e_deployment: EndToEndDeployment) -> None:
+    """Test that invalid YAML syntax in variables.yaml shows a user-friendly error with hint.
+
+    Setting custom_tags to an unclosed bracket '[' produces a YAML parse error.
+    The CLI should show the error + a hint, not a stack trace.
+    """
+    with undeployed_project(e2e_deployment.suite_config) as (project_path, cli):
+        e2e_deployment.suite_config.prepare_configuration("base", target_dir=project_path)
+
+        # Corrupt the YAML with an unclosed bracket
+        variables_path = project_path / "variables.yaml"
+        content = variables_path.read_text()
+        content += "\n  broken_key: [\n"
+        variables_path.write_text(content)
+
+        # Run jd config — should fail with a clean error
+        result = subprocess.run(
+            ["jupyter-deploy", "config"],
+            cwd=str(project_path),
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+        output = result.stdout + result.stderr
+        assert "Invalid YAML syntax" in output
+        assert "Review your variables.yaml file" in output
+        # No stack trace
+        assert "Traceback" not in output
+
+
+@pytest.mark.cli
+@skip_if_testvars_not_set(
+    [
+        "JD_E2E_VAR_DOMAIN",
+        "JD_E2E_VAR_EMAIL",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
+        "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
+        "JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES",
+        "JD_E2E_VAR_SUBDOMAIN",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_SECRET",
+    ]
+)
+def test_config_error_does_not_nullify_list_dict(e2e_deployment: EndToEndDeployment) -> None:
+    """Test that a list[dict] override is NOT nullified on validation failure.
+
+    additional_ebs_mounts (list[dict]) fails validation due to size_gb="one".
+    subdomain (scalar) also fails regex validation.
+    After failure: subdomain is nullified, additional_ebs_mounts is NOT.
+
+    Flow:
+    1. Set bad subdomain + bad additional_ebs_mounts
+    2. `jd config` fails — subdomain nullified, ebs_mounts left intact
+    3. Fix subdomain
+    4. `jd config` still fails (ebs_mounts still bad)
+    5. Fix additional_ebs_mounts
+    6. `jd config` succeeds
+    """
+    subdomain = os.environ["JD_E2E_VAR_SUBDOMAIN"]
+
+    with undeployed_project(e2e_deployment.suite_config) as (project_path, cli):
+        e2e_deployment.suite_config.prepare_configuration("base", target_dir=project_path)
+
+        variables_path = project_path / "variables.yaml"
+        with open(variables_path) as f:
+            config = yaml.safe_load(f)
+
+        config["required"]["subdomain"] = "bad_subdomain"
+        config["overrides"] = config.get("overrides") or {}
+        config["overrides"]["additional_ebs_mounts"] = [{"name": "bad-vol", "mount_point": "data", "size_gb": "one"}]
+        with open(variables_path, "w") as f:
+            yaml.dump(config, f, sort_keys=False)
+
+        # --- First run: fails ---
+        with pytest.raises(JDCliError):
+            cli.run_command(["jupyter-deploy", "config"])
+
+        with open(variables_path) as f:
+            config_after_first = yaml.safe_load(f)
+        assert config_after_first["required"]["subdomain"] is None, (
+            "subdomain (scalar) should be nullified after validation failure"
+        )
+        assert config_after_first["overrides"]["additional_ebs_mounts"] == [
+            {"name": "bad-vol", "mount_point": "data", "size_gb": "one"}
+        ], "list[dict] override should NOT be nullified"
+
+        # --- Fix subdomain only ---
+        config_after_first["required"]["subdomain"] = subdomain
+        with open(variables_path, "w") as f:
+            yaml.dump(config_after_first, f, sort_keys=False)
+
+        # --- Second run: still fails (ebs_mounts still bad) ---
+        with pytest.raises(JDCliError):
+            cli.run_command(["jupyter-deploy", "config"])
+
+        # --- Fix additional_ebs_mounts ---
+        with open(variables_path) as f:
+            config_after_second = yaml.safe_load(f)
+        config_after_second["overrides"]["additional_ebs_mounts"] = [
+            {"name": "fixed-vol", "mount_point": "data", "size_gb": "50"}
+        ]
+        with open(variables_path, "w") as f:
+            yaml.dump(config_after_second, f, sort_keys=False)
+
+        # --- Third run: succeeds ---
+        result = cli.run_command(["jupyter-deploy", "config"])
+        assert "Your project is ready" in result.stdout
+
+
+@pytest.mark.cli
+@skip_if_testvars_not_set(
+    [
+        "JD_E2E_VAR_DOMAIN",
+        "JD_E2E_VAR_EMAIL",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
+        "JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES",
+        "JD_E2E_VAR_SUBDOMAIN",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_SECRET",
+    ]
+)
+def test_config_error_does_not_nullify_dict(e2e_deployment: EndToEndDeployment) -> None:
+    """Test that a dict override is NOT nullified on validation failure.
+
+    custom_tags has a key exceeding 128 chars which fails the tag key length validation.
+    subdomain also fails regex validation. After failure:
+    - subdomain is nullified (scalar → auto-reset)
+    - custom_tags is NOT nullified (dict → complex type preserved)
+
+    Flow:
+    1. Set custom_tags to {"KKK...129 chars": "value"} (fails length validation)
+    2. Set subdomain to "bad_subdomain" (fails regex)
+    3. `jd config` fails — subdomain nullified, custom_tags NOT nullified
+    4. Fix both
+    5. `jd config` succeeds
+    """
+    subdomain = os.environ["JD_E2E_VAR_SUBDOMAIN"]
+
+    with undeployed_project(e2e_deployment.suite_config) as (project_path, cli):
+        e2e_deployment.suite_config.prepare_configuration("base", target_dir=project_path)
+
+        variables_path = project_path / "variables.yaml"
+        with open(variables_path) as f:
+            config = yaml.safe_load(f)
+
+        config["required"]["subdomain"] = "bad_subdomain"
+        config["overrides"] = config.get("overrides") or {}
+        # Key exceeds 128 chars — valid HCL but fails the tag key length validation
+        long_key = "K" * 129
+        config["overrides"]["custom_tags"] = {long_key: "value"}
+        with open(variables_path, "w") as f:
+            yaml.dump(config, f, sort_keys=False)
+
+        # --- First run: fails (subdomain regex + custom_tags key length) ---
+        with pytest.raises(JDCliError):
+            cli.run_command(["jupyter-deploy", "config"])
+
+        with open(variables_path) as f:
+            config_after_fail = yaml.safe_load(f)
+        assert config_after_fail["overrides"]["custom_tags"] == {long_key: "value"}, (
+            "dict override should NOT be nullified — complex types are preserved"
+        )
+        assert config_after_fail["required"]["subdomain"] is None, (
+            "subdomain (scalar) should be nullified after validation failure"
+        )
+
+        # --- Second run: succeeds ---
+        result = cli.run_command(
+            ["jupyter-deploy", "config", "--subdomain", subdomain, "--custom-tags", "ValidKey=value"]
+        )
+        assert "Your project is ready" in result.stdout
+
+
+@pytest.mark.cli
+@skip_if_testvars_not_set(
+    [
+        "JD_E2E_VAR_DOMAIN",
+        "JD_E2E_VAR_EMAIL",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
+        "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
+        "JD_E2E_VAR_OAUTH_ALLOWED_USERNAMES",
+        "JD_E2E_VAR_SUBDOMAIN",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_SECRET",
+    ]
+)
+def test_config_reset_variable_with_inline_value(e2e_deployment: EndToEndDeployment) -> None:
+    """Test --reset-variable combined with --variable-name in the same command.
+
+    `jd config --reset-variable domain --domain <new-value>` should reset the
+    variable and immediately set the new value — no interactive prompt needed.
+    """
+    domain = os.environ["JD_E2E_VAR_DOMAIN"]
+
+    with undeployed_project(e2e_deployment.suite_config) as (project_path, cli):
+        e2e_deployment.suite_config.prepare_configuration("base", target_dir=project_path)
+
+        # First config to establish recorded state
+        cli.run_command(["jupyter-deploy", "config"])
+
+        # Reset domain and provide new value in the same command
+        result = cli.run_command(
+            ["jupyter-deploy", "config", "--reset-variable", "domain", "--domain", domain]
+        )
+        assert "Your project is ready" in result.stdout
+
+        # Verify domain was set to the provided value
+        result = cli.run_command(["jupyter-deploy", "show", "--variable", "domain", "--text"])
+        assert domain in result.stdout
