@@ -225,9 +225,19 @@ class TerraformConfigHandler(EngineConfigHandler):
         )
 
         plan_retcode = plan_executor.execute(plan_cmds)
+
+        # Persist any values the user entered interactively (via terraform prompts).
+        # This runs on BOTH success and failure so that good values survive a failed plan.
+        self._persist_captured_interactive_values(plan_callback)
+
         if plan_retcode != 0:
             # Plan failed — discard staging so the next run uses last-known-good state
             self.tf_variables_handler.discard_staging()
+
+            # Nullify simple variables that failed validation so that the next
+            # `jd config` re-prompts only those, instead of requiring all inputs again.
+            self._nullify_failed_validation_variables(plan_callback)
+
             raise SupervisedExecutionError(
                 command="config",
                 retcode=plan_retcode,
@@ -239,6 +249,51 @@ class TerraformConfigHandler(EngineConfigHandler):
 
         # Return completion context from callback
         return plan_callback.get_completion_context()
+
+    def _persist_captured_interactive_values(self, callback: ExecutionCallbackInterface) -> None:
+        """Persist values captured from interactive terraform prompts to variables.yaml.
+
+        The callback captures var_name→value pairs as the user types responses to
+        terraform's "Enter a value:" prompts. Writing them here ensures they survive
+        even if terraform plan subsequently fails validation.
+        """
+        captured = getattr(callback, "captured_variables", None)
+        if captured:
+            self.variables_handler.sync_project_variables_config(captured)
+
+    def _nullify_failed_validation_variables(self, callback: ExecutionCallbackInterface) -> None:
+        """Null out variables that failed terraform validation.
+
+        Parses the error output for 'Invalid value for variable' blocks and sets
+        those variables to null in variables.yaml. This way, the next `jd config`
+        re-prompts only the bad variables instead of all of them.
+
+        Only simple values (scalars, list[str]) are nullified — complex types
+        (dicts, list[dict]) are left intact since fixing a typo in the editor
+        is better than re-entering a large nested structure interactively.
+        """
+        failed_vars = getattr(callback, "extract_failed_variable_names", None)
+        if not failed_vars:
+            return
+        var_names = failed_vars()
+        if not var_names:
+            return
+
+        nullified = self.variables_handler.nullify_failed_variables(var_names)
+        if nullified:
+            hint = ", ".join(nullified)
+            self.display_manager.hint(
+                f"Variable(s) [{hint}] failed validation and were reset — "
+                "run 'jd config' again to re-enter only those values."
+            )
+
+        # Report complex variables that were NOT nullified
+        not_nullified = [v for v in var_names if v not in nullified]
+        if not_nullified:
+            hint = ", ".join(not_nullified)
+            self.display_manager.hint(
+                f"Variable(s) [{hint}] failed validation but have complex values — fix them directly in variables.yaml."
+            )
 
     def record(self) -> None:
         """Record variables and secrets from the plan file.

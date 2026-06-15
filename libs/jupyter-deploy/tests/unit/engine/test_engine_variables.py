@@ -3,8 +3,6 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import Mock, patch
 
-from pydantic import ValidationError
-
 from jupyter_deploy import constants
 from jupyter_deploy.constants import MASKED_SECRET_VALUE
 from jupyter_deploy.engine.engine_variables import EngineVariablesHandler
@@ -45,7 +43,12 @@ class DummyVariablesHandler(EngineVariablesHandler):
         }
 
     def update_variable_records(self, varvalues: dict[str, Any], sensitive: bool = False) -> None:
-        # This would normally update the engine-specific files
+        pass
+
+    def delete_recorded_varfiles(self) -> None:
+        pass
+
+    def remove_variables_from_recorded(self, var_names: list[str]) -> None:
         pass
 
 
@@ -121,42 +124,17 @@ class TestVariablesConfigProperty(unittest.TestCase):
         mock_retrieve.assert_called_once()
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_variables_config")
-    def test_falls_back_to_empty_config_on_validation_error(self, mock_retrieve: Mock) -> None:
-        # Setup
+    def test_bubbles_up_invalid_variables_dot_yaml_error(self, mock_retrieve: Mock) -> None:
         project_path = Path("/mock/project")
         manifest = Mock()
         handler = DummyVariablesHandler(
             project_path=project_path, project_manifest=manifest, display_manager=NullDisplay()
         )
 
-        # Mock retrieve to raise ValidationError
-        mock_retrieve.side_effect = ValidationError.from_exception_data("Validation error", [])
-
-        # Access the property
-        result = handler.variables_config
-
-        # Verify that a reset config was returned
-        self.assertIsInstance(result, JupyterDeployVariablesConfigV2)
-        mock_retrieve.assert_called_once()
-
-    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_variables_config")
-    def test_falls_back_to_empty_config_on_notadict_error(self, mock_retrieve: Mock) -> None:
-        # Setup
-        project_path = Path("/mock/project")
-        manifest = Mock()
-        handler = DummyVariablesHandler(
-            project_path=project_path, project_manifest=manifest, display_manager=NullDisplay()
-        )
-
-        # Mock retrieve to raise InvalidVariablesDotYamlError
         mock_retrieve.side_effect = InvalidVariablesDotYamlError("Invalid variables config")
 
-        # Access the property
-        result = handler.variables_config
-
-        # Verify that a reset config was returned
-        self.assertIsInstance(result, JupyterDeployVariablesConfigV2)
-        mock_retrieve.assert_called_once()
+        with self.assertRaises(InvalidVariablesDotYamlError):
+            _ = handler.variables_config
 
 
 class TestSyncEngineVarfilesWithProjectVariablesConfig(unittest.TestCase):
@@ -305,16 +283,17 @@ class TestGetVariableNamesAssignedInConfig(unittest.TestCase):
         # Execute
         result = handler.get_variable_names_assigned_in_config()
 
-        # Verify - only non-None values should be included
-        self.assertEqual(len(result), 3)  # Only 3 non-None values
-        self.assertIn("var1", result)  # From required
-        self.assertIn("var3", result)  # From required_sensitive
-        self.assertIn("var5", result)  # From overrides
+        # Verify — required/sensitive: only non-None values
+        self.assertEqual(len(result), 4)
+        self.assertIn("var1", result)  # non-None required
+        self.assertIn("var3", result)  # non-None sensitive
+        # Overrides: ALL keys present in dict suppress preset (even null)
+        self.assertIn("var5", result)  # non-None override
+        self.assertIn("var6", result)  # null override — still suppresses preset
 
-        # Verify - None values should NOT be included
+        # Verify - None values in required/sensitive are NOT included
         self.assertNotIn("var2", result)  # None in required
         self.assertNotIn("var4", result)  # None in required_sensitive
-        self.assertNotIn("var6", result)  # None in overrides
 
     def test_handles_empty_values_in_variables_config(self) -> None:
         # Setup
@@ -339,7 +318,7 @@ class TestGetVariableNamesAssignedInConfig(unittest.TestCase):
         # Verify - should return an empty list
         self.assertEqual(result, [])
 
-    def test_none_values_are_filtered_out(self) -> None:
+    def test_none_values_filtered_for_required_but_not_overrides(self) -> None:
         # Setup
         project_path = Path("/mock/project")
         manifest = Mock()
@@ -359,8 +338,14 @@ class TestGetVariableNamesAssignedInConfig(unittest.TestCase):
         # Execute
         result = handler.get_variable_names_assigned_in_config()
 
-        # Verify - should return an empty list since all values are None
-        self.assertEqual(result, [])
+        # required/sensitive: None values are filtered out
+        self.assertNotIn("var1", result)
+        self.assertNotIn("var2", result)
+        self.assertNotIn("var3", result)
+        self.assertNotIn("var4", result)
+        # overrides: null keys still suppress preset (user claimed the variable)
+        self.assertIn("var5", result)
+        self.assertIn("var6", result)
 
     def test_defaults_are_ignored_even_when_not_none(self) -> None:
         # Setup
@@ -714,3 +699,281 @@ class TestResetRecordedSecrets(unittest.TestCase):
 
         with self.assertRaises(OSError):
             handler.reset_recorded_secrets()
+
+
+class TestResetSpecificVariables(unittest.TestCase):
+    @patch.object(DummyVariablesHandler, "_write_variables_config")
+    @patch.object(DummyVariablesHandler, "_get_defaults_for_comments")
+    def test_resets_required_to_null(self, mock_defaults: Mock, mock_write: Mock) -> None:
+        handler = DummyVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        handler._variables_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required={"domain": "old.com", "subdomain": "keep"},
+            required_sensitive={},
+            overrides={},
+        )
+        mock_defaults.return_value = {}
+
+        handler.reset_specific_variables(["domain"])
+
+        written: JupyterDeployVariablesConfigV2 = mock_write.call_args[0][0]
+        self.assertIsNone(written.required["domain"])
+        self.assertEqual(written.required["subdomain"], "keep")
+
+    @patch.object(DummyVariablesHandler, "_write_variables_config")
+    @patch.object(DummyVariablesHandler, "_get_defaults_for_comments")
+    def test_resets_sensitive_to_null(self, mock_defaults: Mock, mock_write: Mock) -> None:
+        handler = DummyVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        handler._variables_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required={},
+            required_sensitive={"oauth_app_client_secret": "secret123"},
+            overrides={},
+        )
+        mock_defaults.return_value = {}
+
+        handler.reset_specific_variables(["oauth_app_client_secret"])
+
+        written: JupyterDeployVariablesConfigV2 = mock_write.call_args[0][0]
+        self.assertIsNone(written.required_sensitive["oauth_app_client_secret"])
+
+    @patch.object(DummyVariablesHandler, "_write_variables_config")
+    @patch.object(DummyVariablesHandler, "_get_defaults_for_comments")
+    def test_resets_override_to_default(self, mock_defaults: Mock, mock_write: Mock) -> None:
+        handler = DummyVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        handler._variables_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required={},
+            required_sensitive={},
+            overrides={"custom_tags": {"bad": "value"}},
+        )
+        mock_defaults.return_value = {"custom_tags": {}}
+
+        handler.reset_specific_variables(["custom_tags"])
+
+        written: JupyterDeployVariablesConfigV2 = mock_write.call_args[0][0]
+        self.assertEqual(written.overrides["custom_tags"], {})
+
+    @patch.object(DummyVariablesHandler, "_write_variables_config")
+    @patch.object(DummyVariablesHandler, "_get_defaults_for_comments")
+    def test_resets_override_without_default_removes_key(self, mock_defaults: Mock, mock_write: Mock) -> None:
+        handler = DummyVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        handler._variables_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required={},
+            required_sensitive={},
+            overrides={"unknown_var": "value"},
+        )
+        mock_defaults.return_value = {}
+
+        handler.reset_specific_variables(["unknown_var"])
+
+        written: JupyterDeployVariablesConfigV2 = mock_write.call_args[0][0]
+        self.assertNotIn("unknown_var", written.overrides)
+
+    @patch.object(DummyVariablesHandler, "_write_variables_config")
+    @patch.object(DummyVariablesHandler, "_get_defaults_for_comments")
+    def test_resets_multiple_variables(self, mock_defaults: Mock, mock_write: Mock) -> None:
+        handler = DummyVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        handler._variables_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required={"domain": "old.com"},
+            required_sensitive={"oauth_app_client_secret": "secret"},
+            overrides={"custom_tags": {"k": "v"}},
+        )
+        mock_defaults.return_value = {"custom_tags": {}}
+
+        handler.reset_specific_variables(["domain", "oauth_app_client_secret", "custom_tags"])
+
+        written: JupyterDeployVariablesConfigV2 = mock_write.call_args[0][0]
+        self.assertIsNone(written.required["domain"])
+        self.assertIsNone(written.required_sensitive["oauth_app_client_secret"])
+        self.assertEqual(written.overrides["custom_tags"], {})
+
+
+class TestIsComplexValue(unittest.TestCase):
+    def test_none_is_not_complex(self) -> None:
+        self.assertFalse(EngineVariablesHandler._is_complex_value(None))
+
+    def test_string_is_not_complex(self) -> None:
+        self.assertFalse(EngineVariablesHandler._is_complex_value("hello"))
+
+    def test_int_is_not_complex(self) -> None:
+        self.assertFalse(EngineVariablesHandler._is_complex_value(42))
+
+    def test_bool_is_not_complex(self) -> None:
+        self.assertFalse(EngineVariablesHandler._is_complex_value(True))
+
+    def test_list_of_strings_is_complex(self) -> None:
+        self.assertTrue(EngineVariablesHandler._is_complex_value(["a", "b"]))
+
+    def test_empty_list_is_not_complex(self) -> None:
+        self.assertFalse(EngineVariablesHandler._is_complex_value([]))
+
+    def test_dict_is_complex(self) -> None:
+        self.assertTrue(EngineVariablesHandler._is_complex_value({"key": "val"}))
+
+    def test_empty_dict_is_not_complex(self) -> None:
+        self.assertFalse(EngineVariablesHandler._is_complex_value({}))
+
+    def test_list_of_dicts_is_complex(self) -> None:
+        self.assertTrue(EngineVariablesHandler._is_complex_value([{"name": "ebs1"}]))
+
+    def test_mixed_list_with_dict_is_complex(self) -> None:
+        self.assertTrue(EngineVariablesHandler._is_complex_value(["a", {"name": "b"}]))
+
+    def test_list_of_ints_is_complex(self) -> None:
+        self.assertTrue(EngineVariablesHandler._is_complex_value([1, 2, 3]))
+
+
+class TestNullifyFailedVariables(unittest.TestCase):
+    @patch.object(DummyVariablesHandler, "_write_variables_config")
+    def test_nullifies_scalar_in_required(self, mock_write: Mock) -> None:
+        handler = DummyVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        handler._variables_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required={"domain": "bad-value.com", "email": "user@test.com"},
+            required_sensitive={},
+            overrides={},
+        )
+
+        result = handler.nullify_failed_variables(["domain"])
+
+        self.assertEqual(result, ["domain"])
+        written_config: JupyterDeployVariablesConfigV2 = mock_write.call_args[0][0]
+        self.assertIsNone(written_config.required["domain"])
+        self.assertEqual(written_config.required["email"], "user@test.com")
+
+    @patch.object(DummyVariablesHandler, "_write_variables_config")
+    def test_nullifies_scalar_in_overrides(self, mock_write: Mock) -> None:
+        handler = DummyVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        handler._variables_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required={"domain": "ok.com"},
+            required_sensitive={},
+            overrides={"subdomain": "bad!sub"},
+        )
+
+        result = handler.nullify_failed_variables(["subdomain"])
+
+        self.assertEqual(result, ["subdomain"])
+        written_config: JupyterDeployVariablesConfigV2 = mock_write.call_args[0][0]
+        self.assertIsNone(written_config.overrides["subdomain"])
+
+    @patch.object(DummyVariablesHandler, "_write_variables_config")
+    def test_skips_list_of_strings(self, mock_write: Mock) -> None:
+        handler = DummyVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        handler._variables_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required={},
+            required_sensitive={},
+            overrides={"admin_role_names": ["MustNotExist"]},
+        )
+
+        result = handler.nullify_failed_variables(["admin_role_names"])
+
+        self.assertEqual(result, [])
+        mock_write.assert_not_called()
+
+    @patch.object(DummyVariablesHandler, "_write_variables_config")
+    def test_skips_dict_value(self, mock_write: Mock) -> None:
+        handler = DummyVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        handler._variables_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required={},
+            required_sensitive={},
+            overrides={"custom_tags": {"env": "bad"}},
+        )
+
+        result = handler.nullify_failed_variables(["custom_tags"])
+
+        self.assertEqual(result, [])
+        mock_write.assert_not_called()
+
+    @patch.object(DummyVariablesHandler, "_write_variables_config")
+    def test_skips_list_of_dicts(self, mock_write: Mock) -> None:
+        handler = DummyVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        handler._variables_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required={},
+            required_sensitive={},
+            overrides={"node_groups": [{"name": "gpu", "instance_type": "ml.g5.xlarge"}]},
+        )
+
+        result = handler.nullify_failed_variables(["node_groups"])
+
+        self.assertEqual(result, [])
+        mock_write.assert_not_called()
+
+    @patch.object(DummyVariablesHandler, "_write_variables_config")
+    def test_mixed_simple_and_complex(self, mock_write: Mock) -> None:
+        handler = DummyVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        handler._variables_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required={"subdomain": "bad!"},
+            required_sensitive={},
+            overrides={"node_groups": [{"name": "gpu"}]},
+        )
+
+        result = handler.nullify_failed_variables(["subdomain", "node_groups"])
+
+        self.assertEqual(result, ["subdomain"])
+        written_config: JupyterDeployVariablesConfigV2 = mock_write.call_args[0][0]
+        self.assertIsNone(written_config.required["subdomain"])
+        # node_groups unchanged
+        self.assertEqual(written_config.overrides["node_groups"], [{"name": "gpu"}])
+
+    def test_unknown_variable_is_silently_ignored(self) -> None:
+        handler = DummyVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        handler._variables_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required={"domain": "ok.com"},
+            required_sensitive={},
+            overrides={},
+        )
+
+        result = handler.nullify_failed_variables(["nonexistent_var"])
+
+        self.assertEqual(result, [])
+
+    @patch.object(DummyVariablesHandler, "_write_variables_config")
+    def test_nullifies_sensitive_variable(self, mock_write: Mock) -> None:
+        handler = DummyVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        handler._variables_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required={},
+            required_sensitive={"oauth_app_client_secret": "bad-secret"},
+            overrides={},
+        )
+
+        result = handler.nullify_failed_variables(["oauth_app_client_secret"])
+
+        self.assertEqual(result, ["oauth_app_client_secret"])
+        written_config: JupyterDeployVariablesConfigV2 = mock_write.call_args[0][0]
+        self.assertIsNone(written_config.required_sensitive["oauth_app_client_secret"])

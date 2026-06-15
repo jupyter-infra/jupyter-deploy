@@ -2,13 +2,10 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
-
 from jupyter_deploy import constants, fs_utils
 from jupyter_deploy.constants import MASKED_SECRET_VALUE
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
-from jupyter_deploy.exceptions import InvalidVariablesDotYamlError
 from jupyter_deploy.handlers import base_project_handler
 from jupyter_deploy.manifest import JupyterDeployManifest
 from jupyter_deploy.variables_config import (
@@ -84,20 +81,6 @@ class EngineVariablesHandler(ABC):
             reset_variables_config = self._get_reset_variables_config()
             self._variables_config = reset_variables_config
             return self._variables_config
-        except InvalidVariablesDotYamlError:
-            # the user has corrupted their variables.yaml, reset to a fallback
-            if self.display_manager:
-                self.display_manager.warning("Variables config was not a dict, resetting to defaults")
-            reset_variables_config = self._get_reset_variables_config()
-            self._variables_config = reset_variables_config
-            return self._variables_config
-        except ValidationError as e:
-            # the user has corrupted their variables.yaml, reset to a fallback
-            if self.display_manager:
-                self.display_manager.warning(f"Variables config is invalid, resetting to defaults: {e}")
-            reset_variables_config = self._get_reset_variables_config()
-            self._variables_config = reset_variables_config
-            return self._variables_config
 
     @abstractmethod
     def is_template_directory(self) -> bool:
@@ -121,6 +104,16 @@ class EngineVariablesHandler(ABC):
             KeyError if any of the variable name is not found
             TypeError if the any of the variable definition is not of the right type.
         """
+        pass
+
+    @abstractmethod
+    def delete_recorded_varfiles(self) -> None:
+        """Delete recorded engine-specific variable files without resetting variables.yaml."""
+        pass
+
+    @abstractmethod
+    def remove_variables_from_recorded(self, var_names: list[str]) -> None:
+        """Remove specific variables from recorded engine-specific files."""
         pass
 
     def _collect_varvalues_from_config(self) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -207,15 +200,94 @@ class EngineVariablesHandler(ABC):
         self._write_variables_config(new_variables_config)
 
     def get_variable_names_assigned_in_config(self) -> list[str]:
-        """Return the variable names for which the user specified a value in `variables.yaml`."""
+        """Return variable names that should suppress preset defaults.
+
+        A variable is "assigned" (and therefore excluded from the preset) if:
+        - required/required_sensitive: has a non-null value
+        - overrides: key is PRESENT in the dict (even if null)
+
+        For overrides, presence means the user explicitly claimed the variable
+        (either set a value or had it nullified after a validation failure).
+        Commented-out defaults are YAML comments and don't create dict keys,
+        so they never suppress the preset.
+        """
         assigned_variable_names: list[str] = []
         assigned_variable_names.extend([k for k, v in self.variables_config.required.items() if v is not None])
         assigned_variable_names.extend(
             [k for k, v in self.variables_config.required_sensitive.items() if v is not None]
         )
-        assigned_variable_names.extend([k for k, v in self.variables_config.overrides.items() if v is not None])
+        # For overrides, non-null values suppress the preset.
+        # Null values ALSO suppress the preset — this enables re-prompting after
+        # nullification instead of silently falling back to the preset default.
+        assigned_variable_names.extend(list(self.variables_config.overrides.keys()))
 
         return assigned_variable_names
+
+    def nullify_failed_variables(self, var_names: list[str]) -> list[str]:
+        """Set failed variables to null so `jd config` re-prompts them.
+
+        Only nullifies "simple" values (scalars, list[str]). Complex values
+        (dicts, list[dict]) are left in place — re-entering those interactively
+        is worse than fixing a typo in your editor.
+
+        Returns:
+            List of variable names that were actually nullified.
+        """
+        curr_vars = self.variables_config
+        new_required = curr_vars.required.copy()
+        new_sensitive = curr_vars.required_sensitive.copy()
+        new_overrides = curr_vars.overrides.copy()
+        nullified: list[str] = []
+
+        for var_name in var_names:
+            # Find the current value across all sections
+            if var_name in new_required:
+                value = new_required[var_name]
+                if self._is_complex_value(value):
+                    continue
+                new_required[var_name] = None
+                nullified.append(var_name)
+            elif var_name in new_sensitive:
+                value = new_sensitive[var_name]
+                if self._is_complex_value(value):
+                    continue
+                new_sensitive[var_name] = None
+                nullified.append(var_name)
+            elif var_name in new_overrides:
+                value = new_overrides[var_name]
+                if self._is_complex_value(value):
+                    continue
+                new_overrides[var_name] = None
+                nullified.append(var_name)
+
+        if not nullified:
+            return []
+
+        new_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required=new_required,
+            required_sensitive=new_sensitive,
+            overrides=new_overrides,
+        )
+        self._write_variables_config(new_config)
+        return nullified
+
+    @staticmethod
+    def _is_complex_value(value: Any) -> bool:
+        """Return True if value is too complex to re-enter interactively.
+
+        Complex = non-empty dict, non-empty list, or list containing dicts.
+        Simple = scalar, None, empty list, empty dict.
+
+        Non-empty lists (even list[str]) are treated as complex because
+        re-typing a long list interactively is frustrating. Empty collections
+        are simple — nullifying them costs the user nothing.
+        """
+        if isinstance(value, dict):
+            return len(value) > 0
+        if isinstance(value, list):
+            return len(value) > 0
+        return False
 
     def sync_project_variables_config(self, updated_values: dict[str, Any]) -> None:
         """Update the project variables.yaml to match the values."""
@@ -240,6 +312,38 @@ class EngineVariablesHandler(ABC):
             overrides=new_overrides_dict,
         )
         self._write_variables_config(new_variables_config)
+
+    def reset_specific_variables(self, var_names: list[str]) -> None:
+        """Reset specific variables to their default state.
+
+        For required/required_sensitive variables (no default), sets to None
+        so terraform prompts for them on next run.
+        For overrides (has a default), restores the preset default value.
+        """
+        curr_vars = self.variables_config
+        new_required = curr_vars.required.copy()
+        new_sensitive = curr_vars.required_sensitive.copy()
+        new_overrides = curr_vars.overrides.copy()
+        defaults = self._get_defaults_for_comments()
+
+        for var_name in var_names:
+            if var_name in new_required:
+                new_required[var_name] = None
+            elif var_name in new_sensitive:
+                new_sensitive[var_name] = None
+            elif var_name in new_overrides:
+                if var_name in defaults:
+                    new_overrides[var_name] = defaults[var_name]
+                else:
+                    del new_overrides[var_name]
+
+        new_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
+            required=new_required,
+            required_sensitive=new_sensitive,
+            overrides=new_overrides,
+        )
+        self._write_variables_config(new_config)
 
     def reset_recorded_variables(self) -> bool:
         """Reset non-sensitive variables to their original values.

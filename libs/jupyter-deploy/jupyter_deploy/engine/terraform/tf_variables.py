@@ -17,6 +17,7 @@ from jupyter_deploy.engine.terraform.tf_constants import (
     get_preset_filename,
 )
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
+from jupyter_deploy.exceptions import ConfigurationError
 from jupyter_deploy.manifest import JupyterDeployManifest
 
 
@@ -113,10 +114,20 @@ class TerraformVariablesHandler(EngineVariablesHandler):
 
         Used during `jd config` so that a failed terraform plan doesn't corrupt
         the last-known-good recorded state.
+
+        Raises:
+            ConfigurationError: If a variable value has an incorrect type (e.g. list
+                instead of map). The message tells the user which variable to fix.
         """
         varvalues, sensitive_varvalues = self._collect_varvalues_from_config()
-        self.update_variable_records_staging(varvalues)
-        self.update_variable_records_staging(sensitive_varvalues, sensitive=True)
+        try:
+            self.update_variable_records_staging(varvalues)
+            self.update_variable_records_staging(sensitive_varvalues, sensitive=True)
+        except (TypeError, KeyError) as e:
+            raise ConfigurationError(
+                str(e),
+                hint="Fix the value in variables.yaml and run 'jd config' again.",
+            ) from None
 
     def update_variable_records_staging(self, varvalues: dict[str, Any], sensitive: bool = False) -> None:
         """Write variable values to staging .tfvars files (not the recorded files).
@@ -211,6 +222,33 @@ class TerraformVariablesHandler(EngineVariablesHandler):
             fs_utils.write_inline_file_content(filtered_tfvars_file_path, updated_tfvars_lines)
 
         return filtered_tfvars_file_path
+
+    def delete_recorded_varfiles(self) -> None:
+        """Delete recorded .tfvars files without resetting variables.yaml.
+
+        Used by --reset-variable to clear stale recorded values so that
+        terraform re-reads from the (updated) staging varfiles on next plan.
+        """
+        fs_utils.delete_file_if_exists(self.get_recorded_variables_filepath())
+        fs_utils.delete_file_if_exists(self.get_recorded_secrets_filepath())
+        fs_utils.delete_file_if_exists(self.get_staging_variables_filepath())
+        fs_utils.delete_file_if_exists(self.get_staging_secrets_filepath())
+
+    def remove_variables_from_recorded(self, var_names: list[str]) -> None:
+        """Remove specific variables from the recorded .tfvars files.
+
+        Rewrites the recorded varfiles without the specified variables, so
+        terraform won't pick up stale values for reset variables.
+        """
+        for path in [self.get_recorded_variables_filepath(), self.get_recorded_secrets_filepath()]:
+            if not fs_utils.file_exists(path):
+                continue
+            content = fs_utils.read_short_file(path)
+            updated = tf_varfiles.parse_and_remove_overridden_variables_from_content(content, var_names)
+            if updated:
+                fs_utils.write_inline_file_content(path, updated)
+            else:
+                fs_utils.delete_file_if_exists(path)
 
     def reset_recorded_variables(self) -> bool:
         """Reset recorded variables and delete the tfvars file.

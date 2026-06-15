@@ -52,6 +52,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         mock_get_template_variables = Mock()
         mock_update_variable_records = Mock()
         mock_create_filtered_preset_file = Mock()
+        mock_nullify_failed_variables = Mock(return_value=[])
 
         mock_handler.get_recorded_variables_filepath = mock_get_recorded_variables_filepath
         mock_handler.get_recorded_secrets_filepath = mock_get_recorded_secrets_filepath
@@ -65,6 +66,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
         mock_handler.get_template_variables = mock_get_template_variables
         mock_handler.update_variable_records = mock_update_variable_records
         mock_handler.create_filtered_preset_file = mock_create_filtered_preset_file
+        mock_handler.nullify_failed_variables = mock_nullify_failed_variables
 
         mock_get_recorded_variables_filepath.return_value = TestTerraformConfigHandler.MOCK_RECORD_VARS_PATH
         mock_get_recorded_secrets_filepath.return_value = TestTerraformConfigHandler.MOCK_RECORD_SECRETS_PATH
@@ -86,6 +88,7 @@ class TestTerraformConfigHandler(unittest.TestCase):
             "get_template_variables": mock_get_template_variables,
             "update_variables_record": mock_update_variable_records,
             "create_filtered_preset_file": mock_create_filtered_preset_file,
+            "nullify_failed_variables": mock_nullify_failed_variables,
         }
 
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
@@ -895,3 +898,70 @@ class TestTerraformConfigHandler(unittest.TestCase):
 
         self.assertEqual(str(context.exception), "Failed to delete 2 log file(s)")
         mock_history.clear_logs.assert_called_once_with("config")
+
+    @patch("jupyter_deploy.engine.terraform.tf_supervised_executor_factory.create_terraform_executor")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    def test_configure_nullifies_failed_variables_on_plan_failure(
+        self, mock_variable_handler_cls: Mock, mock_create_executor: Mock
+    ) -> None:
+        """On plan failure, variables that failed validation are nullified."""
+        # Arrange
+        mock_vars_handler, mock_vars_fns = self.get_mock_variable_handler_and_fns()
+        mock_variable_handler_cls.return_value = mock_vars_handler
+        mock_vars_fns["nullify_failed_variables"].return_value = ["subdomain"]
+
+        # Capture the plan callback so we can inject error lines into its buffer
+        captured_callbacks: list[object] = []
+
+        def factory_side_effect(**kwargs: object) -> Mock:
+            captured_callbacks.append(kwargs.get("execution_callback"))
+            mock_executor = Mock()
+            # init=0 on first call, plan=1 on second
+            if len(captured_callbacks) == 1:
+                mock_executor.execute.return_value = 0
+            else:
+                # Inject validation error lines before returning failure
+                callback = kwargs["execution_callback"]
+                callback._line_buffer.extend(  # type: ignore[attr-defined]
+                    [
+                        "│ Error: Invalid value for variable",
+                        '│   on variables.tf line 230, in variable "subdomain":',
+                        "│ The subdomain must only contain letters.",
+                    ]
+                )
+                mock_executor.execute.return_value = 1
+            return mock_executor
+
+        mock_create_executor.side_effect = factory_side_effect
+
+        handler = TerraformConfigHandler(Path("/fake/path"), Mock(), self.get_mock_command_history(), NullDisplay())
+
+        # Act
+        with self.assertRaises(SupervisedExecutionError):
+            handler.configure()
+
+        # Assert — nullify_failed_variables was called with the extracted var name
+        mock_vars_fns["nullify_failed_variables"].assert_called_once_with(["subdomain"])
+
+    @patch("jupyter_deploy.engine.terraform.tf_supervised_executor_factory.create_terraform_executor")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    def test_configure_does_not_nullify_on_plan_success(
+        self, mock_variable_handler_cls: Mock, mock_create_executor: Mock
+    ) -> None:
+        """On plan success, nullify_failed_variables is NOT called."""
+        # Arrange
+        mock_vars_handler, mock_vars_fns = self.get_mock_variable_handler_and_fns()
+        mock_variable_handler_cls.return_value = mock_vars_handler
+
+        # Mock executor: init succeeds, plan succeeds
+        mock_executor = Mock()
+        mock_executor.execute.return_value = 0
+        mock_create_executor.return_value = mock_executor
+
+        handler = TerraformConfigHandler(Path("/fake/path"), Mock(), self.get_mock_command_history(), NullDisplay())
+
+        # Act
+        handler.configure()
+
+        # Assert — nullify_failed_variables was NOT called
+        mock_vars_fns["nullify_failed_variables"].assert_not_called()

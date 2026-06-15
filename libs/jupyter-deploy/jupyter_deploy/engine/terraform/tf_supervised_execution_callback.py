@@ -1,6 +1,8 @@
 """Terraform-specific execution callback for prompt detection and context extraction."""
 
+import json
 import re
+from typing import Any
 
 from jupyter_deploy.engine.supervised_execution import CompletionContext, DisplayManager, InteractionContext
 from jupyter_deploy.engine.supervised_execution_callback import EngineExecutionCallback, NoopExecutionCallback
@@ -10,6 +12,45 @@ from jupyter_deploy.engine.terraform.tf_enums import TerraformSequenceId
 # Example raw line: "  \x1b[1mEnter a value:\x1b[0m \x1b[0m"
 # After stripping: "Enter a value:"
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+
+# Regex to extract a variable name from terraform's prompt context line
+# Matches lines like "var.subdomain" or "  var.oauth_app_client_id"
+VAR_NAME_RE = re.compile(r"var\.(\w+)")
+
+# Regex to extract variable names from terraform validation error blocks.
+# Terraform emits the variable name in several forms within error blocks:
+#   ' 219: variable "subdomain" {'          (validation block, modern tf 1.5+)
+#   '  on variables.tf line X, in variable "subdomain":'  (validation block, older tf)
+#   'var.custom_tags declared at ...'       (type mismatch from -var-file)
+VALIDATION_VAR_RE = re.compile(r'variable "(\w+)"')
+VALIDATION_VAR_DECLARED_RE = re.compile(r"var\.(\w+)\s+declared at")
+
+
+def _parse_hcl_interactive_value(raw: str) -> Any:
+    """Parse a value entered interactively in a terraform prompt.
+
+    Terraform accepts JSON-compatible syntax for collections in interactive prompts.
+    This converts the raw string to a native Python type so it round-trips through YAML:
+      - '["a", "b"]'   → list ["a", "b"]
+      - '["a", "b",]'  → list ["a", "b"]  (HCL allows trailing commas)
+      - '{"k": "v"}'   → dict {"k": "v"}
+      - '[{"k":"v"}]'  → list of dicts
+      - 'hello'        → str "hello"
+      - ''             → str ""
+    """
+    stripped = raw.strip()
+    if stripped.startswith("[") or stripped.startswith("{"):
+        try:
+            return json.loads(stripped)
+        except (json.JSONDecodeError, ValueError):
+            pass
+        # HCL allows trailing commas — strip them and retry
+        cleaned = re.sub(r",\s*([}\]])", r"\1", stripped)
+        try:
+            return json.loads(cleaned)
+        except (json.JSONDecodeError, ValueError):
+            return raw
+    return raw
 
 
 class TerraformSupervisedExecutionCallback(EngineExecutionCallback):
@@ -30,6 +71,95 @@ class TerraformSupervisedExecutionCallback(EngineExecutionCallback):
         """
         super().__init__(display_manager)
         self.sequence_id = sequence_id
+
+        # Interactive variable capture: tracks values entered via terraform prompts.
+        # _pending_var_name is set when we detect a var.X prompt; cleared when stdin responds.
+        self._pending_var_name: str | None = None
+        self._captured_variables: dict[str, Any] = {}
+
+    @property
+    def captured_variables(self) -> dict[str, Any]:
+        """Return variables captured from interactive prompts (var_name → user input)."""
+        return self._captured_variables
+
+    def on_stdin_line(self, line: str) -> None:
+        """Capture the user's response to a terraform variable prompt.
+
+        Called by PromptHandler each time a line is forwarded from stdin to the
+        subprocess. Associates the value with the pending variable name.
+
+        HCL collections (lists/dicts) are parsed via JSON into native Python types
+        so they round-trip correctly through YAML:
+          '["a","b"]'           → ["a", "b"]
+          '{"k": "v"}'         → {"k": "v"}
+          '[{"k":"v"},{"k2":"v2"}]' → [{"k":"v"}, {"k2":"v2"}]
+
+        Empty strings are captured as "" (valid for nullable variables).
+        """
+        if self._pending_var_name:
+            value = line.rstrip("\n")
+            parsed = _parse_hcl_interactive_value(value)
+            self._captured_variables[self._pending_var_name] = parsed
+            self._pending_var_name = None
+
+    def handle_interaction(self, line: str) -> None:
+        """Override to extract the variable name before delegating to parent.
+
+        When a prompt is first detected, we scan the buffer for the var.X line
+        and mark it as pending — the next on_stdin_line call will associate the
+        user's input with this variable.
+        """
+        if not self._waiting_for_interaction:
+            # First prompt line — extract variable name from buffer context
+            var_name = self._extract_pending_var_name()
+            if var_name:
+                self._pending_var_name = var_name
+        super().handle_interaction(line)
+
+    def extract_failed_variable_names(self) -> list[str]:
+        """Extract variable names from terraform validation error blocks.
+
+        Scans the line buffer for "Invalid value for [input] variable" error
+        headers, then extracts the variable name from the subsequent lines.
+        Only captures variable-level validation failures — not check/precondition
+        blocks (those reference resources, not variables).
+
+        Terraform emits two header variants:
+          "Error: Invalid value for variable"       — validation block failures
+          "Error: Invalid value for input variable" — type mismatch errors
+
+        Followed by:
+          │  219: variable "subdomain" {           (modern terraform 1.5+)
+          │   on variables.tf line X, in variable "subdomain":  (older)
+        """
+        failed_vars: list[str] = []
+        in_variable_error_block = False
+
+        for line in self._line_buffer:
+            clean = ANSI_ESCAPE.sub("", line).strip()
+
+            if "Invalid value for" in clean and "variable" in clean:
+                in_variable_error_block = True
+                continue
+
+            if in_variable_error_block:
+                match = VALIDATION_VAR_RE.search(clean) or VALIDATION_VAR_DECLARED_RE.search(clean)
+                if match:
+                    var_name = match.group(1)
+                    if var_name not in failed_vars:
+                        failed_vars.append(var_name)
+                    in_variable_error_block = False
+
+        return failed_vars
+
+    def _extract_pending_var_name(self) -> str | None:
+        """Scan the line buffer backwards for the most recent var.X line."""
+        for i in range(len(self._line_buffer) - 1, -1, -1):
+            clean_line = ANSI_ESCAPE.sub("", self._line_buffer[i])
+            match = VAR_NAME_RE.search(clean_line)
+            if match:
+                return match.group(1)
+        return None
 
     def _detect_interaction(self, line: str) -> bool:
         """Detect terraform prompts (cheap check).
@@ -206,6 +336,10 @@ class TerraformNoopExecutionCallback(NoopExecutionCallback):
     """No-op execution callback with terraform-specific prompt detection for verbose mode.
 
     Extends NoopExecutionCallback to add terraform prompt detection for stdin coordination.
+
+    Does NOT support extract_failed_variable_names or interactive value capture —
+    verbose mode is used by agents that pass values via flags/yaml and cannot
+    respond to interactive prompts. Nullifying variables would leave them stuck.
     """
 
     def __init__(self, display_manager: DisplayManager) -> None:
