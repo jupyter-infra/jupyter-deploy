@@ -688,3 +688,19 @@ class TestConfigHandler(unittest.TestCase):
         handler = ConfigHandler(display_manager=NullDisplay())
         # Should return immediately without error
         handler.restore_secrets()
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
+    def test_reset_variables_delegates_to_variables_handler(
+        self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
+    ) -> None:
+        mock_retrieve_manifest.return_value = self.mock_manifest
+        tf_mock_handler_instance, _ = self.get_mock_handler_and_fns()
+        mock_tf_handler.return_value = tf_mock_handler_instance
+
+        handler = ConfigHandler(display_manager=NullDisplay())
+        handler.reset_variables(["domain", "custom_tags"])
+
+        tf_mock_handler_instance.variables_handler.reset_specific_variables.assert_called_once_with(
+            ["domain", "custom_tags"]
+        )
