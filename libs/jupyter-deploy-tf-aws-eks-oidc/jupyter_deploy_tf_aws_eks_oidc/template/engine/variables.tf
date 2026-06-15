@@ -281,6 +281,26 @@ variable "custom_tags" {
     Recommended: {}
   EOT
   type        = map(string)
+
+  validation {
+    condition     = alltrue([for k, v in var.custom_tags : !startswith(k, "aws:")])
+    error_message = "Tag keys must not start with 'aws:' (reserved prefix)."
+  }
+
+  validation {
+    condition     = alltrue([for k, v in var.custom_tags : length(k) >= 1 && length(k) <= 128])
+    error_message = "Tag keys must be between 1 and 128 characters."
+  }
+
+  validation {
+    condition     = alltrue([for k, v in var.custom_tags : length(v) <= 256])
+    error_message = "Tag values must not exceed 256 characters."
+  }
+
+  validation {
+    condition     = alltrue([for k, v in var.custom_tags : can(regex("^[\\w\\s_.:/=+\\-@]+$", k))])
+    error_message = "Tag keys may only contain Unicode letters, digits, whitespace, and _.:/=+-@"
+  }
 }
 
 variable "workspace_operator_namespace" {
