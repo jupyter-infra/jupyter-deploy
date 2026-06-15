@@ -32,7 +32,7 @@ resource "helm_release" "traefik_crds" {
 
   # Access policy associations must outlive all K8s resources — without them the
   # K8s/Helm provider loses authorization and destroy operations fail with "forbidden".
-  depends_on = [aws_eks_addon.cert_manager, aws_eks_access_policy_association.admin, aws_eks_access_policy_association.caller]
+  depends_on = [aws_eks_addon.cert_manager, aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user]
 }
 
 resource "helm_release" "jupyter_k8s" {

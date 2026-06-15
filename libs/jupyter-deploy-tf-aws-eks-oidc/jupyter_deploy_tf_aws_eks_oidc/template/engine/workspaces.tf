@@ -45,8 +45,8 @@ resource "null_resource" "destroy_workspaces" {
     module.node_group,
     kubernetes_namespace_v1.shared,
     module.eks_cluster,
-    aws_eks_access_policy_association.admin,
-    aws_eks_access_policy_association.caller,
+    aws_eks_access_policy_association.admin_role,
+    aws_eks_access_policy_association.admin_user,
   ]
 }
 
@@ -58,10 +58,7 @@ resource "kubernetes_namespace_v1" "shared" {
     }
   }
 
-  # Access entries and their policy associations must outlive all K8s resources —
-  # without them the K8s/Helm provider loses authorization and destroy operations
-  # fail with "Unauthorized" or "forbidden".
-  depends_on = [module.eks_cluster, aws_eks_access_policy_association.admin, aws_eks_access_policy_association.caller]
+  depends_on = [module.eks_cluster, aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user]
 }
 
 resource "helm_release" "github_rbac" {

@@ -37,8 +37,8 @@ overrides:
   #     desired_size: "1"
   # workspace_rbac_namespaces:
   #   - default
-  # admin_role_names:
-  #   - Admin
+  # admin_role_names: []
+  # admin_user_names: []
   # cluster_log_retention_days: 30
   # custom_tags: {}
   # workspace_operator_namespace: jupyter-k8s-system

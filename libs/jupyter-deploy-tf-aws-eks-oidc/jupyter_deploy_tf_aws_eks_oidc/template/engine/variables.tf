@@ -240,19 +240,49 @@ variable "workspace_rbac_namespaces" {
 
 variable "admin_role_names" {
   description = <<-EOT
-    List of IAM role names to grant EKS cluster admin and workspace admin permissions.
+    IAM role names to grant EKS cluster admin and workspace admin permissions.
 
-    Values may embed the IAM path prefix (e.g. "ci/DeployRole" for a role at path /ci/).
+    The caller's own IAM role is always included automatically. However, you
+    should explicitly list every role that may run <jd config> or <jd up>
+    (e.g. your Admin role, CI/CD roles). This ensures switching between callers
+    produces no Terraform state diff.
+
+    Pass the bare role name only (e.g. "Admin"), not the path. IAM role
+    names are unique per AWS account regardless of path, so the name alone is
+    sufficient to identify the role.
+
     Each role gets the AmazonEKSClusterAdminPolicy and the 'cluster-workspace-admin'
     Kubernetes group, which allows managing all workspaces regardless of ownership.
 
-    Example: ["Admin", "ci/DeployRole"]
+    Example: ["Admin", "DeployRole"]
   EOT
   type        = list(string)
 
   validation {
-    condition     = alltrue([for name in var.admin_role_names : can(regex("^[a-zA-Z0-9/_+=,.@-]+$", name))])
-    error_message = "Each entry must be a valid IAM role name or path/name (e.g. 'Admin' or 'path/to/MyRole')."
+    condition     = alltrue([for name in var.admin_role_names : can(regex("^[a-zA-Z0-9_+=,.@-]+$", name))])
+    error_message = "Each entry must be a bare IAM role name (e.g. 'Admin' or 'DeployRole'). Do not include the path."
+  }
+}
+
+variable "admin_user_names" {
+  description = <<-EOT
+    IAM user names to grant EKS cluster admin and workspace admin permissions.
+
+    The caller's own IAM user is always included automatically. However, you
+    should explicitly list every user that may run <jd config> or <jd up>
+    (e.g. your Admin user, shared users). This ensures switching between callers
+    produces no Terraform state diff.
+
+    Each user gets the AmazonEKSClusterAdminPolicy and the 'cluster-workspace-admin'
+    Kubernetes group, which allows managing all workspaces regardless of ownership.
+
+    Example: ["Admin"]
+  EOT
+  type        = list(string)
+
+  validation {
+    condition     = alltrue([for name in var.admin_user_names : can(regex("^[a-zA-Z0-9/_+=,.@-]+$", name))])
+    error_message = "Each entry must be a valid IAM user name (e.g. 'Admin' or 'my-user')."
   }
 }
 
