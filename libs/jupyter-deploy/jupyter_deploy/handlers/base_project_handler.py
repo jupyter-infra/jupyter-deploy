@@ -147,7 +147,10 @@ def retrieve_variables_config(variables_config_path: Path) -> variables_config.J
         raise FileNotFoundError("Missing jupyter-deploy variables config file.")
 
     with open(variables_config_path) as variables_manifest_file:
-        content = yaml.safe_load(variables_manifest_file)
+        try:
+            content = yaml.safe_load(variables_manifest_file)
+        except yaml.YAMLError as e:
+            raise InvalidVariablesDotYamlError(f"Invalid YAML syntax in variables.yaml: {e}") from None
 
     if not isinstance(content, dict):
         raise InvalidVariablesDotYamlError(
@@ -159,7 +162,11 @@ def retrieve_variables_config(variables_config_path: Path) -> variables_config.J
     adapter: TypeAdapter[variables_config.JupyterDeployVariablesConfig] = TypeAdapter(
         variables_config.JupyterDeployVariablesConfig
     )
-    return adapter.validate_python(content)  # type: ignore[return-value]
+    try:
+        return adapter.validate_python(content)  # type: ignore[return-value]
+    except ValidationError as e:
+        errors = "; ".join([f"{err['loc']}: {err['msg']}" for err in e.errors()])
+        raise InvalidVariablesDotYamlError(f"Invalid variables.yaml: {errors}") from None
 
 
 def retrieve_store_config(project_path: Path) -> store_config.JupyterDeployStoreConfig | None:

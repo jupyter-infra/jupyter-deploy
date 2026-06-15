@@ -4,6 +4,7 @@ from unittest.mock import Mock, call, patch
 
 from jupyter_deploy.engine.supervised_execution import NullDisplay
 from jupyter_deploy.engine.terraform.tf_variables import TerraformVariablesHandler
+from jupyter_deploy.exceptions import ConfigurationError
 
 
 class TestTerraformVariablesHandler(unittest.TestCase):
@@ -644,3 +645,47 @@ class TestResetRecordedSecrets(unittest.TestCase):
 
         mock_parent_reset.assert_called_once()
         mock_delete_file.assert_called_once()
+
+
+class TestSyncEngineVarfilesToStagingErrorHandling(unittest.TestCase):
+    @patch.object(TerraformVariablesHandler, "update_variable_records_staging")
+    @patch.object(TerraformVariablesHandler, "_collect_varvalues_from_config")
+    def test_raises_configuration_error_on_type_error(self, mock_collect: Mock, mock_update_staging: Mock) -> None:
+        handler = TerraformVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        mock_collect.return_value = ({"custom_tags": []}, {})
+        mock_update_staging.side_effect = TypeError("Invalid value for variable 'custom_tags': []")
+
+        with self.assertRaises(ConfigurationError) as ctx:
+            handler.sync_engine_varfiles_to_staging()
+
+        self.assertIn("custom_tags", str(ctx.exception))
+        self.assertEqual(ctx.exception.hint, "Fix the value in variables.yaml and run 'jd config' again.")
+
+    @patch.object(TerraformVariablesHandler, "update_variable_records_staging")
+    @patch.object(TerraformVariablesHandler, "_collect_varvalues_from_config")
+    def test_raises_configuration_error_on_key_error(self, mock_collect: Mock, mock_update_staging: Mock) -> None:
+        handler = TerraformVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        mock_collect.return_value = ({"unknown_var": "value"}, {})
+        mock_update_staging.side_effect = KeyError("Variable not found: unknown_var")
+
+        with self.assertRaises(ConfigurationError) as ctx:
+            handler.sync_engine_varfiles_to_staging()
+
+        self.assertIn("unknown_var", str(ctx.exception))
+        self.assertEqual(ctx.exception.hint, "Fix the value in variables.yaml and run 'jd config' again.")
+
+    @patch.object(TerraformVariablesHandler, "update_variable_records_staging")
+    @patch.object(TerraformVariablesHandler, "_collect_varvalues_from_config")
+    def test_does_not_raise_on_success(self, mock_collect: Mock, mock_update_staging: Mock) -> None:
+        handler = TerraformVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        mock_collect.return_value = ({"domain": "test.com"}, {})
+
+        handler.sync_engine_varfiles_to_staging()
+
+        mock_update_staging.assert_called()

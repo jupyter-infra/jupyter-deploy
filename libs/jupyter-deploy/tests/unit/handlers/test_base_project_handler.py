@@ -2,7 +2,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, mock_open, patch
 
-from pydantic import ValidationError
 from yaml.parser import ParserError
 
 from jupyter_deploy.constants import MANIFEST_FILENAME
@@ -389,9 +388,10 @@ class TestRetrieveVariablesConfig(unittest.TestCase):
         variables_config_path = Path("/fake/path/variables.yaml")
         mock_yaml_load.side_effect = ParserError("YAML parsing error")
 
-        # Execute and Assert
-        with self.assertRaises(ParserError):
+        # Execute and Assert — wraps ParserError as InvalidVariablesDotYamlError
+        with self.assertRaises(InvalidVariablesDotYamlError) as ctx:
             retrieve_variables_config(variables_config_path)
+        self.assertIn("YAML syntax", str(ctx.exception))
 
     @patch("jupyter_deploy.fs_utils.file_exists")
     @patch("builtins.open", new_callable=mock_open, read_data="- item1\n- item2")
@@ -424,6 +424,6 @@ class TestRetrieveVariablesConfig(unittest.TestCase):
             "required": ["I", "should", "be", "a", "dict"],
         }
 
-        # Execute and Assert
-        with self.assertRaises(ValidationError):
+        # Execute and Assert — wraps ValidationError as InvalidVariablesDotYamlError
+        with self.assertRaises(InvalidVariablesDotYamlError):
             retrieve_variables_config(variables_config_path)
