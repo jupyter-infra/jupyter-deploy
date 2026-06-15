@@ -1,0 +1,70 @@
+# Build and publish the roborev review image to ECR.
+#
+# The review image (roborev + claude-code agent + gh) is published occasionally,
+# when its pinned tool versions change, not per PR. Consumer repos pull it from
+# ECR in their review workflows.
+#
+# Prerequisites (one-time, by a maintainer):
+#   - Deploy the tf-aws-review-ci template (`jd init`/`jd up`), which creates the
+#     ECR repo and the publish role, and stores the project for `just ci-restore`.
+#   - Set repo variable REVIEW_PUBLISH_ROLE_ARN to the template's
+#     review_publish_iam_role_arn output. Until it is set, this workflow is inert.
+#
+# Mirrors .github/workflows/e2e-build-image.yml, which hardcodes its (already
+# deployed) role ARN; here the ARN is a repo variable so the workflow can be
+# merged before the infrastructure exists.
+
+name: Build review image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/review/**"
+      - ".github/workflows/review-build-image.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and push review image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: vars.REVIEW_PUBLISH_ROLE_ARN != ''
+    environment: review
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.REVIEW_PUBLISH_ROLE_ARN }}
+          aws-region: ${{ vars.REVIEW_AWS_REGION || 'us-west-2' }}
+
+      - name: Restore review CI project
+        run: just ci-restore review-ci
+
+      - name: Pull previous image for cache
+        run: just ci-review-pull || true
+
+      - name: Build review image
+        run: |
+          ECR_URL=$(just ci-review-ecr-url)
+          just ci-review-build "$ECR_URL:latest"
+
+      - name: Push to ECR
+        run: just ci-review-push ${{ github.sha }}
