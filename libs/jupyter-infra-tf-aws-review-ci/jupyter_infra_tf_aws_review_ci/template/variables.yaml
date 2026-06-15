@@ -1,0 +1,24 @@
+schema_version: 1
+required:
+  # either assign values below
+  # or run 'jd config' to use the interactive experience
+  github_org: null
+  review_repos: null
+required_sensitive: {}
+overrides:
+  # set variable values as <variable-name>: <variable-value>
+  # delete or comment out a line to use the default
+  # publish_repo: jupyter-deploy
+  # bedrock_model_arns: ["arn:aws:bedrock:us-west-2:123456789012:inference-profile/us.anthropic.claude-sonnet-4-*"]
+defaults:
+  # read-only: do not modify this section
+  # instead add overrides in the override section
+  region: us-west-2
+  publish_repo: jupyter-deploy
+  iam_roles_prefix: jupyter-infra-review
+  resource_name_prefix: jupyter-infra-review
+  review_image_retain_count: 5
+  create_oidc_provider: true
+  bedrock_model_arns:
+  - "arn:aws:bedrock:us-*::foundation-model/anthropic.claude-*"
+  - "arn:aws:bedrock:us-*:*:inference-profile/us.anthropic.claude-*"

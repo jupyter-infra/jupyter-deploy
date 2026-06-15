@@ -1,0 +1,59 @@
+# Jupyter-deploy: Review CI Infrastructure Template (tf-aws-review-ci)
+
+## Project organization
+
+This project manages AWS resources for automated roborev PR reviews in GitHub
+Actions CI. It uses Terraform as the infrastructure-as-code engine and deploys
+an ECR repository for the review image and two IAM roles scoped to GitHub
+Actions environments.
+
+**IMPORTANT:** The GitHub Actions OIDC provider is a singleton per AWS account.
+Only one can exist for `token.actions.githubusercontent.com`. If another deployment
+in this account already created it (for example the tf-aws-iam-ci template), set
+`create_oidc_provider` to `false` to reference the existing one via data source.
+
+### Resources managed
+
+- **OIDC provider** — GitHub Actions federation (conditional)
+- **ECR repository** — stores the roborev review image
+- **Publish role** — assumed by the publishing repo's review environment to push the image
+- **Run role** — assumed by consumer repos' review environment to pull the image and invoke Bedrock
+
+The run role can only pull the review image and invoke the configured Bedrock
+models. This bounds what a prompt-injected review of an untrusted diff can do.
+
+## Usage
+{{ jupyter-deploy-cli-general-instructions }}
+
+## General project information
+{{ show-info-instructions }}
+
+### Configure and create the infrastructure
+{{ config-up-instructions }}
+
+{{ set-variables-with-cmd-instructions }}
+
+{{ set-variables-with-file-instructions }}
+
+{{ read-variables-with-cmd-instructions }}
+
+### View the full terraform logs
+
+{{ history-logs-instructions }}
+
+### Delete all the resources
+
+{{ down-instructions }}
+
+## The terraform project
+
+### Engine directory
+
+The core terraform files are located in `./engine`, including `main.tf`, `variables.tf` and `outputs.tf`.
+Standalone resources, such as IAM roles or the ECR repository, are defined in `./engine/modules` as standard
+terraform modules.
+
+### Presets
+`./engine/presets` correspond to optional set of default variables. Users SHOULD NOT modify these files.
+
+{{ generated-by-footer }}

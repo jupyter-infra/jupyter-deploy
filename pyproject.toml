@@ -18,6 +18,7 @@ members = [
     "libs/jupyter-deploy-tf-aws-ec2-base",
     "libs/jupyter-deploy-tf-aws-eks-oidc",
     "libs/jupyter-infra-tf-aws-iam-ci",
+    "libs/jupyter-infra-tf-aws-review-ci",
     "libs/pytest-jupyter-deploy",
     "images/uvbase"
 ]
