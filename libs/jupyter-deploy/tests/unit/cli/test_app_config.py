@@ -36,6 +36,7 @@ class TestConfigCommand(unittest.TestCase):
         mock_reset_store_id = Mock()
         mock_restore_secrets = Mock()
         mock_mask_secrets = Mock()
+        mock_reset_specific_variables = Mock()
 
         mock_config_handler.has_recorded_variables = mock_has_recorded_variables
         mock_config_handler.verify_preset_exists = mock_verify_preset_exists
@@ -52,6 +53,7 @@ class TestConfigCommand(unittest.TestCase):
         mock_config_handler.reset_store_id = mock_reset_store_id
         mock_config_handler.restore_secrets = mock_restore_secrets
         mock_config_handler.mask_secrets = mock_mask_secrets
+        mock_config_handler.reset_variables = mock_reset_specific_variables
 
         mock_has_recorded_variables.return_value = False
         mock_verify_preset_exists.return_value = True
@@ -77,6 +79,7 @@ class TestConfigCommand(unittest.TestCase):
             "reset_store_id": mock_reset_store_id,
             "restore_secrets": mock_restore_secrets,
             "mask_secrets": mock_mask_secrets,
+            "reset_variables": mock_reset_specific_variables,
         }
 
     @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
@@ -558,3 +561,30 @@ class TestConfigCommand(unittest.TestCase):
         self.assertEqual(result.exit_code, 1)
         mock_config_fns["restore_secrets"].assert_called_once()
         mock_config_fns["configure"].assert_not_called()
+
+    # --reset-variable tests
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    def test_config_reset_variable_single(self, mock_config_handler: Mock) -> None:
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["config", "--reset-variable", "domain"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_config_fns["reset_variables"].assert_called_once_with(["domain"])
+
+    @patch("jupyter_deploy.handlers.project.config_handler.ConfigHandler")
+    def test_config_reset_variable_multiple(self, mock_config_handler: Mock) -> None:
+        mock_config_handler_instance, mock_config_fns = self.get_mock_config_handler()
+        mock_config_handler.return_value = mock_config_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app_runner.app,
+            ["config", "--reset-variable", "domain", "--reset-variable", "custom_tags"],
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        mock_config_fns["reset_variables"].assert_called_once_with(["domain", "custom_tags"])

@@ -8,7 +8,6 @@ from pytest_jupyter_deploy.oauth2_proxy.github import GitHubOAuth2ProxyApplicati
 
 
 def _make_app(
-    is_ci: bool = False,
     ci_email: str | None = None,
     ci_password: str | None = None,
     ci_totp_fn: Mock | None = None,
@@ -20,7 +19,6 @@ def _make_app(
         page=page,
         jupyterlab_url="https://app.example.com/lab",
         storage_state_path=storage_state_path or Path("/tmp/test-state.json"),
-        is_ci=is_ci,
         ci_email=ci_email,
         ci_password=ci_password,
         ci_totp_fn=ci_totp_fn,
@@ -93,25 +91,6 @@ class TestTryAuthSession(unittest.TestCase):
 
         assert result is True
         mock_handle_oauth.assert_called_once()
-
-
-class TestLoginWithAuthSession(unittest.TestCase):
-    def test_succeeds_when_cookies_valid(self) -> None:
-        app, page = _make_app()
-        type(page).url = PropertyMock(return_value="https://app.example.com/lab")
-        with patch.object(app, "_try_auth_session", return_value=True):
-            # Should not raise
-            app.login_with_auth_session()
-
-    def test_raises_when_cookies_expired(self) -> None:
-        app, page = _make_app()
-        type(page).url = PropertyMock(return_value="https://github.com/login")
-
-        with patch.object(app, "_try_auth_session", return_value=False), self.assertRaises(RuntimeError) as ctx:
-            app.login_with_auth_session()
-
-        assert "GitHub authentication required" in str(ctx.exception)
-        assert "just auth-setup" in str(ctx.exception)
 
 
 class TestLoginWith2fa(unittest.TestCase):
@@ -188,27 +167,19 @@ class TestLoginWith2fa(unittest.TestCase):
 
 
 class TestEnsureAuthenticated(unittest.TestCase):
-    def test_ci_mode_dispatches_to_login_with_2fa(self) -> None:
+    def test_dispatches_to_login_with_2fa(self) -> None:
         totp_fn = Mock()
-        app, _ = _make_app(is_ci=True, ci_email="bot@example.com", ci_password="s3cret", ci_totp_fn=totp_fn)
+        app, _ = _make_app(ci_email="bot@example.com", ci_password="s3cret", ci_totp_fn=totp_fn)
 
         with patch.object(app, "login_with_2fa") as mock_2fa:
             app.ensure_authenticated()
 
         mock_2fa.assert_called_once_with("bot@example.com", "s3cret", totp_fn)
 
-    def test_local_mode_dispatches_to_login_with_auth_session(self) -> None:
-        app, _ = _make_app(is_ci=False)
-
-        with patch.object(app, "login_with_auth_session") as mock_session:
-            app.ensure_authenticated()
-
-        mock_session.assert_called_once()
-
-    def test_ci_mode_raises_without_credentials(self) -> None:
-        app, _ = _make_app(is_ci=True)
+    def test_raises_without_credentials(self) -> None:
+        app, _ = _make_app()
 
         with self.assertRaises(RuntimeError) as ctx:
             app.ensure_authenticated()
 
-        assert "--ci --ci-dir" in str(ctx.exception)
+        assert "--ci-dir" in str(ctx.exception)

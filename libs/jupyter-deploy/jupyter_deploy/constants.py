@@ -1,5 +1,6 @@
 MANIFEST_FILENAME = "manifest.yaml"
 VARIABLES_FILENAME = "variables.yaml"
+VARIABLES_DEFAULTS_FILENAME = "variables-defaults.yaml"
 HISTORY_DIR = ".jd-history"
 JD_DIR = ".jd"
 STORE_CONFIG_FILENAME = "store.yaml"

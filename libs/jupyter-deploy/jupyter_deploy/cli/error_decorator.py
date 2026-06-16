@@ -177,7 +177,7 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
     except InvalidVariablesDotYamlError as e:
         console.print(f":x: {e}", style="bold red")
         console.line()
-        console.print(":bulb: Review your variables.yaml file for syntax errors")
+        console.print(":bulb: Review your variables.yaml file for syntax errors", style="dim")
         raise typer.Exit(code=1) from None
 
     except LogNotFoundError as e:
@@ -314,6 +314,9 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
     # Keep base classes below so that child classes special handling take precedence
     except ConfigurationError as e:
         console.print(f":x: {e}", style="bold red")
+        if e.hint:
+            console.line()
+            console.print(f":bulb: {e.hint}", style="dim")
         raise typer.Exit(code=1) from None
 
     except JupyterDeployError as e:

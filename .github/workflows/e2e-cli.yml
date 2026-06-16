@@ -64,7 +64,17 @@ jobs:
           BUILD_ARGS="--build-arg INSTALL_MODE=pypi"
           BUILD_ARGS="$BUILD_ARGS --build-arg INSTALL_VARIANT=bare"
           BUILD_ARGS="$BUILD_ARGS --build-arg PKG_VERSION=${{ inputs.pkg-version }}"
-          just ci-e2e-cli-build "$ECR_URL:jd-bare" "$BUILD_ARGS"
+          for i in 1 2; do
+            if just ci-e2e-cli-build "$ECR_URL:jd-bare" "$BUILD_ARGS" 2>&1 | tee /tmp/build.log; then exit 0; fi
+            if ! grep -qi "No solution found\|no version of jupyter-deploy" /tmp/build.log; then
+              echo "::error::Build failed with non-transient error"
+              exit 1
+            fi
+            echo "Attempt ${i}/2 failed (package not yet available), retrying in 60s..."
+            sleep 60
+          done
+          echo "::error::CLI E2E image (bare) build failed after 2 attempts"
+          exit 1
 
       - name: Push to ECR
         run: just ci-e2e-cli-push bare
@@ -113,7 +123,17 @@ jobs:
           BUILD_ARGS="--build-arg INSTALL_MODE=pypi"
           BUILD_ARGS="$BUILD_ARGS --build-arg INSTALL_VARIANT=aws"
           BUILD_ARGS="$BUILD_ARGS --build-arg PKG_VERSION=${{ inputs.pkg-version }}"
-          just ci-e2e-cli-build "$ECR_URL:jd-aws" "$BUILD_ARGS"
+          for i in 1 2; do
+            if just ci-e2e-cli-build "$ECR_URL:jd-aws" "$BUILD_ARGS" 2>&1 | tee /tmp/build.log; then exit 0; fi
+            if ! grep -qi "No solution found\|no version of jupyter-deploy" /tmp/build.log; then
+              echo "::error::Build failed with non-transient error"
+              exit 1
+            fi
+            echo "Attempt ${i}/2 failed (package not yet available), retrying in 60s..."
+            sleep 60
+          done
+          echo "::error::CLI E2E image (aws) build failed after 2 attempts"
+          exit 1
 
       - name: Push to ECR
         run: just ci-e2e-cli-push aws
@@ -162,7 +182,17 @@ jobs:
           BUILD_ARGS="--build-arg INSTALL_MODE=pypi"
           BUILD_ARGS="$BUILD_ARGS --build-arg INSTALL_VARIANT=aws-k8s"
           BUILD_ARGS="$BUILD_ARGS --build-arg PKG_VERSION=${{ inputs.pkg-version }}"
-          just ci-e2e-cli-build "$ECR_URL:jd-aws-k8s" "$BUILD_ARGS"
+          for i in 1 2; do
+            if just ci-e2e-cli-build "$ECR_URL:jd-aws-k8s" "$BUILD_ARGS" 2>&1 | tee /tmp/build.log; then exit 0; fi
+            if ! grep -qi "No solution found\|no version of jupyter-deploy" /tmp/build.log; then
+              echo "::error::Build failed with non-transient error"
+              exit 1
+            fi
+            echo "Attempt ${i}/2 failed (package not yet available), retrying in 60s..."
+            sleep 60
+          done
+          echo "::error::CLI E2E image (aws-k8s) build failed after 2 attempts"
+          exit 1
 
       - name: Push to ECR
         run: just ci-e2e-cli-push aws-k8s

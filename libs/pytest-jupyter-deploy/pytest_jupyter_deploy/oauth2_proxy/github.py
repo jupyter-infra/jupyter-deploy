@@ -20,26 +20,28 @@ class GitHubOAuth2ProxyApplication:
         page: Page,
         jupyterlab_url: str,
         storage_state_path: Path | None = None,
-        is_ci: bool = False,
         ci_email: str | None = None,
         ci_password: str | None = None,
         ci_totp_fn: Callable[[], str] | None = None,
     ) -> None:
         """Initialize the GitHub OAuth2 Proxy application helper.
 
+        Authentication is automated via the bot account: email + password + TOTP code
+        fetched from the CI infrastructure project. Browser cookies are persisted to
+        storage state and reused on subsequent runs (mirrors production: sign in once,
+        oauth2-proxy reuses the session), so 2FA only triggers when cookies expire.
+
         Args:
             page: Playwright Page instance
             jupyterlab_url: The JupyterLab URL behind OAuth2 Proxy
             storage_state_path: Optional path to save/load browser storage state for auth persistence
-            is_ci: Whether running in CI environment (automated 2FA via CI infrastructure)
-            ci_email: GitHub bot account email (CI mode only)
-            ci_password: GitHub bot account password (CI mode only)
-            ci_totp_fn: Callable that returns a fresh TOTP code (CI mode only, called just-in-time)
+            ci_email: GitHub bot account email (required to authenticate)
+            ci_password: GitHub bot account password (required to authenticate)
+            ci_totp_fn: Callable that returns a fresh TOTP code (called just-in-time)
         """
         self.page = page
         self.jupyterlab_url = jupyterlab_url
         self.storage_state_path = storage_state_path
-        self.is_ci = is_ci
         self._ci_email = ci_email
         self._ci_password = ci_password
         self._ci_totp_fn = ci_totp_fn
@@ -161,15 +163,11 @@ class GitHubOAuth2ProxyApplication:
                 # Wait for redirect after clicking (back to app domain, not GitHub)
                 self.page.wait_for_url(lambda url: urlparse(url).hostname != "github.com", timeout=10000)
             else:
-                # No authorize button visible, might need manual auth
+                # No authorize button visible — automated authorization could not proceed
                 error_msg = (
                     "GitHub OAuth authorization timed out!\n\n"
                     "GitHub cookies may have expired or authorization requires manual approval.\n\n"
-                    "For local development:\n"
-                    "  1. Run: just auth-setup <project-dir>\n"
-                    "  2. Complete authentication in the browser\n"
-                    "  3. Re-run tests\n\n"
-                    "For CI: use --ci --ci-dir <path> for automated 2FA authentication"
+                    "Ensure the bot credentials are valid and run E2E with --ci-dir <ci-project>."
                 )
                 raise RuntimeError(error_msg) from None
         except Exception as e:
@@ -179,11 +177,7 @@ class GitHubOAuth2ProxyApplication:
             error_msg = (
                 "GitHub OAuth authorization failed!\n\n"
                 f"Error: {e}\n\n"
-                "For local development:\n"
-                "  1. Run: just auth-setup <project-dir>\n"
-                "  2. Complete authentication in the browser\n"
-                "  3. Re-run tests\n\n"
-                "For CI: use --ci --ci-dir <path> for automated 2FA authentication"
+                "Ensure the bot credentials are valid and run E2E with --ci-dir <ci-project>."
             )
             raise RuntimeError(error_msg) from e
 
@@ -313,34 +307,6 @@ class GitHubOAuth2ProxyApplication:
         # We're back on the app domain — authentication succeeded
         self.save_storage_state()
         return True
-
-    def login_with_auth_session(self) -> None:
-        """Login using saved authentication session from storage state.
-
-        Tries cookies first. If GitHub cookies are expired, raises RuntimeError
-        with instructions for local development or CI setup.
-
-        Raises:
-            RuntimeError: If GitHub cookies are expired (requires manual setup or CI mode)
-        """
-        if not self._try_auth_session():
-            current_url = self.page.url
-            error_msg = (
-                "GitHub authentication required!\n\n"
-                "Redirected to GitHub but cookies are expired.\n"
-                f"Current URL: {current_url}\n\n"
-                "For local development:\n"
-                "  1. Run: just auth-setup <project-dir>\n"
-                "  2. Complete authentication in the browser\n"
-                "  3. Re-run tests\n\n"
-                "For CI: use --ci --ci-dir <path> for automated 2FA authentication"
-            )
-            raise RuntimeError(error_msg) from None
-
-        # Verify we're back on the application domain (not GitHub)
-        current_url = self.page.url
-        if "github.com" in current_url:
-            raise RuntimeError(f"Authentication did not complete successfully. Still on GitHub: {current_url}")
 
     def login_with_2fa(self, email: str, password: str, totp_fn: Callable[[], str]) -> None:
         """Login using email, password, and TOTP code (for CI environments with 2FA).
@@ -505,16 +471,12 @@ class GitHubOAuth2ProxyApplication:
     def ensure_authenticated(self) -> None:
         """Ensure the user is authenticated, performing login if necessary.
 
-        Uses the appropriate login method based on environment:
-        - CI mode (--ci --ci-dir): Uses login_with_2fa() with automated 2FA credentials
-        - Local mode: Uses login_with_auth_session() with saved storage state
+        Always authenticates via login_with_2fa() using the bot credentials. Cookie
+        reuse happens inside it (_try_auth_session), so 2FA only runs when cookies expire.
         """
-        if self.is_ci:
-            if not self._ci_email or not self._ci_password or not self._ci_totp_fn:
-                raise RuntimeError("CI mode requires credentials. Use --ci --ci-dir <path> to provide them.")
-            self.login_with_2fa(self._ci_email, self._ci_password, self._ci_totp_fn)
-        else:
-            self.login_with_auth_session()
+        if not self._ci_email or not self._ci_password or not self._ci_totp_fn:
+            raise RuntimeError("Authentication requires bot credentials. Run E2E with --ci-dir <ci-project>.")
+        self.login_with_2fa(self._ci_email, self._ci_password, self._ci_totp_fn)
 
     def save_storage_state(self) -> None:
         """Save the browser storage state (cookies, localStorage) to a file.
@@ -527,93 +489,3 @@ class GitHubOAuth2ProxyApplication:
             self.storage_state_path.parent.mkdir(parents=True, exist_ok=True)
             # Save storage state from the page's context
             self.page.context.storage_state(path=str(self.storage_state_path))
-
-    def login_manually_with_2fa_oauth(self) -> None:
-        """One-time manual GitHub OAuth authentication with 2FA/passkey completion.
-
-        This method:
-        1. Navigates to the JupyterLab URL
-        2. Clicks "Sign in with GitHub"
-        3. Waits for user to manually complete authentication (including 2FA/passkey)
-        4. Waits for redirect back to JupyterLab
-        5. Saves the storage state for future test runs
-
-        This is intended for interactive use to set up authentication once.
-        After running this, automated tests can use login_with_auth_session().
-
-        Raises:
-            RuntimeError: If navigation fails or authentication doesn't complete
-        """
-        # Navigate to JupyterLab URL
-        print(f"🔗 Navigating to {self.jupyterlab_url}")
-        try:
-            self._navigate_with_retry(self.jupyterlab_url, timeout=60000)
-        except Exception as e:
-            error_msg = f"Error navigating to {self.jupyterlab_url}: {e}"
-            print(error_msg)
-            raise RuntimeError(error_msg) from e
-
-        # Click "Sign in with GitHub" button
-        print("🔍 Looking for 'Sign in with GitHub' button...")
-        try:
-            sign_in_button = self.page.get_by_role("button", name="Sign in with GitHub")
-            sign_in_button.wait_for(timeout=10000)
-            print("✓ Found sign-in button, clicking...")
-            sign_in_button.click()
-        except Exception as e:
-            error_msg = f"Could not find 'Sign in with GitHub' button: {e}"
-            print(f"Error: {error_msg}")
-            raise RuntimeError(error_msg) from e
-
-        # Wait for GitHub login page
-        print("⏳ Waiting for GitHub login page...")
-        try:
-            self.page.wait_for_url("**/github.com/**", timeout=30000)
-            print("✓ Redirected to GitHub")
-        except Exception as e:
-            error_msg = f"Failed to redirect to GitHub: {e}"
-            print(f"Error: {error_msg}")
-            raise RuntimeError(error_msg) from e
-
-        # Manual 2FA/passkey completion
-        print("\n" + "=" * 60)
-        print("🔐 Please complete GitHub authentication in the browser")
-        print("=" * 60)
-        print(f"⏳ Waiting for redirect back to {self.jupyterlab_url}...\n")
-
-        # Wait for successful auth and redirect back to JupyterLab
-        # Extract the origin (scheme + host) for URL matching
-        parsed_url = urlparse(self.jupyterlab_url)
-        jupyterlab_origin = f"{parsed_url.scheme}://{parsed_url.netloc}"
-
-        try:
-            # Use a lambda to check if URL starts with the JupyterLab origin
-            # This handles redirects to /lab, /lab?, etc.
-            self.page.wait_for_url(
-                lambda url: url.startswith(jupyterlab_origin),
-                timeout=300000,
-                wait_until="commit",
-            )
-            print(f"✓ Successfully redirected to JupyterLab: {self.page.url}")
-        except Exception as e:
-            error_msg = f"Authentication did not complete: {e}"
-            print(f"Error: {error_msg}")
-            raise RuntimeError(error_msg) from e
-
-        # Wait for JupyterLab to initialize (verify it actually loaded)
-        print("⏳ Waiting for JupyterLab to initialize...")
-        try:
-            # Check for JupyterLab-specific elements in the DOM
-            # Use state='attached' instead of 'visible' since elements may be hidden during load
-            # Try multiple selectors - whichever appears first
-            self.page.locator("#jp-top-panel, #jp-main-dock-panel, #jp-main-content-panel").first.wait_for(
-                state="attached", timeout=15000
-            )
-            print("✓ JupyterLab initialized successfully")
-        except Exception as e:
-            print(f"⚠ Warning: Could not confirm JupyterLab loaded, but continuing: {e}")
-            # Don't fail - the auth already worked if we got redirected
-
-        # Save authentication state
-        self.save_storage_state()
-        print(f"\n✅ Authentication state saved to {self.storage_state_path}")

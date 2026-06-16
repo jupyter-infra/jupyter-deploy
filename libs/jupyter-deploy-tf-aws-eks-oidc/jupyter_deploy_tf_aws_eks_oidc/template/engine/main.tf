@@ -133,45 +133,46 @@ module "eks_cluster" {
   private_subnet_ids         = module.vpc.private_subnet_ids
   public_subnet_ids          = module.vpc.public_subnet_ids
   combined_tags              = local.combined_tags
+}
 
-  depends_on = [terraform_data.caller_access_check]
+# Caller identity detection: the caller is dynamically merged into the
+# admin_role_names or admin_user_names set so that switching callers produces
+# no state diff (as long as all callers are declared in the appropriate list).
+locals {
+  caller_is_user   = can(regex(":user/", data.aws_caller_identity.current.arn))
+  caller_role_name = !local.caller_is_user ? element(split("/", data.aws_caller_identity.current.arn), 1) : ""
+  caller_user_name = local.caller_is_user ? regex(":user/(.+)$", data.aws_caller_identity.current.arn)[0] : ""
+
+  all_admin_role_names = toset(
+    !local.caller_is_user
+    ? distinct(concat(var.admin_role_names, [local.caller_role_name]))
+    : var.admin_role_names
+  )
+  all_admin_user_names = toset(
+    local.caller_is_user
+    ? distinct(concat(var.admin_user_names, [local.caller_user_name]))
+    : var.admin_user_names
+  )
 }
 
 data "aws_iam_role" "admin" {
-  for_each = toset(var.admin_role_names)
+  for_each = local.all_admin_role_names
   name     = each.value
 }
 
-# Caller identity detection: EKS access entries use different ARN formats for
-# IAM roles vs users/federated/root-account principals, and duplicate entries cause 409 errors.
-# Roles are managed via admin_role_names; other principals get a separate entry.
-locals {
-  caller_is_role       = can(regex("assumed-role/", data.aws_caller_identity.current.arn))
-  caller_role_name     = local.caller_is_role ? element(split("/", data.aws_caller_identity.current.arn), 1) : ""
-  caller_principal_arn = local.caller_is_role ? "" : "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:${regex("^arn:[^:]+:[^:]+::[^:]+:(.+)$", data.aws_caller_identity.current.arn)[0]}"
+data "aws_iam_user" "admin" {
+  for_each  = local.all_admin_user_names
+  user_name = each.value
 }
 
-# Role callers MUST be in admin_role_names — otherwise the role gets no access entry
-# and is locked out immediately (bootstrap_cluster_creator_admin_permissions = false).
-# terraform_data with precondition produces a hard plan-time error, unlike `check`
-# blocks which only warn and let apply proceed into a broken state.
-resource "terraform_data" "caller_access_check" {
-  lifecycle {
-    precondition {
-      condition     = !local.caller_is_role || contains(var.admin_role_names, local.caller_role_name)
-      error_message = "The caller role '${local.caller_role_name}' is not in admin_role_names. Fix: set admin_role_names = ${jsonencode(concat(var.admin_role_names, [local.caller_role_name]))} and rerun jd config."
-    }
-  }
-}
-
-resource "aws_eks_access_entry" "admin" {
+resource "aws_eks_access_entry" "admin_role" {
   for_each          = data.aws_iam_role.admin
   cluster_name      = module.eks_cluster.cluster_name
   principal_arn     = each.value.arn
   kubernetes_groups = ["cluster-workspace-admin"]
 }
 
-resource "aws_eks_access_policy_association" "admin" {
+resource "aws_eks_access_policy_association" "admin_role" {
   for_each      = data.aws_iam_role.admin
   cluster_name  = module.eks_cluster.cluster_name
   principal_arn = each.value.arn
@@ -181,29 +182,27 @@ resource "aws_eks_access_policy_association" "admin" {
     type = "cluster"
   }
 
-  depends_on = [aws_eks_access_entry.admin]
+  depends_on = [aws_eks_access_entry.admin_role]
 }
 
-# Non-role callers (IAM users, SSO federated users) need their own access entry
-# since they won't appear in admin_role_names. Skipped for roles to avoid duplicates.
-resource "aws_eks_access_entry" "caller" {
-  count             = local.caller_is_role ? 0 : 1
+resource "aws_eks_access_entry" "admin_user" {
+  for_each          = data.aws_iam_user.admin
   cluster_name      = module.eks_cluster.cluster_name
-  principal_arn     = local.caller_principal_arn
+  principal_arn     = each.value.arn
   kubernetes_groups = ["cluster-workspace-admin"]
 }
 
-resource "aws_eks_access_policy_association" "caller" {
-  count         = local.caller_is_role ? 0 : 1
+resource "aws_eks_access_policy_association" "admin_user" {
+  for_each      = data.aws_iam_user.admin
   cluster_name  = module.eks_cluster.cluster_name
-  principal_arn = local.caller_principal_arn
+  principal_arn = each.value.arn
   policy_arn    = "arn:${data.aws_partition.current.partition}:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
 
   access_scope {
     type = "cluster"
   }
 
-  depends_on = [aws_eks_access_entry.caller]
+  depends_on = [aws_eks_access_entry.admin_user]
 }
 
 module "node_group" {

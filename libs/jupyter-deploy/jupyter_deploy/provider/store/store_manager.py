@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 from yaml.parser import ParserError
 from yaml.scanner import ScannerError
 
@@ -14,7 +14,11 @@ from jupyter_deploy.constants import MASKED_SECRET_VALUE
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.enum import StoreType
 from jupyter_deploy.manifest import JupyterDeployManifest
-from jupyter_deploy.variables_config import JupyterDeployVariablesConfigV1
+from jupyter_deploy.variables_config import (
+    JupyterDeployVariablesConfig,
+    JupyterDeployVariablesConfigV1,
+    JupyterDeployVariablesConfigV2,
+)
 
 
 class StoreInfo(BaseModel):
@@ -143,6 +147,7 @@ class StoreManager(ABC):
         """Parse variables YAML and return a flat dict of variable names to values.
 
         Sensitive values are masked. Returns None if the content cannot be parsed.
+        Handles both V1 and V2 formats.
         """
         try:
             data = yaml.safe_load(content)
@@ -153,7 +158,8 @@ class StoreManager(ABC):
             return None
 
         try:
-            config = JupyterDeployVariablesConfigV1(**data)
+            adapter: TypeAdapter[JupyterDeployVariablesConfig] = TypeAdapter(JupyterDeployVariablesConfig)
+            config = adapter.validate_python(data)
         except ValidationError:
             return None
 
@@ -161,7 +167,13 @@ class StoreManager(ABC):
         variables.update(config.required)
         for key in config.required_sensitive:
             variables[key] = MASKED_SECRET_VALUE
-        # Overrides take precedence over defaults
-        for key, value in config.defaults.items():
-            variables[key] = config.overrides.get(key, value)
+
+        if isinstance(config, JupyterDeployVariablesConfigV1):
+            # V1: overrides take precedence over defaults
+            for key, value in config.defaults.items():
+                variables[key] = config.overrides.get(key, value)
+        elif isinstance(config, JupyterDeployVariablesConfigV2):
+            # V2: just include overrides (no defaults section)
+            variables.update(config.overrides)
+
         return variables

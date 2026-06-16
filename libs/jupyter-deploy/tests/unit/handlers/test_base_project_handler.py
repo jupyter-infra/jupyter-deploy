@@ -2,7 +2,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, mock_open, patch
 
-from pydantic import ValidationError
 from yaml.parser import ParserError
 
 from jupyter_deploy.constants import MANIFEST_FILENAME
@@ -301,9 +300,8 @@ class TestRetrieveVariablesConfig(unittest.TestCase):
         ),
     )
     @patch("yaml.safe_load")
-    @patch("jupyter_deploy.variables_config.JupyterDeployVariablesConfig")
     def test_open_file_call_safe_load_and_parse(
-        self, mock_config_class: Mock, mock_yaml_load: Mock, mock_open_file: Mock, mock_file_exists: Mock
+        self, mock_yaml_load: Mock, mock_open_file: Mock, mock_file_exists: Mock
     ) -> None:
         # Setup
         mock_file_exists.return_value = True
@@ -316,8 +314,6 @@ class TestRetrieveVariablesConfig(unittest.TestCase):
             "defaults": {"var3": "default3"},
         }
         mock_yaml_load.return_value = yaml_content
-        mock_config = Mock()
-        mock_config_class.return_value = mock_config
 
         # Execute
         result = retrieve_variables_config(variables_config_path)
@@ -325,8 +321,8 @@ class TestRetrieveVariablesConfig(unittest.TestCase):
         # Assert
         mock_open_file.assert_called_once_with(variables_config_path)
         mock_yaml_load.assert_called_once()
-        mock_config_class.assert_called_once_with(**yaml_content)
-        self.assertEqual(result, mock_config)
+        self.assertEqual(result.schema_version, 1)
+        self.assertEqual(result.required["var1"], "value1")
 
     @patch("jupyter_deploy.fs_utils.file_exists")
     @patch("builtins.open", new_callable=mock_open)
@@ -362,12 +358,12 @@ class TestRetrieveVariablesConfig(unittest.TestCase):
             # Execute
             result = retrieve_variables_config(variables_config_path)
 
-            # Assert
+            # Assert — V1 parsed successfully
             self.assertEqual(result.schema_version, 1)
             self.assertEqual(result.required["var1"], "value1")
             self.assertEqual(result.required_sensitive["var2"], "value2")
             self.assertEqual(result.overrides["var3"], "value3")
-            self.assertEqual(result.defaults["var3"], "default3")
+            self.assertEqual(result.defaults["var3"], "default3")  # type: ignore[union-attr]
 
     @patch("jupyter_deploy.fs_utils.file_exists")
     @patch("builtins.open")
@@ -392,9 +388,10 @@ class TestRetrieveVariablesConfig(unittest.TestCase):
         variables_config_path = Path("/fake/path/variables.yaml")
         mock_yaml_load.side_effect = ParserError("YAML parsing error")
 
-        # Execute and Assert
-        with self.assertRaises(ParserError):
+        # Execute and Assert — wraps ParserError as InvalidVariablesDotYamlError
+        with self.assertRaises(InvalidVariablesDotYamlError) as ctx:
             retrieve_variables_config(variables_config_path)
+        self.assertIn("YAML syntax", str(ctx.exception))
 
     @patch("jupyter_deploy.fs_utils.file_exists")
     @patch("builtins.open", new_callable=mock_open, read_data="- item1\n- item2")
@@ -427,6 +424,6 @@ class TestRetrieveVariablesConfig(unittest.TestCase):
             "required": ["I", "should", "be", "a", "dict"],
         }
 
-        # Execute and Assert
-        with self.assertRaises(ValidationError):
+        # Execute and Assert — wraps ValidationError as InvalidVariablesDotYamlError
+        with self.assertRaises(InvalidVariablesDotYamlError):
             retrieve_variables_config(variables_config_path)

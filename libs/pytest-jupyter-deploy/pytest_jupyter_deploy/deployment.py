@@ -13,6 +13,8 @@ from jupyter_deploy.manifest import JupyterDeployManifest
 from jupyter_deploy.variables_config import (
     VARIABLES_CONFIG_V1_COMMENTS,
     VARIABLES_CONFIG_V1_KEYS_ORDER,
+    VARIABLES_CONFIG_V2_COMMENTS,
+    VARIABLES_CONFIG_V2_KEYS_ORDER,
     JupyterDeployVariablesConfig,
 )
 
@@ -540,13 +542,22 @@ class EndToEndDeployment:
         # Update the specific key
         config["overrides"][key] = value
 
-        # Write back with comments preserved
-        jd_fs_utils.write_yaml_file_with_comments(
-            variables_yaml,
-            config,
-            key_order=VARIABLES_CONFIG_V1_KEYS_ORDER,
-            comments=VARIABLES_CONFIG_V1_COMMENTS,
-        )
+        # Write back with comments preserved, using the correct format for the schema version
+        schema_version = config.get("schema_version", 1)
+        if schema_version >= 2:
+            jd_fs_utils.write_yaml_file_with_comments(
+                variables_yaml,
+                config,
+                key_order=VARIABLES_CONFIG_V2_KEYS_ORDER,
+                comments=VARIABLES_CONFIG_V2_COMMENTS,
+            )
+        else:
+            jd_fs_utils.write_yaml_file_with_comments(
+                variables_yaml,
+                config,
+                key_order=VARIABLES_CONFIG_V1_KEYS_ORDER,
+                comments=VARIABLES_CONFIG_V1_COMMENTS,
+            )
 
     def ensure_deployed_with(self, config_args: list[str], timeout_seconds: int | None = None) -> None:
         """Ensure the deployment is updated with new configuration.

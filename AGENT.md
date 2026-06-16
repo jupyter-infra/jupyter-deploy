@@ -13,7 +13,7 @@ It's cloud-provider and infrastructure-as-code agnostic. The CLI code MUST NOT:
 - assume that an infrastructure-as-code engine is selected (e.g. it MUST remain extensible to other engines than `terraform`)
 - create custom dataclasses for AWS API types; use boto3 type stubs directly (e.g. `ObjectTypeDef`, `TagTypeDef`)
 
-To access cloud-provider specific dependencies, we use optional installs such as `pip install juptyer-deploy[aws]` 
+To access cloud-provider specific dependencies, we use optional installs such as `pip install "jupyter-deploy[aws]"` 
 Then module `provider/instruction_runner_factory` handles these optional imports.
 You MUST NOT break that pattern with import statements to cloud-provider or infrastructure-as-code specific libraries
 outside of the instruction runner code paths.
@@ -165,7 +165,7 @@ E2E tests validate a complete deployment with actual CLI commands and browser-ba
 The E2E tests run in a local container using `pytest` where `playwright` and webbrowsers are installed.
 - `just e2e-up` builds and starts the container (image from `pytest-jupyter-deploy` plugin).
 - `just e2e-sync` synchronizes the workspace files with the container.
-- Per-template convenience wrappers: `just test-e2e-base`, `just auth-setup-base`.
+- Per-template convenience wrappers: `just test-e2e-base`, `just test-e2e-eks-oidc`.
 - Generic commands accept a `template` parameter: `just test-e2e <project-dir> <filter> <options> <template>`.
 Look at `./justfile` for more details.
 
@@ -179,12 +179,16 @@ to the deployment directory BEFORE running configuration tests or deploying.
 **IMPORTANT:** E2E tests MUST be run sequentially — never run multiple `just test-e2e` commands in parallel.
 
 ### Prerequisites
-1. A deployed project to test against located in a dir relative to the workspace root (e.g., `./sandbox`)
-2. Some E2E tests require environment variables to be set:
+1. Browser-auth tests require a restored CI project providing bot credentials:
+    - `just ci-restore sandbox-ci` — restores the CI project from the store
+2. A deployed project to test against located in a dir relative to the workspace root:
+    - e.g. `./sandbox`
+    - or restore one with `just ci-restore-base <oauth-app-num> sandbox-ci <project-dir>`
+3. Some E2E tests require environment variables to be set:
     - look at `./env.example` in the workspace root
     - the user must have created an `.env` file with values at the workspace root
     - tests will be skipped if the required test environment variables are not set.
-3. Most E2E tests for the base template require a specific oauth setup (see Authentication setup)
+    - generate the `.env` from the CI project with: `just env-setup-base <project-dir> sandbox-ci <oauth-app-num>`
 
 ### Configuration Tests
 The configuration test verifies a template project is correctly wired up.
@@ -197,26 +201,33 @@ In the case of the base template, this corresponds to the `terraform plan` opera
 To run the configuration test:
 1. ask the user for the `<project-dir>` to use
 2. if testing modified template files, ensure they've been copied to `<project-dir>`
-3. run `just test-e2e-base <project-dir> test_configuration`
+3. run `just test-e2e-base <project-dir> test_project_is_configurable`
+
+Note: `test_configuration` contains many additional error-recovery tests. Use `test_project_is_configurable` for a quick validation that the template works.
 
 ### Running Base Template E2E Tests
 Run E2E tests against an existing deployment: `just test-e2e-base <project-dir> TEST-SELECTOR`
 
-Examples (for project-dir == sandbox3):
-- Run all E2E tests without mutating the project: `just test-e2e-base sandbox3 ""`
-- Run all E2E tests: `just test-e2e-base sandbox3 "" mutate=true`
-- Run specific test file: `just test-e2e-base sandbox3 test_users` (possibly needs `mutate=true`)
+**Prerequisite:** Tests that authenticate a browser (most tests except `test_configuration`) require a restored CI project providing bot credentials. Pass `ci-dir=<ci-project>` in options:
+
+Examples (for project-dir == sandbox3, ci-dir == sandbox-ci):
+- Run all E2E tests without mutating the project: `just test-e2e-base sandbox3 "" ci-dir=sandbox-ci`
+- Run all E2E tests: `just test-e2e-base sandbox3 "" mutate=true,ci-dir=sandbox-ci`
+- Run specific test file: `just test-e2e-base sandbox3 test_users ci-dir=sandbox-ci` (possibly needs `mutate=true`)
+- Run config-only test (no ci-dir needed): `just test-e2e-base sandbox3 test_project_is_configurable`
 - Run CI template E2E tests: `just test-e2e-ci sandbox3 ""`
 
-**NOTE:** mutate tests are long, pipe to log stream to file: `just test-e2e <project-dir> TEST-SELECTOR mutate=true 2>&1 | tee results.log`   
+**NOTE:** mutate tests are long, pipe to log stream to file: `just test-e2e <project-dir> TEST-SELECTOR mutate=true,ci-dir=sandbox-ci 2>&1 | tee results.log`   
 The test container saves screenshots of failed tests to `./test-results`, use the read image tool.
 
 ### Running EKS OIDC Template E2E Tests
 Run E2E tests: `just test-e2e-eks-oidc <project-dir> TEST-SELECTOR`
 
-Examples (for project-dir == sandbox-e2e):
-- Run all tests: `just test-e2e-eks-oidc sandbox-e2e "" mutate=true,full-deploy=true`
-- Run workspace tests only: `just test-e2e-eks-oidc sandbox-e2e test_workspace mutate=true,full-deploy=true`
+**Prerequisite:** Same as base — pass `ci-dir=<ci-project>` for browser-auth tests.
+
+Examples (for project-dir == sandbox-e2e, ci-dir == sandbox-ci):
+- Run all tests: `just test-e2e-eks-oidc sandbox-e2e "" mutate=true,full-deploy=true,ci-dir=sandbox-ci`
+- Run workspace tests only: `just test-e2e-eks-oidc sandbox-e2e test_workspace mutate=true,full-deploy=true,ci-dir=sandbox-ci`
 
 **Gotcha:** `JD_E2E_RBAC_TEAM` in `.env` MUST match the team in `oauth_allowed_teams` that the sandbox was deployed with.
 The RBAC RoleBinding on the cluster grants workspace access to that group — if they don't match, all impersonation-based workspace tests will fail with `Forbidden`.

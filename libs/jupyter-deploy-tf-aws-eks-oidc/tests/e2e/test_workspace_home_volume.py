@@ -38,6 +38,7 @@ def test_home_volume_persists_across_restart(e2e_deployment: EndToEndDeployment,
     # Restart the workspace
     e2e_deployment.cli.run_command(["jupyter-deploy", "server", "start", "--name", name])
     e2e_deployment.cli.poll_scoped_server_status(name, "Running", timeout_s=300)
+    e2e_deployment.cli.wait_for_workspace_pod_exec_ready(name)
 
     # Verify the sentinel file persisted
     verify_file_exists_on_server(e2e_deployment, f"/home/jovyan/{SENTINEL_FILE}", name=name)

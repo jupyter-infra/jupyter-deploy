@@ -4,7 +4,6 @@ from pathlib import Path
 import hcl2  # type: ignore[import-untyped]
 import yaml
 from jupyter_deploy.engine.terraform.tf_varfiles import strip_hcl2_quotes
-from jupyter_deploy.handlers import base_project_handler
 
 from jupyter_deploy_tf_aws_ec2_base.template import TEMPLATE_PATH
 
@@ -47,31 +46,22 @@ class TestVariablesYaml(unittest.TestCase):
 
             TestVariablesYaml.TF_VARIABLES = tf_variables
 
+    def test_schema_version_is_2(self) -> None:
+        self.assertEqual(self.VARIABLES_CONFIG["schema_version"], 2)
+
     def test_all_keys_are_present(self) -> None:
         self.assertIn("required", self.VARIABLES_CONFIG)
         self.assertIn("required_sensitive", self.VARIABLES_CONFIG)
         self.assertIn("overrides", self.VARIABLES_CONFIG)
-        self.assertIn("defaults", self.VARIABLES_CONFIG)
+
+    def test_no_defaults_section(self) -> None:
+        self.assertNotIn("defaults", self.VARIABLES_CONFIG)
 
     def test_no_overlap_between_required_and_required_sensitive(self) -> None:
         required_vars = set(self.VARIABLES_CONFIG["required"].keys())
         required_sensitive_vars = set(self.VARIABLES_CONFIG["required_sensitive"].keys())
 
         overlap = required_vars.intersection(required_sensitive_vars)
-        self.assertEqual(len(overlap), 0, f"Found overlapping variables: {overlap}")
-
-    def test_no_overlap_between_required_and_defaults(self) -> None:
-        required_vars = set(self.VARIABLES_CONFIG["required"].keys())
-        default_vars = set(self.VARIABLES_CONFIG["defaults"].keys())
-
-        overlap = required_vars.intersection(default_vars)
-        self.assertEqual(len(overlap), 0, f"Found overlapping variables: {overlap}")
-
-    def test_no_overlap_between_required_sensitive_and_defaults(self) -> None:
-        required_sensitive_vars = set(self.VARIABLES_CONFIG["required_sensitive"].keys())
-        default_vars = set(self.VARIABLES_CONFIG["defaults"].keys())
-
-        overlap = required_sensitive_vars.intersection(default_vars)
         self.assertEqual(len(overlap), 0, f"Found overlapping variables: {overlap}")
 
     def test_all_required_set_to_none(self) -> None:
@@ -83,152 +73,133 @@ class TestVariablesYaml(unittest.TestCase):
             self.assertIsNone(var_value, f"Required sensitive variable {var_name} is not set to None")
 
     def test_no_overrides_set(self) -> None:
-        # The overrides section should be empty dictionary or have only commented lines
         overrides = self.VARIABLES_CONFIG["overrides"]
         self.assertTrue(
             overrides is None or len(overrides) == 0,
             f"Overrides should be empty in default variables.yaml, found: {overrides}",
         )
 
-    def test_all_defaults_varname_exist_in_all_preset(self) -> None:
-        default_vars = set(self.VARIABLES_CONFIG["defaults"].keys())
-        preset_vars = set(self.DEFAULTS_ALL_TFVARS.keys())
-
-        missing_vars = default_vars - preset_vars
-        self.assertEqual(
-            len(missing_vars), 0, f"Variables in defaults section not found in defaults-all.tfvars: {missing_vars}"
-        )
-
-    def test_defaults_varname_count_equal_varnames_in_all_preset(self) -> None:
-        default_vars = set(self.VARIABLES_CONFIG["defaults"].keys())
-        preset_vars = set(self.DEFAULTS_ALL_TFVARS.keys())
-
-        self.assertEqual(
-            len(default_vars),
-            len(preset_vars),
-            f"Number of variables in defaults ({len(default_vars)}) does not match "
-            f"number in defaults-all.tfvars ({len(preset_vars)})",
-        )
-
-    def test_all_values_in_defaults_match_preset(self) -> None:
-        for var_name, var_value in self.VARIABLES_CONFIG["defaults"].items():
-            # Special case for empty dictionaries or lists that might be represented differently
-            if var_value == {}:
-                self.assertIn(var_name, self.DEFAULTS_ALL_TFVARS)
-                self.assertEqual(
-                    self.DEFAULTS_ALL_TFVARS[var_name],
-                    {},
-                    f"Value mismatch for {var_name}: variables.yaml has {var_value}, "
-                    f"defaults-all.tfvars has {self.DEFAULTS_ALL_TFVARS[var_name]}",
-                )
-            elif var_value == []:
-                self.assertIn(var_name, self.DEFAULTS_ALL_TFVARS)
-                self.assertEqual(
-                    self.DEFAULTS_ALL_TFVARS[var_name],
-                    [],
-                    f"Value mismatch for {var_name}: variables.yaml has {var_value}, "
-                    f"defaults-all.tfvars has {self.DEFAULTS_ALL_TFVARS[var_name]}",
-                )
-            else:
-                # For values that should match exactly between the two files
-                self.assertIn(var_name, self.DEFAULTS_ALL_TFVARS)
-
-                # Handle null vs None comparison
-                if var_value is None:
-                    self.assertIsNone(
-                        self.DEFAULTS_ALL_TFVARS[var_name],
-                        f"Value mismatch for {var_name}: variables.yaml has None, "
-                        f"defaults-all.tfvars has {self.DEFAULTS_ALL_TFVARS[var_name]}",
-                    )
-                else:
-                    self.assertEqual(
-                        var_value,
-                        self.DEFAULTS_ALL_TFVARS[var_name],
-                        f"Value mismatch for {var_name}: variables.yaml has {var_value}, "
-                        f"defaults-all.tfvars has {self.DEFAULTS_ALL_TFVARS[var_name]}",
-                    )
-
     def test_all_variables_in_yaml_exist_in_tf(self) -> None:
         """Test that all variables referenced in variables.yaml exist in variables.tf"""
-        # Collect all variable names from variables.yaml
         required_vars = set(self.VARIABLES_CONFIG.get("required", {}).keys())
         required_sensitive_vars = set(self.VARIABLES_CONFIG.get("required_sensitive", {}).keys())
-        defaults_vars = set(self.VARIABLES_CONFIG.get("defaults", {}).keys())
 
-        # Combine all variable names from variables.yaml
-        all_yaml_vars = required_vars.union(required_sensitive_vars).union(defaults_vars)
+        all_yaml_vars = required_vars.union(required_sensitive_vars)
 
-        # Get all variable names from variables.tf
         all_tf_vars = set(self.TF_VARIABLES.keys())
 
-        # Check if any variables in variables.yaml are missing from variables.tf
         missing_vars = all_yaml_vars - all_tf_vars
         self.assertEqual(len(missing_vars), 0, f"Variables in variables.yaml not found in variables.tf: {missing_vars}")
 
-    def test_all_variables_in_tf_are_referenced_in_yaml(self) -> None:
-        """Test that all variables in variables.tf are referenced in variables.yaml"""
-        # Collect all variable names from variables.yaml
+    def test_all_variables_in_tf_are_referenced_in_yaml_or_preset(self) -> None:
+        """Test that all variables in variables.tf are covered by either variables.yaml or the preset."""
         required_vars = set(self.VARIABLES_CONFIG.get("required", {}).keys())
         required_sensitive_vars = set(self.VARIABLES_CONFIG.get("required_sensitive", {}).keys())
-        defaults_vars = set(self.VARIABLES_CONFIG.get("defaults", {}).keys())
+        preset_vars = set(self.DEFAULTS_ALL_TFVARS.keys())
 
-        # Combine all variable names from variables.yaml
-        all_yaml_vars = required_vars.union(required_sensitive_vars).union(defaults_vars)
+        all_covered_vars = required_vars.union(required_sensitive_vars).union(preset_vars)
 
-        # Get all variable names from variables.tf
         all_tf_vars = set(self.TF_VARIABLES.keys())
 
-        # Check if any variables in variables.tf are missing from variables.yaml
-        missing_vars = all_tf_vars - all_yaml_vars
+        missing_vars = all_tf_vars - all_covered_vars
         self.assertEqual(
-            len(missing_vars), 0, f"Variables in variables.tf not referenced in variables.yaml: {missing_vars}"
+            len(missing_vars),
+            0,
+            f"Variables in variables.tf not referenced in variables.yaml or preset: {missing_vars}",
         )
 
-    def test_sensitive_variables_not_in_required_or_defaults(self) -> None:
-        """Test that no variables flagged as sensitive in variables.tf are referenced in required or defaults"""
-        # Get all sensitive variables from variables.tf
+    def test_sensitive_variables_not_in_required(self) -> None:
+        """Test that no variables flagged as sensitive in variables.tf are in the required section."""
         sensitive_vars = set()
         for var_name, var_config in self.TF_VARIABLES.items():
             if var_config.get("sensitive") is True:
                 sensitive_vars.add(var_name)
 
-        # Get variables from required and defaults
         required_vars = set(self.VARIABLES_CONFIG.get("required", {}).keys())
-        defaults_vars = set(self.VARIABLES_CONFIG.get("defaults", {}).keys())
 
-        # Check if any sensitive variables appear in required or defaults
-        sensitive_in_required = sensitive_vars.intersection(required_vars)
-        sensitive_in_defaults = sensitive_vars.intersection(defaults_vars)
+        overlap = sensitive_vars.intersection(required_vars)
+        self.assertEqual(len(overlap), 0, f"Sensitive variables should not be in 'required' section: {overlap}")
 
-        self.assertEqual(
-            len(sensitive_in_required), 0, f"Sensitive variables found in 'required' section: {sensitive_in_required}"
-        )
-
-        self.assertEqual(
-            len(sensitive_in_defaults), 0, f"Sensitive variables found in 'defaults' section: {sensitive_in_defaults}"
-        )
-
-    def test_required_sensitive_variables_are_marked_sensitive_in_tf(self) -> None:
-        """Test that all variables in required_sensitive are marked as sensitive in variables.tf"""
-        # Get all sensitive variables from variables.tf
+    def test_sensitive_variables_in_required_sensitive(self) -> None:
+        """Test that all variables flagged as sensitive in variables.tf are in required_sensitive."""
         sensitive_vars = set()
         for var_name, var_config in self.TF_VARIABLES.items():
             if var_config.get("sensitive") is True:
                 sensitive_vars.add(var_name)
 
-        # Get variables from required_sensitive
         required_sensitive_vars = set(self.VARIABLES_CONFIG.get("required_sensitive", {}).keys())
 
-        # Check if all required_sensitive variables are marked as sensitive in variables.tf
-        not_marked_sensitive = required_sensitive_vars - sensitive_vars
+        missing = sensitive_vars - required_sensitive_vars
+        self.assertEqual(len(missing), 0, f"Sensitive variables missing from required_sensitive: {missing}")
 
-        self.assertEqual(
-            len(not_marked_sensitive),
-            0,
-            f"Variables in 'required_sensitive' not marked as sensitive in variables.tf: {not_marked_sensitive}",
-        )
+    def test_no_overlap_between_required_and_preset(self) -> None:
+        """Required variables should not also have defaults in the preset."""
+        required_vars = set(self.VARIABLES_CONFIG.get("required", {}).keys())
+        preset_vars = set(self.DEFAULTS_ALL_TFVARS.keys())
 
-    def test_variables_file_parsable_by_base_project_handler(self) -> None:
-        """Test that the variables.yaml file can be parsed by the base project handler."""
-        variables_config = base_project_handler.retrieve_variables_config(self.VARIABLES_CONFIG_PATH)
-        self.assertIsNotNone(variables_config)
+        overlap = required_vars.intersection(preset_vars)
+        self.assertEqual(len(overlap), 0, f"Required variables should not have defaults in preset: {overlap}")
+
+    def test_commented_overrides_match_preset_keys(self) -> None:
+        """All commented-out overrides in variables.yaml should exist in the preset."""
+        commented_vars = self._parse_commented_overrides()
+        preset_vars = set(self.DEFAULTS_ALL_TFVARS.keys())
+
+        missing = set(commented_vars.keys()) - preset_vars
+        self.assertEqual(len(missing), 0, f"Commented overrides not found in preset: {missing}")
+
+    def test_commented_overrides_values_match_preset(self) -> None:
+        """Commented-out override values should match the preset defaults."""
+        commented_vars = self._parse_commented_overrides()
+
+        for var_name, var_value in commented_vars.items():
+            if var_name not in self.DEFAULTS_ALL_TFVARS:
+                continue
+            preset_value = self.DEFAULTS_ALL_TFVARS[var_name]
+            self.assertEqual(
+                var_value,
+                preset_value,
+                f"Commented override '{var_name}' has value {var_value!r} but preset has {preset_value!r}",
+            )
+
+    def test_all_preset_vars_appear_as_commented_overrides(self) -> None:
+        """Every variable in the preset should appear as a commented override in variables.yaml."""
+        commented_vars = self._parse_commented_overrides()
+        preset_vars = set(self.DEFAULTS_ALL_TFVARS.keys())
+
+        missing = preset_vars - set(commented_vars.keys())
+        self.assertEqual(len(missing), 0, f"Preset variables missing from commented overrides: {missing}")
+
+    @classmethod
+    def _parse_commented_overrides(cls) -> dict:
+        """Parse commented-out key-value pairs from the overrides section of variables.yaml.
+
+        Handles multi-line values (lists, maps) by preserving indentation
+        relative to the `# ` prefix.
+        """
+        with open(cls.VARIABLES_CONFIG_PATH) as f:
+            lines = f.readlines()
+
+        # Find the overrides section and extract commented entries
+        in_overrides = False
+        commented_yaml_lines: list[str] = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("overrides:"):
+                in_overrides = True
+                continue
+            if in_overrides and not stripped.startswith("#") and stripped and not line.startswith(" "):
+                break
+            if in_overrides and stripped.startswith("# "):
+                # Skip header comments (no colon or starts with a known header phrase)
+                content_after_hash = stripped[2:]
+                if content_after_hash.startswith("uncomment"):
+                    continue
+                commented_yaml_lines.append(content_after_hash)
+
+        if not commented_yaml_lines:
+            return {}
+
+        combined = "\n".join(commented_yaml_lines)
+        result = yaml.safe_load(combined)
+        return result if isinstance(result, dict) else {}

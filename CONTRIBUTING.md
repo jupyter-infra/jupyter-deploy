@@ -71,7 +71,7 @@ shared across all templates. It includes Python, Terraform, AWS CLI, and Playwri
 Requirements:
 - Docker or Finch installed (automatically detected)
 - `just` command runner: `cargo install just` (or use homebrew/package manager)
-- For UI tests with authentication: SSH with X11 forwarding enabled (`ssh -X`)
+- For UI tests with authentication: a deployed CI infrastructure project providing the GitHub bot credentials (see [Authentication Setup](#authentication-setup))
 
 
 #### Running E2E Tests
@@ -107,10 +107,8 @@ just e2e-all <project-dir> [test-filter]
 ```
 
 
-Setup authentication (one-time, requires X11 forwarding):
-```bash
-just auth-setup <project-dir>
-```
+UI tests authenticate automatically via the GitHub bot account — pass `ci-dir=<ci-project>`
+(see [Authentication Setup](#authentication-setup)).
 
 Stop the E2E container when done:
 ```bash
@@ -120,68 +118,32 @@ just e2e-down
 
 #### Authentication Setup
 
-E2E tests that interact with the JupyterLab UI require GitHub OAuth2 authentication. Since most GitHub accounts use 2FA/passkeys (which cannot be automated), you need to complete authentication manually once before running UI tests.
+E2E tests that interact with the JupyterLab UI require GitHub OAuth2 authentication. This is
+fully automated using a dedicated GitHub **bot account** whose password and TOTP (2FA) seed are
+stored in AWS Secrets Manager and provisioned by the CI infrastructure template
+(`jupyter-infra-tf-aws-iam-ci`).
 
-**One-Time Setup (Using Docker)**
+**Setup**
 
-1. Ensure you're SSH'd with X11 forwarding enabled:
+1. Deploy a CI infrastructure project (one-time per AWS account):
    ```bash
-   ssh -X your-user@your-host
+   just init-ci sandbox-ci         # scaffold the CI project
+   just ci-deploy-base <oauth-app-num> sandbox-ci sandbox-base   # deploy + wire secrets
+   ```
+   The bot account's email, password, and TOTP seed live in Secrets Manager; the CI project
+   exposes them via outputs (`github_bot_account_*`).
+
+2. Run UI tests with `ci-dir` pointing at that project:
+   ```bash
+   just test-e2e-base <project-dir> "" ci-dir=sandbox-ci
    ```
 
-2. Verify DISPLAY is set in your terminal:
-   ```bash
-   echo $DISPLAY  # Should show something like "localhost:10.0"
-   ```
+The plugin fetches the bot credentials and authenticates with email + password + a just-in-time
+TOTP code. If `ci-dir` is omitted for a UI test, the run fails early with a clear error.
 
-   **Note**: If using VS Code's embedded terminal, it won't inherit X11 forwarding. Either:
-   - Run commands from a regular SSH terminal, OR
-   - Manually export DISPLAY in VS Code terminal: `export DISPLAY=localhost:10.0`
-
-3. Run the authentication setup (a Firefox browser window will open via X11):
-   ```bash
-   just auth-setup <project-dir>
-   ```
-
-   **Note**: The setup uses Firefox for better X11 forwarding compatibility.
-
-4. Complete the GitHub OAuth flow including 2FA/passkey authentication in the browser
-
-5. The authenticated browser state is saved to `.auth/github-oauth-state.json`
-
-6. Run E2E tests - they will reuse the saved authentication:
-   ```bash
-   just test-e2e <project-dir>
-   ```
-
-**Note**: The `.auth/` directory is excluded from version control to avoid committing sensitive authentication data.
-
-**Session Management**: OAuth2 Proxy stores sessions in memory by default. When the OAuth2 Proxy server restarts (e.g., after running `jd down` and `jd up`), the OAuth2 Proxy session is lost. However, if your GitHub cookies are still valid (they last 7 days by default), tests will automatically re-authenticate by:
-1. Detecting the OAuth2 Proxy sign-in page
-2. Clicking "Sign in with GitHub"
-3. GitHub auto-authenticates using valid cookies (no manual 2FA needed)
-4. Redirecting back to JupyterLab
-
-You only need to re-run `just auth-setup` when GitHub cookies have also expired (requiring manual 2FA/passkey authentication).
-
-#### Setup on Mac for Amazon cloud desktop
-You will need to install `xquartz`: `brew install --cask xquartz`
-- Open XQuartz: `Settings > Security > Allow connection from network client`
-- reboot XQuartz (or restart your laptop)
-
-Then, update `~/.ssh/config` on your mac as follow:
-```
-Host your-devdesktop-host
-    ForwardX11 yes
-    ForwardX11Trusted yes
-    XAuthLocation /opt/X11/bin/xauth
-```
-
-Open a terminal (on your mac), and run:
-```
-ssh -X username@your-devdesktop-host
-```
-Get the port xquartz is listening to: `echo $DISPLAY`
-
-Finally, verify that the xserver is running by running on that same mac terminal: `xset q`
+**Cookie reuse (mirrors production)**: after the first successful login, the browser storage
+state is saved to `.auth/github-oauth-state.json` and reused on subsequent runs — just as
+oauth2-proxy reuses a user's session in production. 2FA only re-runs when the cookies expire.
+The `.auth/` directory is git-ignored. In CI it is round-tripped through Secrets Manager via
+`just auth-import` / `just auth-export`.
 

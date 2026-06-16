@@ -92,36 +92,29 @@ this, org-based and team-based E2E tests will fail with "Authorization Failure".
 **An org admin must perform this step.** The bot account cannot do it alone
 (unless the bot is an org admin).
 
-To grant access using `auth-setup`:
-
-1. Allowlist the admin's GitHub username on the deployment:
-   `jd users add <admin-github-username> -p <project-dir>`
-2. Ensure a base template project is deployed and the E2E container is running
-   (`just e2e-up`)
-3. Run `just auth-setup-base <project-dir>` — this opens a browser window
-4. Log in with the **admin's** GitHub account (not the bot)
-5. On the GitHub OAuth authorization page, find the target organization
-   and click **Grant**
-6. Close the browser (Ctrl+C) — you do NOT need to save this auth state,
-   only the grant matters
-
-Alternatively, an org admin can approve the app from the org settings:
-`Organization Settings > Third-party access > OAuth application policy`
+An org admin approves the app from the org settings:
+`Organization Settings > Third-party access > OAuth application policy` — find
+the app by its client ID and click **Grant**.
 
 This only needs to be done once per OAuth app per organization. The approval
 persists across deployments as long as the OAuth app client ID stays the same.
 
 ### 7. Authenticate the bot account
 
-The bot's browser session (Playwright storage state) is saved to Secrets
-Manager and reused across CI runs. To create or refresh it:
+Bot authentication is fully automated: the password and TOTP seed are read from
+Secrets Manager and the test suite logs in with email + password + a fresh TOTP
+code.
 
-1. Run `just auth-setup-base <project-dir>` — this opens a browser window
-2. Log in as the **bot account** (use `just auth-bot-password` and
-   `just auth-bot-2fa` to get credentials)
-3. After successful authentication, the session is saved to
-   `.auth/github-oauth-state.json`
-4. Export the auth state to Secrets Manager: `just auth-export sandbox-ci`
+The browser session (Playwright storage state) is cached in
+`.auth/github-oauth-state.json` and reused across runs (mirrors production:
+sign in once, oauth2-proxy reuses the session). In CI it is round-tripped
+through Secrets Manager. To seed/refresh the cache:
+
+1. Ensure a base project is deployed and the E2E container is running (`just e2e-up`)
+2. Run a UI test with the bot credentials — this performs the automated 2FA
+   login and writes `.auth/github-oauth-state.json`:
+   `just test-e2e-base <project-dir> "test_application" ci-dir=sandbox-ci`
+3. Export the auth state to Secrets Manager: `just auth-export sandbox-ci`
 
 ### 8. Verify the setup
 
@@ -150,4 +143,5 @@ just test-e2e-base sandbox-base "test_org_and_teams"
 | `just auth-bot-username` | Print the bot account username |
 | `just auth-bot-password` | Print the bot account password |
 | `just auth-bot-2fa` | Generate a TOTP code for the bot |
-| `just auth-setup-base <dir>` | Interactive browser auth setup |
+| `just auth-export sandbox-ci` | Save the cached auth state to Secrets Manager |
+| `just auth-import sandbox-ci` | Restore the cached auth state from Secrets Manager |

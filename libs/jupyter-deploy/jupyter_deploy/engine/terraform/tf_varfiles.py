@@ -162,6 +162,14 @@ def parse_and_update_dot_tfvars_content(
     return tf_plan.format_values_for_dot_tfvars(saved_values)
 
 
+def parse_dot_tfvars_to_dict(content: str) -> dict[str, Any]:
+    """Parse a .tfvars file content and return as a plain dict of variable-name→value."""
+    if not content or not content.strip():
+        return {}
+    result: dict[str, Any] = strip_hcl2_quotes(hcl2.loads(content))
+    return result
+
+
 def parse_and_remove_overridden_variables_from_content(
     content: str,
     varnames_to_remove: list[str],

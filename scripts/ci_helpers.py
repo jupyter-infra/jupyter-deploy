@@ -104,6 +104,24 @@ def put_secret_value(arn: str, value: str) -> None:
     client.put_secret_value(SecretId=arn, SecretString=value)
 
 
+def is_project_deployed(project_dir: str) -> bool:
+    """Check if a project has live infrastructure (non-empty terraform state).
+
+    Runs `jd show --outputs --list` and returns True if any outputs are present.
+    A project with empty state (e.g. destroyed but still in S3) returns False.
+    """
+    result = subprocess.run(
+        ["uv", "run", "jd", "show", "--outputs", "--list", "--text", "-p", project_dir],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=JD_TIMEOUT_SECONDS,
+    )
+    if result.returncode != 0:
+        return False
+    return bool(result.stdout.strip())
+
+
 def run_jd_config(config_args: list[str], project_dir: str, check: bool = True) -> bool:
     """Run jd config with the given arguments in a project directory.
 

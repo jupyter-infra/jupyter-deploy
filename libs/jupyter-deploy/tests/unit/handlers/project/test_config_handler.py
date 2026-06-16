@@ -15,7 +15,7 @@ from jupyter_deploy.handlers.project.config_handler import ConfigHandler
 from jupyter_deploy.manifest import JupyterDeployManifestV1, JupyterDeployProjectStoreV1
 from jupyter_deploy.provider.store.store_manager import StoreInfo
 from jupyter_deploy.store_config import JupyterDeployStoreConfigV1
-from jupyter_deploy.variables_config import JupyterDeployVariablesConfig
+from jupyter_deploy.variables_config import JupyterDeployVariablesConfigV2
 from jupyter_deploy.verify_utils import ToolRequiredError
 
 
@@ -581,8 +581,8 @@ class TestConfigHandler(unittest.TestCase):
         mock_tf_handler.return_value = tf_mock_handler_instance
 
         # Set up variables_handler to return a config with no sensitive vars
-        mock_vars_config = JupyterDeployVariablesConfig(
-            schema_version=1,
+        mock_vars_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
             required={"domain": "example.com"},
             required_sensitive={},
         )
@@ -601,8 +601,8 @@ class TestConfigHandler(unittest.TestCase):
         tf_mock_handler_instance, _ = self.get_mock_handler_and_fns()
         mock_tf_handler.return_value = tf_mock_handler_instance
 
-        mock_vars_config = JupyterDeployVariablesConfig(
-            schema_version=1,
+        mock_vars_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
             required={},
             required_sensitive={"my_secret": MASKED_SECRET_VALUE},
         )
@@ -647,8 +647,8 @@ class TestConfigHandler(unittest.TestCase):
         tf_mock_handler_instance, _ = self.get_mock_handler_and_fns()
         mock_tf_handler.return_value = tf_mock_handler_instance
 
-        mock_vars_config = JupyterDeployVariablesConfig(
-            schema_version=1,
+        mock_vars_config = JupyterDeployVariablesConfigV2(
+            schema_version=2,
             required={},
             required_sensitive={"oauth_secret": MASKED_SECRET_VALUE},
         )
@@ -688,3 +688,19 @@ class TestConfigHandler(unittest.TestCase):
         handler = ConfigHandler(display_manager=NullDisplay())
         # Should return immediately without error
         handler.restore_secrets()
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_config.TerraformConfigHandler")
+    def test_reset_variables_delegates_to_variables_handler(
+        self, mock_tf_handler: Mock, mock_retrieve_manifest: Mock
+    ) -> None:
+        mock_retrieve_manifest.return_value = self.mock_manifest
+        tf_mock_handler_instance, _ = self.get_mock_handler_and_fns()
+        mock_tf_handler.return_value = tf_mock_handler_instance
+
+        handler = ConfigHandler(display_manager=NullDisplay())
+        handler.reset_variables(["domain", "custom_tags"])
+
+        tf_mock_handler_instance.variables_handler.reset_specific_variables.assert_called_once_with(
+            ["domain", "custom_tags"]
+        )

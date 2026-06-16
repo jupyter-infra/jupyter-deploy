@@ -178,15 +178,16 @@ e2e-sync:
 
 # Run E2E tests in containerized environment
 # Usage: just test-e2e [project-dir] [test-filter] [options]
-# Options: comma-separated key=value pairs (e.g., mutate=true,destroy=true,log-level=debug)
-# Example: just test-e2e                                      # deploy sandbox-e2e from scratch (includes mutating tests)
-# Example: just test-e2e sandbox-e2e                          # deploy sandbox-e2e from scratch (explicit)
-# Example: just test-e2e sandbox2                             # test existing project (skips mutating tests)
-# Example: just test-e2e sandbox2 test_users                  # test specific test on existing project
-# Example: just test-e2e sandbox2 test_config_changes mutate=true   # test existing project with mutating tests
-# Example: just test-e2e sandbox-e2e "" mutate=true,destroy=true    # deploy from scratch and destroy after tests
-# Example: just test-e2e sandbox2 "" log-level=debug          # test with debug logging
-# Example: just test-e2e sandbox2 test_application ci-dir=sandbox-ci  # CI mode with automated 2FA
+# Options: comma-separated key=value pairs (e.g., mutate=true,ci-dir=sandbox-ci)
+#
+# Browser-auth tests require ci-dir=<ci-project> (provides bot credentials for automated 2FA).
+# Restore the CI project first: just ci-restore sandbox-ci
+#
+# Example: just test-e2e sandbox2 "" ci-dir=sandbox-ci                 # all non-mutating tests (browser auth)
+# Example: just test-e2e sandbox2 test_users ci-dir=sandbox-ci         # specific test
+# Example: just test-e2e sandbox2 "" mutate=true,ci-dir=sandbox-ci     # with mutating tests
+# Example: just test-e2e sandbox2 test_configuration                   # config-only (no ci-dir needed)
+# Example: just test-e2e sandbox2 "" log-level=debug,ci-dir=sandbox-ci # with debug logging
 test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-template:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -418,10 +419,10 @@ test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-te
             echo "  - log level: $LOG_LEVEL"
         fi
 
-        # Parse ci-dir option (enables CI mode with automated 2FA)
+        # Parse ci-dir option (provides bot credentials for automated 2FA browser auth)
         if [ -n "$CI_DIR" ]; then
-            PYTEST_ARGS="$PYTEST_ARGS --ci --ci-dir $CI_DIR"
-            echo "  - CI mode: enabled (ci-dir=$CI_DIR)"
+            PYTEST_ARGS="$PYTEST_ARGS --ci-dir $CI_DIR"
+            echo "  - bot-credential auth: enabled (ci-dir=$CI_DIR)"
         fi
 
         # Parse skip-sync option (use pre-built image, skip e2e-sync)
@@ -447,172 +448,7 @@ test-e2e project_dir="sandbox-e2e" test_filter="" options="" template=default-te
     echo "Test filter: {{test_filter}}"
     echo "================================================"
 
-    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} exec -e XAUTHORITY=/home/testuser/.Xauthority -e PYTHONUNBUFFERED=1 e2e bash -c "cd /workspace && xvfb-run --auto-servernum bash -c '$PYTEST_CMD $PYTEST_ARGS'"
-
-# Setup GitHub OAuth authentication (one-time, requires X11 forwarding)
-# Usage: just auth-setup <project-dir> [display]
-# Example: just auth-setup sandbox3
-# Example: just auth-setup sandbox3 localhost:10.0
-auth-setup project_dir display="${DISPLAY:-}":
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-
-    # Track override file for cleanup
-    OVERRIDE_FILE=""
-
-    # Cleanup function
-    cleanup() {
-        [ -n "$OVERRIDE_FILE" ] && [ -f "$OVERRIDE_FILE" ] && rm -f "$OVERRIDE_FILE"
-    }
-
-    # Ensure cleanup on exit
-    trap cleanup EXIT
-
-    if [ ! -d "{{project_dir}}" ]; then
-        echo "Error: Project directory '{{project_dir}}' does not exist"
-        exit 1
-    fi
-
-    # Check if container is running
-    if ! ({{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} ps e2e) | grep -qE "(Up|running)"; then
-        echo "Error: E2E container is not running. Start it with: just e2e-up"
-        exit 1
-    fi
-
-    # Always mount project directory dynamically
-    echo "Mounting project directory: {{project_dir}}"
-
-    # Create test-results and .auth directories
-    mkdir -p "{{justfile_directory()}}/test-results"
-    mkdir -p "{{justfile_directory()}}/.auth"
-    echo "Cleaning old test artifacts..."
-    rm -rf "{{justfile_directory()}}/test-results"/*
-
-    # Update .env file with current values
-    sed -i 's/^HOST_UID=.*/HOST_UID={{HOST_UID}}/' {{justfile_directory()}}/.env
-    sed -i 's/^HOST_GID=.*/HOST_GID={{HOST_GID}}/' {{justfile_directory()}}/.env
-    if grep -q '^E2E_DOCKERFILE=' {{justfile_directory()}}/.env; then
-        sed -i 's|^E2E_DOCKERFILE=.*|E2E_DOCKERFILE={{e2e-image-dir}}/Dockerfile|' {{justfile_directory()}}/.env
-    else
-        echo 'E2E_DOCKERFILE={{e2e-image-dir}}/Dockerfile' >> {{justfile_directory()}}/.env
-    fi
-    # Resolve AWS_REGION from env or AWS config (must not be empty — SDK treats "" as valid)
-    _AWS_REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null || echo "")}"
-    if [ -n "$_AWS_REGION" ]; then
-        if grep -q '^AWS_REGION=' {{justfile_directory()}}/.env; then
-            sed -i "s|^AWS_REGION=.*|AWS_REGION=$_AWS_REGION|" {{justfile_directory()}}/.env
-        else
-            echo "AWS_REGION=$_AWS_REGION" >> {{justfile_directory()}}/.env
-        fi
-    fi
-
-    # Create temporary override file to mount the project directory and test-results
-    OVERRIDE_FILE="{{justfile_directory()}}/docker-compose.e2e-override.yml"
-    cat > "$OVERRIDE_FILE" <<EOF
-    services:
-      e2e:
-        volumes:
-          - ./{{project_dir}}:/workspace/{{project_dir}}
-          - ./test-results:/workspace/test-results
-    EOF
-
-    # Stop and restart container with new mounts (ensures clean mount state)
-    echo "Restarting E2E container with project mount..."
-    mkdir -p ~/.kube  # must exist before compose up; Docker creates missing bind-mount sources as root
-    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} down
-    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} -f "$OVERRIDE_FILE" up -d
-
-    # Re-sync files after restart (container loses synced files when restarted)
-    echo "Re-syncing project files after mount..."
-    just e2e-sync
-
-    # Verify test-results directory is writable (detect stale mount)
-    echo "Verifying test-results directory is writable..."
-    if ! {{container-tool}} exec {{e2e-container-name}} bash -c "touch /workspace/test-results/.mount-check && rm /workspace/test-results/.mount-check" 2>/dev/null; then
-        echo "Error: test-results directory is not writable (stale mount detected)"
-        echo ""
-        echo "This happens when test-results was deleted while the container was running."
-        echo "To fix: just e2e-down && just e2e-up"
-        [ -n "$OVERRIDE_FILE" ] && rm -f "$OVERRIDE_FILE"
-        exit 1
-    fi
-    echo "✓ test-results directory is writable"
-
-    # Check if DISPLAY is set
-    if [ -z "{{display}}" ]; then
-        echo "Error: DISPLAY environment variable is not set."
-        echo ""
-        echo "X11 forwarding is required for authentication setup."
-        echo ""
-        echo "Solutions:"
-        echo "  1. SSH with X11 forwarding: ssh -X your-host"
-        echo "  2. Set DISPLAY manually: export DISPLAY=localhost:10.0"
-        echo "  3. Pass DISPLAY explicitly: just auth-setup {{project_dir}} localhost:10.0"
-        exit 1
-    fi
-
-    echo "Setting up GitHub OAuth authentication..."
-    echo "Using DISPLAY: {{display}}"
-    echo "A browser window will open for you to complete authentication."
-    echo "================================================"
-
-    # Setup X11 authentication
-    echo "Setting up X11 authentication..."
-
-    # Parse DISPLAY to extract the display number (e.g., "localhost:10.0" -> "10")
-    DISPLAY_NUM=$(echo "{{display}}" | cut -d':' -f2 | cut -d'.' -f1)
-
-    # Get X11 auth cookie for this display
-    COOKIE=$(xauth list 2>/dev/null | grep ":$DISPLAY_NUM" | awk '{print $NF}' | head -1)
-
-    if [ -z "$COOKIE" ]; then
-        echo "⚠ Error: Could not find X11 auth cookie for display :$DISPLAY_NUM"
-        echo "Make sure X11 forwarding is enabled (ssh -X) and DISPLAY is set"
-        exit 1
-    fi
-
-    echo "Found X11 cookie: ${COOKIE:0:16}..."
-
-    # Add localhost cookies to host .Xauthority (needed for TCP connections)
-    # xauth converts "localhost:10" to "localhost/unix:10", but we need both formats
-    xauth list | grep -q "localhost:$DISPLAY_NUM" || xauth add localhost:$DISPLAY_NUM MIT-MAGIC-COOKIE-1 $COOKIE 2>/dev/null || true
-    xauth list | grep -q "127.0.0.1:$DISPLAY_NUM" || xauth add 127.0.0.1:$DISPLAY_NUM MIT-MAGIC-COOKIE-1 $COOKIE 2>/dev/null || true
-
-    # Copy the host's .Xauthority file to container (preserves all cookie formats)
-    {{container-tool}} cp ~/.Xauthority {{e2e-container-name}}:/home/testuser/.Xauthority
-    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} exec e2e chmod 600 /home/testuser/.Xauthority
-
-    echo "✓ X11 authentication cookies copied to container"
-
-    echo ""
-    echo "Verifying X11 setup..."
-    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} exec -e DISPLAY={{display}} e2e bash -c "\
-        echo \"DISPLAY in container: \$DISPLAY\" && \
-        echo \"Container hostname: \$(hostname -f)\" && \
-        echo \"\" && \
-        echo \"Xauthority file:\" && \
-        ls -lh /home/testuser/.Xauthority 2>&1 || echo 'No .Xauthority' && \
-        echo \"\" && \
-        echo \"X11 cookies installed:\" && \
-        xauth list 2>&1 || echo 'No xauth cookies' \
-    "
-
-    echo ""
-    echo "Launching browser..."
-
-    # Ensure project files are synced (check if scripts directory exists)
-    if ! {{container-tool}} exec {{e2e-container-name}} test -d /workspace/scripts; then
-        echo "Project files not found in container, syncing..."
-        just e2e-sync
-    fi
-
-    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} exec -e DISPLAY={{display}} -e XAUTHORITY=/home/testuser/.Xauthority e2e bash -c "\
-        export DISPLAY={{display}} && \
-        export XAUTHORITY=/home/testuser/.Xauthority && \
-        cd /workspace && \
-        uv run python scripts/github_auth_setup.py --project-dir={{project_dir}} \
-    "
+    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} exec -e PYTHONUNBUFFERED=1 e2e bash -c "cd /workspace && xvfb-run --auto-servernum bash -c '$PYTEST_CMD $PYTEST_ARGS'"
 
 # Clean up test artifacts and remove image
 clean-e2e:
@@ -631,20 +467,24 @@ e2e-all project_dir test_filter="" options="" no_cache="false" template=default-
 # --- Per-template convenience wrappers ---
 
 # Run E2E tests for the base template (tf-aws-ec2-base)
+# Example: just test-e2e-base sandbox3 test_configuration                   # config only (no ci-dir needed)
+# Example: just test-e2e-base sandbox3 "" ci-dir=sandbox-ci                 # all non-mutating tests
+# Example: just test-e2e-base sandbox3 "" mutate=true,ci-dir=sandbox-ci     # include mutating tests
+# Example: just test-e2e-base sandbox3 test_users ci-dir=sandbox-ci         # run a specific test
 test-e2e-base project_dir="sandbox-e2e" test_filter="" options="":
     @just test-e2e {{project_dir}} "{{test_filter}}" "{{options}}" tf-aws-ec2-base
 
 # Run E2E tests for the EKS OIDC template (tf-aws-eks-oidc)
+# Example: just test-e2e-eks-oidc sandbox-eks test_configuration                              # config only (no ci-dir needed)
+# Example: just test-e2e-eks-oidc sandbox-eks "" ci-dir=sandbox-ci                            # all non-full-deploy, non-mutating tests
+# Example: just test-e2e-eks-oidc sandbox-eks "" full-deploy=true,ci-dir=sandbox-ci           # include full-deploy tests
+# Example: just test-e2e-eks-oidc sandbox-eks test_workspace ci-dir=sandbox-ci                # run a specific test
 test-e2e-eks-oidc project_dir="sandbox-e2e" test_filter="" options="":
     @just test-e2e {{project_dir}} "{{test_filter}}" "{{options}}" tf-aws-eks-oidc
 
 # Run E2E tests for the CI template (tf-aws-iam-ci)
 test-e2e-ci project_dir="sandbox-e2e-ci" test_filter="" options="":
     @just test-e2e {{project_dir}} "{{test_filter}}" "{{options}}" tf-aws-iam-ci
-
-# Setup GitHub OAuth for the base template
-auth-setup-base project_dir display="${DISPLAY:-}":
-    @just auth-setup {{project_dir}} "{{display}}"
 
 # --- CI infrastructure commands ---
 

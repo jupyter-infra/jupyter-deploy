@@ -164,6 +164,9 @@ class SupervisedExecutor:
                 self._last_log_line = stripped_line
                 self._execution_callback.on_log_line(stripped_line)
 
+        # Wire on_stdin_line if the callback supports it (for capturing interactive values)
+        on_stdin_line_cb = getattr(self._execution_callback, "on_stdin_line", None)
+
         handler = PromptHandler(
             process=process,
             on_line=on_line,
@@ -171,6 +174,7 @@ class SupervisedExecutor:
             on_prompt=on_prompt,
             on_char=None,  # No character echo (handled by callback)
             on_stderr=on_stderr,
+            on_stdin_line=on_stdin_line_cb,
             buffer_size=200,  # Match the callback buffer size
             prompt_check_chars=self.prompt_check_chars,
         )

@@ -73,6 +73,10 @@ def seeded_cluster(
 
     Yields a dict: {"admin": [...], "seeded": [...]}
     Tears down all workspaces on session end.
+
+    These workspaces are long-lived (session-scoped) and must not be mutated or
+    deleted by tests. Tests in test_workspace.py use separate, self-contained
+    workspace names (e2e-ws-*) with their own create/delete lifecycle.
     """
     group = _get_impersonation_group()
     if not group:

@@ -1,9 +1,10 @@
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from jupyter_deploy.engine.supervised_execution import NullDisplay
 from jupyter_deploy.engine.terraform.tf_variables import TerraformVariablesHandler
+from jupyter_deploy.exceptions import ConfigurationError
 
 
 class TestTerraformVariablesHandler(unittest.TestCase):
@@ -534,9 +535,14 @@ class TestResetRecordedVariables(unittest.TestCase):
         # Execute
         handler.reset_recorded_variables()
 
-        # Assert parent method was called and delete_file was called with correct path
+        # Assert parent method was called and delete_file was called for recorded + staging
         mock_parent_reset.assert_called_once()
-        mock_delete_file.assert_called_once_with(project_path / "engine" / "jdinputs.auto.tfvars")
+        expected_calls = [
+            call(project_path / "engine" / "jdinputs.auto.tfvars"),
+            call(project_path / "engine" / "jdinputs.staging.auto.tfvars"),
+        ]
+        mock_delete_file.assert_has_calls(expected_calls, any_order=False)
+        self.assertEqual(mock_delete_file.call_count, 2)
 
     @patch("jupyter_deploy.engine.engine_variables.EngineVariablesHandler.reset_recorded_variables")
     @patch("jupyter_deploy.fs_utils.delete_file_if_exists")
@@ -555,7 +561,6 @@ class TestResetRecordedVariables(unittest.TestCase):
 
         # Assert
         mock_parent_reset.assert_called_once()
-        mock_delete_file.assert_called_once()
         self.assertTrue(result, "Should return True when file was deleted")
 
     @patch("jupyter_deploy.engine.engine_variables.EngineVariablesHandler.reset_recorded_variables")
@@ -576,7 +581,6 @@ class TestResetRecordedVariables(unittest.TestCase):
             handler.reset_recorded_variables()
 
         mock_parent_reset.assert_called_once()
-        mock_delete_file.assert_called_once()
 
 
 class TestResetRecordedSecrets(unittest.TestCase):
@@ -594,9 +598,14 @@ class TestResetRecordedSecrets(unittest.TestCase):
         # Execute
         handler.reset_recorded_secrets()
 
-        # Assert parent method was called and delete_file was called with correct path
+        # Assert parent method was called and delete_file was called for recorded + staging
         mock_parent_reset.assert_called_once()
-        mock_delete_file.assert_called_once_with(project_path / "engine" / "jdinputs.secrets.auto.tfvars")
+        expected_calls = [
+            call(project_path / "engine" / "jdinputs.secrets.auto.tfvars"),
+            call(project_path / "engine" / "jdinputs.staging.secrets.auto.tfvars"),
+        ]
+        mock_delete_file.assert_has_calls(expected_calls, any_order=False)
+        self.assertEqual(mock_delete_file.call_count, 2)
 
     @patch("jupyter_deploy.engine.engine_variables.EngineVariablesHandler.reset_recorded_secrets")
     @patch("jupyter_deploy.fs_utils.delete_file_if_exists")
@@ -615,7 +624,6 @@ class TestResetRecordedSecrets(unittest.TestCase):
 
         # Assert
         mock_parent_reset.assert_called_once()
-        mock_delete_file.assert_called_once()
         self.assertTrue(result, "Should return True when file was deleted")
 
     @patch("jupyter_deploy.engine.engine_variables.EngineVariablesHandler.reset_recorded_secrets")
@@ -637,3 +645,47 @@ class TestResetRecordedSecrets(unittest.TestCase):
 
         mock_parent_reset.assert_called_once()
         mock_delete_file.assert_called_once()
+
+
+class TestSyncEngineVarfilesToStagingErrorHandling(unittest.TestCase):
+    @patch.object(TerraformVariablesHandler, "update_variable_records_staging")
+    @patch.object(TerraformVariablesHandler, "_collect_varvalues_from_config")
+    def test_raises_configuration_error_on_type_error(self, mock_collect: Mock, mock_update_staging: Mock) -> None:
+        handler = TerraformVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        mock_collect.return_value = ({"custom_tags": []}, {})
+        mock_update_staging.side_effect = TypeError("Invalid value for variable 'custom_tags': []")
+
+        with self.assertRaises(ConfigurationError) as ctx:
+            handler.sync_engine_varfiles_to_staging()
+
+        self.assertIn("custom_tags", str(ctx.exception))
+        self.assertEqual(ctx.exception.hint, "Fix the value in variables.yaml and run 'jd config' again.")
+
+    @patch.object(TerraformVariablesHandler, "update_variable_records_staging")
+    @patch.object(TerraformVariablesHandler, "_collect_varvalues_from_config")
+    def test_raises_configuration_error_on_key_error(self, mock_collect: Mock, mock_update_staging: Mock) -> None:
+        handler = TerraformVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        mock_collect.return_value = ({"unknown_var": "value"}, {})
+        mock_update_staging.side_effect = KeyError("Variable not found: unknown_var")
+
+        with self.assertRaises(ConfigurationError) as ctx:
+            handler.sync_engine_varfiles_to_staging()
+
+        self.assertIn("unknown_var", str(ctx.exception))
+        self.assertEqual(ctx.exception.hint, "Fix the value in variables.yaml and run 'jd config' again.")
+
+    @patch.object(TerraformVariablesHandler, "update_variable_records_staging")
+    @patch.object(TerraformVariablesHandler, "_collect_varvalues_from_config")
+    def test_does_not_raise_on_success(self, mock_collect: Mock, mock_update_staging: Mock) -> None:
+        handler = TerraformVariablesHandler(
+            project_path=Path("/mock"), project_manifest=Mock(), display_manager=NullDisplay()
+        )
+        mock_collect.return_value = ({"domain": "test.com"}, {})
+
+        handler.sync_engine_varfiles_to_staging()
+
+        mock_update_staging.assert_called()

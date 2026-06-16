@@ -87,6 +87,15 @@ class ConfigHandler(BaseProjectHandler):
         """
         return expected_preset_name is None or expected_preset_name == self.preset_name
 
+    def reset_variables(self, var_names: list[str]) -> None:
+        """Reset specific variables so they get re-prompted on next config.
+
+        Also removes those variables from recorded varfiles so terraform
+        doesn't pick up stale values for the reset variables.
+        """
+        self._handler.variables_handler.reset_specific_variables(var_names)
+        self._handler.variables_handler.remove_variables_from_recorded(var_names)
+
     def reset_recorded_variables(self) -> bool:
         """Delete the file in the project dir where the previous inputs were recorded.
 

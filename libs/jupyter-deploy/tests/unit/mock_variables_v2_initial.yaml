@@ -1,0 +1,20 @@
+schema_version: 2
+
+required:
+  # fill in values below, or run 'jd config' for the interactive experience
+  region: null
+  bucket_name: null
+  storage_region: null
+
+required_sensitive:
+  # fill in values below, or run 'jd config' for the interactive experience
+  # values entered here will be masked after running 'jd config'
+  aws_secret_key: null
+  api_token: null
+
+overrides:
+  # uncomment and change a value to override the default
+  # deployment_type: "t3.medium"
+  # storage_size: 50
+  # server_name: "jupyter-server"
+  # enable_monitoring: true

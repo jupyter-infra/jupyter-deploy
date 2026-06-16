@@ -116,10 +116,22 @@ jobs:
       - name: Test installation from Test PyPI
         run: |
           uv venv
-          uv pip install \
-            --extra-index-url https://test.pypi.org/simple/ \
-            --index-strategy unsafe-best-match \
-            ${{ env.PKG_NAME }}==${{ env.VERSION }}
+          for i in 1 2; do
+            if uv pip install \
+              --extra-index-url https://test.pypi.org/simple/ \
+              --index-strategy unsafe-best-match \
+              ${{ env.PKG_NAME }}==${{ env.VERSION }} 2>&1 | tee /tmp/install.log; then
+              exit 0
+            fi
+            if ! grep -qi "No solution found\|no version of" /tmp/install.log; then
+              echo "::error::Install failed with non-transient error"
+              exit 1
+            fi
+            echo "Attempt ${i}/2 failed (package not yet installable), retrying in 60s..."
+            sleep 60
+          done
+          echo "::error::Test PyPI install failed after 2 attempts"
+          exit 1
 
   prod-pypi-publish:
     name: Publish to PyPI

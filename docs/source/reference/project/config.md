@@ -28,5 +28,6 @@ $ jd config [OPTIONS]
 * `--restore-secrets`: Restore all masked secret variable value.
 * `--restore-secret TEXT`: Restore the specific variable secret value.
 * `--reset-store-id`: Clear the pinned store ID and rediscover the store.
+* `--reset-variable TEXT`: Reset a variable to its default, or to null to trigger re-prompt.
 * `-v, --verbose`: Show full output without progress bar.
 * `--help`: Show this message and exit.

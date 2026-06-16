@@ -2,219 +2,186 @@
 
 Tests web UI page loads, workspace CRUD via the browser, and access control.
 The web UI is gated by oauth2-proxy (Dex OAuth flow).
-Uses the dex_oauth_app fixture to authenticate through oauth2-proxy → Dex → GitHub.
 
 Auth model:
 - "User A" = the GitHub bot user (github:<JD_E2E_USER>) — same identity as the browser session
+- Seeded workspaces = owned by a synthetic "other user" (github:e2e-other-user)
 """
 
-import subprocess
-from collections.abc import Generator
-
 import pytest
-from pytest_jupyter_deploy.oauth2_proxy.dex import DexGitHubOAuth2ProxyApplication
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
+from pytest_jupyter_deploy.workspaces.kubectl import ensure_workspace_no_longer_exists
+from pytest_jupyter_deploy.workspaces.web_app import WebAppNavigator
 
 pytestmark = pytest.mark.usefixtures("cluster_login")
-
-NAMESPACE = "default"
-
-
-@pytest.fixture()
-def create_workspace_via_page(
-    getting_started_url: str,
-    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
-) -> Generator[str, None, None]:
-    """Create a workspace through the UI and yield its name. Deletes on teardown."""
-    dex_oauth_app.ensure_authenticated()
-
-    base_url = getting_started_url.rstrip("/")
-    page = dex_oauth_app.page
-
-    page.goto(base_url + "/create", wait_until="networkidle", timeout=60000)
-
-    name_field = page.get_by_label("Name").first
-    name_field.wait_for(state="visible", timeout=30000)
-    workspace_name = name_field.input_value()
-    assert workspace_name != "", "Expected auto-generated workspace name"
-
-    create_button = page.get_by_role("button", name="Create Workspace")
-    create_button.click()
-
-    # Wait for creation to complete (app redirects to list)
-    page.wait_for_timeout(3000)
-
-    # Navigate to detail page
-    page.goto(base_url + f"/workspace/{workspace_name}", wait_until="networkidle", timeout=60000)
-    page.get_by_text(workspace_name).wait_for(state="visible", timeout=30000)
-
-    yield workspace_name
-
-    subprocess.run(
-        ["kubectl", "delete", "workspace", workspace_name, "-n", NAMESPACE, "--ignore-not-found"],
-        capture_output=True,
-    )
 
 
 # ── Page load tests ──────────────────────────────────────────────────────────
 
 
 @skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
-def test_web_app_loads_after_oauth(
-    getting_started_url: str,
-    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
-) -> None:
+def test_web_app_loads_after_oauth(dex_oauth_web_app: WebAppNavigator) -> None:
     """Verify the web UI loads successfully behind OAuth."""
-    dex_oauth_app.ensure_authenticated()
+    dex_oauth_web_app.goto_workspace_list()
 
-    base_url = getting_started_url.rstrip("/")
-    dex_oauth_app.page.goto(base_url + "/", wait_until="networkidle", timeout=60000)
-
-    heading = dex_oauth_app.page.get_by_role("heading", name="Workspaces", exact=True)
+    heading = dex_oauth_web_app.page.get_by_role("heading", name="Workspaces", exact=True)
     assert heading.is_visible(timeout=30000), "Expected 'Workspaces' heading to be visible"
 
 
 @skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
-def test_web_app_health_endpoint(
-    getting_started_url: str,
-    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
-) -> None:
+def test_web_app_health_endpoint(dex_oauth_web_app: WebAppNavigator) -> None:
     """Verify the web app health endpoint responds."""
-    dex_oauth_app.ensure_authenticated()
-
-    base_url = getting_started_url.rstrip("/")
-    response = dex_oauth_app.page.goto(base_url + "/api/v1/health", wait_until="load", timeout=30000)
-
+    response = dex_oauth_web_app.page.goto(
+        dex_oauth_web_app.base_url + "/api/v1/health", wait_until="load", timeout=30000
+    )
     assert response is not None
     assert response.status == 200
 
 
 @skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
-def test_web_app_kubectl_page(
-    getting_started_url: str,
-    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
-) -> None:
+def test_web_app_kubectl_page(dex_oauth_web_app: WebAppNavigator) -> None:
     """Verify the kubectl access page loads and shows cluster info."""
-    dex_oauth_app.ensure_authenticated()
+    dex_oauth_web_app.goto_kubectl_page()
 
-    base_url = getting_started_url.rstrip("/")
-    dex_oauth_app.page.goto(base_url + "/kubectl", wait_until="networkidle", timeout=60000)
-
-    heading = dex_oauth_app.page.get_by_role("heading", name="Kubectl Access")
+    heading = dex_oauth_web_app.page.get_by_role("heading", name="Kubectl Access")
     assert heading.is_visible(timeout=30000), "Expected 'Kubectl Access' heading to be visible"
 
 
-# ── Workspace CRUD ───────────────────────────────────────────────────────────
+# ── Workspace lifecycle ────────────────────────────────────────────────────────
 
 
 @skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
-def test_create_workspace(
-    getting_started_url: str,
-    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
-    create_workspace_via_page: str,
-) -> None:
-    """Create a workspace through the UI and verify it appears in the list."""
-    workspace_name = create_workspace_via_page
+def test_create_default_workspace(dex_oauth_web_app: WebAppNavigator) -> None:
+    """Create a workspace through the UI, verify Running, open it → JupyterLab loads."""
+    with dex_oauth_web_app.default_workspace() as workspace_name:
+        dex_oauth_web_app.wait_for_status("Starting")
+        dex_oauth_web_app.wait_for_running()
 
-    base_url = getting_started_url.rstrip("/")
-    page = dex_oauth_app.page
+        # Open button should appear when workspace is Running
+        open_button = dex_oauth_web_app.get_open_button()
+        assert open_button.is_visible(), "Expected Open button on Running workspace detail page"
 
-    # Navigate to workspace list and verify the workspace shows up
-    page.goto(base_url + "/", wait_until="networkidle", timeout=60000)
-    page.get_by_role("heading", name="Workspaces", exact=True).wait_for(state="visible", timeout=30000)
-    page.get_by_text(workspace_name).wait_for(state="visible", timeout=30000)
+        # Verify it shows up in the list with an Open button on the card
+        dex_oauth_web_app.goto_workspace_list()
+        card = dex_oauth_web_app.get_workspace_card(workspace_name)
+        assert card.is_visible(timeout=30000), f"Workspace '{workspace_name}' not found in list"
 
-
-@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
-def test_workspace_detail_page(
-    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
-    create_workspace_via_page: str,
-) -> None:
-    """Create a workspace and verify the detail page shows status and actions."""
-    workspace_name = create_workspace_via_page
-    page = dex_oauth_app.page
-
-    # Detail page should show workspace name (already navigated by fixture)
-    page.get_by_text(workspace_name).wait_for(state="visible", timeout=30000)
-
-    # Should show a status indicator (Starting or Running)
-    status = page.get_by_text("Starting").or_(page.get_by_text("Running"))
-    status.first.wait_for(state="visible", timeout=30000)
+        # Click Open on the card → new tab → JupyterLab should load
+        dex_oauth_web_app.open_workspace_from_card(workspace_name)
+        dex_oauth_web_app.verify_jupyterlab_loaded()
 
 
 @skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
-def test_stop_workspace(
-    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
-    create_workspace_via_page: str,
-) -> None:
-    """Create a workspace, wait for Running, then stop it."""
-    _ = create_workspace_via_page
-    page = dex_oauth_app.page
+def test_stop_and_restart_workspace(dex_oauth_web_app: WebAppNavigator) -> None:
+    """Create a workspace, stop it (Open disappears), restart it, open → JupyterLab."""
+    with dex_oauth_web_app.default_workspace():
+        dex_oauth_web_app.wait_for_running()
 
-    # Wait for workspace to reach Running
-    page.get_by_text("Running").wait_for(state="visible", timeout=300000)
+        # Open button should be visible while Running
+        open_button = dex_oauth_web_app.get_open_button()
+        assert open_button.is_visible(), "Expected Open button while workspace is Running"
 
-    # Click stop button
-    page.get_by_role("button", name="Stop").click()
+        # Stop the workspace
+        dex_oauth_web_app.stop_workspace()
+        assert dex_oauth_web_app.get_status_chip_text() == "Stopped"
+        assert not open_button.is_visible(), "Open button should disappear when workspace is Stopped"
 
-    # Confirm the action in the dialog
-    page.get_by_role("button", name="Confirm").or_(page.get_by_role("button", name="Stop")).last.click(timeout=5000)
+        # Restart the workspace
+        dex_oauth_web_app.start_workspace()
+        dex_oauth_web_app.wait_for_running()
+        assert dex_oauth_web_app.get_status_chip_text() == "Running"
 
-    # Verify workspace transitions to Stopped
-    page.get_by_text("Stopped").wait_for(state="visible", timeout=180000)
-
-
-@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
-def test_start_stopped_workspace(
-    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
-    create_workspace_via_page: str,
-) -> None:
-    """Create a workspace, stop it, then restart it."""
-    _ = create_workspace_via_page
-    page = dex_oauth_app.page
-
-    # Wait for Running, then stop
-    page.get_by_text("Running").wait_for(state="visible", timeout=300000)
-    page.get_by_role("button", name="Stop").click()
-
-    page.get_by_role("button", name="Confirm").or_(page.get_by_role("button", name="Stop")).last.click(timeout=5000)
-
-    page.get_by_text("Stopped").wait_for(state="visible", timeout=180000)
-
-    # Restart the workspace
-    page.get_by_role("button", name="Start").click()
-
-    # Verify workspace transitions back to Running
-    page.get_by_text("Running").wait_for(state="visible", timeout=300000)
+        # Open the workspace from detail page → JupyterLab should load
+        dex_oauth_web_app.open_workspace_from_details_page()
+        dex_oauth_web_app.verify_jupyterlab_loaded()
 
 
 @skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
-def test_delete_workspace(
-    getting_started_url: str,
-    dex_oauth_app: DexGitHubOAuth2ProxyApplication,
-    create_workspace_via_page: str,
+def test_delete_workspace(dex_oauth_web_app: WebAppNavigator) -> None:
+    """Create a workspace, delete it through the UI, verify kubectl can't find it."""
+    with dex_oauth_web_app.default_workspace() as workspace_name:
+        dex_oauth_web_app.wait_for_running()
+        dex_oauth_web_app.delete_workspace_from_list(workspace_name)
+        ensure_workspace_no_longer_exists(workspace_name)
+
+
+# ── Cross-user visibility (other user's workspaces) ───────────────────────────
+
+
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
+def test_user_sees_other_user_workspaces_in_list(
+    seeded_cluster: dict[str, list[str]], dex_oauth_web_app: WebAppNavigator
 ) -> None:
-    """Create a workspace and delete it through the UI."""
-    workspace_name = create_workspace_via_page
-    page = dex_oauth_app.page
+    """Verify the 'All' view shows workspaces owned by other users."""
+    other_public = seeded_cluster["seeded"][0]
+    other_private = seeded_cluster["seeded"][1]
+    dex_oauth_web_app.goto_workspace_list(view_all=True)
 
-    # Wait for workspace to be Running on detail page
-    page.get_by_text("Running").wait_for(state="visible", timeout=300000)
+    public_card = dex_oauth_web_app.get_workspace_card(other_public)
+    public_card.wait_for(state="visible", timeout=30000)
+    assert public_card.is_visible(), f"Expected other user's public workspace '{other_public}' in list"
 
-    # Go to list page and delete via the card menu
-    base_url = getting_started_url.rstrip("/")
-    page.goto(base_url + "/", wait_until="networkidle", timeout=60000)
-    page.get_by_text(workspace_name).wait_for(state="visible", timeout=30000)
+    private_card = dex_oauth_web_app.get_workspace_card(other_private)
+    assert private_card.is_visible(), f"Expected other user's private workspace '{other_private}' in list"
 
-    # Find the card for this workspace and open its menu
-    card = page.locator(".MuiCard-root").filter(has_text=workspace_name)
-    card.get_by_role("button", name="More options").click()
-    page.get_by_role("menuitem", name="Delete").click()
 
-    # Confirm deletion in the dialog
-    page.get_by_role("button", name="Delete").click()
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
+def test_user_does_not_see_other_user_workspaces_in_my_workspaces_list(
+    seeded_cluster: dict[str, list[str]], dex_oauth_web_app: WebAppNavigator
+) -> None:
+    """Verify the default 'My Workspaces' view does NOT show other users' workspaces."""
+    other_public = seeded_cluster["seeded"][0]
+    other_private = seeded_cluster["seeded"][1]
+    dex_oauth_web_app.goto_workspace_list()
 
-    # Verify workspace is no longer in the list
-    page.wait_for_timeout(3000)
-    page.reload(wait_until="networkidle", timeout=60000)
-    page.get_by_text(workspace_name).wait_for(state="hidden", timeout=30000)
+    public_card = dex_oauth_web_app.get_workspace_card(other_public)
+    assert not public_card.is_visible(), (
+        f"Other user's public workspace '{other_public}' should NOT be in My Workspaces"
+    )
+
+    private_card = dex_oauth_web_app.get_workspace_card(other_private)
+    assert not private_card.is_visible(), (
+        f"Other user's private workspace '{other_private}' should NOT be in My Workspaces"
+    )
+
+
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
+def test_user_can_view_other_user_workspace_detail(
+    seeded_cluster: dict[str, list[str]], dex_oauth_web_app: WebAppNavigator
+) -> None:
+    """Verify the user can navigate to another user's workspace detail page."""
+    other_public = seeded_cluster["seeded"][0]
+    dex_oauth_web_app.goto_workspace_detail(other_public)
+
+    assert dex_oauth_web_app.page.get_by_text(other_public).is_visible()
+
+
+# ── Cross-user access: public workspace ───────────────────────────────────────
+
+
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
+def test_user_can_open_other_user_public_workspace(
+    seeded_cluster: dict[str, list[str]], dex_oauth_web_app: WebAppNavigator
+) -> None:
+    """Verify the user can open another user's public workspace and JupyterLab loads."""
+    other_public = seeded_cluster["seeded"][0]
+    dex_oauth_web_app.goto_workspace_list(view_all=True)
+    open_button = dex_oauth_web_app.get_workspace_card_open_button(other_public)
+    assert open_button.is_visible(), f"Expected Open button on public workspace '{other_public}'"
+
+    dex_oauth_web_app.open_workspace_from_card(other_public)
+    dex_oauth_web_app.verify_jupyterlab_loaded()
+
+
+# ── Cross-user access: private workspace ──────────────────────────────────────
+
+
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
+def test_user_cannot_open_other_user_private_workspace(
+    seeded_cluster: dict[str, list[str]], dex_oauth_web_app: WebAppNavigator
+) -> None:
+    """Verify the Open button is NOT present on another user's private workspace card."""
+    other_private = seeded_cluster["seeded"][1]
+    dex_oauth_web_app.goto_workspace_list(view_all=True)
+    stop_button = dex_oauth_web_app.get_workspace_card_stop_button(other_private)
+    assert not stop_button.is_visible(), f"Stop button should NOT be visible on private workspace '{other_private}'"

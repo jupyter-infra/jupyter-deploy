@@ -4,6 +4,7 @@ import os
 import shutil
 import stat
 from pathlib import Path
+from typing import Any
 
 import pathspec
 import yaml
@@ -207,9 +208,23 @@ def read_short_file(file_path: Path, max_size_mb: float = 1.0) -> str:
 
 
 def write_yaml_file_with_comments(
-    file_path: Path, content: dict, key_order: list[str] | None = None, comments: dict[str, list[str]] | None = None
+    file_path: Path,
+    content: dict,
+    key_order: list[str] | None = None,
+    comments: dict[str, list[str]] | None = None,
+    commented_entries: dict[str, dict[str, Any]] | None = None,
 ) -> None:
-    """Write dict content to disk."""
+    """Write dict content to disk with optional header comments and commented-out entries.
+
+    Args:
+        file_path: Target file path.
+        content: Dict to serialize as YAML.
+        key_order: Optional ordering for top-level keys.
+        comments: Header comment lines to insert after a top-level key line.
+        commented_entries: Dict of {section_key: {var: value}} rendered as
+            commented-out YAML lines at the end of the section. Entries whose
+            key already appears in the section's active content are skipped.
+    """
     ordered_dict: dict = {}
 
     # First add keys in specified order
@@ -223,25 +238,104 @@ def write_yaml_file_with_comments(
         if key not in ordered_dict:
             ordered_dict[key] = content[key]
 
-    # write to file
-    with open(file_path, "w+") as f:
-        yaml.dump(ordered_dict, f, indent=2, sort_keys=False, default_flow_style=False)
+    # Dump to string, then inject comments in a single pass before writing to disk
+    raw_yaml = yaml.dump(ordered_dict, indent=2, sort_keys=False, default_flow_style=False)
 
-    # add back comments if any
-    if comments:
-        with open(file_path) as f:
-            lines = f.readlines()
-
-        modified_lines: list[str] = []
-        for line in lines:
-            modified_lines.append(line)
-            for key, comment_lines in comments.items():
-                if line.strip() == f"{key}:":
-                    for comment in comment_lines:
-                        modified_lines.append(f"{comment}\n")
-
+    if not comments and not commented_entries:
         with open(file_path, "w") as f:
-            f.writelines(modified_lines)
+            f.write(raw_yaml)
+        return
+
+    # Walk the YAML lines and inject comments in a single pass.
+    # Commented entries (inactive defaults) are appended AFTER the section's
+    # active content so that user-set values stay at the top of each section.
+    modified_lines: list[str] = []
+    top_level_keys: set[str] = set(ordered_dict.keys())
+    pending_commented_section: str | None = None
+
+    def _match_top_level_key(stripped_line: str) -> str | None:
+        """Return the matching top-level key if this line starts a new YAML section."""
+        for key in top_level_keys:
+            if stripped_line == f"{key}:" or stripped_line.startswith(f"{key}: "):
+                return key
+        return None
+
+    def _flush_pending_comments() -> None:
+        # `nonlocal` allows this nested function to reassign the enclosing
+        # scope's variable (without it, assignment would create a new local).
+        nonlocal pending_commented_section
+        if pending_commented_section and commented_entries:
+            entries = commented_entries.get(pending_commented_section, {})
+            # Skip entries that are already active (uncommented) in the section
+            active_keys = set((content.get(pending_commented_section) or {}).keys())
+            inactive = {k: v for k, v in entries.items() if k not in active_keys}
+            if inactive:
+                modified_lines.extend(_render_commented_yaml_entries(inactive))
+        pending_commented_section = None
+
+    for line in raw_yaml.splitlines(keepends=True):
+        stripped = line.strip()
+        matched_key = _match_top_level_key(stripped)
+
+        if matched_key:
+            # We're entering a new section — flush any pending commented entries
+            # from the previous section (they trail after the active content).
+            _flush_pending_comments()
+
+            # Blank line between top-level sections for readability
+            if modified_lines:
+                modified_lines.append("\n")
+
+            modified_lines.append(line)
+
+            # Header comments (e.g. "# fill in values below...")
+            if comments and matched_key in comments:
+                for comment in comments[matched_key]:
+                    modified_lines.append(f"{comment}\n")
+
+            # Remember this section so we can append commented entries at its end
+            if commented_entries and matched_key in commented_entries:
+                pending_commented_section = matched_key
+        else:
+            modified_lines.append(line)
+
+    # Flush commented entries for the final section (no next section triggers the flush)
+    _flush_pending_comments()
+
+    with open(file_path, "w") as f:
+        f.writelines(modified_lines)
+
+
+def _render_commented_yaml_entries(entries: dict[str, Any]) -> list[str]:
+    """Render dict entries as commented-out multi-line YAML with 2-space indent."""
+    lines: list[str] = []
+    for var_name, var_value in entries.items():
+        single_entry = {var_name: var_value}
+        raw = yaml.dump(single_entry, indent=2, sort_keys=False, default_flow_style=False)
+        for raw_line in raw.splitlines():
+            lines.append(f"  # {raw_line}\n")
+    return lines
+
+
+def write_yaml_reference_file(file_path: Path, content: dict[str, Any], header: str | None = None) -> None:
+    """Write a simple YAML reference file with an optional header comment."""
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(file_path, "w") as f:
+        if header:
+            f.write(f"# {header}\n")
+        if content:
+            yaml.dump(content, f, indent=2, sort_keys=False, default_flow_style=False)
+
+
+def read_yaml_reference_file(file_path: Path) -> dict[str, Any]:
+    """Read a YAML reference file. Returns empty dict if file doesn't exist or is invalid."""
+    if not file_path.exists():
+        return {}
+    with open(file_path) as f:
+        result = yaml.safe_load(f)
+    if not isinstance(result, dict):
+        return {}
+    return result
 
 
 def walk_local_files_with_gitignore_rules(local_path: Path, gitignore_path: Path | None = None) -> list[Path]:

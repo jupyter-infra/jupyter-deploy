@@ -150,14 +150,29 @@ class TerraformConfigHandler(EngineConfigHandler):
                 message="Error initializing Terraform project.",
             )
 
+        # 1b/ generate the defaults reference file (.jd/variables-defaults.yaml)
+        # from template variable definitions — used by the v2 YAML writer
+        self.tf_variables_handler.generate_defaults_reference_file()
+
         # 2/ prepare to run terraform plan and save output with ``terraform plan PATH``
         plan_cmds = TF_PLAN_CMD.copy()
 
         # 2.1/ output plan to disk
         plan_cmds.append(f"-out={self.plan_out_path.absolute()}")
 
-        # 2.2/ sync variables.yaml -> tfvars and create the .tfvars files if necessary
-        self.variables_handler.sync_engine_varfiles_with_project_variables_config()
+        # 2.2/ sync variables.yaml -> staging tfvars (not the recorded file)
+        # This ensures a failed plan doesn't poison the last-known-good recorded state.
+        self.tf_variables_handler.sync_engine_varfiles_to_staging()
+
+        # Include the staging var-file so terraform plan picks up the new values.
+        # Terraform uses last-wins semantics, so staging overlays recorded.
+        staging_vars_path = self.tf_variables_handler.get_staging_variables_filepath()
+        if staging_vars_path.exists():
+            plan_cmds.append(f"-var-file={staging_vars_path.absolute()}")
+
+        staging_secrets_path = self.tf_variables_handler.get_staging_secrets_filepath()
+        if staging_secrets_path.exists():
+            plan_cmds.append(f"-var-file={staging_secrets_path.absolute()}")
 
         # 2.3/ using preset
         if preset_name:
@@ -180,6 +195,13 @@ class TerraformConfigHandler(EngineConfigHandler):
 
         # 2.4/ pass variable overrides
         if variable_overrides:
+            # Persist CLI --variable values to variables.yaml BEFORE running plan.
+            # This ensures user input survives even if terraform plan fails — the user
+            # can then fix the bad value and re-run without re-entering everything.
+            # The .tfvars (recorded state) stays protected by the staging pattern above.
+            cli_values: dict[str, Any] = {name: var_def.assigned_value for name, var_def in variable_overrides.items()}
+            self.variables_handler.sync_project_variables_config(cli_values)
+
             for var_def in variable_overrides.values():
                 var_option = tf_vardefs.to_tf_var_option(var_def)
                 plan_cmds.extend(var_option)
@@ -203,7 +225,19 @@ class TerraformConfigHandler(EngineConfigHandler):
         )
 
         plan_retcode = plan_executor.execute(plan_cmds)
+
+        # Persist any values the user entered interactively (via terraform prompts).
+        # This runs on BOTH success and failure so that good values survive a failed plan.
+        self._persist_captured_interactive_values(plan_callback)
+
         if plan_retcode != 0:
+            # Plan failed — discard staging so the next run uses last-known-good state
+            self.tf_variables_handler.discard_staging()
+
+            # Nullify simple variables that failed validation so that the next
+            # `jd config` re-prompts only those, instead of requiring all inputs again.
+            self._nullify_failed_validation_variables(plan_callback)
+
             raise SupervisedExecutionError(
                 command="config",
                 retcode=plan_retcode,
@@ -215,6 +249,51 @@ class TerraformConfigHandler(EngineConfigHandler):
 
         # Return completion context from callback
         return plan_callback.get_completion_context()
+
+    def _persist_captured_interactive_values(self, callback: ExecutionCallbackInterface) -> None:
+        """Persist values captured from interactive terraform prompts to variables.yaml.
+
+        The callback captures var_name→value pairs as the user types responses to
+        terraform's "Enter a value:" prompts. Writing them here ensures they survive
+        even if terraform plan subsequently fails validation.
+        """
+        captured = getattr(callback, "captured_variables", None)
+        if captured:
+            self.variables_handler.sync_project_variables_config(captured)
+
+    def _nullify_failed_validation_variables(self, callback: ExecutionCallbackInterface) -> None:
+        """Null out variables that failed terraform validation.
+
+        Parses the error output for 'Invalid value for variable' blocks and sets
+        those variables to null in variables.yaml. This way, the next `jd config`
+        re-prompts only the bad variables instead of all of them.
+
+        Only simple values (scalars, list[str]) are nullified — complex types
+        (dicts, list[dict]) are left intact since fixing a typo in the editor
+        is better than re-entering a large nested structure interactively.
+        """
+        failed_vars = getattr(callback, "extract_failed_variable_names", None)
+        if not failed_vars:
+            return
+        var_names = failed_vars()
+        if not var_names:
+            return
+
+        nullified = self.variables_handler.nullify_failed_variables(var_names)
+        if nullified:
+            hint = ", ".join(nullified)
+            self.display_manager.hint(
+                f"Variable(s) [{hint}] failed validation and were reset — "
+                "run 'jd config' again to re-enter only those values."
+            )
+
+        # Report complex variables that were NOT nullified
+        not_nullified = [v for v in var_names if v not in nullified]
+        if not_nullified:
+            hint = ", ".join(not_nullified)
+            self.display_manager.hint(
+                f"Variable(s) [{hint}] failed validation but have complex values — fix them directly in variables.yaml."
+            )
 
     def record(self) -> None:
         """Record variables and secrets from the plan file.
@@ -268,6 +347,10 @@ class TerraformConfigHandler(EngineConfigHandler):
         secrets_file_lines.append("# do NOT commit this file\n")
         secrets_file_lines.extend(tf_plan.format_plan_variables(secrets))
         fs_utils.write_inline_file_content(secrets_file_path, secrets_file_lines)
+
+        # Promote staging files now that we've successfully recorded from the plan.
+        # This merges any staging values into the recorded files and removes staging.
+        self.tf_variables_handler.discard_staging()
 
         # Sync non-secret variables back to variables.yaml.
         # Secrets are not synced — they will be masked separately.

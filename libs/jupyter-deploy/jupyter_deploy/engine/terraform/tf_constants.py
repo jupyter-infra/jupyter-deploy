@@ -24,6 +24,8 @@ TF_DEFAULT_PLAN_FILENAME = "jdout-tfplan"
 TF_PLAN_METADATA_FILENAME = "jdout-tfplan.meta.json"
 TF_RECORDED_VARS_FILENAME = "jdinputs.auto.tfvars"
 TF_RECORDED_SECRETS_FILENAME = "jdinputs.secrets.auto.tfvars"
+TF_STAGING_VARS_FILENAME = "jdinputs.staging.auto.tfvars"
+TF_STAGING_SECRETS_FILENAME = "jdinputs.staging.secrets.auto.tfvars"
 TF_CUSTOM_PRESET_FILENAME = "jdinputs.preset.override.tfvars"
 TF_DESTROY_PRESET_FILENAME = "destroy.tfvars"
 TF_VARIABLES_FILENAME = "variables.tf"
@@ -56,6 +58,8 @@ __all__ = [
     "TF_PLAN_METADATA_FILENAME",
     "TF_RECORDED_VARS_FILENAME",
     "TF_RECORDED_SECRETS_FILENAME",
+    "TF_STAGING_VARS_FILENAME",
+    "TF_STAGING_SECRETS_FILENAME",
     "TF_CUSTOM_PRESET_FILENAME",
     "TF_DESTROY_PRESET_FILENAME",
     "TF_VARIABLES_FILENAME",

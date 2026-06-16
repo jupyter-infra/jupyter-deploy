@@ -76,6 +76,29 @@ def kubectl_patch_workspace(
     return subprocess.run(cmd, capture_output=True, text=True)
 
 
+def kubectl_workspace_exists(name: str, namespace: str = "default") -> bool:
+    """Check if a Workspace CR exists via kubectl."""
+    result = subprocess.run(
+        ["kubectl", "get", "workspace", name, "-n", namespace],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0
+
+
+def ensure_workspace_no_longer_exists(name: str, namespace: str = "default", timeout_s: int = 60) -> None:
+    """Poll until a Workspace CR no longer exists.
+
+    Raises AssertionError if the workspace still exists after timeout_s.
+    """
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if not kubectl_workspace_exists(name, namespace):
+            return
+        time.sleep(5)
+    raise AssertionError(f"Workspace '{name}' still exists after {timeout_s}s")
+
+
 def kubectl_get_workspace(
     name: str,
     namespace: str = "default",

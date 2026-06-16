@@ -195,6 +195,56 @@ class JDCli:
             f"Server '{name}' did not reach status '{target_status}' within {timeout_s}s (last: {last_status})"
         )
 
+    _EXEC_TRANSIENT_ERRORS = (
+        "container not found",
+        "unable to upgrade connection",
+        "'NoneType' object has no attribute",
+        "container is not created or running",
+    )
+
+    def wait_for_workspace_pod_exec_ready(
+        self,
+        name: str,
+        scope: str | None = None,
+        timeout_s: int = 10,
+        interval_s: int = 2,
+    ) -> None:
+        """Wait until pod exec is ready by retrying a trivial command.
+
+        After a workspace reports Available/Running, the container may not yet
+        accept exec connections (known Kubernetes race). This helper retries
+        only on transient container-readiness errors; other failures propagate
+        immediately.
+
+        Args:
+            name: Server / workspace name
+            scope: Kubernetes namespace (omit to let jd resolve from project config)
+            timeout_s: Maximum wait time in seconds
+            interval_s: Seconds between retries
+        """
+        cmd = ["jupyter-deploy", "server", "exec", "--name", name]
+        if scope is not None:
+            cmd.extend(["--scope", scope])
+        cmd.extend(["--", "true"])
+
+        deadline = time.time() + timeout_s
+        last_error: Exception | None = None
+        while time.time() < deadline:
+            try:
+                self.run_command(cmd)
+                return
+            except JDCliError as e:
+                if not self._is_transient_exec_error(e):
+                    raise
+                last_error = e
+                time.sleep(interval_s)
+        raise TimeoutError(f"Exec not ready on '{name}' within {timeout_s}s (last error: {last_error})")
+
+    @classmethod
+    def _is_transient_exec_error(cls, error: JDCliError) -> bool:
+        error_str = str(error).lower()
+        return any(sentinel.lower() in error_str for sentinel in cls._EXEC_TRANSIENT_ERRORS)
+
     def get_jupyterlab_url(self) -> str:
         """Get the JupyterLab URL by querying the open_url value's terraform output.
 

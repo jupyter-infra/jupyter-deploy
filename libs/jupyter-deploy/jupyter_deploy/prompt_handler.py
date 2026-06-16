@@ -26,6 +26,7 @@ class PromptHandler:
         on_prompt: Callable[[str], None],
         on_char: Callable[[str], None] | None = None,
         on_stderr: Callable[[list[str]], None] | None = None,
+        on_stdin_line: Callable[[str], None] | None = None,
         buffer_size: int = 100,
         prompt_check_chars: str = ":?",
     ):
@@ -38,6 +39,9 @@ class PromptHandler:
             on_prompt: Callback when prompt is detected (called with prompt string)
             on_char: Optional callback for each character read (for live echo)
             on_stderr: Optional callback for buffered stderr lines (called after stdout completes)
+            on_stdin_line: Optional callback when a line is forwarded from user stdin to
+                the subprocess. Called with the raw line (including newline). Used to capture
+                interactive values that the user types in response to prompts.
             buffer_size: Maximum buffer size before sliding window is applied
             prompt_check_chars: Only check prompts when last char is one of these (e.g. ":?")
         """
@@ -47,6 +51,7 @@ class PromptHandler:
         self.on_prompt = on_prompt
         self.on_char = on_char
         self.on_stderr = on_stderr
+        self.on_stdin_line = on_stdin_line
         self.buffer_size = buffer_size
         self.prompt_check_chars = prompt_check_chars
         self._buffer = ""
@@ -171,6 +176,8 @@ class PromptHandler:
                                 break
                             self.process.stdin.write(line)
                             self.process.stdin.flush()
+                            if self.on_stdin_line:
+                                self.on_stdin_line(line)
                     else:
                         # For non-interactive input (e.g., piped input)
                         char = sys.stdin.read(1)

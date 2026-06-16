@@ -19,7 +19,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from ci_helpers import run_jd, run_jd_config
+from ci_helpers import is_project_deployed, run_jd, run_jd_config
 from ci_restore_base import get_subdomain_from_ci, list_project_ids
 
 
@@ -96,6 +96,18 @@ def main() -> None:
     print(f"  Found project: {project_id}")
 
     restore_project(project_id, project_dir)
+
+    if not is_project_deployed(str(project_dir)):
+        print(
+            f"\nError: Project '{project_id}' exists in the S3 store but has no live infrastructure.",
+            file=sys.stderr,
+        )
+        print(
+            "Run the fresh deploy workflow to recreate it, or delete the stale entry with:\n"
+            f"  uv run jd projects delete {project_id} --store-type s3-only -y",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     print()
     print("Restoring secrets from cloud provider...")

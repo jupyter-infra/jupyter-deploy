@@ -4,6 +4,7 @@ import re
 
 import pytest
 import yaml
+from pytest_jupyter_deploy.cli import JDCliError
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 from pytest_jupyter_deploy.undeployed_project import undeployed_project
@@ -139,3 +140,54 @@ def test_store_config_written_after_config(e2e_deployment: EndToEndDeployment) -
         )
         assert "store-id" in store_config, ".jd/store.yaml should contain store-id"
         assert store_config["store-id"], "store-id should not be empty"
+
+
+@pytest.mark.cli
+@skip_if_testvars_not_set(
+    [
+        "JD_E2E_VAR_DOMAIN",
+        "JD_E2E_VAR_EMAIL",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
+        "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
+        "JD_E2E_VAR_SUBDOMAIN",
+        "JD_E2E_VAR_OAUTH_APP_CLIENT_SECRET",
+    ]
+)
+def test_config_error_recovery_invalid_admin_role(e2e_deployment: EndToEndDeployment) -> None:
+    """Test error recovery: non-existent admin_role_names fails plan, fix via variables.yaml succeeds.
+
+    Flow:
+    1. Configure with a non-existent IAM role in admin_role_names
+    2. `jd config` fails (terraform precondition rejects the role)
+    3. Remove the admin_role_names override in variables.yaml (reverts to template default)
+    4. Run `jd config` again — succeeds
+    """
+    with undeployed_project(e2e_deployment.suite_config) as (project_path, cli):
+        # Prepare valid configuration
+        e2e_deployment.suite_config.prepare_configuration("base", target_dir=project_path)
+
+        # Inject a non-existent admin role that will fail the terraform check block
+        variables_path = project_path / "variables.yaml"
+        with open(variables_path) as f:
+            config = yaml.safe_load(f)
+
+        config["overrides"] = config.get("overrides") or {}
+        config["overrides"]["admin_role_names"] = ["MustNotExist"]
+        with open(variables_path, "w") as f:
+            yaml.dump(config, f, sort_keys=False)
+
+        # --- First run: should fail because the role doesn't exist ---
+        with pytest.raises(JDCliError):
+            cli.run_command(["jupyter-deploy", "config"])
+
+        # --- Fix: remove the bad override so the template default (from preset) applies ---
+        with open(variables_path) as f:
+            config = yaml.safe_load(f)
+
+        del config["overrides"]["admin_role_names"]
+        with open(variables_path, "w") as f:
+            yaml.dump(config, f, sort_keys=False)
+
+        # --- Second run: should succeed ---
+        result = cli.run_command(["jupyter-deploy", "config"])
+        assert "Your project is ready" in result.stdout

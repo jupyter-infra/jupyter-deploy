@@ -13,8 +13,12 @@ from jupyter_deploy.manifest import JupyterDeployManifest
 from jupyter_deploy.variables_config import (
     VARIABLES_CONFIG_V1_COMMENTS,
     VARIABLES_CONFIG_V1_KEYS_ORDER,
+    VARIABLES_CONFIG_V2_COMMENTS,
+    VARIABLES_CONFIG_V2_KEYS_ORDER,
     JupyterDeployVariablesConfig,
+    JupyterDeployVariablesConfigV2,
 )
+from pydantic import TypeAdapter
 
 from pytest_jupyter_deploy import constants
 
@@ -158,14 +162,22 @@ class SuiteConfig:
         # Determine target directory
         write_dir = target_dir if target_dir is not None else self.project_dir
 
-        # Write resolved configuration to target dir
+        # Write resolved configuration using the correct format for the schema version
         variables_config_path = write_dir / jd_constants.VARIABLES_FILENAME
-        jd_fs_utils.write_yaml_file_with_comments(
-            variables_config_path,
-            resolved_variables.model_dump(),
-            key_order=VARIABLES_CONFIG_V1_KEYS_ORDER,
-            comments=VARIABLES_CONFIG_V1_COMMENTS,
-        )
+        if isinstance(resolved_variables, JupyterDeployVariablesConfigV2):
+            jd_fs_utils.write_yaml_file_with_comments(
+                variables_config_path,
+                resolved_variables.model_dump(),
+                key_order=VARIABLES_CONFIG_V2_KEYS_ORDER,
+                comments=VARIABLES_CONFIG_V2_COMMENTS,
+            )
+        else:
+            jd_fs_utils.write_yaml_file_with_comments(
+                variables_config_path,
+                resolved_variables.model_dump(),
+                key_order=VARIABLES_CONFIG_V1_KEYS_ORDER,
+                comments=VARIABLES_CONFIG_V1_COMMENTS,
+            )
 
     def _load_configuration(self, config_name: str) -> JupyterDeployVariablesConfig:
         """Load a deployment configuration to the target directory.
@@ -201,4 +213,5 @@ class SuiteConfig:
         if not isinstance(data, dict):
             raise ValueError("Invalid variables config file: jupyter-deploy variables config is not a dict.")
 
-        return JupyterDeployVariablesConfig(**data)
+        adapter: TypeAdapter[JupyterDeployVariablesConfig] = TypeAdapter(JupyterDeployVariablesConfig)
+        return adapter.validate_python(data)  # type: ignore[return-value]

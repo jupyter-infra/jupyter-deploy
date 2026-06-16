@@ -8,24 +8,20 @@ services:
         USER_GID: ${HOST_GID:-1000}
     image: ${E2E_IMAGE:-jupyter-deploy-e2e:latest}
     container_name: jupyter-deploy-e2e
-    # Required for X11 forwarding: .Xauthority cookies are hostname-specific
     hostname: ${HOSTNAME:-localhost}
     working_dir: /workspace
     # User is set in Dockerfile based on build args
     volumes:
-      # Mount .auth directory to persist authentication state
+      # Mount .auth directory to persist authentication state (cookie cache reused across runs)
       - ./.auth:/workspace/.auth
       # Mount AWS credentials (read-only) - accessible by testuser
       - ~/.aws:/home/testuser/.aws:ro
       # Mount kube config - needed for kubectl commands and jd cluster login
       - ~/.kube:/home/testuser/.kube
-      # Mount X11 socket for GUI applications
-      - /tmp/.X11-unix:/tmp/.X11-unix
       # Project directory will be mounted dynamically via override file in justfile
     env_file:
       - ./.env
     environment:
-      - DISPLAY=${DISPLAY}
       # AWS credential passthrough for CI (OIDC session credentials)
       # Empty defaults are safe: the SDK ignores them and falls back to ~/.aws/config
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}

@@ -40,7 +40,7 @@ The template creates several IAM roles:
 - **Cluster role** — Used by the EKS control plane.
 - **Node roles** — One per node group, with managed policies for ECR pull, EKS worker nodes, and CNI.
 - **Pod identity associations** — cert-manager and external-dns use EKS Pod Identity for Route 53 and DNS access.
-- **Admin access entries** — Roles listed in `admin_role_names` get cluster admin permissions and workspace admin group membership.
+- **Admin access entries** — The caller's IAM principal is always authorized; roles in `admin_role_names` and users in `admin_user_names` get cluster admin permissions and workspace admin group membership.
 
 ## Helm charts
 
@@ -60,7 +60,7 @@ The template deploys a `github-rbac` local chart that creates namespace-scoped R
 
 - Each namespace in `workspace_rbac_namespaces` gets a Role granting workspace CRUD permissions.
 - RoleBindings associate the Role with GitHub teams from `oauth_allowed_teams`.
-- Roles listed in `admin_role_names` additionally get a `cluster-workspace-admin` ClusterRoleBinding for cross-namespace workspace management.
+- Roles in `admin_role_names` and users in `admin_user_names` additionally get a `cluster-workspace-admin` ClusterRoleBinding for cross-namespace workspace management.
 
 ## Presets
 
@@ -116,7 +116,8 @@ The template provides two variable presets:
 | oauth_allowed_teams | `list(string)` | Required | GitHub teams to allow access, in `org:team` format |
 | node_groups | `list(map(string))` | See preset | EKS managed node groups (name, role, instance_type, disk_size_gb, sizing) |
 | workspace_rbac_namespaces | `list(string)` | `["default"]` | Namespaces where teams get workspace permissions |
-| admin_role_names | `list(string)` | `["Admin"]` | IAM role names to grant cluster and workspace admin |
+| admin_role_names | `list(string)` | `[]` | IAM role names to grant cluster and workspace admin (list all callers for stable state) |
+| admin_user_names | `list(string)` | `[]` | IAM user names to grant cluster and workspace admin (list all callers for stable state) |
 | cluster_log_retention_days | `number` | `30` | Days to retain EKS cluster CloudWatch logs |
 | custom_tags | `map(string)` | `{}` | Tags added to all AWS resources |
 | workspace_operator_namespace | `string` | `jupyter-k8s-system` | Namespace for the workspace operator |

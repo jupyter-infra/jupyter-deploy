@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 required:
   domain: "${JD_E2E_VAR_DOMAIN}"
   letsencrypt_email: "${JD_E2E_VAR_EMAIL}"
@@ -10,29 +10,4 @@ required:
   subdomain: "${JD_E2E_VAR_SUBDOMAIN}"
 required_sensitive:
   oauth_app_client_secret: "${JD_E2E_VAR_OAUTH_APP_CLIENT_SECRET}"
-overrides:
-  # set variable values as <variable-name>: <variable-value>
-  # delete or comment out a line to use the default
-  # instance_type: t3.large
-defaults:
-  # read-only: do not modify this section
-  # instead add overrides in the override section
-  ami_id: null
-  custom_tags: {}
-  iam_role_prefix: Jupyter-deploy-ec2-base
-  instance_type: t3.medium
-  jupyter_package_manager: uv
-  key_pair_name: null
-  log_files_retention_count: 10
-  log_files_retention_days: 180
-  log_files_rotation_size_mb: 50
-  oauth_provider: github
-  oauth_app_secret_prefix: Jupyter-deploy-ec2-base
-  s3_bucket_prefix: jupyter-deploy-ec2-base
-  certs_secret_prefix: Jupyter-deploy-ec2-base
-  region: us-west-2
-  min_root_volume_size_gb: 30
-  volume_size_gb: 30
-  volume_type: gp3
-  additional_ebs_mounts: []
-  additional_efs_mounts: []
+overrides: {}

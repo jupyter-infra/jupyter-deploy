@@ -72,7 +72,9 @@ def print_cookie_summary() -> int:
 def cmd_export(ci_dir: str) -> None:
     if not AUTH_FILE.exists():
         print(f"Error: {AUTH_FILE} does not exist")
-        print("Run 'just auth-setup-base <project-dir>' first to create it.")
+        print(
+            "Run a UI test with ci-dir=<ci-project> first to seed it (e.g. just test-e2e-base ... ci-dir=sandbox-ci)."
+        )
         sys.exit(1)
 
     auth_content = AUTH_FILE.read_text()

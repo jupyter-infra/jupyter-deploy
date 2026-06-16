@@ -294,6 +294,10 @@ def config(
         bool,
         typer.Option("--reset-store-id", help="Clear the pinned store ID and rediscover the store."),
     ] = False,
+    reset_variable: Annotated[
+        list[str] | None,
+        typer.Option("--reset-variable", help="Reset a variable to its default, or to null to trigger re-prompt."),
+    ] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show full output without progress bar.")] = False,
     variables: Annotated[
         dict[str, TemplateVariableDefinition] | None,
@@ -361,6 +365,14 @@ def config(
                     console.print(":wastebasket: Deleted previously recorded inputs", style="dim")
                 if secrets_deleted:
                     console.print(":wastebasket: Deleted previously recorded secrets", style="dim")
+
+        if reset_variable:
+            handler.reset_variables(reset_variable)
+            if verbose:
+                console.print(
+                    f":wastebasket: Reset variable(s): {', '.join(reset_variable)}",
+                    style="dim",
+                )
 
         if run_verify:
             handler.verify_requirements()

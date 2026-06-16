@@ -16,6 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from ci_helpers import is_project_deployed
 from ci_restore_base import (
     find_project_by_subdomain,
     get_subdomain_from_ci,
@@ -72,6 +73,12 @@ def main() -> None:
     print(f"  Found project: {project_id}")
 
     restore_project(project_id, project_dir)
+
+    if not is_project_deployed(str(project_dir)):
+        print(f"  Project {project_id} has no live infrastructure (empty state) — skipping jd down.")
+        delete_project_from_store(project_id)
+        print(f"\nStale project {project_id} deleted from store (subdomain: {subdomain})")
+        return
 
     # Takedown uses destroy.tfvars and never reads the restored secret value, so a
     # missing secret (e.g. a prior destroy was interrupted after deleting it) must

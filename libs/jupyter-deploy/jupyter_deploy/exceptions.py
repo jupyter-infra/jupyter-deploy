@@ -161,7 +161,9 @@ class OpenWebBrowserError(JupyterDeployError, RuntimeError):
 class ConfigurationError(JupyterDeployError, RuntimeError):
     """Base exception for configuration errors."""
 
-    pass
+    def __init__(self, message: str, hint: str | None = None) -> None:
+        self.hint = hint
+        super().__init__(message)
 
 
 class ReadConfigurationError(ConfigurationError, RuntimeError):
