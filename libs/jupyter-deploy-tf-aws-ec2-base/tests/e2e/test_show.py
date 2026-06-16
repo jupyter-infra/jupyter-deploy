@@ -1,7 +1,9 @@
 """E2E tests for jd show command."""
 
 import pytest
+from jupyter_deploy import constants as jd_constants
 from jupyter_deploy.enum import ValueSource
+from jupyter_deploy.fs_utils import read_yaml_reference_file
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.terraform.utils import (
     get_outputs_dot_tf_path,
@@ -26,13 +28,20 @@ def test_show_variables_list_matches_config(e2e_deployment: EndToEndDeployment) 
     # Read variables config to get all variable names
     variables_config = e2e_deployment.get_variables_config()
 
-    # Collect all variable names from all sections (required, required_sensitive, overrides, defaults)
+    # Collect all variable names from all sections
     # jd show --variables --list shows ALL template variables
     expected_vars: set[str] = set()
     expected_vars.update(variables_config.required.keys())
     expected_vars.update(variables_config.required_sensitive.keys())
     expected_vars.update(variables_config.overrides.keys())
-    expected_vars.update(variables_config.defaults.keys())
+    if variables_config.schema_version == 1:
+        expected_vars.update(variables_config.defaults.keys())
+    else:
+        defaults_path = (
+            e2e_deployment.suite_config.project_dir / jd_constants.JD_DIR / jd_constants.VARIABLES_DEFAULTS_FILENAME
+        )
+        defaults_ref = read_yaml_reference_file(defaults_path)
+        expected_vars.update(defaults_ref.keys())
 
     # Run jd show --variables --list --text
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "show", "--variables", "--list", "--text"])

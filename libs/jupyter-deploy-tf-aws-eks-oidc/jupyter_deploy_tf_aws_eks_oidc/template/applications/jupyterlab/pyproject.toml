@@ -5,4 +5,5 @@ description = "JupyterLab workspace image for jupyter-deploy EKS template"
 requires-python = ">=3.12"
 dependencies = [
     "jupyterlab>=4.4.2",
+    "jupyter-server-documents>=0.2.4",
 ]
