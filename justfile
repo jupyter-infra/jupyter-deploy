@@ -543,6 +543,10 @@ ci-deploy-base oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-base":
 ci-restore ci_dir="sandbox-ci":
     uv run python scripts/ci_restore.py {{ci_dir}}
 
+# Discover and restore the roborev review CI project (tf-aws-review-ci-*, no secrets)
+ci-restore-review ci_dir="review-ci":
+    uv run python scripts/ci_restore.py {{ci_dir}} --project-prefix tf-aws-review-ci- --no-secrets
+
 # Find and restore a base template project from S3 by OAuth app subdomain
 # Usage: just ci-restore-base <oauth-app-num> [ci-dir] [project-dir]
 ci-restore-base oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-base":
