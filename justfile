@@ -903,10 +903,6 @@ env-setup-eks project_dir ci_dir="sandbox-ci" oauth_app_num="4" options="":
 
 # --- roborev review image (tf-aws-review-ci template) ---
 
-# Get the ECR repository URL for the roborev review image
-ci-review-ecr-url ci_dir="review-ci":
-    @uv run jd show -o review_image_repository_url --text -p {{ci_dir}}
-
 # Build the roborev review image (self-contained: roborev + claude-code agent + gh)
 # Usage: just ci-review-build                     # local: no cache
 # Usage: just ci-review-build <ecr-url>:latest    # CI: use ECR :latest as layer cache
