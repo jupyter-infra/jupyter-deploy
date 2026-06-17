@@ -49,6 +49,12 @@ jobs:
       - name: Install just
         uses: ./.github/actions/install-just
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -56,7 +62,7 @@ jobs:
           aws-region: ${{ vars.REVIEW_AWS_REGION || 'us-west-2' }}
 
       - name: Restore review CI project
-        run: just ci-restore review-ci
+        run: just ci-restore-review review-ci
 
       - name: Pull previous image for cache
         run: just ci-review-pull || true
