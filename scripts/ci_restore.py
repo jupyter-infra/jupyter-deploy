@@ -1,39 +1,32 @@
 #!/usr/bin/env python3
-"""Discover and restore a CI project from the S3 store, then re-populate
+"""Discover and restore the CI project from S3 store, then re-populate
 sensitive variables from AWS Secrets Manager via jd config.
 
-Usage: scripts/ci_restore.py <ci-dir> [--project-prefix PREFIX] [--no-secrets]
-
-Defaults target the E2E CI project (tf-aws-iam-ci-*, with secrets). The roborev
-review CI project (tf-aws-review-ci-*, no secrets) is restored via
-`just ci-restore-review`, which passes --project-prefix and --no-secrets.
+Usage: scripts/ci_restore.py <ci-dir>
 """
 
 from __future__ import annotations
 
-import argparse
 import shutil
 import sys
 from pathlib import Path
 
 from ci_helpers import run_jd, run_jd_config
 
-E2E_PROJECT_PREFIX = "tf-aws-iam-ci-"
 
-
-def discover_project_id(project_prefix: str) -> str:
-    """Discover the CI project ID from S3 store by id prefix."""
+def discover_project_id() -> str:
+    """Discover the CI project ID from S3 store."""
     result = run_jd(["projects", "list", "--store-type", "s3-only", "--text"], capture=True)
-    matches = [line for line in result.stdout.strip().splitlines() if line.startswith(project_prefix)]
+    matches = [line for line in result.stdout.strip().splitlines() if line.startswith("tf-aws-iam-ci-")]
 
     if not matches:
-        print(f"Error: No CI project found in S3 store (no {project_prefix}* project)")
+        print("Error: No CI project found in S3 store (no tf-aws-iam-ci-* project)")
         sys.exit(1)
     if len(matches) > 1:
         print("Error: Multiple CI projects found in S3 store:")
         for m in matches:
             print(f"  {m}")
-        print(f"Expected exactly one {project_prefix}* project.")
+        print("Expected exactly one tf-aws-iam-ci-* project.")
         sys.exit(1)
 
     return matches[0]
@@ -69,48 +62,22 @@ def restore_secrets_and_configure(ci_dir: Path) -> None:
     run_jd_config(config_args, str(ci_dir))
 
 
-def configure(ci_dir: Path) -> None:
-    """Run jd config with no secrets on the restored project.
-
-    The review CI template declares no secrets; it only needs terraform
-    initialized so later steps can read its outputs (`jd show -o`).
-    """
-    print("Running jd config to initialize the restored project...")
-    run_jd_config([], str(ci_dir))
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Discover and restore a CI project from the S3 store.")
-    parser.add_argument("ci_dir", help="Local directory to restore the project into")
-    parser.add_argument(
-        "--project-prefix",
-        default=E2E_PROJECT_PREFIX,
-        help=f"Project id prefix to discover in the S3 store (default: {E2E_PROJECT_PREFIX})",
-    )
-    parser.add_argument(
-        "--no-secrets",
-        action="store_true",
-        help="Skip Secrets Manager restore for templates that declare no secrets (e.g. the review CI project)",
-    )
-    return parser.parse_args()
-
-
 def main() -> None:
-    args = parse_args()
-    ci_dir = Path(args.ci_dir)
+    if len(sys.argv) < 2:
+        print("Usage: scripts/ci_restore.py <ci-dir>")
+        sys.exit(1)
+
+    ci_dir = Path(sys.argv[1])
 
     print("Discovering CI project in S3 store...")
-    project_id = discover_project_id(args.project_prefix)
+    project_id = discover_project_id()
     print(f"Found CI project: {project_id}")
 
     restore_project(project_id, ci_dir)
 
     print()
-    if args.no_secrets:
-        configure(ci_dir)
-    else:
-        print("Restoring secrets and configuring...")
-        restore_secrets_and_configure(ci_dir)
+    print("Restoring secrets and configuring...")
+    restore_secrets_and_configure(ci_dir)
 
     print(f"CI project restored and configured at {ci_dir}")
 

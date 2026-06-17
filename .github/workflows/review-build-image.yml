@@ -4,15 +4,18 @@
 # when its pinned tool versions change, not per PR. Consumer repos pull it from
 # ECR in their review workflows.
 #
+# The build is decoupled from the IaC state: it only needs the target ECR
+# repository URL, so it assumes the publish role, logs in, builds, and pushes.
+# No terraform/jd state is read, so the publish role needs only ECR push.
+#
 # Prerequisites (one-time, by a maintainer):
 #   - Deploy the tf-aws-review-ci template (`jd init`/`jd up`), which creates the
-#     ECR repo and the publish role, and stores the project for `just ci-restore`.
-#   - Set repo variable REVIEW_PUBLISH_ROLE_ARN to the template's
-#     review_publish_iam_role_arn output. Until it is set, this workflow is inert.
-#
-# Mirrors .github/workflows/e2e-build-image.yml, which hardcodes its (already
-# deployed) role ARN; here the ARN is a repo variable so the workflow can be
-# merged before the infrastructure exists.
+#     ECR repo and the publish role.
+#   - Set these repo variables from the template outputs. Until both are set,
+#     this workflow is inert:
+#       REVIEW_PUBLISH_ROLE_ARN  <- review_publish_iam_role_arn
+#       REVIEW_ECR_REPOSITORY    <- review_image_repository_url
+#       REVIEW_AWS_REGION        optional, defaults to us-west-2
 
 name: Build review image
 
@@ -32,7 +35,7 @@ jobs:
     name: Build and push review image
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: vars.REVIEW_PUBLISH_ROLE_ARN != ''
+    if: vars.REVIEW_PUBLISH_ROLE_ARN != '' && vars.REVIEW_ECR_REPOSITORY != ''
     environment: review
     permissions:
       id-token: write
@@ -41,19 +44,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install UV and Python
-        uses: ./.github/actions/install-uv
-        with:
-          python-version: "3.13"
-
       - name: Install just
         uses: ./.github/actions/install-just
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.5.7"
-          terraform_wrapper: false
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -61,16 +53,11 @@ jobs:
           role-to-assume: ${{ vars.REVIEW_PUBLISH_ROLE_ARN }}
           aws-region: ${{ vars.REVIEW_AWS_REGION || 'us-west-2' }}
 
-      - name: Restore review CI project
-        run: just ci-restore-review review-ci
-
       - name: Pull previous image for cache
-        run: just ci-review-pull || true
+        run: just ci-review-pull "${{ vars.REVIEW_ECR_REPOSITORY }}" || true
 
       - name: Build review image
-        run: |
-          ECR_URL=$(just ci-review-ecr-url)
-          just ci-review-build "$ECR_URL:latest"
+        run: just ci-review-build "${{ vars.REVIEW_ECR_REPOSITORY }}:latest"
 
       - name: Push to ECR
-        run: just ci-review-push ${{ github.sha }}
+        run: just ci-review-push "${{ vars.REVIEW_ECR_REPOSITORY }}" ${{ github.sha }}
