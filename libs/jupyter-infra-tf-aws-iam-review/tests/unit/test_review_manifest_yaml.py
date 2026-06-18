@@ -6,7 +6,7 @@ from typing import Any
 import yaml
 from jupyter_deploy.handlers import base_project_handler
 
-from jupyter_infra_tf_aws_review_ci.template import TEMPLATE_PATH
+from jupyter_infra_tf_aws_iam_review.template import TEMPLATE_PATH
 
 
 class TestManifest(unittest.TestCase):

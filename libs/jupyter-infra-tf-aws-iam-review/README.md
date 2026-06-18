@@ -25,8 +25,8 @@ This terraform project is meant to be used with the [jupyter-deploy](https://git
 Recommended: create or activate a python virtual environment.
 
 ```bash
-pip install jupyter-deploy[aws]
-pip install jupyter-infra-tf-aws-review-ci
+pip install "jupyter-deploy[aws]"
+pip install jupyter-infra-tf-aws-iam-review
 ```
 
 ### Project setup
@@ -34,7 +34,7 @@ pip install jupyter-infra-tf-aws-review-ci
 mkdir review-ci
 cd review-ci
 
-jd init . -P aws -I review -T ci
+jd init . -P aws -I iam -T review
 ```
 
 ### Configure and create the infrastructure

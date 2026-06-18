@@ -1,6 +1,6 @@
 schema_version: 1
 template:
-  name: tf-aws-review-ci
+  name: tf-aws-iam-review
   engine: terraform
   version: 0.1.0
 requirements:

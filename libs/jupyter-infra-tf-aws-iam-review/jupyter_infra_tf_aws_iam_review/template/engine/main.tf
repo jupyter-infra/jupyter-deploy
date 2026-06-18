@@ -18,7 +18,7 @@ resource "random_id" "postfix" {
 }
 
 locals {
-  template_name    = "tf-aws-review-ci"
+  template_name    = "tf-aws-iam-review"
   template_version = "0.1.0"
 
   default_tags = {

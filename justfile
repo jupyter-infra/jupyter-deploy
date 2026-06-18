@@ -901,7 +901,7 @@ env-setup-base project_dir ci_dir="sandbox-ci" oauth_app_num="1" options="":
 env-setup-eks project_dir ci_dir="sandbox-ci" oauth_app_num="4" options="":
     uv run python scripts/env_setup_eks.py "{{project_dir}}" {{ci_dir}} {{oauth_app_num}} "{{options}}"
 
-# --- roborev review image (tf-aws-review-ci template) ---
+# --- roborev review image (tf-aws-iam-review template) ---
 
 # Build the roborev review image (self-contained: roborev + claude-code agent + gh)
 # Usage: just ci-review-build                     # local: no cache

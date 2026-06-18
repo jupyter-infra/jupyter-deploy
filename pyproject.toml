@@ -18,7 +18,7 @@ members = [
     "libs/jupyter-deploy-tf-aws-ec2-base",
     "libs/jupyter-deploy-tf-aws-eks-oidc",
     "libs/jupyter-infra-tf-aws-iam-ci",
-    "libs/jupyter-infra-tf-aws-review-ci",
+    "libs/jupyter-infra-tf-aws-iam-review",
     "libs/pytest-jupyter-deploy",
     "images/uvbase"
 ]
@@ -85,7 +85,7 @@ mypy_path = [
     "libs/jupyter-deploy-tf-aws-ec2-base",
     "libs/jupyter-deploy-tf-aws-eks-oidc",
     "libs/jupyter-infra-tf-aws-iam-ci",
-    "libs/jupyter-infra-tf-aws-review-ci",
+    "libs/jupyter-infra-tf-aws-iam-review",
     "libs/pytest-jupyter-deploy",
     "scripts",
 ]
@@ -95,7 +95,7 @@ files = [
     "libs/jupyter-deploy-tf-aws-ec2-base",
     "libs/jupyter-deploy-tf-aws-eks-oidc",
     "libs/jupyter-infra-tf-aws-iam-ci",
-    "libs/jupyter-infra-tf-aws-review-ci",
+    "libs/jupyter-infra-tf-aws-iam-review",
     "libs/pytest-jupyter-deploy",
     "scripts",
 ]
@@ -106,7 +106,7 @@ exclude = [
     "libs/jupyter-deploy-tf-aws-ec2-base/tests/",
     "libs/jupyter-deploy-tf-aws-eks-oidc/tests/",
     "libs/jupyter-infra-tf-aws-iam-ci/tests/",
-    "libs/jupyter-infra-tf-aws-review-ci/tests/",
+    "libs/jupyter-infra-tf-aws-iam-review/tests/",
     "tests/e2e/",
 ]
 
@@ -122,7 +122,7 @@ pythonpath = [
   "libs/jupyter-deploy-tf-aws-ec2-base",
   "libs/jupyter-deploy-tf-aws-eks-oidc",
   "libs/jupyter-infra-tf-aws-iam-ci",
-  "libs/jupyter-infra-tf-aws-review-ci",
+  "libs/jupyter-infra-tf-aws-iam-review",
   "libs/pytest-jupyter-deploy"
 ]
 markers = [

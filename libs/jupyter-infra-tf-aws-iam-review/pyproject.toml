@@ -1,5 +1,5 @@
 [project]
-name = "jupyter-infra-tf-aws-review-ci"
+name = "jupyter-infra-tf-aws-iam-review"
 version = "0.1.0"
 description = "Review CI infrastructure template for jupyter-deploy — manages IAM OIDC, ECR, and review roles for automated roborev PR reviews."
 readme = "README.md"
@@ -13,7 +13,7 @@ dependencies = []
 file = "LICENSE"
 
 [project.entry-points."jupyter_deploy.terraform_templates"]
-aws_review_ci = "jupyter_infra_tf_aws_review_ci.template:TEMPLATE_PATH"
+aws_iam_review = "jupyter_infra_tf_aws_iam_review.template:TEMPLATE_PATH"
 
 [project.urls]
 Homepage = "https://github.com/jupyter-infra/jupyter-deploy"
@@ -26,7 +26,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = [
-    "jupyter_infra_tf_aws_review_ci",
+    "jupyter_infra_tf_aws_iam_review",
 ]
 
 [tool.mypy]
@@ -38,7 +38,7 @@ mypy_path = [
     ".",
 ]
 packages = [
-    "jupyter_infra_tf_aws_review_ci",
+    "jupyter_infra_tf_aws_iam_review",
 ]
 
 [tool.ruff]

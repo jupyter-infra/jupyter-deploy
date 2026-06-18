@@ -23,20 +23,20 @@ def test_version_consistency() -> None:
     pyproject_version = pyproject_data["project"]["version"]
 
     # Read version from __init__.py
-    init_path = project_path / "jupyter_infra_tf_aws_review_ci" / "__init__.py"
+    init_path = project_path / "jupyter_infra_tf_aws_iam_review" / "__init__.py"
     init_content = init_path.read_text()
     init_version_match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', init_content)
     assert init_version_match is not None, "Could not find __version__ in __init__.py"
     init_version = init_version_match.group(1)
 
     # Read version from template/manifest.yaml
-    manifest_path = project_path / "jupyter_infra_tf_aws_review_ci" / "template" / "manifest.yaml"
+    manifest_path = project_path / "jupyter_infra_tf_aws_iam_review" / "template" / "manifest.yaml"
     with open(manifest_path) as f:
         manifest_data = yaml.safe_load(f)
     manifest_version = manifest_data["template"]["version"]
 
     # Read version from template/engine/main.tf
-    main_tf_path = project_path / "jupyter_infra_tf_aws_review_ci" / "template" / "engine" / "main.tf"
+    main_tf_path = project_path / "jupyter_infra_tf_aws_iam_review" / "template" / "engine" / "main.tf"
     main_tf_content = main_tf_path.read_text()
     main_tf_version_match = re.search(r'template_version\s*=\s*["\']([^"\']+)["\']', main_tf_content)
     assert main_tf_version_match is not None, "Could not find template_version in main.tf"

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from jupyter_infra_tf_aws_review_ci.template import TEMPLATE_PATH
+from jupyter_infra_tf_aws_iam_review.template import TEMPLATE_PATH
 
 MANDATORY_TEMPLATE_STRPATHS: list[str] = [
     "manifest.yaml",
