@@ -9,7 +9,7 @@
 # All tool versions are pinned so a given image tag is reproducible and the
 # supply chain is auditable. The roborev tarball is checksum-verified.
 
-FROM node:22-bookworm-slim
+FROM node:24-bookworm-slim
 
 # Pinned tool versions.
 ARG ROBOREV_VERSION=0.58.0
@@ -47,5 +47,12 @@ RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
 
 LABEL org.opencontainers.image.source="https://github.com/jupyter-infra/jupyter-deploy"
 LABEL org.opencontainers.image.description="roborev CI review runner (roborev + claude-code agent)"
+
+# Run as the unprivileged `node` user (uid 1000) shipped in the base image, not root.
+# HOME (/home/node) is writable for roborev/claude-code/gh runtime state. Consumers
+# that bind-mount a workspace should run with --user matching the host uid so the
+# mount stays writable.
+WORKDIR /home/node
+USER node
 
 CMD ["roborev", "--help"]
