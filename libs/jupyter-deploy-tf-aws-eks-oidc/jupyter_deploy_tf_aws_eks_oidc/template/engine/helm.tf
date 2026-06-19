@@ -174,5 +174,5 @@ resource "helm_release" "workspace_router" {
     },
   ]
 
-  depends_on = [helm_release.jupyter_k8s, aws_eks_addon.cert_manager, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup]
+  depends_on = [helm_release.jupyter_k8s, aws_eks_addon.cert_manager, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup, kubernetes_namespace_v1.shared]
 }

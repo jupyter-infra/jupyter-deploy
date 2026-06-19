@@ -158,5 +158,5 @@ resource "helm_release" "workspace_defaults" {
     },
   ]
 
-  depends_on = [kubernetes_namespace_v1.shared, helm_release.workspace_router]
+  depends_on = [kubernetes_namespace_v1.shared, helm_release.workspace_router, helm_release.jupyter_k8s]
 }
