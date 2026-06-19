@@ -12,6 +12,8 @@ from jupyter_deploy.exceptions import (
     ConfigurationError,
     DownAutoApproveRequiredError,
     HostCommandInstructionError,
+    ImageNotFoundError,
+    ImageTagNotFoundError,
     IncompatibleHostStateError,
     InstructionNotFoundError,
     InteractiveSessionError,
@@ -197,6 +199,19 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         console.line()
         console.print(f"Available components: {', '.join(e.valid_components)}")
         console.print(":bulb: Run [bold cyan]jd component list[/] to see all components.")
+        raise typer.Exit(code=1) from None
+
+    except ImageNotFoundError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        console.print(f"Available images: {', '.join(e.valid_images)}")
+        console.print(":bulb: Run [bold cyan]jd image list[/] to see all images.")
+        raise typer.Exit(code=1) from None
+
+    except ImageTagNotFoundError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        console.print(f":bulb: Run [bold cyan]jd image tags --name {e.image_name}[/] to see available tags.")
         raise typer.Exit(code=1) from None
 
     except InvalidComponentVerbError as e:

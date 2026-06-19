@@ -94,6 +94,7 @@ class TestJupyterDeployCliRunner(unittest.TestCase):
         self.assertTrue(result.stdout.index("Deploy interactive") >= 0)
         self.assertTrue(result.stdout.index("server") >= 0)
         self.assertTrue(result.stdout.index("host") >= 0)
+        self.assertTrue(result.stdout.index("image") >= 0)
         self.assertTrue(result.stdout.index("users") >= 0)
         self.assertTrue(result.stdout.index("teams") >= 0)
         self.assertTrue(result.stdout.index("organization") >= 0)
