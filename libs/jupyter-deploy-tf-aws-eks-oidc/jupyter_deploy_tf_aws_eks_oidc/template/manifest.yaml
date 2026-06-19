@@ -84,6 +84,11 @@ server-status-rules:
   all:
   - path: .status.conditions[type=Available].status
     equals: "True"
+images:
+  jupyterlab:
+    description: JupyterLab workspace image
+    repository-output: jupyterlab_ecr_repository_name
+    tag-output: jupyterlab_image_tag
 secrets:
 - name: oauth_app_client_secret
   source: output
@@ -625,6 +630,71 @@ commands:
   - result-name: component.cronjob.trigger.job_name
     source: result
     source-key: '[0].JobName'
+- cmd: image.show
+  sequence:
+  - api-name: aws.ecr.describe-repository
+    arguments:
+    - api-attribute: repository_name
+      source: cli
+      source-key: repository_name
+  - api-name: aws.inspector2.get-scan-status
+    arguments:
+    - api-attribute: repository_name
+      source: cli
+      source-key: repository_name
+    - api-attribute: image_tag
+      source: cli
+      source-key: image_tag
+  results:
+  - result-name: image.show.repository_uri
+    source: result
+    source-key: '[0].RepositoryUri'
+  - result-name: image.show.scanner_type
+    source: result
+    source-key: '[1].ScannerType'
+  - result-name: image.show.last_scanned
+    source: result
+    source-key: '[1].LastScanned'
+  - result-name: image.show.scan_status
+    source: result
+    source-key: '[1].ScanStatus'
+- cmd: image.tags
+  sequence:
+  - api-name: aws.ecr.list-image-tags
+    arguments:
+    - api-attribute: repository_name
+      source: cli
+      source-key: repository_name
+  results:
+  - result-name: image.tags.tags
+    source: result
+    source-key: '[0].Tags'
+- cmd: image.vulnerabilities
+  sequence:
+  - api-name: aws.inspector2.list-vulnerabilities
+    arguments:
+    - api-attribute: repository_name
+      source: cli
+      source-key: repository_name
+    - api-attribute: image_tag
+      source: cli
+      source-key: image_tag
+  results:
+  - result-name: image.vulnerabilities.vulnerabilities
+    source: result
+    source-key: '[0].Vulnerabilities'
+  - result-name: image.vulnerabilities.last_scanned
+    source: result
+    source-key: '[0].LastScanned'
+  - result-name: image.vulnerabilities.critical_count
+    source: result
+    source-key: '[0].CriticalCount'
+  - result-name: image.vulnerabilities.high_count
+    source: result
+    source-key: '[0].HighCount'
+  - result-name: image.vulnerabilities.scanner_type
+    source: result
+    source-key: '[0].ScannerType'
 components:
   traefik:
     type: Deployment
