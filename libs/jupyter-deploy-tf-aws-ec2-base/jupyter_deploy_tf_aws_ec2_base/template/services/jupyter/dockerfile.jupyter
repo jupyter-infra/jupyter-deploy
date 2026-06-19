@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 
 ARG SERVICE_GID
 ARG DOCKER_GID
@@ -14,7 +14,7 @@ RUN groupadd -g ${DOCKER_GID} docker && \
 RUN useradd -m -s /bin/bash -u ${SERVICE_UID} -g ${SERVICE_GID} -G docker jovyan
 
 # docker CLI
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     ca-certificates \
     curl \
     gnupg
