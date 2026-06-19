@@ -31,8 +31,8 @@ pip install jupyter-infra-tf-aws-iam-review
 
 ### Project setup
 ```bash
-mkdir review-ci
-cd review-ci
+mkdir iam-review
+cd iam-review
 
 jd init . -P aws -I iam -T review
 ```
