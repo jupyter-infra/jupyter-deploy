@@ -19,7 +19,7 @@ def get_caller_arn(sts_client: STSClient) -> str:
 
 def get_caller_account(sts_client: STSClient) -> str:
     """Return the AWS account ID of the caller's identity via STS:GetCallerIdentity."""
-    return get_caller_arn(sts_client).split(":")[4]
+    return sts_client.get_caller_identity()["Account"]
 
 
 def get_partition(sts_client: STSClient) -> str:

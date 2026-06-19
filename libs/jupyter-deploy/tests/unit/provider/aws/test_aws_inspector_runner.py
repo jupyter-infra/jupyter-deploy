@@ -11,6 +11,10 @@ from jupyter_deploy.provider.aws.aws_inspector_runner import AwsInspectorRunner
 from jupyter_deploy.provider.resolved_argdefs import ResolvedInstructionArgument, StrResolvedInstructionArgument
 
 
+class _OtherException(botocore.exceptions.ClientError):
+    """Distinct exception so ImageNotFoundException doesn't shadow ScanNotFoundException in except chains."""
+
+
 class TestAwsInspectorRunner(unittest.TestCase):
     @patch("boto3.client")
     def test_instantiates_clients(self, mock_boto3_client: Mock) -> None:
@@ -174,17 +178,18 @@ class TestListVulnerabilitiesEcrBasicFallback(unittest.TestCase):
         self.assertEqual(ctx.exception.tag, "v99")
 
 
-class TestInspectorFallbackOnEmpty(unittest.TestCase):
+class TestInspectorEmptyResult(unittest.TestCase):
     @patch("jupyter_deploy.api.aws.inspector2.inspector2_findings.is_ecr_scanning_enabled")
     @patch("jupyter_deploy.api.aws.inspector2.inspector2_findings.list_image_findings")
+    @patch("jupyter_deploy.api.aws.ecr.ecr_repository.describe_image")
     @patch("jupyter_deploy.api.aws.ecr.ecr_repository.describe_image_scan_findings")
-    def test_falls_through_to_ecr_when_inspector_returns_empty(
-        self, mock_scan_findings: Mock, mock_list_findings: Mock, mock_is_enabled: Mock
+    def test_returns_clean_inspector_result_when_empty_and_tag_exists(
+        self, mock_scan_findings: Mock, mock_describe_image: Mock, mock_list_findings: Mock, mock_is_enabled: Mock
     ) -> None:
         runner = AwsInspectorRunner(NullDisplay(), region_name="us-west-2")
         mock_is_enabled.return_value = True
         mock_list_findings.return_value = []
-        mock_scan_findings.return_value = ([], "COMPLETE", "2026-06-18T15:49:33+00:00")
+        mock_describe_image.return_value = {"imageTags": ["v1"]}
 
         resolved_args: dict[str, ResolvedInstructionArgument] = {
             "repository_name": StrResolvedInstructionArgument(
@@ -195,23 +200,25 @@ class TestInspectorFallbackOnEmpty(unittest.TestCase):
 
         result = runner._list_vulnerabilities(resolved_arguments=resolved_args)
 
-        mock_list_findings.assert_called_once()
-        mock_scan_findings.assert_called_once()
-        self.assertEqual(result["ScannerType"].value, "ECR Basic")
+        # Inspector is authoritative: empty means clean, ECR basic is NOT consulted for findings.
+        mock_describe_image.assert_called_once()
+        mock_scan_findings.assert_not_called()
+        self.assertEqual(result["ScannerType"].value, "Inspector Enhanced")
+        self.assertEqual(json.loads(result["Vulnerabilities"].value), [])
 
     @patch("jupyter_deploy.api.aws.inspector2.inspector2_findings.is_ecr_scanning_enabled")
     @patch("jupyter_deploy.api.aws.inspector2.inspector2_findings.list_image_findings")
-    @patch("jupyter_deploy.api.aws.ecr.ecr_repository.describe_image_scan_findings")
-    def test_raises_tag_not_found_when_inspector_empty_and_ecr_throws(
-        self, mock_scan_findings: Mock, mock_list_findings: Mock, mock_is_enabled: Mock
+    @patch("jupyter_deploy.api.aws.ecr.ecr_repository.describe_image")
+    def test_raises_tag_not_found_when_inspector_empty_and_tag_missing(
+        self, mock_describe_image: Mock, mock_list_findings: Mock, mock_is_enabled: Mock
     ) -> None:
         runner = AwsInspectorRunner(NullDisplay(), region_name="us-west-2")
         mock_is_enabled.return_value = True
         mock_list_findings.return_value = []
 
-        mock_scan_findings.side_effect = botocore.exceptions.ClientError(
+        mock_describe_image.side_effect = botocore.exceptions.ClientError(
             {"Error": {"Code": "ImageNotFoundException", "Message": "Image not found"}},
-            "DescribeImageScanFindings",
+            "DescribeImages",
         )
         runner.ecr_client.exceptions.ImageNotFoundException = botocore.exceptions.ClientError
 
@@ -226,6 +233,38 @@ class TestInspectorFallbackOnEmpty(unittest.TestCase):
             runner._list_vulnerabilities(resolved_arguments=resolved_args)
 
         self.assertEqual(ctx.exception.tag, "v99")
+
+
+class TestEcrBasicScanNotFound(unittest.TestCase):
+    @patch("jupyter_deploy.api.aws.inspector2.inspector2_findings.is_ecr_scanning_enabled")
+    @patch("jupyter_deploy.api.aws.ecr.ecr_repository.describe_image_scan_findings")
+    def test_returns_empty_result_when_image_never_scanned(
+        self, mock_scan_findings: Mock, mock_is_enabled: Mock
+    ) -> None:
+        runner = AwsInspectorRunner(NullDisplay(), region_name="us-west-2")
+        mock_is_enabled.return_value = False
+
+        mock_scan_findings.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "ScanNotFoundException", "Message": "Scan not found"}},
+            "DescribeImageScanFindings",
+        )
+        runner.ecr_client.exceptions.ImageNotFoundException = _OtherException
+        runner.ecr_client.exceptions.ScanNotFoundException = botocore.exceptions.ClientError
+
+        resolved_args: dict[str, ResolvedInstructionArgument] = {
+            "repository_name": StrResolvedInstructionArgument(
+                argument_name="repository_name", value="my-app/jupyterlab"
+            ),
+            "image_tag": StrResolvedInstructionArgument(argument_name="image_tag", value="v1"),
+        }
+
+        result = runner._list_vulnerabilities(resolved_arguments=resolved_args)
+
+        self.assertEqual(result["ScannerType"].value, "ECR Basic")
+        self.assertEqual(json.loads(result["Vulnerabilities"].value), [])
+        self.assertEqual(result["CriticalCount"].value, "0")
+        self.assertEqual(result["HighCount"].value, "0")
+        self.assertEqual(result["LastScanned"].value, "")
 
 
 class TestGetScanStatus(unittest.TestCase):

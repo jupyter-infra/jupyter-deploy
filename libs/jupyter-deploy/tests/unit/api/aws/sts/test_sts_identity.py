@@ -30,17 +30,14 @@ class TestGetCallerArn(unittest.TestCase):
 
 
 class TestGetCallerAccount(unittest.TestCase):
-    def test_extracts_account_id_from_user_arn(self) -> None:
+    def test_returns_account_id(self) -> None:
         sts_client = Mock()
-        sts_client.get_caller_identity.return_value = {"Arn": "arn:aws:iam::123456789012:user/jeff"}
+        sts_client.get_caller_identity.return_value = {
+            "Account": "123456789012",
+            "Arn": "arn:aws:iam::123456789012:user/jeff",
+        }
 
         self.assertEqual(get_caller_account(sts_client), "123456789012")
-
-    def test_extracts_account_id_from_role_arn(self) -> None:
-        sts_client = Mock()
-        sts_client.get_caller_identity.return_value = {"Arn": "arn:aws:sts::987654321098:assumed-role/MyRole/session"}
-
-        self.assertEqual(get_caller_account(sts_client), "987654321098")
 
     def test_raises_on_client_error(self) -> None:
         sts_client = Mock()

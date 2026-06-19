@@ -24,7 +24,7 @@ class TestIsEcrScanningEnabled(unittest.TestCase):
             ]
         }
         mock_sts = Mock()
-        mock_sts.get_caller_identity.return_value = {"Arn": "arn:aws:iam::123456789012:user/test"}
+        mock_sts.get_caller_identity.return_value = {"Account": "123456789012"}
 
         result = inspector2_findings.is_ecr_scanning_enabled(mock_inspector, mock_sts)
 
@@ -43,7 +43,7 @@ class TestIsEcrScanningEnabled(unittest.TestCase):
             ]
         }
         mock_sts = Mock()
-        mock_sts.get_caller_identity.return_value = {"Arn": "arn:aws:iam::123456789012:user/test"}
+        mock_sts.get_caller_identity.return_value = {"Account": "123456789012"}
 
         result = inspector2_findings.is_ecr_scanning_enabled(mock_inspector, mock_sts)
 
@@ -53,7 +53,7 @@ class TestIsEcrScanningEnabled(unittest.TestCase):
         mock_inspector: Mock = Mock(spec=Inspector2Client)
         mock_inspector.batch_get_account_status.return_value = {"accounts": []}
         mock_sts = Mock()
-        mock_sts.get_caller_identity.return_value = {"Arn": "arn:aws:iam::123456789012:user/test"}
+        mock_sts.get_caller_identity.return_value = {"Account": "123456789012"}
 
         result = inspector2_findings.is_ecr_scanning_enabled(mock_inspector, mock_sts)
 
@@ -66,7 +66,7 @@ class TestIsEcrScanningEnabled(unittest.TestCase):
             "BatchGetAccountStatus",
         )
         mock_sts = Mock()
-        mock_sts.get_caller_identity.return_value = {"Arn": "arn:aws:iam::123456789012:user/test"}
+        mock_sts.get_caller_identity.return_value = {"Account": "123456789012"}
 
         with self.assertRaises(botocore.exceptions.ClientError):
             inspector2_findings.is_ecr_scanning_enabled(mock_inspector, mock_sts)

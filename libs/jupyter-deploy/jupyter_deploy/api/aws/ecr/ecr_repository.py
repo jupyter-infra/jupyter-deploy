@@ -17,6 +17,18 @@ def list_image_tags(client: ECRClient, repository_name: str) -> list[ImageDetail
     return response.get("imageDetails", [])
 
 
+def describe_image(client: ECRClient, repository_name: str, image_tag: str) -> ImageDetailTypeDef:
+    """Call ECR:DescribeImages for a single tag and return its detail.
+
+    Raises ECR's ImageNotFoundException if the tag does not exist in the repository.
+    """
+    response = client.describe_images(
+        repositoryName=repository_name,
+        imageIds=[{"imageTag": image_tag}],
+    )
+    return response["imageDetails"][0]
+
+
 def describe_image_scan_findings(
     client: ECRClient, repository_name: str, image_tag: str
 ) -> tuple[list[ImageScanFindingTypeDef], str, str]:

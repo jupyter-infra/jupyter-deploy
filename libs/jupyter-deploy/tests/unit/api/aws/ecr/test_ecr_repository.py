@@ -76,6 +76,46 @@ class TestListImageTags(unittest.TestCase):
             ecr_repository.list_image_tags(mock_client, repository_name="nonexistent")
 
 
+class TestDescribeImage(unittest.TestCase):
+    def test_returns_image_detail_for_tag(self) -> None:
+        mock_client: Mock = Mock(spec=ECRClient)
+        image_detail: ImageDetailTypeDef = {
+            "imageTags": ["v1"],
+            "imageDigest": "sha256:abc123",
+        }
+        mock_client.describe_images.return_value = {"imageDetails": [image_detail]}
+
+        result = ecr_repository.describe_image(mock_client, repository_name="my-app/jupyterlab", image_tag="v1")
+
+        self.assertEqual(result["imageTags"], ["v1"])
+        mock_client.describe_images.assert_called_once_with(
+            repositoryName="my-app/jupyterlab",
+            imageIds=[{"imageTag": "v1"}],
+        )
+
+    def test_raises_on_image_not_found(self) -> None:
+        mock_client: Mock = Mock(spec=ECRClient)
+        mock_client.describe_images.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "ImageNotFoundException", "Message": "Image not found"}},
+            "DescribeImages",
+        )
+
+        with self.assertRaises(botocore.exceptions.ClientError):
+            ecr_repository.describe_image(mock_client, repository_name="my-app/jupyterlab", image_tag="v99")
+
+    def test_bubbles_up_other_client_error(self) -> None:
+        mock_client: Mock = Mock(spec=ECRClient)
+        mock_client.describe_images.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "RepositoryNotFoundException", "Message": "Repository not found"}},
+            "DescribeImages",
+        )
+
+        with self.assertRaises(botocore.exceptions.ClientError) as ctx:
+            ecr_repository.describe_image(mock_client, repository_name="nonexistent", image_tag="v1")
+
+        self.assertEqual(ctx.exception.response["Error"]["Code"], "RepositoryNotFoundException")
+
+
 class TestDescribeImageScanFindings(unittest.TestCase):
     def test_returns_findings_and_status(self) -> None:
         mock_client: Mock = Mock(spec=ECRClient)

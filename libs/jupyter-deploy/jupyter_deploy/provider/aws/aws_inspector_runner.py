@@ -166,6 +166,24 @@ class AwsInspectorRunner(InstructionRunner):
             "ScannerType": StrResolvedInstructionResult(result_name="ScannerType", value="ECR Basic"),
         }
 
+    def _verify_tag_exists(self, repository_name: str, image_tag: str) -> None:
+        """Confirm the image tag exists in ECR, raising ImageTagNotFoundError otherwise."""
+        try:
+            ecr_repository.describe_image(self.ecr_client, repository_name=repository_name, image_tag=image_tag)
+        except self.ecr_client.exceptions.ImageNotFoundException:
+            raise ImageTagNotFoundError(repository_name, image_tag) from None
+
+    @staticmethod
+    def _empty_ecr_basic_result() -> dict[str, ResolvedInstructionResult]:
+        """Return an empty ECR basic vulnerability result for un-scanned images."""
+        return {
+            "Vulnerabilities": StrResolvedInstructionResult(result_name="Vulnerabilities", value=json.dumps([])),
+            "LastScanned": StrResolvedInstructionResult(result_name="LastScanned", value=""),
+            "CriticalCount": StrResolvedInstructionResult(result_name="CriticalCount", value="0"),
+            "HighCount": StrResolvedInstructionResult(result_name="HighCount", value="0"),
+            "ScannerType": StrResolvedInstructionResult(result_name="ScannerType", value="ECR Basic"),
+        }
+
     def _list_vulnerabilities(
         self, resolved_arguments: dict[str, ResolvedInstructionArgument]
     ) -> dict[str, ResolvedInstructionResult]:
@@ -177,16 +195,24 @@ class AwsInspectorRunner(InstructionRunner):
         if self._is_inspector_enabled():
             self.display_manager.info(f"Reading Inspector findings for {repository_name}:{image_tag}")
             result = self._list_vulnerabilities_inspector(repository_name, image_tag)
-            if json.loads(result["Vulnerabilities"].value):
-                return result
-            # Inspector returned empty — validate the tag exists via ECR
-            self.display_manager.info(f"No Inspector findings, verifying tag exists: {repository_name}:{image_tag}")
+            if not json.loads(result["Vulnerabilities"].value):
+                # Inspector is authoritative: zero findings means clean (continuous re-scan).
+                # Validate the tag exists rather than falling back to stale ECR basic findings.
+                self.display_manager.info(f"No Inspector findings, verifying tag exists: {repository_name}:{image_tag}")
+                self._verify_tag_exists(repository_name, image_tag)
+            return result
 
         try:
             self.display_manager.info(f"Reading ECR scan findings for {repository_name}:{image_tag}")
             return self._list_vulnerabilities_ecr_basic(repository_name, image_tag)
         except self.ecr_client.exceptions.ImageNotFoundException:
             raise ImageTagNotFoundError(repository_name, image_tag) from None
+        except self.ecr_client.exceptions.ScanNotFoundException:
+            # Image exists but was never scanned (scan-on-push disabled or image predates scanning).
+            self.display_manager.warning(
+                f"No scan results for {repository_name}:{image_tag} — enable scan-on-push or trigger a manual scan."
+            )
+            return self._empty_ecr_basic_result()
 
     def _get_scan_status(
         self, resolved_arguments: dict[str, ResolvedInstructionArgument]
@@ -214,9 +240,13 @@ class AwsInspectorRunner(InstructionRunner):
                 "ScanStatus": StrResolvedInstructionResult(result_name="ScanStatus", value="NO_FINDINGS"),
             }
 
-        _, scan_status, completed_at = ecr_repository.describe_image_scan_findings(
-            self.ecr_client, repository_name=repository_name_arg.value, image_tag=image_tag_arg.value
-        )
+        try:
+            _, scan_status, completed_at = ecr_repository.describe_image_scan_findings(
+                self.ecr_client, repository_name=repository_name_arg.value, image_tag=image_tag_arg.value
+            )
+        except self.ecr_client.exceptions.ScanNotFoundException:
+            # Image exists but was never scanned (scan-on-push disabled or image predates scanning).
+            scan_status, completed_at = "NOT_SCANNED", ""
         return {
             "ScannerType": StrResolvedInstructionResult(result_name="ScannerType", value="ECR Basic"),
             "LastScanned": StrResolvedInstructionResult(result_name="LastScanned", value=completed_at),
