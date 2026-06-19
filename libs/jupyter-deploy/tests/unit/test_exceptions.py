@@ -6,6 +6,8 @@ from jupyter_deploy.exceptions import (
     ConfigurationError,
     DownAutoApproveRequiredError,
     HostCommandInstructionError,
+    ImageNotFoundError,
+    ImageTagNotFoundError,
     IncompatibleHostStateError,
     InstructionError,
     InstructionNotFoundError,
@@ -345,3 +347,24 @@ class TestProjectStoreErrors(unittest.TestCase):
         self.assertIsInstance(error, NotImplementedError)
         self.assertEqual(error.region_or_location, "aws-iso")
         self.assertIn("aws-iso", str(error))
+
+
+class TestImageErrors(unittest.TestCase):
+    """Test cases for image-related exceptions."""
+
+    def test_image_not_found_error(self) -> None:
+        error = ImageNotFoundError("myimage", ["jupyterlab", "worker"])
+        self.assertIsInstance(error, JupyterDeployError)
+        self.assertIsInstance(error, ValueError)
+        self.assertEqual(error.image_name, "myimage")
+        self.assertEqual(error.valid_images, ["jupyterlab", "worker"])
+        self.assertIn("myimage", str(error))
+
+    def test_image_tag_not_found_error(self) -> None:
+        error = ImageTagNotFoundError("jupyterlab", "v99")
+        self.assertIsInstance(error, JupyterDeployError)
+        self.assertIsInstance(error, ValueError)
+        self.assertEqual(error.image_name, "jupyterlab")
+        self.assertEqual(error.tag, "v99")
+        self.assertIn("v99", str(error))
+        self.assertIn("jupyterlab", str(error))

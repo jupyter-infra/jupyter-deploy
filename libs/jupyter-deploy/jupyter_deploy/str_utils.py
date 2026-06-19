@@ -1,3 +1,6 @@
+from datetime import UTC, datetime
+
+
 def to_cli_option_name(s: str) -> str:
     """Return name to kebab-case CLI option format.
 
@@ -54,3 +57,14 @@ def to_list_str(concatenated_list: str, sep: str = ",") -> list[str]:
 
     items = concatenated_list.split(sep)
     return items
+
+
+def format_timestamp(raw: str) -> str:
+    """Format an ISO timestamp to a human-readable UTC date string."""
+    if not raw:
+        return ""
+    try:
+        dt = datetime.fromisoformat(raw)
+        return dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    except ValueError:
+        return raw

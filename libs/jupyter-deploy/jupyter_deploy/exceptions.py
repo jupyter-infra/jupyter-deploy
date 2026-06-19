@@ -352,6 +352,34 @@ class ComponentNotFoundError(JupyterDeployError, ValueError):
         super().__init__(f"Component '{component_name}' not found.")
 
 
+class ImageNotFoundError(JupyterDeployError, ValueError):
+    """Raised when an image name is not found in the manifest.
+
+    Attributes:
+        image_name: The name that was looked up
+        valid_images: List of valid image names
+    """
+
+    def __init__(self, image_name: str, valid_images: list[str]) -> None:
+        self.image_name = image_name
+        self.valid_images = valid_images
+        super().__init__(f"Image '{image_name}' not found.")
+
+
+class ImageTagNotFoundError(JupyterDeployError, ValueError):
+    """Raised when an image tag does not exist in the repository.
+
+    Attributes:
+        image_name: The image name
+        tag: The tag that was looked up
+    """
+
+    def __init__(self, image_name: str, tag: str) -> None:
+        self.image_name = image_name
+        self.tag = tag
+        super().__init__(f"Tag '{tag}' not found for image '{image_name}'.")
+
+
 class InvalidComponentVerbError(JupyterDeployError, ValueError):
     """Raised when a verb is not valid for the component's type.
 

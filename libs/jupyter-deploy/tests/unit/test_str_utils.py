@@ -2,7 +2,7 @@ import unittest
 
 from parameterized import parameterized  # type: ignore
 
-from jupyter_deploy.str_utils import get_trimmed_header, to_cli_option_name, to_list_str
+from jupyter_deploy.str_utils import format_timestamp, get_trimmed_header, to_cli_option_name, to_list_str
 
 
 class TestToCliOptionName(unittest.TestCase):
@@ -116,3 +116,23 @@ class TestToListStr(unittest.TestCase):
             self.assertEqual(to_list_str(input_str, sep=sep), expect_list)
         else:
             self.assertEqual(to_list_str(input_str), expect_list)
+
+
+class TestFormatTimestamp(unittest.TestCase):
+    def test_empty_string_returns_empty(self) -> None:
+        self.assertEqual(format_timestamp(""), "")
+
+    def test_iso_utc_timestamp(self) -> None:
+        result = format_timestamp("2026-06-18T15:49:33+00:00")
+        self.assertEqual(result, "2026-06-18 15:49 UTC")
+
+    def test_iso_with_timezone_offset(self) -> None:
+        result = format_timestamp("2026-06-18T10:30:00-05:00")
+        self.assertEqual(result, "2026-06-18 15:30 UTC")
+
+    def test_iso_with_microseconds(self) -> None:
+        result = format_timestamp("2026-06-18T16:21:23.542000+00:00")
+        self.assertEqual(result, "2026-06-18 16:21 UTC")
+
+    def test_invalid_string_returned_as_is(self) -> None:
+        self.assertEqual(format_timestamp("not-a-date"), "not-a-date")

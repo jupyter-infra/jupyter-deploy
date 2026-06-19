@@ -9,12 +9,14 @@ from jupyter_deploy.enum import StoreType
 from jupyter_deploy.exceptions import (
     CommandNotImplementedError,
     ComponentNotFoundError,
+    ImageNotFoundError,
     InvalidStoreTypeError,
     SecretNotFoundError,
 )
 from jupyter_deploy.manifest import (
     InvalidServiceError,
     JupyterDeployComponentDefinitionV1,
+    JupyterDeployImageDefinitionV1,
     JupyterDeployManifestV1,
     JupyterDeployProjectStoreV1,
 )
@@ -282,3 +284,80 @@ class TestJupyterDeployManifestV1Components(unittest.TestCase):
 
         with self.assertRaises(CommandNotImplementedError):
             manifest.get_component("traefik")
+
+
+class TestJupyterDeployManifestV1Images(unittest.TestCase):
+    def _make_manifest(self, images: dict[str, Any] | None = None) -> JupyterDeployManifestV1:
+        data: dict[str, Any] = {
+            "schema_version": 1,
+            "template": {"name": "test-template", "engine": "terraform", "version": "1.0.0"},
+        }
+        if images is not None:
+            data["images"] = images
+        return JupyterDeployManifestV1(**data)  # type: ignore
+
+    def test_get_images_parses_manifest(self) -> None:
+        manifest = self._make_manifest(
+            images={
+                "jupyterlab": {
+                    "description": "JupyterLab workspace image",
+                    "repository-output": "ecr_repo_name",
+                    "tag-output": "image_tag",
+                },
+                "worker": {
+                    "description": "Background worker",
+                    "repository-output": "worker_repo",
+                    "tag-output": "worker_tag",
+                },
+            }
+        )
+        images = manifest.get_images()
+
+        self.assertEqual(len(images), 2)
+        self.assertIn("jupyterlab", images)
+        self.assertIn("worker", images)
+
+    def test_get_image_returns_definition(self) -> None:
+        manifest = self._make_manifest(
+            images={
+                "jupyterlab": {
+                    "description": "JupyterLab workspace image",
+                    "repository-output": "ecr_repo_name",
+                    "tag-output": "image_tag",
+                },
+            }
+        )
+        image = manifest.get_image("jupyterlab")
+
+        self.assertIsInstance(image, JupyterDeployImageDefinitionV1)
+        self.assertEqual(image.description, "JupyterLab workspace image")
+        self.assertEqual(image.repository_output, "ecr_repo_name")
+        self.assertEqual(image.tag_output, "image_tag")
+
+    def test_get_image_raises_not_found(self) -> None:
+        manifest = self._make_manifest(
+            images={
+                "jupyterlab": {
+                    "description": "JupyterLab workspace image",
+                    "repository-output": "ecr_repo_name",
+                    "tag-output": "image_tag",
+                },
+            }
+        )
+        with self.assertRaises(ImageNotFoundError) as ctx:
+            manifest.get_image("unknown")
+
+        self.assertEqual(ctx.exception.image_name, "unknown")
+        self.assertIn("jupyterlab", ctx.exception.valid_images)
+
+    def test_get_images_raises_when_none(self) -> None:
+        manifest = self._make_manifest()
+
+        with self.assertRaises(CommandNotImplementedError):
+            manifest.get_images()
+
+    def test_get_image_raises_when_none(self) -> None:
+        manifest = self._make_manifest()
+
+        with self.assertRaises(CommandNotImplementedError):
+            manifest.get_image("jupyterlab")
