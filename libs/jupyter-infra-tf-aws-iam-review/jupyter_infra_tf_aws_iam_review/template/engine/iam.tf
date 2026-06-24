@@ -21,6 +21,13 @@ data "aws_iam_openid_connect_provider" "github_actions" {
 locals {
   oidc_provider_url = "token.actions.githubusercontent.com"
   oidc_provider_arn = var.create_oidc_provider ? aws_iam_openid_connect_provider.github_actions[0].arn : data.aws_iam_openid_connect_provider.github_actions[0].arn
+
+  bedrock_invoke_arns = concat(
+    [for id in var.bedrock_inference_profile_ids :
+      "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${id}"
+    ],
+    var.bedrock_foundation_model_arns,
+  )
 }
 
 # Publish policy: push the review image to its ECR repository.
@@ -90,7 +97,7 @@ resource "aws_iam_policy" "review_run" {
           "bedrock:InvokeModel",
           "bedrock:InvokeModelWithResponseStream",
         ]
-        Resource = var.bedrock_model_arns
+        Resource = local.bedrock_invoke_arns
       }
     ]
   })

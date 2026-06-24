@@ -42,18 +42,23 @@ variable "review_repos" {
   type        = list(string)
 }
 
-variable "bedrock_model_arns" {
+variable "bedrock_inference_profile_ids" {
   description = <<-EOT
-    Bedrock model and inference-profile ARNs the run role may invoke.
+    Inference profiles the run role may invoke. The deployment region and the
+    role's own account are filled in to form each ARN.
 
-    For cross-region inference profiles, include both the inference profile ARN
-    and the underlying foundation model ARNs in each region the profile routes to.
+    Example: ["us.anthropic.claude-*"]
+  EOT
+  type        = list(string)
+}
 
-    Example:
-    [
-      "arn:aws:bedrock:us-west-2:123456789012:inference-profile/us.anthropic.claude-sonnet-4-*",
-      "arn:aws:bedrock:us-*::foundation-model/anthropic.claude-*"
-    ]
+variable "bedrock_foundation_model_arns" {
+  description = <<-EOT
+    Foundation-model ARNs the run role may invoke. These are AWS-owned, so the
+    ARN has no account, and a cross-region profile runs the model in several
+    regions, so include each region it routes to (or us-*).
+
+    Example: ["arn:aws:bedrock:us-*::foundation-model/anthropic.claude-*"]
   EOT
   type        = list(string)
 }
