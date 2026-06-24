@@ -64,6 +64,16 @@ output "jupyterlab_image_uri" {
   value       = var.workspace_app_jupyterlab_use ? module.app_jupyterlab[0].image_uri : ""
 }
 
+output "jupyterlab_ecr_repository_name" {
+  description = "ECR repository name for the JupyterLab workspace image."
+  value       = var.workspace_app_jupyterlab_use ? module.app_jupyterlab[0].repository_name : ""
+}
+
+output "jupyterlab_image_tag" {
+  description = "Current image tag for the JupyterLab workspace image."
+  value       = var.workspace_app_jupyterlab_use ? module.app_jupyterlab[0].image_tag : ""
+}
+
 output "kubeconfig_path" {
   description = "Path to the local kubeconfig file for this cluster."
   value       = abspath("${path.root}/.kube/config")

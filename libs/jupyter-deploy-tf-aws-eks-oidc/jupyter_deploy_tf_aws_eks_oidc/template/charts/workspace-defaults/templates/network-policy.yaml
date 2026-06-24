@@ -1,0 +1,36 @@
+{{- if .Values.networkPolicy.create }}
+{{- range $ns := .Values.networkPolicy.workspaceNamespaces }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: workspace-ingress
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/managed-by: jupyter-deploy
+spec:
+  # Selects every workspace pod in the namespace (label set by the operator).
+  podSelector:
+    matchLabels:
+      workspace.jupyter.org/component: workspace
+  policyTypes:
+    - Ingress
+  ingress:
+    # Traefik router proxying authenticated workspace traffic.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $.Values.networkPolicy.routerNamespace }}
+      ports:
+        - port: {{ $.Values.networkPolicy.port }}
+          protocol: TCP
+    # Operator idle-detection probes (transport: network).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $.Values.networkPolicy.operatorNamespace }}
+      ports:
+        - port: {{ $.Values.networkPolicy.port }}
+          protocol: TCP
+{{- end }}
+{{- end }}

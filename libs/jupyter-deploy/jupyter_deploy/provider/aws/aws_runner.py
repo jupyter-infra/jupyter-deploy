@@ -3,9 +3,11 @@ from enum import Enum
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.exceptions import InstructionNotFoundError
 from jupyter_deploy.provider.aws.aws_ec2_runner import AwsEc2Runner
+from jupyter_deploy.provider.aws.aws_ecr_runner import AwsEcrRunner
 from jupyter_deploy.provider.aws.aws_eks_runner import AwsEksRunner
 from jupyter_deploy.provider.aws.aws_elbv2_runner import AwsElbv2Runner
 from jupyter_deploy.provider.aws.aws_error_handler import aws_error_context_manager
+from jupyter_deploy.provider.aws.aws_inspector_runner import AwsInspectorRunner
 from jupyter_deploy.provider.aws.aws_secretsmanager_runner import AwsSecretsManagerRunner
 from jupyter_deploy.provider.aws.aws_ssm_runner import AwsSsmRunner
 from jupyter_deploy.provider.instruction_runner import InstructionRunner
@@ -17,8 +19,10 @@ class AwsService(str, Enum):
     """AWS services mapped to jupyter-deploy instructions."""
 
     EC2 = "ec2"
+    ECR = "ecr"
     EKS = "eks"
     ELBV2 = "elbv2"
+    INSPECTOR2 = "inspector2"
     SECRETSMANAGER = "secretsmanager"
     SSM = "ssm"
 
@@ -62,12 +66,20 @@ class AwsApiRunner(InstructionRunner):
             service_runner = AwsEc2Runner(self.display_manager, region_name=self.region_name)
             self.service_runners[service_name] = service_runner
             return service_runner
+        elif service_name == AwsService.ECR:
+            service_runner = AwsEcrRunner(self.display_manager, region_name=self.region_name)
+            self.service_runners[service_name] = service_runner
+            return service_runner
         elif service_name == AwsService.EKS:
             service_runner = AwsEksRunner(self.display_manager, region_name=self.region_name)
             self.service_runners[service_name] = service_runner
             return service_runner
         elif service_name == AwsService.ELBV2:
             service_runner = AwsElbv2Runner(self.display_manager, region_name=self.region_name)
+            self.service_runners[service_name] = service_runner
+            return service_runner
+        elif service_name == AwsService.INSPECTOR2:
+            service_runner = AwsInspectorRunner(self.display_manager, region_name=self.region_name)
             self.service_runners[service_name] = service_runner
             return service_runner
         elif service_name == AwsService.SECRETSMANAGER:

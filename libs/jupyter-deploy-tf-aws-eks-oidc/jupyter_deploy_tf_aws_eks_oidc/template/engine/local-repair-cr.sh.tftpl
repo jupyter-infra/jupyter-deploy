@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+
+# Apply-time repair: re-create an operator custom resource that was orphaned by a
+# CRD wipe (operator release replace/uninstall cascade-deletes every CR of that
+# kind, including ones owned by OTHER Helm releases — see GitHub issue #270).
+#
+# The Terraform Helm provider only diffs a release's chart+values, not its
+# in-cluster objects, so once the CR is gone `jd config`/`jd up` report
+# "No changes" and never self-heal. A companion data.kubernetes_resource read
+# makes `jd config` notice the drift (planned replacement of this resource); this
+# script performs the repair by re-applying the CR straight from the owning
+# release's rendered manifest — the source of truth, no duplicated YAML.
+#
+# Idempotent: if the CR is already present this is a harmless re-apply.
+
+set -uo pipefail
+
+CLUSTER_NAME="${cluster_name}"
+REGION="${region}"
+RELEASE_NAME="${release_name}"
+RELEASE_NAMESPACE="${release_namespace}"
+CR_KIND="${cr_kind}"
+CR_NAME="${cr_name}"
+CR_NAMESPACE="${cr_namespace}"
+
+setup_kubeconfig() {
+    echo "Configuring kubectl for cluster $CLUSTER_NAME..."
+    if ! aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$REGION" 2>&1; then
+        echo "WARNING: Failed to configure kubeconfig — skipping $CR_KIND/$CR_NAME repair."
+        return 1
+    fi
+
+    # Guard against ever acting on the wrong cluster.
+    local current_context
+    current_context=$(kubectl config current-context 2>/dev/null)
+    if [[ "$current_context" != *"$CLUSTER_NAME"* ]] || [[ "$current_context" != *"$REGION"* ]]; then
+        echo "WARNING: kubectl context '$current_context' does not match cluster '$CLUSTER_NAME' in region '$REGION'."
+        echo "Skipping $CR_KIND/$CR_NAME repair to avoid touching the wrong cluster."
+        return 1
+    fi
+    echo "kubectl configured (context: $current_context)."
+}
+
+main() {
+    setup_kubeconfig || exit 0
+
+    if kubectl get "$CR_KIND" "$CR_NAME" -n "$CR_NAMESPACE" >/dev/null 2>&1; then
+        echo "$CR_KIND/$CR_NAME already present in namespace $CR_NAMESPACE — nothing to repair."
+        exit 0
+    fi
+
+    echo "$CR_KIND/$CR_NAME missing — re-applying from release '$RELEASE_NAME' manifest..."
+    if ! helm get manifest "$RELEASE_NAME" -n "$RELEASE_NAMESPACE" \
+        | yq "select(.kind == \"$CR_KIND\" and .metadata.name == \"$CR_NAME\")" \
+        | kubectl apply -f - 2>&1; then
+        echo "WARNING: failed to re-apply $CR_KIND/$CR_NAME from release '$RELEASE_NAME'."
+        exit 0
+    fi
+    echo "$CR_KIND/$CR_NAME repaired."
+
+    exit 0
+}
+
+main

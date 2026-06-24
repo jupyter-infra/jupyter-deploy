@@ -64,12 +64,21 @@ def _check_kubectl_installation() -> None:
     )
 
 
+def _check_yq_installation() -> None:
+    """Shell out to verify `yq` install, raise ToolRequiredError if not found."""
+    return _check_installation(
+        tool_name="yq",
+        installation_url="https://github.com/mikefarah/yq/#install",
+    )
+
+
 _TOOL_VERIFICATION_FN_MAP: dict[JupyterDeployTool, Callable[[], None]] = {
     JupyterDeployTool.AWS_CLI: _check_aws_cli_installation,
     JupyterDeployTool.AWS_SSM_PLUGIN: _check_ssm_plugin_installation,
     JupyterDeployTool.JQ: _check_jq_installation,
     JupyterDeployTool.KUBECTL: _check_kubectl_installation,
     JupyterDeployTool.TERRAFORM: _check_terraform_installation,
+    JupyterDeployTool.YQ: _check_yq_installation,
 }
 
 

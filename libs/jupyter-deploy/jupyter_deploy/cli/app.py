@@ -16,6 +16,7 @@ from jupyter_deploy.cli.error_decorator import handle_cli_errors
 from jupyter_deploy.cli.health_app import health_app
 from jupyter_deploy.cli.history_app import history_app
 from jupyter_deploy.cli.host_app import host_app
+from jupyter_deploy.cli.image_app import image_app
 from jupyter_deploy.cli.organization_app import organization_app
 from jupyter_deploy.cli.progress_display import ProgressDisplayManager
 from jupyter_deploy.cli.projects_app import projects_app
@@ -59,6 +60,7 @@ class JupyterDeployCliRunner:
         self.app.add_typer(teams_app, name="teams")
         self.app.add_typer(organization_app, name="organization")
         self.app.add_typer(servers_app, name="server")
+        self.app.add_typer(image_app, name="image")
         self.app.add_typer(component_app, name="component")
         self.app.add_typer(host_app, name="host")
         self.app.add_typer(cluster_app, name="cluster")

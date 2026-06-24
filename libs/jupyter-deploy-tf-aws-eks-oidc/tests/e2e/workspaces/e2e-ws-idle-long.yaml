@@ -1,0 +1,29 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-ws-idle-long
+  namespace: default
+spec:
+  displayName: "E2E Idle Long Timeout"
+  desiredStatus: Running
+  ownershipType: Public
+  accessType: Public
+  # Idle the whole test, but a 60-minute timeout is never reached within the
+  # observation window — the operator must NOT stop this workspace. Negative
+  # counterpart to e2e-ws-idle-shutdown (1-minute timeout).
+  #
+  # detection.httpGet is repeated here for the same reason as the short fixture:
+  # setting any idleShutdown field replaces the template default wholesale, so
+  # detection must be specified explicitly.
+  # Tracked upstream: https://github.com/jupyter-infra/jupyter-k8s/issues/415
+  idleShutdown:
+    enabled: true
+    idleTimeoutInMinutes: 60
+    detection:
+      httpGet:
+        path: /api/status
+        port: 8888
+        transport: network
+        lastActivityTimestamp:
+          responseBodyPath: last_activity
+          format: RFC3339

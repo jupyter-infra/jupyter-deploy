@@ -1,6 +1,6 @@
 # Resource Commands
 
-Resource commands interact with the infrastructure resources backing your deployment: application servers, compute hosts, Kubernetes clusters, and platform components.
+Resource commands interact with the infrastructure resources backing your deployment: application servers, compute hosts, Kubernetes clusters, platform components, and container images.
 
 | Command | Description |
 |---------|-------------|
@@ -8,6 +8,7 @@ Resource commands interact with the infrastructure resources backing your deploy
 | [host](resource/host) | Interact with the host machine(s) running your app(s). |
 | [cluster](resource/cluster) | Interact with the cluster managing the host machines where your apps run. |
 | [component](resource/component) | Interact with the platform components supporting your apps. |
+| [image](resource/image) | Manage application images. |
 
 ```{toctree}
 :hidden:
@@ -16,4 +17,5 @@ resource/server
 resource/host
 resource/cluster
 resource/component
+resource/image
 ```

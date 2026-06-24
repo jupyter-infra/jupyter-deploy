@@ -65,6 +65,31 @@ class TestVerifyMap(unittest.TestCase):
                 mock_check.assert_called_once()
 
 
+class TestCheckYqInstallation(unittest.TestCase):
+    @patch("jupyter_deploy.verify_utils._check_installation")
+    def test_passes_tool_name_and_install_url(self, mock_check: Mock) -> None:
+        verify_utils._check_yq_installation()
+        mock_check.assert_called_once_with(
+            tool_name="yq",
+            installation_url="https://github.com/mikefarah/yq/#install",
+        )
+
+    @patch("jupyter_deploy.cmd_utils.check_executable_installation")
+    def test_raises_when_yq_not_installed(self, mock_check: Mock) -> None:
+        mock_check.return_value = (False, None, "Command 'yq' not found")
+
+        with self.assertRaises(ToolRequiredError) as context:
+            verify_utils._check_yq_installation()
+
+        self.assertEqual(context.exception.tool_name, "yq")
+
+    def test_yq_is_mapped(self) -> None:
+        self.assertIs(
+            verify_utils._TOOL_VERIFICATION_FN_MAP[JupyterDeployTool.YQ],
+            verify_utils._check_yq_installation,
+        )
+
+
 class TestVerifyToolsInstallation(unittest.TestCase):
     def test_succeeds_for_empty_list(self) -> None:
         # Should not raise

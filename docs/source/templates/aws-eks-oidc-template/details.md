@@ -132,6 +132,7 @@ The template provides two variable presets:
 | workspaces_default_ownership_type | `string` | `OwnerOnly` | Default ownership type for new workspaces |
 | workspaces_idle_shutdown_enabled | `bool` | `true` | Enable automatic idle shutdown for workspaces |
 | workspaces_idle_shutdown_timeout_default | `number` | `60` | Default idle timeout in minutes (5-1440) |
+| workspaces_idle_shutdown_timeout_min | `number` | `15` | Minimum idle timeout users can set (advanced; lower values mainly serve testing) |
 | workspaces_idle_shutdown_timeout_max | `number` | `480` | Maximum idle timeout users can set (15-1440) |
 | workspace_app_jupyterlab_use | `bool` | `true` | Build and deploy the JupyterLab workspace image |
 | workspace_app_jupyterlab_app_type | `string` | `jupyterlab` | Application type identifier for the workspace template |

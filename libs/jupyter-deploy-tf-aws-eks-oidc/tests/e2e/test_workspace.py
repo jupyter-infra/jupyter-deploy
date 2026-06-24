@@ -27,7 +27,7 @@ from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_poll_workspace_status,
 )
 
-pytestmark = pytest.mark.usefixtures("cluster_login")
+pytestmark = pytest.mark.usefixtures("kubernetes_cluster_login")
 
 NAMESPACE = "default"
 WORKSPACES_DIR = Path(__file__).parent / "workspaces"

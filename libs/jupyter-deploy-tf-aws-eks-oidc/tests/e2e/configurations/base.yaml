@@ -9,3 +9,13 @@ required_sensitive:
   oauth_app_client_secret: "${JD_E2E_VAR_OAUTH_APP_CLIENT_SECRET}"
 overrides:
   admin_role_names: ${JD_E2E_VAR_ADMIN_ROLE_NAMES}
+  # Lower the template idle-timeout floor so test_workspace_idleshutdown can use a
+  # 1-minute timeout. Safe to apply suite-wide: this only widens the override
+  # window, so no other E2E test changes behavior. It cannot weaken the no-bypass
+  # property (that is enforced by max + a mandatory enabled/detection, see
+  # jupyter-k8s#415) — a lower floor only makes shutdown more aggressive.
+  # Note: because this overrides the floor, the E2E sandbox cannot catch a
+  # misconfigured-too-high default min; assert the default min (==15, min<=max)
+  # at the unit layer instead. The operator poll interval is sped up separately at
+  # runtime by the fast_idle_operator fixture (operator-internal tuning, not a jd var).
+  workspaces_idle_shutdown_timeout_min: 1

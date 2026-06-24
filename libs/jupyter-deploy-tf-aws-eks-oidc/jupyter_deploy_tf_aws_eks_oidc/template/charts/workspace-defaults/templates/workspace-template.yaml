@@ -47,7 +47,11 @@ spec:
       httpGet:
         path: /api/status
         port: 8888
+        transport: network
+        lastActivityTimestamp:
+          responseBodyPath: last_activity
+          format: RFC3339
   idleShutdownOverrides:
     allow: true
-    minIdleTimeoutInMinutes: 15
+    minIdleTimeoutInMinutes: {{ .Values.workspaceTemplate.idleShutdown.minTimeoutMinutes }}
     maxIdleTimeoutInMinutes: {{ .Values.workspaceTemplate.idleShutdown.maxTimeoutMinutes }}

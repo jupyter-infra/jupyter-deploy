@@ -32,5 +32,23 @@ workspaceTemplate:
     enabled: true
     # -- Default idle timeout in minutes before a workspace is stopped.
     timeoutMinutes: 60
+    # -- Minimum idle timeout users can configure, in minutes.
+    minTimeoutMinutes: 15
     # -- Maximum idle timeout users can configure, in minutes.
     maxTimeoutMinutes: 480
+
+# -- Namespace-scoped NetworkPolicy governing ingress to workspace pods. One
+# policy is created per workspace namespace, replacing the per-workspace policy
+# the aws-oidc router chart used to create (accessStrategy.createNetworkPolicy).
+networkPolicy:
+  # -- Whether to create the workspace ingress NetworkPolicy.
+  create: true
+  # -- Namespaces where workspaces run; one NetworkPolicy is created in each.
+  workspaceNamespaces:
+    - default
+  # -- Namespace of the Traefik router that proxies workspace traffic.
+  routerNamespace: jupyter-k8s-router
+  # -- Namespace of the operator that probes workspaces for idle detection.
+  operatorNamespace: jupyter-k8s-system
+  # -- Workspace application port allowed for ingress.
+  port: 8888

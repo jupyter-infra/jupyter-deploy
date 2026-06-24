@@ -7,6 +7,15 @@ resource "aws_eks_addon" "vpc_cni" {
   cluster_name = module.eks_cluster.cluster_name
   addon_name   = "vpc-cni"
   tags         = local.combined_tags
+
+  # Enable Kubernetes NetworkPolicy enforcement. The VPC CNI ships with the
+  # network-policy agent DISABLED by default, which silently makes every
+  # NetworkPolicy inert (nothing is blocked). The workspace-ingress policy
+  # (charts/workspace-defaults) and the router chart's component policies rely
+  # on this being on.
+  configuration_values = jsonencode({
+    enableNetworkPolicy = "true"
+  })
 }
 
 resource "aws_eks_addon" "kube_proxy" {

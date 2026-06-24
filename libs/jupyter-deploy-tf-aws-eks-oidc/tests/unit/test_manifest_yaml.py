@@ -99,3 +99,66 @@ class TestManifest(unittest.TestCase):
                 required_sensitive,
                 f"Manifest secret '{secret['name']}' not found in variables.yaml required_sensitive",
             )
+
+    def test_images_section_declared(self) -> None:
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        images = self.MANIFEST.get("images")
+        self.assertIsNotNone(images, "Manifest must define 'images' section")
+        self.assertIn("jupyterlab", images, "Expected 'jupyterlab' image declared in manifest")
+
+    def test_image_definitions_have_required_fields(self) -> None:
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        for name, image_def in self.MANIFEST.get("images", {}).items():
+            self.assertIn("repository-output", image_def, f"Image '{name}' missing 'repository-output'")
+            self.assertIn("tag-output", image_def, f"Image '{name}' missing 'tag-output'")
+
+    def test_image_outputs_have_matching_terraform_outputs(self) -> None:
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        outputs_tf = (TEMPLATE_PATH / "engine" / "outputs.tf").read_text()
+        tf_output_names = set(re.findall(r'^output "(\w+)"', outputs_tf, re.MULTILINE))
+
+        for name, image_def in self.MANIFEST.get("images", {}).items():
+            repo_output = image_def["repository-output"]
+            tag_output = image_def["tag-output"]
+            self.assertIn(
+                repo_output,
+                tf_output_names,
+                f"Image '{name}' repository-output '{repo_output}' not found in outputs.tf",
+            )
+            self.assertIn(
+                tag_output,
+                tf_output_names,
+                f"Image '{name}' tag-output '{tag_output}' not found in outputs.tf",
+            )
+
+    def test_image_commands_declared(self) -> None:
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        commands = self.MANIFEST.get("commands", [])
+        command_names = [cmd["cmd"] for cmd in commands]
+
+        expected_image_commands = ["image.show", "image.tags", "image.vulnerabilities"]
+        for expected_cmd in expected_image_commands:
+            self.assertIn(
+                expected_cmd,
+                command_names,
+                f"Expected command '{expected_cmd}' not found in manifest commands",
+            )
+
+    def test_image_commands_have_results(self) -> None:
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        commands = self.MANIFEST.get("commands", [])
+        image_commands = [cmd for cmd in commands if cmd["cmd"].startswith("image.")]
+
+        for cmd in image_commands:
+            self.assertIn("results", cmd, f"Command '{cmd['cmd']}' must define results")
+            self.assertTrue(len(cmd["results"]) > 0, f"Command '{cmd['cmd']}' must have at least one result")

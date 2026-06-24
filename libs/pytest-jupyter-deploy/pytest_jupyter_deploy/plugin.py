@@ -16,6 +16,11 @@ from pytest_jupyter_deploy.oauth2_proxy.ci_credentials import fetch_ci_credentia
 from pytest_jupyter_deploy.oauth2_proxy.dex import DexGitHubOAuth2ProxyApplication
 from pytest_jupyter_deploy.oauth2_proxy.github import GitHubOAuth2ProxyApplication
 from pytest_jupyter_deploy.suite_config import SuiteConfig
+from pytest_jupyter_deploy.workspaces.operator import (
+    get_operator_args,
+    set_operator_args,
+    with_idle_check_interval,
+)
 from pytest_jupyter_deploy.workspaces.web_app import WebAppNavigator
 
 # Type variable for function decorators
@@ -370,3 +375,32 @@ def dex_oauth_web_app(
     dex_oauth_app.ensure_authenticated()
     url = e2e_deployment.cli.get_jupyterlab_url()
     return WebAppNavigator(page=dex_oauth_app.page, base_url=url, oauth_app=dex_oauth_app)
+
+
+@pytest.fixture(scope="session")
+def kubernetes_cluster_login(e2e_deployment: EndToEndDeployment) -> None:
+    """Configure kubectl for admin access via `jd cluster login`.
+
+    For templates that provision a Kubernetes cluster (the `jd cluster login`
+    command only exists for cluster-provider templates).
+    """
+    e2e_deployment.ensure_deployed()
+    e2e_deployment.cli.run_command(["jupyter-deploy", "cluster", "login"])
+
+
+@pytest.fixture(scope="function")
+def fast_idle_operator(kubernetes_cluster_login: None) -> Generator[None, None, None]:
+    """Speed up the jupyter-k8s operator's idle-check interval for a test.
+
+    The idle-check interval is an operator-internal CLI flag, not a jd variable.
+    Tests that wait for idle shutdown patch the controller-manager Deployment to
+    poll every few seconds, then restore the original args on teardown.
+
+    Reusable across any template that deploys the jupyter-k8s operator.
+    """
+    original_args = get_operator_args()
+    set_operator_args(with_idle_check_interval(original_args, "10s"))
+    try:
+        yield
+    finally:
+        set_operator_args(original_args)

@@ -1,0 +1,31 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-ws-idle-shutdown
+  namespace: default
+spec:
+  displayName: "E2E Idle Shutdown"
+  desiredStatus: Running
+  ownershipType: Public
+  accessType: Public
+  # Shortest timeout the template allows; the test deployment lowers the floor
+  # (workspaces_idle_shutdown_timeout_min) and the fast_idle_operator fixture
+  # speeds up the operator poll interval so idle shutdown fires quickly.
+  #
+  # The detection block must be repeated here: the operator's defaulter copies
+  # the template's defaultIdleShutdown only when spec.idleShutdown is entirely
+  # absent. Setting any idleShutdown field (e.g. the timeout) replaces the whole
+  # block, so detection.httpGet must be specified or the operator hits
+  # "httpGet config is nil" and disables idle shutdown for the workspace.
+  # Tracked upstream: https://github.com/jupyter-infra/jupyter-k8s/issues/415
+  idleShutdown:
+    enabled: true
+    idleTimeoutInMinutes: 1
+    detection:
+      httpGet:
+        path: /api/status
+        port: 8888
+        transport: network
+        lastActivityTimestamp:
+          responseBodyPath: last_activity
+          format: RFC3339

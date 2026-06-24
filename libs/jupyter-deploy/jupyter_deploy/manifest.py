@@ -15,6 +15,7 @@ from jupyter_deploy.enum import (
 from jupyter_deploy.exceptions import (
     CommandNotImplementedError,
     ComponentNotFoundError,
+    ImageNotFoundError,
     InvalidServiceError,
     InvalidStoreTypeError,
     SecretNotFoundError,
@@ -281,6 +282,13 @@ class JupyterDeployComponentDefinitionV1(BaseModel):
     verbs: dict[str, JupyterDeployComponentVerbV1]
 
 
+class JupyterDeployImageDefinitionV1(BaseModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    description: str = ""
+    repository_output: str = Field(alias="repository-output")
+    tag_output: str = Field(alias="tag-output")
+
+
 class JupyterDeployHealthV1(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
     active: bool = False
@@ -303,6 +311,7 @@ class JupyterDeployManifestV1(BaseModel):
     supervised_execution: JupyterDeploySupervisedExecutionV1 | None = Field(alias="supervised-execution", default=None)
     project_store: JupyterDeployProjectStoreV1 | None = Field(alias="project-store", default=None)
     components: dict[str, JupyterDeployComponentDefinitionV1] | None = None
+    images: dict[str, JupyterDeployImageDefinitionV1] | None = None
     health: JupyterDeployHealthV1 | None = None
 
     def get_engine(self) -> EngineType:
@@ -416,6 +425,28 @@ class JupyterDeployManifestV1(BaseModel):
         if name not in components:
             raise ComponentNotFoundError(name, list(components.keys()))
         return components[name]
+
+    def get_images(self) -> dict[str, JupyterDeployImageDefinitionV1]:
+        """Return the images map.
+
+        Raises:
+            CommandNotImplementedError if no images are declared.
+        """
+        if not self.images:
+            raise CommandNotImplementedError("image")
+        return self.images
+
+    def get_image(self, name: str) -> JupyterDeployImageDefinitionV1:
+        """Return a single image definition by name.
+
+        Raises:
+            CommandNotImplementedError if no images are declared.
+            ImageNotFoundError if the named image does not exist.
+        """
+        images = self.get_images()
+        if name not in images:
+            raise ImageNotFoundError(name, list(images.keys()))
+        return images[name]
 
 
 # Combined type using discriminated union

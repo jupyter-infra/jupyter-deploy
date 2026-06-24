@@ -63,7 +63,7 @@ resource "random_id" "postfix" {
 
 locals {
   template_name    = "tf-aws-eks-oidc"
-  template_version = "0.1.0-rc.2"
+  template_version = "0.1.0"
 
   default_tags = {
     Source       = "jupyter-deploy"

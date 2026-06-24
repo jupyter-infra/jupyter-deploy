@@ -2,7 +2,7 @@
 name = "jupyter"
 version = "0.1.0"
 description = "JupyterLab workspace image for jupyter-deploy EKS template"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "jupyterlab>=4.4.2",
     "jupyter-server-documents>=0.2.4",

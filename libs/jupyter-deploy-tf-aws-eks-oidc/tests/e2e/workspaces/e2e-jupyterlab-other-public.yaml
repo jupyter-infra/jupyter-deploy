@@ -8,3 +8,16 @@ spec:
   desiredStatus: Running
   ownershipType: Public
   accessType: Public
+  # Long-lived seeded workspace — 6h idle timeout so it survives the session.
+  # See e2e-jupyterlab-admin-public.yaml for the full rationale (jupyter-k8s#415).
+  idleShutdown:
+    enabled: true
+    idleTimeoutInMinutes: 360
+    detection:
+      httpGet:
+        path: /api/status
+        port: 8888
+        transport: network
+        lastActivityTimestamp:
+          responseBodyPath: last_activity
+          format: RFC3339

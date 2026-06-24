@@ -36,6 +36,10 @@ RUN curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/st
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && \
     rm kubectl
 
+# Install yq (used by the eks-oidc template's orphan-CR repair guard)
+RUN curl -sL "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" -o /usr/local/bin/yq && \
+    chmod 0755 /usr/local/bin/yq
+
 # Create user with configurable UID/GID (defaults to 1000:1000)
 ARG USER_UID=1000
 ARG USER_GID=1000

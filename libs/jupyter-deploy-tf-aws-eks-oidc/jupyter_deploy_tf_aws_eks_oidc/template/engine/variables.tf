@@ -516,6 +516,29 @@ variable "workspaces_idle_shutdown_timeout_max" {
   }
 }
 
+variable "workspaces_idle_shutdown_timeout_min" {
+  description = <<-EOT
+    The minimum number of minutes a user can set for idle shutdown on their workspace.
+
+    Advanced: lower values mainly serve testing; production deployments should keep
+    the default to avoid stopping workspaces during short pauses. Do not set this
+    below the operator's idle check interval (5m by default): the floor is de-facto
+    bound by the polling cadence, so a smaller value cannot make shutdown fire sooner.
+    Only applies when workspaces_idle_shutdown_enabled is true.
+
+    Recommended: 15
+  EOT
+  type        = number
+
+  # The lower bound is intentionally 1, not the 5m poll interval: E2E idle-shutdown
+  # tests set this to 1 (paired with a sped-up operator check interval) so an idle
+  # workspace stops in ~1 minute instead of 15. Keep this as bounds-only validation.
+  validation {
+    condition     = var.workspaces_idle_shutdown_timeout_min >= 1 && var.workspaces_idle_shutdown_timeout_min <= 1440
+    error_message = "workspaces_idle_shutdown_timeout_min must be between 1 and 1440 minutes (24 hours)."
+  }
+}
+
 variable "workspace_app_jupyterlab_use" {
   description = <<-EOT
     Whether to build and deploy the JupyterLab workspace application image.

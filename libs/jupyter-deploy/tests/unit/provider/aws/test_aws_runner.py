@@ -105,6 +105,48 @@ class TestAwsApiRunner(unittest.TestCase):
         )
         self.assertEqual(result, expected_result)
 
+    @patch("jupyter_deploy.provider.aws.aws_runner.AwsEcrRunner")
+    def test_execute_instantiate_ecr_runner_and_call_execute(self, mock_ecr_runner_class: Mock) -> None:
+        mock_ecr_runner = Mock()
+        mock_ecr_runner_class.return_value = mock_ecr_runner
+
+        expected_result = {"result_key": Mock(spec=ResolvedInstructionResult)}
+        mock_ecr_runner.execute_instruction.return_value = expected_result
+
+        runner = AwsApiRunner(NullDisplay(), region_name="us-west-2")
+        resolved_args: dict[str, ResolvedInstructionArgument] = {"arg1": Mock(spec=ResolvedInstructionArgument)}
+
+        result = runner.execute_instruction(
+            instruction_name="aws.ecr.describe-repository", resolved_arguments=resolved_args
+        )
+
+        mock_ecr_runner_class.assert_called_once_with(ANY, region_name="us-west-2")
+        mock_ecr_runner.execute_instruction.assert_called_once_with(
+            instruction_name="describe-repository", resolved_arguments=resolved_args
+        )
+        self.assertEqual(result, expected_result)
+
+    @patch("jupyter_deploy.provider.aws.aws_runner.AwsInspectorRunner")
+    def test_execute_instantiate_inspector_runner_and_call_execute(self, mock_inspector_runner_class: Mock) -> None:
+        mock_inspector_runner = Mock()
+        mock_inspector_runner_class.return_value = mock_inspector_runner
+
+        expected_result = {"result_key": Mock(spec=ResolvedInstructionResult)}
+        mock_inspector_runner.execute_instruction.return_value = expected_result
+
+        runner = AwsApiRunner(NullDisplay(), region_name="us-west-2")
+        resolved_args: dict[str, ResolvedInstructionArgument] = {"arg1": Mock(spec=ResolvedInstructionArgument)}
+
+        result = runner.execute_instruction(
+            instruction_name="aws.inspector2.list-vulnerabilities", resolved_arguments=resolved_args
+        )
+
+        mock_inspector_runner_class.assert_called_once_with(ANY, region_name="us-west-2")
+        mock_inspector_runner.execute_instruction.assert_called_once_with(
+            instruction_name="list-vulnerabilities", resolved_arguments=resolved_args
+        )
+        self.assertEqual(result, expected_result)
+
     @patch("jupyter_deploy.provider.aws.aws_runner.AwsSsmRunner")
     def test_execute_recycle_service_runner(self, mock_ssm_runner_class: Mock) -> None:
         # Setup

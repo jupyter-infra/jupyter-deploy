@@ -13,7 +13,7 @@ from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 from pytest_jupyter_deploy.workspaces.kubectl import ensure_workspace_no_longer_exists
 from pytest_jupyter_deploy.workspaces.web_app import WebAppNavigator
 
-pytestmark = pytest.mark.usefixtures("cluster_login")
+pytestmark = pytest.mark.usefixtures("kubernetes_cluster_login")
 
 
 # ── Page load tests ──────────────────────────────────────────────────────────

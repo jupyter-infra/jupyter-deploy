@@ -163,6 +163,7 @@ class JupyterDeployTool(str, Enum):
     JQ = "jq"
     KUBECTL = "kubectl"
     TERRAFORM = "terraform"
+    YQ = "yq"
 
     @classmethod
     def from_string(cls, target_str: str) -> "JupyterDeployTool":

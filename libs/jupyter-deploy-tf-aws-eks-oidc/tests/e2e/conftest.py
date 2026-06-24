@@ -55,15 +55,8 @@ def browser_context_args(browser_context_args: dict[str, Any], request: pytest.F
 
 
 @pytest.fixture(scope="session")
-def cluster_login(e2e_deployment: EndToEndDeployment) -> None:
-    """Configure kubectl for admin access via `jd cluster login`."""
-    e2e_deployment.ensure_deployed()
-    e2e_deployment.cli.run_command(["jupyter-deploy", "cluster", "login"])
-
-
-@pytest.fixture(scope="session")
 def seeded_cluster(
-    cluster_login: None, e2e_deployment: EndToEndDeployment
+    kubernetes_cluster_login: None, e2e_deployment: EndToEndDeployment
 ) -> Generator[dict[str, list[str]], None, None]:
     """Seed the cluster with admin and impersonated workspaces.
 
