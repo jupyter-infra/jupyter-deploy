@@ -1,27 +1,16 @@
-# GitHub Actions OIDC provider — singleton per AWS account.
-# Only one can exist per URL. When create_oidc_provider is true (default),
-# the provider is created. Set to false if it already exists in the account
-# (e.g. from the tf-aws-iam-ci deployment) to look it up via data source instead.
-resource "aws_iam_openid_connect_provider" "github_actions" {
-  count           = var.create_oidc_provider ? 1 : 0
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["ffffffffffffffffffffffffffffffffffffffff"]
-
-  tags = merge(local.default_tags, {
-    Name = "github-actions-oidc"
-  })
-}
-
-data "aws_iam_openid_connect_provider" "github_actions" {
-  count = var.create_oidc_provider ? 0 : 1
-  url   = "https://token.actions.githubusercontent.com"
-}
+# roborev review resources, gated behind create_review_resources (default off).
+# This template owns the GitHub Actions OIDC provider (a per-account singleton),
+# so when review is enabled the review image's ECR repo and its publish/run roles
+# live here and reuse that one provider, instead of a separate template colliding
+# on it. With the flag off, count = 0 creates nothing and CI deploys are unchanged.
 
 locals {
-  oidc_provider_url = "token.actions.githubusercontent.com"
-  oidc_provider_arn = var.create_oidc_provider ? aws_iam_openid_connect_provider.github_actions[0].arn : data.aws_iam_openid_connect_provider.github_actions[0].arn
+  review_count = var.create_review_resources ? 1 : 0
 
+  # Inference-profile ARNs are account- and region-scoped, so fill them in from
+  # the caller and the deployment region. Foundation-model ARNs are AWS-owned
+  # (no account) and a cross-region profile spans several regions, so they are
+  # passed through as given.
   bedrock_invoke_arns = concat(
     [for id in var.bedrock_inference_profile_ids :
       "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${id}"
@@ -30,9 +19,19 @@ locals {
   )
 }
 
+# ECR repository for the roborev review image.
+# The publish role (jupyter-deploy CI) pushes here; the run role (consumer repos) pulls.
+module "ecr_review_image" {
+  count  = local.review_count
+  source = "./modules/ecr_repository"
+  name   = "${var.review_resource_prefix}-${local.doc_postfix}/review"
+  tags   = local.default_tags
+}
+
 # Publish policy: push the review image to its ECR repository.
 resource "aws_iam_policy" "review_publish" {
-  name        = "${var.iam_roles_prefix}-publish-${local.doc_postfix}"
+  count       = local.review_count
+  name        = "${var.review_resource_prefix}-publish-${local.doc_postfix}"
   description = "Push the roborev review image to ECR."
 
   policy = jsonencode({
@@ -56,7 +55,7 @@ resource "aws_iam_policy" "review_publish" {
           "ecr:CompleteLayerUpload",
           "ecr:PutImage",
         ]
-        Resource = module.ecr_review_image.repository_arn
+        Resource = module.ecr_review_image[0].repository_arn
       }
     ]
   })
@@ -68,7 +67,8 @@ resource "aws_iam_policy" "review_publish" {
 # This is the blast radius for a prompt-injected review of an untrusted diff:
 # pull one image, spend model tokens.
 resource "aws_iam_policy" "review_run" {
-  name        = "${var.iam_roles_prefix}-run-${local.doc_postfix}"
+  count       = local.review_count
+  name        = "${var.review_resource_prefix}-run-${local.doc_postfix}"
   description = "Pull the roborev review image and invoke Bedrock models."
 
   policy = jsonencode({
@@ -88,7 +88,7 @@ resource "aws_iam_policy" "review_run" {
           "ecr:GetDownloadUrlForLayer",
           "ecr:BatchGetImage",
         ]
-        Resource = module.ecr_review_image.repository_arn
+        Resource = module.ecr_review_image[0].repository_arn
       },
       {
         Sid    = "BedrockInvoke"
@@ -107,28 +107,30 @@ resource "aws_iam_policy" "review_run" {
 
 # Publish role — assumed by jupyter-deploy CI to build and push the review image.
 module "role_review_publish" {
-  source = "./modules/iam_role"
+  count  = local.review_count
+  source = "./modules/review_role"
 
-  role_name          = "${var.iam_roles_prefix}-publish-${local.doc_postfix}"
+  role_name          = "${var.review_resource_prefix}-publish-${local.doc_postfix}"
   oidc_provider_arn  = local.oidc_provider_arn
   oidc_provider_url  = local.oidc_provider_url
   github_org         = var.github_org
   github_repos       = [var.publish_repo]
   oidc_trust_subject = "environment:review"
-  policy_arns        = [aws_iam_policy.review_publish.arn]
+  policy_arns        = [aws_iam_policy.review_publish[0].arn]
   tags               = local.default_tags
 }
 
 # Run role — assumed by consumer repos to pull the image and run reviews.
 module "role_review_run" {
-  source = "./modules/iam_role"
+  count  = local.review_count
+  source = "./modules/review_role"
 
-  role_name          = "${var.iam_roles_prefix}-run-${local.doc_postfix}"
+  role_name          = "${var.review_resource_prefix}-run-${local.doc_postfix}"
   oidc_provider_arn  = local.oidc_provider_arn
   oidc_provider_url  = local.oidc_provider_url
   github_org         = var.github_org
   github_repos       = var.review_repos
   oidc_trust_subject = "environment:review"
-  policy_arns        = [aws_iam_policy.review_run.arn]
+  policy_arns        = [aws_iam_policy.review_run[0].arn]
   tags               = local.default_tags
 }

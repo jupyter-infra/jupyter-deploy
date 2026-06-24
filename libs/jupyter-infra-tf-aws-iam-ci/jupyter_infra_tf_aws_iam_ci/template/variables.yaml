@@ -39,3 +39,11 @@ overrides:
   # maintainer_roles:
   #   - Admin
   # test_results_bucket_prefix: jd-ci-e2e-results
+  # create_review_resources: false
+  # publish_repo: jupyter-deploy
+  # review_repos: []
+  # bedrock_inference_profile_ids:
+  #   - "us.anthropic.claude-*"
+  # bedrock_foundation_model_arns:
+  #   - "arn:aws:bedrock:us-*::foundation-model/anthropic.claude-*"
+  # review_resource_prefix: jupyter-infra-review

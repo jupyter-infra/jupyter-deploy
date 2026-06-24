@@ -9,8 +9,8 @@
 # No terraform/jd state is read, so the publish role needs only ECR push.
 #
 # Prerequisites (one-time, by a maintainer):
-#   - Deploy the tf-aws-iam-review template (`jd init`/`jd up`), which creates the
-#     ECR repo and the publish role.
+#   - Deploy the tf-aws-iam-ci template with create_review_resources = true
+#     (`jd init`/`jd up`), which creates the review ECR repo and the publish role.
 #   - Set these repo variables from the template outputs. Until both are set,
 #     this workflow is inert:
 #       REVIEW_PUBLISH_ROLE_ARN  <- review_publish_iam_role_arn

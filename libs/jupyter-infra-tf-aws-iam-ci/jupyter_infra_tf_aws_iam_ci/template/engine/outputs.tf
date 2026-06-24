@@ -151,3 +151,19 @@ output "test_results_bucket_name" {
   description = "Name of the S3 bucket for E2E test result uploads."
   value       = module.test_results_bucket.bucket_name
 }
+
+# roborev review resources (null unless create_review_resources is true)
+output "review_publish_iam_role_arn" {
+  description = "ARN of the IAM role that builds and pushes the review image (jupyter-deploy CI)."
+  value       = var.create_review_resources ? module.role_review_publish[0].role_arn : null
+}
+
+output "review_run_iam_role_arn" {
+  description = "ARN of the IAM role that pulls the review image and runs reviews (consumer repos)."
+  value       = var.create_review_resources ? module.role_review_run[0].role_arn : null
+}
+
+output "review_image_repository_url" {
+  description = "URL of the ECR repository for the roborev review image."
+  value       = var.create_review_resources ? module.ecr_review_image[0].repository_url : null
+}

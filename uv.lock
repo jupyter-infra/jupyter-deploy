@@ -14,7 +14,6 @@ members = [
     "jupyter-deploy-tf-aws-ec2-base",
     "jupyter-deploy-tf-aws-eks-oidc",
     "jupyter-infra-tf-aws-iam-ci",
-    "jupyter-infra-tf-aws-iam-review",
     "pytest-jupyter-deploy",
 ]
 
@@ -972,13 +971,8 @@ dev = [
 
 [[package]]
 name = "jupyter-infra-tf-aws-iam-ci"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "libs/jupyter-infra-tf-aws-iam-ci" }
-
-[[package]]
-name = "jupyter-infra-tf-aws-iam-review"
-version = "0.1.0"
-source = { editable = "libs/jupyter-infra-tf-aws-iam-review" }
 
 [[package]]
 name = "kubernetes"

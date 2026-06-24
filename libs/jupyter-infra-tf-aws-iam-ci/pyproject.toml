@@ -1,6 +1,6 @@
 [project]
 name = "jupyter-infra-tf-aws-iam-ci"
-version = "0.1.0"
+version = "0.2.0"
 description = "CI infrastructure template for jupyter-deploy — manages IAM OIDC, CI role, and Secrets Manager secrets."
 readme = "README.md"
 authors = [

@@ -403,3 +403,66 @@ variable "github_oauth_app_client_secret_6" {
     error_message = "github_oauth_app_client_secret_6 must be a 40-character lowercase alphanumeric value."
   }
 }
+
+variable "create_review_resources" {
+  description = <<-EOT
+    Whether to create the roborev review resources (ECR repo + publish/run roles).
+
+    Off by default. Set true on the deployment that hosts the review image and
+    roles; CI-only deployments are unaffected.
+
+    Example: false
+  EOT
+  type        = bool
+}
+
+variable "publish_repo" {
+  description = <<-EOT
+    GitHub repository that builds and pushes the review image (assumes the
+    publish role). Used only when create_review_resources is true.
+
+    Example: jupyter-deploy
+  EOT
+  type        = string
+}
+
+variable "review_repos" {
+  description = <<-EOT
+    GitHub repositories that run reviews (assume the run role). Used only when
+    create_review_resources is true.
+
+    Example: ["jupyter-k8s"]
+  EOT
+  type        = list(string)
+}
+
+variable "bedrock_inference_profile_ids" {
+  description = <<-EOT
+    Inference profiles the run role may invoke. The deployment region and the
+    role's own account are filled in to form each ARN.
+
+    Example: ["us.anthropic.claude-*"]
+  EOT
+  type        = list(string)
+}
+
+variable "bedrock_foundation_model_arns" {
+  description = <<-EOT
+    Foundation-model ARNs the run role may invoke. These are AWS-owned, so the
+    ARN has no account, and a cross-region profile runs the model in several
+    regions, so include each region it routes to (or us-*).
+
+    Example: ["arn:aws:bedrock:us-*::foundation-model/anthropic.claude-*"]
+  EOT
+  type        = list(string)
+}
+
+variable "review_resource_prefix" {
+  description = <<-EOT
+    Naming prefix for the review ECR repo and IAM roles. Used only when
+    create_review_resources is true.
+
+    Example: jupyter-infra-review
+  EOT
+  type        = string
+}
