@@ -2,6 +2,8 @@ import json
 import unittest
 from unittest.mock import Mock, patch
 
+from kubernetes.client.exceptions import ApiException
+
 from jupyter_deploy.api.k8s.custom import CustomObjectResult, CustomResourceRef
 from jupyter_deploy.engine.supervised_execution import NullDisplay
 from jupyter_deploy.exceptions import InstructionNotFoundError
@@ -65,6 +67,30 @@ class TestK8sCustomRunner(unittest.TestCase):
         )
 
     @patch("jupyter_deploy.provider.k8s.k8s_custom_runner.k8s_custom")
+    def test_get_cluster_returns_resource(self, mock_k8s_custom: Mock) -> None:
+        runner = self._make_runner()
+        crd_ref = CustomResourceRef(group="apiextensions.k8s.io", version="v1", plural="customresourcedefinitions")
+        resource = {"metadata": {"name": "workspaces.workspace.jupyter.org"}}
+        mock_k8s_custom.get_cluster.return_value = CustomObjectResult(
+            name="workspaces.workspace.jupyter.org", resource=resource
+        )
+
+        args: dict[str, ResolvedInstructionArgument] = {
+            "group": StrResolvedInstructionArgument(argument_name="group", value=crd_ref.group),
+            "version": StrResolvedInstructionArgument(argument_name="version", value=crd_ref.version),
+            "plural": StrResolvedInstructionArgument(argument_name="plural", value=crd_ref.plural),
+            "name": StrResolvedInstructionArgument(argument_name="name", value="workspaces.workspace.jupyter.org"),
+        }
+
+        result = runner.execute_instruction(instruction_name="get-cluster", resolved_arguments=args)
+
+        self.assertEqual(result["Name"].value, "workspaces.workspace.jupyter.org")
+        self.assertEqual(json.loads(result["Resource"].value), resource)
+        mock_k8s_custom.get_cluster.assert_called_once_with(
+            runner.custom_api, ref=crd_ref, name="workspaces.workspace.jupyter.org"
+        )
+
+    @patch("jupyter_deploy.provider.k8s.k8s_custom_runner.k8s_custom")
     def test_patch_parses_body_json(self, mock_k8s_custom: Mock) -> None:
         runner = self._make_runner()
         patch_body = {"spec": {"replicas": 2}}
@@ -103,3 +129,35 @@ class TestK8sCustomRunner(unittest.TestCase):
 
         with self.assertRaises(InstructionNotFoundError):
             runner.execute_instruction(instruction_name="unknown", resolved_arguments={})
+
+    @patch("jupyter_deploy.provider.k8s.k8s_custom_runner.k8s_custom")
+    def test_get_bubbles_up_api_exception(self, mock_k8s_custom: Mock) -> None:
+        # The runner does not catch K8s API errors; translation happens at the API-runner level,
+        # so the raw ApiException must propagate unchanged.
+        runner = self._make_runner()
+        mock_k8s_custom.get_namespaced.side_effect = ApiException(status=403, reason="Forbidden")
+
+        args = _crd_args()
+        args["name"] = StrResolvedInstructionArgument(argument_name="name", value="ws-1")
+
+        with self.assertRaises(ApiException):
+            runner.execute_instruction(instruction_name="get", resolved_arguments=args)
+
+    @patch("jupyter_deploy.provider.k8s.k8s_custom_runner.k8s_custom")
+    def test_get_cluster_bubbles_up_api_exception(self, mock_k8s_custom: Mock) -> None:
+        runner = self._make_runner()
+        mock_k8s_custom.get_cluster.side_effect = ApiException(status=404, reason="Not Found")
+
+        args = _crd_args(scope="")
+        args["name"] = StrResolvedInstructionArgument(argument_name="name", value="workspaces.workspace.jupyter.org")
+
+        with self.assertRaises(ApiException):
+            runner.execute_instruction(instruction_name="get-cluster", resolved_arguments=args)
+
+    @patch("jupyter_deploy.provider.k8s.k8s_custom_runner.k8s_custom")
+    def test_list_bubbles_up_api_exception(self, mock_k8s_custom: Mock) -> None:
+        runner = self._make_runner()
+        mock_k8s_custom.list_namespaced.side_effect = ApiException(status=401, reason="Unauthorized")
+
+        with self.assertRaises(ApiException):
+            runner.execute_instruction(instruction_name="list", resolved_arguments=_crd_args())

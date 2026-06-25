@@ -487,6 +487,98 @@ commands:
     - api-attribute: container
       source: cli
       source-key: service
+- cmd: component.customresourcewithoutstatus.status
+  sequence:
+  - api-name: k8s.custom.get
+    arguments:
+    - api-attribute: group
+      source: cli
+      source-key: group
+    - api-attribute: version
+      source: cli
+      source-key: version
+    - api-attribute: plural
+      source: cli
+      source-key: plural
+    - api-attribute: scope
+      source: cli
+      source-key: scope
+    - api-attribute: name
+      source: cli
+      source-key: name
+  results:
+  - result-name: component.customresourcewithoutstatus.status.resource
+    source: result
+    source-key: '[0].Resource'
+- cmd: component.customresourcewithoutstatus.show
+  sequence:
+  - api-name: k8s.custom.get
+    arguments:
+    - api-attribute: group
+      source: cli
+      source-key: group
+    - api-attribute: version
+      source: cli
+      source-key: version
+    - api-attribute: plural
+      source: cli
+      source-key: plural
+    - api-attribute: scope
+      source: cli
+      source-key: scope
+    - api-attribute: name
+      source: cli
+      source-key: name
+  results:
+  - result-name: component.customresourcewithoutstatus.show.name
+    source: result
+    source-key: '[0].Name'
+  - result-name: component.customresourcewithoutstatus.show.resource
+    source: result
+    source-key: '[0].Resource'
+- cmd: component.customresourcedefinition.status
+  sequence:
+  - api-name: k8s.custom.get-cluster
+    arguments:
+    - api-attribute: group
+      source: cli
+      source-key: group
+    - api-attribute: version
+      source: cli
+      source-key: version
+    - api-attribute: plural
+      source: cli
+      source-key: plural
+    - api-attribute: name
+      source: cli
+      source-key: name
+  results:
+  - result-name: component.customresourcedefinition.status.resource
+    source: result
+    source-key: '[0].Resource'
+- cmd: component.customresourcedefinition.show
+  sequence:
+  - api-name: k8s.custom.get-cluster
+    arguments:
+    - api-attribute: group
+      source: cli
+      source-key: group
+    - api-attribute: version
+      source: cli
+      source-key: version
+    - api-attribute: plural
+      source: cli
+      source-key: plural
+    - api-attribute: name
+      source: cli
+      source-key: name
+  results:
+  - result-name: component.customresourcedefinition.show.name
+    source: result
+    source-key: '[0].Name'
+  - result-name: component.customresourcedefinition.show.resource
+    source: result
+    source-key: '[0].Resource'
 - cmd: component.deployment.status
   sequence:
   - api-name: k8s.apps.get-deployment-status
@@ -631,6 +723,23 @@ commands:
   - result-name: component.cronjob.trigger.job_name
     source: result
     source-key: '[0].JobName'
+- cmd: image.status
+  sequence:
+  - api-name: aws.ecr.describe-image
+    arguments:
+    - api-attribute: repository_name
+      source: cli
+      source-key: repository_name
+    - api-attribute: image_tag
+      source: cli
+      source-key: image_tag
+  results:
+  - result-name: image.status.status
+    source: result
+    source-key: '[0].Status'
+  - result-name: image.status.status_category
+    source: result
+    source-key: '[0].StatusCategory'
 - cmd: image.show
   sequence:
   - api-name: aws.ecr.describe-repository
@@ -697,6 +806,77 @@ commands:
     source: result
     source-key: '[0].ScannerType'
 components:
+  workspace-crd:
+    type: CustomResourceDefinition
+    description: Workspace CRD
+    resource-name: workspaces.workspace.jupyter.org
+    details:
+      path: .spec.versions[0].name
+    verbs:
+      status:
+        method: k8s.custom.get-cluster
+      show:
+        method: k8s.custom.get-cluster
+  workspace-template-crd:
+    type: CustomResourceDefinition
+    description: WorkspaceTemplate CRD
+    resource-name: workspacetemplates.workspace.jupyter.org
+    details:
+      path: .spec.versions[0].name
+    verbs:
+      status:
+        method: k8s.custom.get-cluster
+      show:
+        method: k8s.custom.get-cluster
+  workspace-access-strategy-crd:
+    type: CustomResourceDefinition
+    description: WorkspaceAccessStrategy CRD
+    resource-name: workspaceaccessstrategies.workspace.jupyter.org
+    details:
+      path: .spec.versions[0].name
+    verbs:
+      status:
+        method: k8s.custom.get-cluster
+      show:
+        method: k8s.custom.get-cluster
+  oauth-access-strategy:
+    type: CustomResourceWithoutStatus
+    type-display: WorkspaceAccessStrategy
+    description: Default workspace access strategy
+    scope: workspace_shared_namespace
+    resource-name: oauth-access-strategy
+    crd-group: workspace.jupyter.org
+    crd-version: v1alpha1
+    crd-plural: workspaceaccessstrategies
+    details:
+      path: .metadata.namespace
+    sub-component:
+      label: access-resources
+      count: .spec.accessResourceTemplates
+    verbs:
+      status:
+        method: k8s.custom.get
+      show:
+        method: k8s.custom.get
+  jupyterlab-template:
+    type: CustomResourceWithoutStatus
+    type-display: WorkspaceTemplate
+    description: Default workspace template
+    scope: workspace_shared_namespace
+    resource-name: jupyterlab
+    crd-group: workspace.jupyter.org
+    crd-version: v1alpha1
+    crd-plural: workspacetemplates
+    details:
+      path: .metadata.namespace
+    sub-component:
+      label: access-strategy
+      path: .spec.defaultAccessStrategy.name
+    verbs:
+      status:
+        method: k8s.custom.get
+      show:
+        method: k8s.custom.get
   traefik:
     type: Deployment
     description: Ingress controller and reverse proxy

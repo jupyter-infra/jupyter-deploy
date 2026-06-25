@@ -15,14 +15,16 @@ from jupyter_deploy.handlers.payloads import ConnectionResult, HealthLayer, Heal
 
 
 def _format_sub_component(raw: str) -> str:
-    if not raw or raw == "-":
+    if not raw:
+        return "-"
+    if raw == "-":
         return raw
     try:
         item = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
         return raw
     if not item:
-        return ""
+        return "-"
     return f"{item['name']}: {item['status']}"
 
 
@@ -51,6 +53,10 @@ def health(
         bool,
         typer.Option("--components", help="Check only the components layer."),
     ] = False,
+    images: Annotated[
+        bool,
+        typer.Option("--images", help="Check only the images layer."),
+    ] = False,
     connection: Annotated[
         bool,
         typer.Option("--connection", help="Check only the end-to-end connection."),
@@ -78,6 +84,8 @@ def health(
             requested_layers.append(HealthLayer.LOAD_BALANCER)
         if components:
             requested_layers.append(HealthLayer.COMPONENTS)
+        if images:
+            requested_layers.append(HealthLayer.IMAGES)
 
         has_filter = bool(requested_layers) or connection
         layer_conn: ConnectionResult | None = None
@@ -147,3 +155,12 @@ def health(
                     status_text = f"[indian_red]{r.status_text}[/indian_red]"
                 table.add_row(r.layer.value, r.name, status_text, r.detail, _format_sub_component(r.sub_component))
             console.print(table)
+
+            # Hint when an image has a non-zero vulnerability count (independent of row health).
+            for r in results:
+                if r.layer == HealthLayer.IMAGES and "critical" in r.sub_component:
+                    tag_suffix = f" --tag {r.detail}" if r.detail else ""
+                    console.print(
+                        f"Hint: run `jd image vulnerabilities --name {r.name}{tag_suffix}` for details.",
+                        style="dim",
+                    )

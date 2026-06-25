@@ -144,7 +144,7 @@ class TestManifest(unittest.TestCase):
         commands = self.MANIFEST.get("commands", [])
         command_names = [cmd["cmd"] for cmd in commands]
 
-        expected_image_commands = ["image.show", "image.tags", "image.vulnerabilities"]
+        expected_image_commands = ["image.status", "image.show", "image.tags", "image.vulnerabilities"]
         for expected_cmd in expected_image_commands:
             self.assertIn(
                 expected_cmd,
@@ -162,3 +162,52 @@ class TestManifest(unittest.TestCase):
         for cmd in image_commands:
             self.assertIn("results", cmd, f"Command '{cmd['cmd']}' must define results")
             self.assertTrue(len(cmd["results"]) > 0, f"Command '{cmd['cmd']}' must have at least one result")
+
+    def test_custom_resource_definition_components_declared(self) -> None:
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        components = self.MANIFEST.get("components", {})
+        crd_components = [c for c in components.values() if c["type"] == "CustomResourceDefinition"]
+
+        # The Workspace, WorkspaceTemplate and WorkspaceAccessStrategy CRDs are surfaced.
+        self.assertGreaterEqual(
+            len(crd_components),
+            3,
+            f"Expected at least 3 CustomResourceDefinition components, got {len(crd_components)}",
+        )
+
+    def test_workspace_custom_resource_components_declared(self) -> None:
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        components = self.MANIFEST.get("components", {})
+        cr_kinds = {c.get("type-display") for c in components.values() if c["type"] == "CustomResourceWithoutStatus"}
+
+        # At least one access strategy and one template must be surfaced as components.
+        self.assertIn(
+            "WorkspaceAccessStrategy",
+            cr_kinds,
+            f"Expected a CustomResourceWithoutStatus of kind WorkspaceAccessStrategy, got kinds: {cr_kinds}",
+        )
+        self.assertIn(
+            "WorkspaceTemplate",
+            cr_kinds,
+            f"Expected a CustomResourceWithoutStatus of kind WorkspaceTemplate, got kinds: {cr_kinds}",
+        )
+
+    def test_component_verbs_have_matching_commands(self) -> None:
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        command_names = {cmd["cmd"] for cmd in self.MANIFEST.get("commands", [])}
+
+        for name, comp in self.MANIFEST.get("components", {}).items():
+            comp_type = comp["type"].lower()
+            for verb in comp["verbs"]:
+                expected_cmd = f"component.{comp_type}.{verb}"
+                self.assertIn(
+                    expected_cmd,
+                    command_names,
+                    f"Component '{name}' verb '{verb}' requires command '{expected_cmd}' in manifest",
+                )

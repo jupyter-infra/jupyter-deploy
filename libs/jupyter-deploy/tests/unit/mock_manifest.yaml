@@ -620,6 +620,23 @@ commands:
       - result-name: image.show.scan_status
         source: result
         source-key: '[1].ScanStatus'
+  - cmd: image.status
+    sequence:
+      - api-name: aws.ecr.describe-image
+        arguments:
+          - api-attribute: repository_name
+            source: cli
+            source-key: repository_name
+          - api-attribute: image_tag
+            source: cli
+            source-key: image_tag
+    results:
+      - result-name: image.status.status
+        source: result
+        source-key: '[0].Status'
+      - result-name: image.status.status_category
+        source: result
+        source-key: '[0].StatusCategory'
   - cmd: image.tags
     sequence:
       - api-name: aws.ecr.list-image-tags

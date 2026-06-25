@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition
-from jupyter_deploy.exceptions import ComponentNotFoundError, InvalidComponentVerbError
+from jupyter_deploy.exceptions import ComponentNotFoundError, InvalidComponentVerbError, ResourceNotFoundError
 from jupyter_deploy.handlers.resource.component_handler import ComponentHandler
 from jupyter_deploy.manifest import JupyterDeployComponentDefinitionV1, JupyterDeployComponentVerbV1
 
@@ -34,10 +34,42 @@ def _mock_component_cronjob() -> JupyterDeployComponentDefinitionV1:
     )
 
 
+def _mock_component_custom_resource() -> JupyterDeployComponentDefinitionV1:
+    return JupyterDeployComponentDefinitionV1(
+        **{  # type: ignore[arg-type]
+            "type": "CustomResourceWithoutStatus",
+            "scope": "workspace_shared_namespace",
+            "resource-name": "jupyterlab",
+            "crd-group": "workspace.jupyter.org",
+            "crd-version": "v1alpha1",
+            "crd-plural": "workspacetemplates",
+            "verbs": {"status": {"method": "k8s.custom.get"}, "show": {"method": "k8s.custom.get"}},
+        }
+    )
+
+
+def _mock_component_crd() -> JupyterDeployComponentDefinitionV1:
+    # No crd-group/version/plural: the handler supplies them for the well-known CRD kind.
+    return JupyterDeployComponentDefinitionV1(
+        **{  # type: ignore[arg-type]
+            "type": "CustomResourceDefinition",
+            "resource-name": "workspaces.workspace.jupyter.org",
+            "details": {"path": ".spec.versions[0].name"},
+            "verbs": {"status": {"method": "k8s.custom.get-cluster"}, "show": {"method": "k8s.custom.get-cluster"}},
+        }
+    )
+
+
 _NS_OUTPUTS = {
     "workspace_router_namespace": StrTemplateOutputDefinition(
         output_name="workspace_router_namespace", value="router-ns"
     )
+}
+
+_CR_OUTPUTS = {
+    "workspace_shared_namespace": StrTemplateOutputDefinition(
+        output_name="workspace_shared_namespace", value="shared-ns"
+    ),
 }
 
 
@@ -131,6 +163,35 @@ class TestComponentHandlerGetComponentStatus(unittest.TestCase):
 
         self.assertEqual(ctx.exception.component_name, "unknown")
         self.assertIn("traefik", ctx.exception.valid_components)
+
+
+@patch("jupyter_deploy.handlers.resource.component_handler.tf_variables.TerraformVariablesHandler")
+@patch("jupyter_deploy.handlers.resource.component_handler.tf_outputs.TerraformOutputsHandler")
+@patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+class TestComponentHandlerListComponents(unittest.TestCase):
+    def test_uses_type_display_when_set_else_type(
+        self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock
+    ) -> None:
+        manifest: Mock = Mock()
+        manifest.get_engine.return_value = "terraform"
+        manifest.template.engine = "terraform"
+        cr = JupyterDeployComponentDefinitionV1(
+            **{  # type: ignore[arg-type]
+                "type": "CustomResourceWithoutStatus",
+                "type-display": "WorkspaceTemplate",
+                "scope": "ns",
+                "verbs": {"status": {"method": "k8s.custom.get"}},
+            }
+        )
+        manifest.get_components.return_value = {"jupyterlab-template": cr, "traefik": _mock_component_deployment()}
+        mock_manifest_fn.return_value = manifest
+
+        handler = ComponentHandler(display_manager=Mock())
+        components = handler.list_components()
+
+        by_name = {c["name"]: c for c in components}
+        self.assertEqual(by_name["jupyterlab-template"]["type"], "WorkspaceTemplate")
+        self.assertEqual(by_name["traefik"]["type"], "Deployment")  # falls back to type
 
 
 @patch("jupyter_deploy.handlers.resource.component_handler.tf_variables.TerraformVariablesHandler")
@@ -232,6 +293,205 @@ class TestComponentHandlerGetAllStatus(unittest.TestCase):
 
             with self.assertRaises(RuntimeError):
                 handler.get_all_status()
+
+
+@patch("jupyter_deploy.handlers.resource.component_handler.tf_variables.TerraformVariablesHandler")
+@patch("jupyter_deploy.handlers.resource.component_handler.tf_outputs.TerraformOutputsHandler")
+@patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+class TestComponentHandlerCustomResourceWithoutStatus(unittest.TestCase):
+    def _setup(self, manifest_fn: Mock, outputs: Mock, component: JupyterDeployComponentDefinitionV1) -> Mock:
+        manifest: Mock = Mock()
+        manifest.get_engine.return_value = "terraform"
+        manifest.template.engine = "terraform"
+        manifest.get_components.return_value = {"default-template": component}
+        manifest_fn.return_value = manifest
+        outputs.return_value.get_full_project_outputs.return_value = _CR_OUTPUTS
+        return manifest
+
+    def test_present_when_get_succeeds(self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock) -> None:
+        manifest = self._setup(mock_manifest_fn, mock_outputs, _mock_component_custom_resource())
+
+        mock_runner: Mock = Mock()
+        mock_runner.get_result_value_with_fallback.return_value = ""
+
+        with patch("jupyter_deploy.handlers.resource.component_handler.cmd_runner.ManifestCommandRunner") as mock_cmd:
+            mock_cmd.return_value = mock_runner
+            manifest.get_command.return_value = Mock()
+            handler = ComponentHandler(display_manager=Mock())
+            results = handler.get_all_status()
+
+        self.assertEqual(results[0]["status"], "Present")
+        self.assertEqual(results[0]["status_category"], "healthy")
+        manifest.get_command.assert_called_with("component.customresourcewithoutstatus.status")
+        cli_paramdefs = mock_runner.run_command_sequence.call_args.kwargs["cli_paramdefs"]
+        self.assertEqual(cli_paramdefs["name"].value, "jupyterlab")
+        self.assertEqual(cli_paramdefs["group"].value, "workspace.jupyter.org")
+        self.assertEqual(cli_paramdefs["version"].value, "v1alpha1")
+        self.assertEqual(cli_paramdefs["plural"].value, "workspacetemplates")
+        self.assertEqual(cli_paramdefs["scope"].value, "shared-ns")
+
+    def test_renders_details_and_sub_component_from_resource(
+        self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock
+    ) -> None:
+        component = JupyterDeployComponentDefinitionV1(
+            **{  # type: ignore[arg-type]
+                "type": "CustomResourceWithoutStatus",
+                "scope": "workspace_shared_namespace",
+                "resource-name": "jupyterlab",
+                "crd-group": "workspace.jupyter.org",
+                "crd-version": "v1alpha1",
+                "crd-plural": "workspacetemplates",
+                "details": {"path": ".metadata.namespace"},
+                "sub-component": {"label": "access-strategy", "path": ".spec.defaultAccessStrategy.name"},
+                "verbs": {"status": {"method": "k8s.custom.get"}},
+            }
+        )
+        manifest = self._setup(mock_manifest_fn, mock_outputs, component)
+
+        mock_runner: Mock = Mock()
+        resource_json = (
+            '{"metadata": {"namespace": "jupyter-k8s-shared"},'
+            ' "spec": {"appType": "jupyterlab", "defaultAccessStrategy": {"name": "oauth-access-strategy"}}}'
+        )
+        mock_runner.get_result_value_with_fallback.return_value = resource_json
+
+        with patch("jupyter_deploy.handlers.resource.component_handler.cmd_runner.ManifestCommandRunner") as mock_cmd:
+            mock_cmd.return_value = mock_runner
+            manifest.get_command.return_value = Mock()
+            handler = ComponentHandler(display_manager=Mock())
+            results = handler.get_all_status()
+
+        self.assertEqual(results[0]["details"], "jupyter-k8s-shared")
+        self.assertEqual(results[0]["sub_component"], "access-strategy: oauth-access-strategy")
+
+    def test_missing_when_resource_not_found(
+        self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock
+    ) -> None:
+        manifest = self._setup(mock_manifest_fn, mock_outputs, _mock_component_custom_resource())
+
+        with patch("jupyter_deploy.handlers.resource.component_handler.cmd_runner.ManifestCommandRunner") as mock_cmd:
+            mock_cmd.return_value.run_command_sequence.side_effect = ResourceNotFoundError(
+                resource_kind="WorkspaceTemplate", resource_name="jupyterlab", original_message="not found"
+            )
+            manifest.get_command.return_value = Mock()
+            handler = ComponentHandler(display_manager=Mock())
+            results = handler.get_all_status()
+
+        self.assertEqual(results[0]["status"], "Not Found")
+        self.assertEqual(results[0]["status_category"], "degraded")
+
+    def test_get_component_status_present(
+        self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock
+    ) -> None:
+        manifest = self._setup(mock_manifest_fn, mock_outputs, _mock_component_custom_resource())
+        manifest.get_component.return_value = _mock_component_custom_resource()
+
+        mock_runner: Mock = Mock()
+        mock_runner.get_result_value_with_fallback.return_value = ""
+
+        with patch("jupyter_deploy.handlers.resource.component_handler.cmd_runner.ManifestCommandRunner") as mock_cmd:
+            mock_cmd.return_value = mock_runner
+            manifest.get_command.return_value = Mock()
+            handler = ComponentHandler(display_manager=Mock())
+            status = handler.get_component_status("default-template")
+
+        self.assertEqual(status, "Present")
+
+    def test_get_component_status_missing(
+        self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock
+    ) -> None:
+        manifest = self._setup(mock_manifest_fn, mock_outputs, _mock_component_custom_resource())
+        manifest.get_component.return_value = _mock_component_custom_resource()
+
+        with patch("jupyter_deploy.handlers.resource.component_handler.cmd_runner.ManifestCommandRunner") as mock_cmd:
+            mock_cmd.return_value.run_command_sequence.side_effect = ResourceNotFoundError(
+                resource_kind="WorkspaceTemplate", resource_name="jupyterlab", original_message="not found"
+            )
+            manifest.get_command.return_value = Mock()
+            handler = ComponentHandler(display_manager=Mock())
+            status = handler.get_component_status("default-template")
+
+        self.assertEqual(status, "Not Found")
+
+    def test_show_component_returns_resource(
+        self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock
+    ) -> None:
+        manifest = self._setup(mock_manifest_fn, mock_outputs, _mock_component_custom_resource())
+        manifest.get_component.return_value = _mock_component_custom_resource()
+
+        mock_runner: Mock = Mock()
+        mock_command = Mock()
+        mock_command.cmd = "component.customresourcewithoutstatus.show"
+        mock_command.results = []
+
+        with patch("jupyter_deploy.handlers.resource.component_handler.cmd_runner.ManifestCommandRunner") as mock_cmd:
+            mock_cmd.return_value = mock_runner
+            manifest.get_command.return_value = mock_command
+            handler = ComponentHandler(display_manager=Mock())
+            handler.show_component("default-template")
+
+        manifest.get_command.assert_called_with("component.customresourcewithoutstatus.show")
+        cli_paramdefs = mock_runner.run_command_sequence.call_args.kwargs["cli_paramdefs"]
+        self.assertEqual(cli_paramdefs["name"].value, "jupyterlab")
+        self.assertEqual(cli_paramdefs["plural"].value, "workspacetemplates")
+
+
+@patch("jupyter_deploy.handlers.resource.component_handler.tf_variables.TerraformVariablesHandler")
+@patch("jupyter_deploy.handlers.resource.component_handler.tf_outputs.TerraformOutputsHandler")
+@patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+class TestComponentHandlerCustomResourceDefinition(unittest.TestCase):
+    def _setup(self, manifest_fn: Mock, outputs: Mock) -> Mock:
+        manifest: Mock = Mock()
+        manifest.get_engine.return_value = "terraform"
+        manifest.template.engine = "terraform"
+        component = _mock_component_crd()
+        manifest.get_components.return_value = {"workspace-crd": component}
+        manifest.get_component.return_value = component
+        manifest_fn.return_value = manifest
+        # Cluster-scoped components resolve no namespace output.
+        outputs.return_value.get_full_project_outputs.return_value = {}
+        return manifest
+
+    def test_present_omits_scope_and_renders_details(
+        self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock
+    ) -> None:
+        manifest = self._setup(mock_manifest_fn, mock_outputs)
+
+        mock_runner: Mock = Mock()
+        resource_json = '{"spec": {"group": "workspace.jupyter.org", "versions": [{"name": "v1alpha1"}]}}'
+        mock_runner.get_result_value_with_fallback.return_value = resource_json
+
+        with patch("jupyter_deploy.handlers.resource.component_handler.cmd_runner.ManifestCommandRunner") as mock_cmd:
+            mock_cmd.return_value = mock_runner
+            manifest.get_command.return_value = Mock()
+            handler = ComponentHandler(display_manager=Mock())
+            results = handler.get_all_status()
+
+        self.assertEqual(results[0]["status"], "Present")
+        self.assertEqual(results[0]["status_category"], "healthy")
+        self.assertEqual(results[0]["details"], "v1alpha1")
+        manifest.get_command.assert_called_with("component.customresourcedefinition.status")
+        cli_paramdefs = mock_runner.run_command_sequence.call_args.kwargs["cli_paramdefs"]
+        self.assertNotIn("scope", cli_paramdefs)
+        self.assertEqual(cli_paramdefs["name"].value, "workspaces.workspace.jupyter.org")
+        self.assertEqual(cli_paramdefs["group"].value, "apiextensions.k8s.io")
+        self.assertEqual(cli_paramdefs["plural"].value, "customresourcedefinitions")
+
+    def test_not_found_when_crd_missing(self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock) -> None:
+        manifest = self._setup(mock_manifest_fn, mock_outputs)
+
+        with patch("jupyter_deploy.handlers.resource.component_handler.cmd_runner.ManifestCommandRunner") as mock_cmd:
+            mock_cmd.return_value.run_command_sequence.side_effect = ResourceNotFoundError(
+                resource_kind="CustomResourceDefinition",
+                resource_name="workspaces.workspace.jupyter.org",
+                original_message="not found",
+            )
+            manifest.get_command.return_value = Mock()
+            handler = ComponentHandler(display_manager=Mock())
+            results = handler.get_all_status()
+
+        self.assertEqual(results[0]["status"], "Not Found")
+        self.assertEqual(results[0]["status_category"], "degraded")
 
 
 @patch("jupyter_deploy.handlers.resource.component_handler.tf_variables.TerraformVariablesHandler")

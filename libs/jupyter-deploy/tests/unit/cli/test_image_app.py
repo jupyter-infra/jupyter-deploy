@@ -10,6 +10,7 @@ from jupyter_deploy.exceptions import ImageNotFoundError, ImageTagNotFoundError
 from jupyter_deploy.handlers.payloads import (
     ImageDetail,
     ImageInfo,
+    ImageStatusResult,
     ImageTag,
     ImageVulnerabilitiesResult,
     ImageVulnerability,
@@ -121,6 +122,89 @@ class TestImageListCommand(unittest.TestCase):
         result = runner.invoke(image_app, ["list"])
 
         self.assertNotEqual(result.exit_code, 0)
+
+
+class TestImageStatusCommand(unittest.TestCase):
+    def get_mock_image_handler(self, status: str = "Available") -> tuple[Mock, dict[str, Mock]]:
+        mock_get_status = Mock()
+        mock_handler = Mock()
+        mock_handler.get_status = mock_get_status
+        mock_get_status.return_value = ImageStatusResult(
+            name="jupyterlab",
+            status=status,
+            status_category="healthy" if status == "Available" else "degraded",
+            latest_tag="v2",
+        )
+        return mock_handler, {"get_status": mock_get_status}
+
+    @patch("jupyter_deploy.handlers.resource.image_handler.ImageHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_renders_available_one_liner(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
+        mock_handler, mock_fns = self.get_mock_image_handler()
+        mock_handler_class.return_value = mock_handler
+        mock_project_dir.return_value.__enter__.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(image_app, ["status", "--name", "jupyterlab"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_fns["get_status"].assert_called_once_with("jupyterlab")
+        self.assertIn("jupyterlab status:", result.stdout)
+        self.assertIn("Available", result.stdout)
+
+    @patch("jupyter_deploy.handlers.resource.image_handler.ImageHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_renders_missing(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
+        mock_handler, _ = self.get_mock_image_handler(status="Missing")
+        mock_handler_class.return_value = mock_handler
+        mock_project_dir.return_value.__enter__.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(image_app, ["status"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Missing", result.stdout)
+
+    @patch("jupyter_deploy.handlers.resource.image_handler.ImageHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_image_not_found_error(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
+        mock_handler = Mock()
+        mock_handler.get_status.side_effect = ImageNotFoundError("bad", ["jupyterlab"])
+        mock_handler_class.return_value = mock_handler
+        mock_project_dir.return_value.__enter__.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(image_app, ["status", "--name", "bad"])
+
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn("bad", result.stdout)
+        self.assertIn("jupyterlab", result.stdout)
+
+    @patch("jupyter_deploy.handlers.resource.image_handler.ImageHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_raises_when_handler_raises(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
+        mock_handler = Mock()
+        mock_handler.get_status.side_effect = Exception("Test error")
+        mock_handler_class.return_value = mock_handler
+        mock_project_dir.return_value.__enter__.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(image_app, ["status"])
+
+        self.assertNotEqual(result.exit_code, 0)
+
+    @patch("jupyter_deploy.handlers.resource.image_handler.ImageHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_status_switches_dir_with_path(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
+        mock_handler, _ = self.get_mock_image_handler()
+        mock_handler_class.return_value = mock_handler
+        mock_project_dir.return_value.__enter__.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(image_app, ["status", "--path", "/my/project"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_dir.assert_called_once_with(Path("/my/project"))
 
 
 class TestImageShowCommand(unittest.TestCase):
@@ -325,6 +409,7 @@ class TestImageVulnerabilitiesCommand(unittest.TestCase):
                     installed_version="3.0.18",
                     fixed_version="3.0.19",
                     score=8.3,
+                    epss_score=0.42,
                 ),
                 ImageVulnerability(
                     cve="CVE-2026-5678",
@@ -334,6 +419,7 @@ class TestImageVulnerabilitiesCommand(unittest.TestCase):
                     installed_version="5.36.0",
                     fixed_version="",
                     score=7.5,
+                    epss_score=None,
                 ),
                 ImageVulnerability(
                     cve="CVE-2026-9999",
@@ -343,6 +429,7 @@ class TestImageVulnerabilitiesCommand(unittest.TestCase):
                     installed_version="7.88.0",
                     fixed_version="7.88.1",
                     score=6.1,
+                    epss_score=0.01,
                 ),
             ],
         )
@@ -361,7 +448,7 @@ class TestImageVulnerabilitiesCommand(unittest.TestCase):
         mock_project_dir.return_value.__enter__.return_value = None
 
         runner = CliRunner()
-        result = runner.invoke(image_app, ["vulnerabilities"])
+        result = runner.invoke(image_app, ["vulnerabilities"], env={"COLUMNS": "200"})
 
         self.assertEqual(result.exit_code, 0)
         mock_handler_class.assert_called_once()
@@ -370,6 +457,9 @@ class TestImageVulnerabilitiesCommand(unittest.TestCase):
         self.assertIn("CVE-2026-1234", result.stdout)
         self.assertIn("openssl", result.stdout)
         self.assertIn("Inspector Enhanced", result.stdout)
+        # EPSS column: percentage when present, n/a when absent.
+        self.assertIn("42%", result.stdout)
+        self.assertIn("n/a", result.stdout)
 
     @patch("jupyter_deploy.handlers.resource.image_handler.ImageHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")

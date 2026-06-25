@@ -273,6 +273,72 @@ class TestJupyterDeployManifestV1Components(unittest.TestCase):
         self.assertEqual(ctx.exception.component_name, "unknown")
         self.assertIn("traefik", ctx.exception.valid_components)
 
+    def test_parses_custom_resource_fields_and_aliases(self) -> None:
+        manifest = self._make_manifest(
+            components={
+                "oauth-access-strategy": {
+                    "type": "CustomResourceWithoutStatus",
+                    "type-display": "WorkspaceAccessStrategy",
+                    "scope": "workspace_shared_namespace",
+                    "resource-name": "oauth-access-strategy",
+                    "crd-group": "workspace.jupyter.org",
+                    "crd-version": "v1alpha1",
+                    "crd-plural": "workspaceaccessstrategies",
+                    "details": {"path": ".metadata.namespace"},
+                    "sub-component": {"label": "access-resources", "count": ".spec.accessResourceTemplates"},
+                    "verbs": {"status": {"method": "k8s.custom.get"}},
+                },
+            }
+        )
+        component = manifest.get_component("oauth-access-strategy")
+
+        self.assertEqual(component.type, "CustomResourceWithoutStatus")
+        self.assertEqual(component.type_display, "WorkspaceAccessStrategy")
+        self.assertEqual(component.resource_name, "oauth-access-strategy")
+        self.assertEqual(component.crd_group, "workspace.jupyter.org")
+        self.assertEqual(component.crd_version, "v1alpha1")
+        self.assertEqual(component.crd_plural, "workspaceaccessstrategies")
+        assert component.details is not None
+        self.assertEqual(component.details.path, ".metadata.namespace")
+        assert component.sub_component is not None
+        self.assertEqual(component.sub_component.label, "access-resources")
+        self.assertEqual(component.sub_component.count, ".spec.accessResourceTemplates")
+
+    def test_parses_cluster_scoped_component_without_scope(self) -> None:
+        manifest = self._make_manifest(
+            components={
+                "workspace-crd": {
+                    "type": "CustomResourceDefinition",
+                    "resource-name": "workspaces.workspace.jupyter.org",
+                    "details": {"label": "apiVersion", "join": [".spec.group", ".spec.versions[0].name"]},
+                    "verbs": {"status": {"method": "k8s.custom.get-cluster"}},
+                },
+            }
+        )
+        component = manifest.get_component("workspace-crd")
+
+        # Cluster-scoped components declare no namespace; scope defaults to None.
+        self.assertIsNone(component.scope)
+        assert component.details is not None
+        self.assertEqual(component.details.join, [".spec.group", ".spec.versions[0].name"])
+
+    def test_optional_fields_default_to_none(self) -> None:
+        manifest = self._make_manifest(
+            components={
+                "traefik": {
+                    "type": "Deployment",
+                    "scope": "router_namespace",
+                    "verbs": {"status": {"method": "k8s.apps.get-deployment-status"}},
+                },
+            }
+        )
+        component = manifest.get_component("traefik")
+
+        self.assertIsNone(component.type_display)
+        self.assertIsNone(component.crd_group)
+        self.assertIsNone(component.details)
+        self.assertIsNone(component.sub_component)
+
     def test_get_components_raises_when_none(self) -> None:
         manifest = self._make_manifest()
 

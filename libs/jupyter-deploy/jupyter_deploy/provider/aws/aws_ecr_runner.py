@@ -6,7 +6,7 @@ from mypy_boto3_ecr.client import ECRClient
 
 from jupyter_deploy.api.aws.ecr import ecr_repository
 from jupyter_deploy.engine.supervised_execution import DisplayManager
-from jupyter_deploy.exceptions import InstructionNotFoundError
+from jupyter_deploy.exceptions import ImageTagNotFoundError, InstructionNotFoundError
 from jupyter_deploy.provider.instruction_runner import InstructionRunner
 from jupyter_deploy.provider.resolved_argdefs import (
     ResolvedInstructionArgument,
@@ -23,6 +23,7 @@ class AwsEcrInstruction(str, Enum):
     """AWS ECR instructions accessible from manifest.commands[].sequence[].api-name."""
 
     DESCRIBE_REPOSITORY = "describe-repository"
+    DESCRIBE_IMAGE = "describe-image"
     LIST_IMAGE_TAGS = "list-image-tags"
 
 
@@ -51,6 +52,26 @@ class AwsEcrRunner(InstructionRunner):
             "RepositoryName": StrResolvedInstructionResult(
                 result_name="RepositoryName", value=repo.get("repositoryName", "")
             ),
+        }
+
+    def _describe_image(
+        self, resolved_arguments: dict[str, ResolvedInstructionArgument]
+    ) -> dict[str, ResolvedInstructionResult]:
+        repository_name_arg = require_arg(resolved_arguments, "repository_name", StrResolvedInstructionArgument)
+        image_tag_arg = require_arg(resolved_arguments, "image_tag", StrResolvedInstructionArgument)
+
+        self.display_manager.info(f"Describing image: {repository_name_arg.value}:{image_tag_arg.value}")
+        try:
+            ecr_repository.describe_image(
+                self.client, repository_name=repository_name_arg.value, image_tag=image_tag_arg.value
+            )
+        except self.client.exceptions.ImageNotFoundException:
+            raise ImageTagNotFoundError(repository_name_arg.value, image_tag_arg.value) from None
+
+        # Presence in ECR is the health signal: a successful describe means the image is available.
+        return {
+            "Status": StrResolvedInstructionResult(result_name="Status", value="Available"),
+            "StatusCategory": StrResolvedInstructionResult(result_name="StatusCategory", value="healthy"),
         }
 
     def _list_image_tags(
@@ -90,6 +111,8 @@ class AwsEcrRunner(InstructionRunner):
 
         if instruction == AwsEcrInstruction.DESCRIBE_REPOSITORY:
             return self._describe_repository(resolved_arguments)
+        elif instruction == AwsEcrInstruction.DESCRIBE_IMAGE:
+            return self._describe_image(resolved_arguments)
         elif instruction == AwsEcrInstruction.LIST_IMAGE_TAGS:
             return self._list_image_tags(resolved_arguments)
 

@@ -6,6 +6,7 @@ from kubernetes.client.exceptions import ApiException
 
 from jupyter_deploy.api.k8s.custom import (
     CustomResourceRef,
+    get_cluster,
     get_namespaced,
     list_cluster,
     list_namespaced,
@@ -129,6 +130,45 @@ class TestGetNamespaced(unittest.TestCase):
 
         with self.assertRaises(ApiException):
             get_namespaced(mock_api, ref=REF, namespace="default", name="nonexistent")
+
+
+class TestGetCluster(unittest.TestCase):
+    CRD_REF = CustomResourceRef(group="apiextensions.k8s.io", version="v1", plural="customresourcedefinitions")
+
+    def test_returns_name_and_resource(self) -> None:
+        mock_api: Mock = Mock(spec=CustomObjectsApi)
+        resource = {
+            "metadata": {"name": "workspaces.workspace.jupyter.org"},
+            "spec": {"group": "workspace.jupyter.org"},
+        }
+        mock_api.get_cluster_custom_object.return_value = resource
+
+        result = get_cluster(mock_api, ref=self.CRD_REF, name="workspaces.workspace.jupyter.org")
+
+        self.assertEqual(result.name, "workspaces.workspace.jupyter.org")
+        self.assertEqual(result.resource["spec"]["group"], "workspace.jupyter.org")
+        mock_api.get_cluster_custom_object.assert_called_once_with(
+            group="apiextensions.k8s.io",
+            version="v1",
+            plural="customresourcedefinitions",
+            name="workspaces.workspace.jupyter.org",
+        )
+
+    def test_returns_empty_name_when_metadata_absent(self) -> None:
+        mock_api: Mock = Mock(spec=CustomObjectsApi)
+        mock_api.get_cluster_custom_object.return_value = {}
+
+        result = get_cluster(mock_api, ref=self.CRD_REF, name="workspaces.workspace.jupyter.org")
+
+        self.assertEqual(result.name, "")
+        self.assertEqual(result.resource, {})
+
+    def test_raises_on_api_error(self) -> None:
+        mock_api: Mock = Mock(spec=CustomObjectsApi)
+        mock_api.get_cluster_custom_object.side_effect = _NOT_FOUND
+
+        with self.assertRaises(ApiException):
+            get_cluster(mock_api, ref=self.CRD_REF, name="nonexistent")
 
 
 class TestPatchNamespaced(unittest.TestCase):

@@ -26,6 +26,7 @@ class K8sCustomInstruction(str, Enum):
 
     LIST = "list"
     GET = "get"
+    GET_CLUSTER = "get-cluster"
     PATCH = "patch"
     LIST_CLUSTER = "list-cluster"
 
@@ -79,6 +80,20 @@ class K8sCustomRunner(InstructionRunner):
 
         self.display_manager.info(f"Getting {ref.plural}/{name_arg.value}")
         result = k8s_custom.get_namespaced(self.custom_api, ref=ref, namespace=scope_arg.value, name=name_arg.value)
+
+        return {
+            "Name": StrResolvedInstructionResult(result_name="Name", value=result.name),
+            "Resource": StrResolvedInstructionResult(result_name="Resource", value=json.dumps(result.resource)),
+        }
+
+    def _get_cluster(
+        self, resolved_arguments: dict[str, ResolvedInstructionArgument]
+    ) -> dict[str, ResolvedInstructionResult]:
+        ref = self._extract_ref(resolved_arguments)
+        name_arg = require_arg(resolved_arguments, "name", StrResolvedInstructionArgument)
+
+        self.display_manager.info(f"Getting cluster-scoped {ref.plural}/{name_arg.value}")
+        result = k8s_custom.get_cluster(self.custom_api, ref=ref, name=name_arg.value)
 
         return {
             "Name": StrResolvedInstructionResult(result_name="Name", value=result.name),
@@ -143,6 +158,8 @@ class K8sCustomRunner(InstructionRunner):
             return self._list(resolved_arguments)
         elif instruction == K8sCustomInstruction.GET:
             return self._get(resolved_arguments)
+        elif instruction == K8sCustomInstruction.GET_CLUSTER:
+            return self._get_cluster(resolved_arguments)
         elif instruction == K8sCustomInstruction.PATCH:
             return self._patch(resolved_arguments)
         elif instruction == K8sCustomInstruction.LIST_CLUSTER:

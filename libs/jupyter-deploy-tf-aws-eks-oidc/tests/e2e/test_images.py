@@ -41,6 +41,27 @@ def test_image_list_text(e2e_deployment: EndToEndDeployment) -> None:
     assert "jupyterlab" in names
 
 
+# ── image status ───────────────────────────────────────────────────────────
+
+
+def test_image_status(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify status reports the image as available."""
+    e2e_deployment.ensure_deployed()
+
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "status"])
+    assert "jupyterlab status:" in result.stdout
+    assert "Available" in result.stdout
+
+
+def test_image_status_not_found(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify status for a non-existent image fails gracefully."""
+    e2e_deployment.ensure_deployed()
+
+    with pytest.raises(JDCliError) as exc_info:
+        e2e_deployment.cli.run_command(["jupyter-deploy", "image", "status", "--name", "nonexistent"])
+    assert "nonexistent" in str(exc_info.value)
+
+
 # ── image show ─────────────────────────────────────────────────────────────
 
 
@@ -137,6 +158,10 @@ def test_image_vulnerabilities_json(e2e_deployment: EndToEndDeployment) -> None:
     assert "critical" in data["summary"]
     assert "high" in data["summary"]
     assert isinstance(data["vulnerabilities"], list)
+    # Each vulnerability carries an EPSS field (float when the scanner provides it, else null).
+    for vuln in data["vulnerabilities"]:
+        assert "epss_score" in vuln
+        assert vuln["epss_score"] is None or isinstance(vuln["epss_score"], int | float)
 
 
 def test_image_vulnerabilities_with_tag(e2e_deployment: EndToEndDeployment) -> None:

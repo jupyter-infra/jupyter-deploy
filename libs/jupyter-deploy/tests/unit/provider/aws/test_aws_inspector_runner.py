@@ -69,6 +69,7 @@ class TestListVulnerabilitiesInspector(unittest.TestCase):
                 "title": "CVE-2026-1234 - openssl vulnerability",
                 "severity": "CRITICAL",
                 "inspectorScore": 9.8,
+                "epss": {"score": 0.42},
                 "lastObservedAt": datetime(2026, 6, 18, 16, 0, 0, tzinfo=UTC),
                 "packageVulnerabilityDetails": {
                     "vulnerablePackages": [
@@ -107,6 +108,9 @@ class TestListVulnerabilitiesInspector(unittest.TestCase):
         self.assertEqual(vulns[1]["cve"], "CVE-2026-5678")
         self.assertEqual(vulns[1]["type"], "NODE")
         self.assertEqual(vulns[1]["score"], 7.3)
+        # EPSS is plumbed when present and None when the finding omits it.
+        self.assertEqual(vulns[0]["epss_score"], 0.42)
+        self.assertIsNone(vulns[1]["epss_score"])
         self.assertEqual(result["CriticalCount"].value, "1")
         self.assertEqual(result["HighCount"].value, "1")
         self.assertEqual(result["ScannerType"].value, "Inspector Enhanced")
@@ -150,6 +154,7 @@ class TestListVulnerabilitiesEcrBasicFallback(unittest.TestCase):
         self.assertEqual(vulns[0]["cve"], "CVE-2026-9999")
         self.assertEqual(vulns[0]["package"], "glibc")
         self.assertEqual(vulns[0]["score"], 7.5)
+        self.assertIsNone(vulns[0]["epss_score"])  # ECR basic has no EPSS.
         self.assertEqual(result["ScannerType"].value, "ECR Basic")
         self.assertEqual(result["LastScanned"].value, "2026-06-18T15:49:33+00:00")
 

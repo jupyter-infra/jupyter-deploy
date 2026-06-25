@@ -14,6 +14,7 @@ $ jd health [OPTIONS] COMMAND [ARGS]...
 * `--cluster`: Check only the cluster layer.
 * `--load-balancer`: Check only the load balancer layer.
 * `--components`: Check only the components layer.
+* `--images`: Check only the images layer.
 * `--connection`: Check only the end-to-end connection.
 * `--json`: Output as JSON.
 * `--help`: Show this message and exit.

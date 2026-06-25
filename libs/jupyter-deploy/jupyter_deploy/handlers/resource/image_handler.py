@@ -10,6 +10,7 @@ from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
 from jupyter_deploy.handlers.payloads import (
     ImageDetail,
     ImageInfo,
+    ImageStatusResult,
     ImageTag,
     ImageVulnerabilitiesResult,
     ImageVulnerability,
@@ -122,6 +123,49 @@ class ImageHandler(BaseProjectHandler):
         raw_tags = results.get("tags", [])
         return [ImageTag(tag=t["tag"], pushed_at=t.get("pushed_at", ""), digest=t.get("digest", "")) for t in raw_tags]
 
+    @staticmethod
+    def _select_latest_tag(tags: list[ImageTag]) -> str:
+        """Return the most-recently-pushed tag name, excluding the floating 'latest' tag."""
+        real_tags = [t for t in tags if t.tag != "latest"]
+        if not real_tags:
+            return ""
+        # list_tags returns tags sorted by push time (most recent first).
+        return real_tags[0].tag
+
+    def get_status(self, name: str | None = None) -> ImageStatusResult:
+        """Return whether the image is present in ECR, plus its latest non-'latest' tag."""
+        resolved_name = self.resolve_name(name)
+        image_def = self.project_manifest.get_image(resolved_name)
+        repository_name, default_tag = self._resolve_image_outputs(image_def)
+
+        latest_tag = self._select_latest_tag(self.list_tags(resolved_name))
+        probe_tag = latest_tag or default_tag
+
+        cli_paramdefs = self._build_cli_paramdefs(repository_name, probe_tag)
+        command = self.project_manifest.get_command("image.status")
+        runner = cmd_runner.ManifestCommandRunner(
+            display_manager=self.display_manager,
+            output_handler=self._output_handler,
+            variable_handler=self._variable_handler,
+        )
+        try:
+            runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
+        except ImageTagNotFoundError:
+            return ImageStatusResult(
+                name=resolved_name,
+                status="Missing",
+                status_category="degraded",
+                latest_tag=latest_tag,
+            )
+        results = collect_results(runner, command)
+
+        return ImageStatusResult(
+            name=resolved_name,
+            status=results.get("status", "Available"),
+            status_category=results.get("status_category", "healthy"),
+            latest_tag=latest_tag,
+        )
+
     def get_vulnerabilities(self, name: str | None = None, tag: str | None = None) -> ImageVulnerabilitiesResult:
         """Return vulnerabilities for an image."""
         resolved_name = self.resolve_name(name)
@@ -152,6 +196,7 @@ class ImageHandler(BaseProjectHandler):
                 installed_version=v.get("installed_version", ""),
                 fixed_version=v.get("fixed_version", ""),
                 score=v.get("score", 0.0),
+                epss_score=v.get("epss_score"),
             )
             for v in raw_vulns
         ]

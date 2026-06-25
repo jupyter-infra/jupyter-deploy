@@ -5,9 +5,26 @@ from unittest.mock import Mock, patch
 
 from typer.testing import CliRunner
 
-from jupyter_deploy.cli.health_app import health_app
+from jupyter_deploy.cli.health_app import _format_sub_component, health_app
 from jupyter_deploy.enum import StatusCategory
 from jupyter_deploy.handlers.payloads import ConnectionResult, HealthLayer, HealthLayerResult
+
+
+class TestFormatSubComponent(unittest.TestCase):
+    def test_empty_renders_dash(self) -> None:
+        self.assertEqual(_format_sub_component(""), "-")
+
+    def test_dash_passthrough(self) -> None:
+        self.assertEqual(_format_sub_component("-"), "-")
+
+    def test_plain_text_passthrough(self) -> None:
+        self.assertEqual(_format_sub_component("1 critical, 1 high"), "1 critical, 1 high")
+
+    def test_empty_json_renders_dash(self) -> None:
+        self.assertEqual(_format_sub_component("{}"), "-")
+
+    def test_json_item_formatted(self) -> None:
+        self.assertEqual(_format_sub_component('{"name": "pod", "status": "Running"}'), "pod: Running")
 
 
 class TestHealthApp(unittest.TestCase):
@@ -192,6 +209,119 @@ class TestHealthApp(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         mock_handler.check_layer.assert_called_once_with(HealthLayer.LOAD_BALANCER)
         self.assertIn("load-balancer", result.stdout)
+
+    @patch("jupyter_deploy.handlers.health_handler.HealthHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_health_images_flag(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
+        mock_project_dir.return_value.__enter__ = Mock(return_value=None)
+        mock_project_dir.return_value.__exit__ = Mock(return_value=None)
+        mock_handler: Mock = Mock()
+        mock_handler.check_layer.return_value = [
+            HealthLayerResult(
+                layer=HealthLayer.IMAGES,
+                name="jupyterlab",
+                status_category=StatusCategory.HEALTHY,
+                status_text="Available",
+                detail="v1",
+                sub_component="1 critical, 1 high",
+            )
+        ]
+        mock_handler_class.return_value = mock_handler
+
+        runner = CliRunner()
+        result = runner.invoke(health_app, ["--images"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_handler.check_layer.assert_called_once_with(HealthLayer.IMAGES)
+        self.assertIn("images", result.stdout)
+        self.assertIn("Available", result.stdout)
+        # A non-zero vulnerability count surfaces the drill-down hint.
+        self.assertIn("Hint:", result.stdout)
+        self.assertIn("jd image vulnerabilities --name jupyterlab --tag v1", result.stdout)
+
+    @patch("jupyter_deploy.handlers.health_handler.HealthHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_health_images_clean_has_no_hint(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
+        mock_project_dir.return_value.__enter__ = Mock(return_value=None)
+        mock_project_dir.return_value.__exit__ = Mock(return_value=None)
+        mock_handler: Mock = Mock()
+        mock_handler.check_layer.return_value = [
+            HealthLayerResult(
+                layer=HealthLayer.IMAGES,
+                name="jupyterlab",
+                status_category=StatusCategory.HEALTHY,
+                status_text="Available",
+                detail="v1",
+                sub_component="",
+            )
+        ]
+        mock_handler_class.return_value = mock_handler
+
+        runner = CliRunner()
+        result = runner.invoke(health_app, ["--images"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertNotIn("Hint:", result.stdout)
+
+    @patch("jupyter_deploy.handlers.health_handler.HealthHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_health_renders_custom_resource_components(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
+        mock_project_dir.return_value.__enter__ = Mock(return_value=None)
+        mock_project_dir.return_value.__exit__ = Mock(return_value=None)
+        mock_handler: Mock = Mock()
+        mock_handler.check_all.return_value = (
+            [
+                HealthLayerResult(
+                    layer=HealthLayer.COMPONENTS,
+                    name="workspace-crd",
+                    status_category=StatusCategory.HEALTHY,
+                    status_text="Present",
+                    detail="v1alpha1",
+                ),
+                HealthLayerResult(
+                    layer=HealthLayer.COMPONENTS,
+                    name="oauth-access-strategy",
+                    status_category=StatusCategory.HEALTHY,
+                    status_text="Present",
+                    detail="jupyter-k8s-shared",
+                    sub_component="access-resources: 2",
+                ),
+                HealthLayerResult(
+                    layer=HealthLayer.COMPONENTS,
+                    name="jupyterlab-template",
+                    status_category=StatusCategory.HEALTHY,
+                    status_text="Present",
+                    detail="jupyter-k8s-shared",
+                    sub_component="access-strategy: oauth-access-strategy",
+                ),
+                HealthLayerResult(
+                    layer=HealthLayer.IMAGES,
+                    name="jupyterlab",
+                    status_category=StatusCategory.HEALTHY,
+                    status_text="Available",
+                    detail="v1",
+                    sub_component="1 critical, 1 high",
+                ),
+            ],
+            ConnectionResult(status_category=StatusCategory.HEALTHY, detail="", skipped=True),
+        )
+        mock_handler_class.return_value = mock_handler
+
+        runner = CliRunner()
+        result = runner.invoke(health_app, [], env={"COLUMNS": "200"})
+
+        self.assertEqual(result.exit_code, 0)
+        for token in [
+            "workspace-crd",
+            "v1alpha1",
+            "oauth-access-strategy",
+            "access-resources: 2",
+            "jupyterlab-template",
+            "Present",
+            "Available",
+        ]:
+            self.assertIn(token, result.stdout)
+        self.assertIn("Hint:", result.stdout)
 
     @patch("jupyter_deploy.handlers.health_handler.HealthHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")

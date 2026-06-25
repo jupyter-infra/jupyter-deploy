@@ -3,7 +3,13 @@ from unittest.mock import Mock, patch
 
 from jupyter_deploy.enum import StatusCategory
 from jupyter_deploy.handlers.health_handler import HealthHandler
-from jupyter_deploy.handlers.payloads import HealthLayer, HealthLayerResult
+from jupyter_deploy.handlers.payloads import (
+    HealthLayer,
+    HealthLayerResult,
+    ImageStatusResult,
+    ImageVulnerabilitiesResult,
+    ImageVulnerability,
+)
 from jupyter_deploy.handlers.project.open_handler import OpenHealthResult
 
 
@@ -12,6 +18,7 @@ def _make_handler(
     has_components: bool = True,
     has_lb: bool = True,
     has_open: bool = True,
+    has_images: bool = True,
 ) -> tuple[HealthHandler, Mock, Mock, Mock, Mock]:
     with patch.object(HealthHandler, "__init__", lambda self, **kwargs: None):
         handler = HealthHandler.__new__(HealthHandler)
@@ -19,16 +26,22 @@ def _make_handler(
     mock_cluster_handler: Mock = Mock()
     mock_component_handler: Mock = Mock()
     mock_open_handler: Mock = Mock()
+    mock_image_handler: Mock = Mock()
 
     handler.display_manager = Mock()
     handler.project_manifest = mock_manifest  # type: ignore[assignment]
     handler._cluster_handler = mock_cluster_handler if has_cluster else None  # type: ignore[assignment]
     handler._component_handler = mock_component_handler if has_components else None  # type: ignore[assignment]
+    handler._image_handler = mock_image_handler if has_images else None  # type: ignore[assignment]
     handler._open_handler = mock_open_handler if has_open else None  # type: ignore[assignment]
     mock_manifest.has_command.side_effect = lambda cmd: cmd == "cluster.loadbalancer.health" and has_lb
     mock_manifest.health = None
 
     return handler, mock_manifest, mock_cluster_handler, mock_component_handler, mock_open_handler
+
+
+def _image_handler_of(handler: HealthHandler) -> Mock:
+    return handler._image_handler  # type: ignore[return-value]
 
 
 class TestHealthHandlerCheckCluster(unittest.TestCase):
@@ -80,6 +93,135 @@ class TestHealthHandlerCheckComponents(unittest.TestCase):
         self.assertEqual(results[0].status_category, StatusCategory.HEALTHY)
         self.assertEqual(results[1].name, "dex")
         self.assertEqual(results[1].status_category, StatusCategory.DEGRADED)
+
+
+def _vuln(severity: str, epss: float | None) -> ImageVulnerability:
+    return ImageVulnerability(
+        cve="CVE-X",
+        type="OS",
+        package="pkg",
+        severity=severity,
+        installed_version="1",
+        fixed_version="2",
+        score=7.0,
+        epss_score=epss,
+    )
+
+
+def _vulns_result(
+    vulns: list[ImageVulnerability], last_scanned: str = "2026-06-18T00:00:00+00:00"
+) -> ImageVulnerabilitiesResult:
+    return ImageVulnerabilitiesResult(
+        name="jupyterlab",
+        tag="v2",
+        last_scanned=last_scanned,
+        scanner_type="Inspector Enhanced",
+        critical_count=sum(1 for v in vulns if v.severity == "CRITICAL"),
+        high_count=sum(1 for v in vulns if v.severity == "HIGH"),
+        vulnerabilities=vulns,
+    )
+
+
+class TestHealthHandlerCheckImages(unittest.TestCase):
+    def test_images_skipped_when_no_handler(self) -> None:
+        handler, _, _, _, _ = _make_handler(has_images=False)
+
+        results = handler._check_images()
+
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0].skipped)
+
+    def test_image_available_and_clean(self) -> None:
+        handler, manifest, _, _, _ = _make_handler()
+        manifest.get_images.return_value = {"jupyterlab": Mock()}
+        img = _image_handler_of(handler)
+        img.get_status.return_value = ImageStatusResult(
+            name="jupyterlab", status="Available", status_category="healthy", latest_tag="v2"
+        )
+        img.get_vulnerabilities.return_value = _vulns_result([])
+
+        results = handler._check_images()
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].status_text, "Available")
+        self.assertEqual(results[0].status_category, StatusCategory.HEALTHY)
+        self.assertEqual(results[0].detail, "v2")
+        self.assertEqual(results[0].sub_component, "")
+
+    def test_image_counts_only_qualifying_cves(self) -> None:
+        handler, manifest, _, _, _ = _make_handler()
+        manifest.get_images.return_value = {"jupyterlab": Mock()}
+        img = _image_handler_of(handler)
+        img.get_status.return_value = ImageStatusResult(
+            name="jupyterlab", status="Available", status_category="healthy", latest_tag="v2"
+        )
+        img.get_vulnerabilities.return_value = _vulns_result(
+            [
+                _vuln("CRITICAL", 0.5),  # qualifies
+                _vuln("HIGH", 0.02),  # below threshold, excluded
+                _vuln("HIGH", None),  # EPSS unavailable -> qualifies
+            ]
+        )
+
+        results = handler._check_images()
+
+        # 1 critical (0.5) + 1 high (None) qualify; the 0.02 high is excluded.
+        self.assertEqual(results[0].sub_component, "1 critical, 1 high")
+        self.assertEqual(results[0].status_category, StatusCategory.HEALTHY)  # CVEs never downgrade
+
+    def test_image_missing(self) -> None:
+        handler, manifest, _, _, _ = _make_handler()
+        manifest.get_images.return_value = {"jupyterlab": Mock()}
+        img = _image_handler_of(handler)
+        img.get_status.return_value = ImageStatusResult(
+            name="jupyterlab", status="Missing", status_category="degraded", latest_tag=""
+        )
+
+        results = handler._check_images()
+
+        self.assertEqual(results[0].status_text, "Missing")
+        self.assertEqual(results[0].status_category, StatusCategory.DEGRADED)
+        img.get_vulnerabilities.assert_not_called()
+
+    def test_image_scan_unavailable(self) -> None:
+        handler, manifest, _, _, _ = _make_handler()
+        manifest.get_images.return_value = {"jupyterlab": Mock()}
+        img = _image_handler_of(handler)
+        img.get_status.return_value = ImageStatusResult(
+            name="jupyterlab", status="Available", status_category="healthy", latest_tag="v2"
+        )
+        img.get_vulnerabilities.return_value = _vulns_result([], last_scanned="")
+
+        results = handler._check_images()
+
+        self.assertEqual(results[0].sub_component, "scan n/a")
+
+    def test_image_error_does_not_fail_check(self) -> None:
+        handler, manifest, _, _, _ = _make_handler()
+        manifest.get_images.return_value = {"jupyterlab": Mock()}
+        img = _image_handler_of(handler)
+        img.get_status.side_effect = RuntimeError("boom")
+
+        results = handler._check_images()
+
+        self.assertEqual(results[0].status_category, StatusCategory.DEGRADED)
+        self.assertEqual(results[0].status_text, "error")
+
+    def test_vulnerability_fetch_error_surfaces_in_sub_component(self) -> None:
+        handler, manifest, _, _, _ = _make_handler()
+        manifest.get_images.return_value = {"jupyterlab": Mock()}
+        img = _image_handler_of(handler)
+        img.get_status.return_value = ImageStatusResult(
+            name="jupyterlab", status="Available", status_category="healthy", latest_tag="v2"
+        )
+        img.get_vulnerabilities.side_effect = RuntimeError("access denied")
+
+        results = handler._check_images()
+
+        # A failed vuln fetch surfaces in the sub-component, but the image stays available/healthy.
+        self.assertEqual(results[0].status_text, "Available")
+        self.assertEqual(results[0].status_category, StatusCategory.HEALTHY)
+        self.assertEqual(results[0].sub_component, "scan error: access denied")
 
 
 class TestHealthHandlerCheckLoadBalancer(unittest.TestCase):

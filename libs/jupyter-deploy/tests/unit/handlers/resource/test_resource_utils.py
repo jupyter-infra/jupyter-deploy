@@ -2,8 +2,18 @@ import json
 import unittest
 from unittest.mock import Mock
 
-from jupyter_deploy.handlers.resource.resource_utils import collect_results, evaluate_status_rules, resolve_path
-from jupyter_deploy.manifest import JupyterDeployStatusRuleMatchV1, JupyterDeployStatusRuleV1
+from jupyter_deploy.handlers.resource.resource_utils import (
+    collect_results,
+    evaluate_status_rules,
+    render_display_field,
+    resolve_node,
+    resolve_path,
+)
+from jupyter_deploy.manifest import (
+    JupyterDeployDisplayFieldV1,
+    JupyterDeployStatusRuleMatchV1,
+    JupyterDeployStatusRuleV1,
+)
 
 
 class TestResolvePath(unittest.TestCase):
@@ -28,6 +38,74 @@ class TestResolvePath(unittest.TestCase):
 
     def test_non_dict_root(self) -> None:
         self.assertIsNone(resolve_path({"status": "a string"}, ".status.field"))
+
+    def test_map_key_lookup_with_dotted_key(self) -> None:
+        resource = {"metadata": {"labels": {"workspace.jupyter.org/default-template": "true"}}}
+        self.assertEqual(resolve_path(resource, ".metadata.labels[workspace.jupyter.org/default-template]"), "true")
+
+    def test_map_key_lookup_missing_key(self) -> None:
+        resource = {"metadata": {"labels": {"other": "x"}}}
+        self.assertIsNone(resolve_path(resource, ".metadata.labels[workspace.jupyter.org/default-template]"))
+
+    def test_map_key_lookup_missing_container(self) -> None:
+        self.assertIsNone(resolve_path({"metadata": {}}, ".metadata.labels[some.key]"))
+
+
+class TestResolveNode(unittest.TestCase):
+    def test_list_index(self) -> None:
+        resource = {"spec": {"versions": [{"name": "v1alpha1"}, {"name": "v1beta1"}]}}
+        self.assertEqual(resolve_node(resource, ".spec.versions[0].name"), "v1alpha1")
+        self.assertEqual(resolve_node(resource, ".spec.versions[1].name"), "v1beta1")
+
+    def test_list_index_out_of_range(self) -> None:
+        resource = {"spec": {"versions": [{"name": "v1alpha1"}]}}
+        self.assertIsNone(resolve_node(resource, ".spec.versions[5].name"))
+
+    def test_returns_raw_list(self) -> None:
+        resource = {"spec": {"items": [1, 2, 3]}}
+        self.assertEqual(resolve_node(resource, ".spec.items"), [1, 2, 3])
+
+
+class TestRenderDisplayField(unittest.TestCase):
+    def test_path_field_with_label(self) -> None:
+        resource = json.dumps({"metadata": {"namespace": "shared"}})
+        field = JupyterDeployDisplayFieldV1(label="namespace", path=".metadata.namespace")
+        self.assertEqual(render_display_field(resource, field), "namespace: shared")
+
+    def test_count_field(self) -> None:
+        resource = json.dumps({"spec": {"accessResourceTemplates": [{"a": 1}, {"b": 2}]}})
+        field = JupyterDeployDisplayFieldV1(label="access-resources", count=".spec.accessResourceTemplates")
+        self.assertEqual(render_display_field(resource, field), "access-resources: 2")
+
+    def test_join_field(self) -> None:
+        resource = json.dumps({"spec": {"group": "workspace.jupyter.org", "versions": [{"name": "v1alpha1"}]}})
+        field = JupyterDeployDisplayFieldV1(label="apiVersion", join=[".spec.group", ".spec.versions[0].name"])
+        self.assertEqual(render_display_field(resource, field), "apiVersion: workspace.jupyter.org/v1alpha1")
+
+    def test_labeled_absent_field_renders_label_with_dash(self) -> None:
+        # A missing or typo'd path keeps the label so the cell stays self-documenting.
+        resource = json.dumps({"spec": {}})
+        field = JupyterDeployDisplayFieldV1(label="app-type", path=".spec.appType")
+        self.assertEqual(render_display_field(resource, field), "app-type: -")
+
+    def test_labeled_absent_count_renders_label_with_dash(self) -> None:
+        resource = json.dumps({"spec": {}})
+        field = JupyterDeployDisplayFieldV1(label="access-resources", count=".spec.absentList")
+        self.assertEqual(render_display_field(resource, field), "access-resources: -")
+
+    def test_unlabeled_absent_field_returns_empty(self) -> None:
+        resource = json.dumps({"spec": {}})
+        field = JupyterDeployDisplayFieldV1(path=".spec.appType")
+        self.assertEqual(render_display_field(resource, field), "")
+
+    def test_unparseable_json_returns_empty(self) -> None:
+        field = JupyterDeployDisplayFieldV1(label="x", path=".a")
+        self.assertEqual(render_display_field("not-json", field), "")
+
+    def test_field_without_label(self) -> None:
+        resource = json.dumps({"metadata": {"namespace": "shared"}})
+        field = JupyterDeployDisplayFieldV1(path=".metadata.namespace")
+        self.assertEqual(render_display_field(resource, field), "shared")
 
 
 class TestEvaluateStatusRules(unittest.TestCase):

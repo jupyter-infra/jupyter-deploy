@@ -88,6 +88,10 @@ class AwsInspectorRunner(InstructionRunner):
             score = finding.get("inspectorScore", 0.0)
             package_manager = vulnerable_packages[0].get("packageManager", "") if vulnerable_packages else ""
 
+            # EPSS (Exploit Prediction Scoring System) probability, 0.0-1.0; absent on some findings.
+            epss_details = finding.get("epss") or {}
+            epss_score = epss_details.get("score")
+
             raw_title = finding.get("title", "")
             cve = raw_title.split(" - ")[0].strip() if " - " in raw_title else raw_title
 
@@ -100,6 +104,7 @@ class AwsInspectorRunner(InstructionRunner):
                     "installed_version": installed_version,
                     "fixed_version": fixed_version,
                     "score": score,
+                    "epss_score": epss_score,
                 }
             )
 
@@ -151,6 +156,7 @@ class AwsInspectorRunner(InstructionRunner):
                     "installed_version": installed_version,
                     "fixed_version": fixed_version,
                     "score": score,
+                    "epss_score": None,  # ECR basic scanning does not provide EPSS.
                 }
             )
 

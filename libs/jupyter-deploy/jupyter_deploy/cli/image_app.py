@@ -96,6 +96,33 @@ def show(
 
 
 @image_app.command()
+def status(
+    name: Annotated[str | None, typer.Option("--name", help="Name of the image.")] = None,
+    project_dir: Annotated[
+        Path | None,
+        typer.Option("--path", "-p", help="Directory of the project."),
+    ] = None,
+) -> None:
+    """Check the status of an application image.
+
+    Reports whether the image is present in its registry (available) or missing.
+
+    Run either from a project directory that you created with <jd init>;
+    or pass --path <project-dir>.
+    """
+    console = Console()
+
+    with handle_cli_errors(console), cmd_utils.project_dir(project_dir):
+        simple_display_manager = SimpleDisplayManager(console=console)
+        handler = image_handler.ImageHandler(display_manager=simple_display_manager)
+
+        with simple_display_manager.spinner("Checking image status..."):
+            result = handler.get_status(name)
+
+        console.print(f"{result.name} status: [bold cyan]{result.status}[/]")
+
+
+@image_app.command()
 def tags(
     name: Annotated[str | None, typer.Option("--name", help="Name of the image.")] = None,
     project_dir: Annotated[
@@ -149,6 +176,11 @@ def vulnerabilities(
 
     Shows HIGH and CRITICAL severity vulnerabilities detected by the image scanner.
     If --tag is not specified, uses the current deployed tag.
+
+    The EPSS column shows the Exploit Prediction Scoring System probability that a
+    CVE will be exploited in the wild within the next 30 days, as a percentage from
+    0% to 100% — higher means more urgent. It shows n/a for scanners that do not
+    provide it (for example basic registry scanning).
 
     Run either from a project directory that you created with <jd init>;
     or pass --path <project-dir>.
@@ -206,16 +238,19 @@ def vulnerabilities(
         table.add_column("Package")
         table.add_column("Severity")
         table.add_column("Score")
+        table.add_column("EPSS")
         table.add_column("Installed")
         table.add_column("Fixed")
         for v in result.vulnerabilities:
             severity_style = "red" if v.severity == "CRITICAL" else "yellow"
+            epss_text = f"{v.epss_score:.0%}" if v.epss_score is not None else "n/a"
             table.add_row(
                 v.cve,
                 v.type,
                 v.package,
                 f"[{severity_style}]{v.severity}[/{severity_style}]",
                 f"{v.score:.1f}" if v.score else "-",
+                epss_text,
                 v.installed_version,
                 v.fixed_version,
             )

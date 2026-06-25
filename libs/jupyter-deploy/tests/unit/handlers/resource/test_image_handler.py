@@ -310,6 +310,74 @@ class TestImageHandler(unittest.TestCase):
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_get_status_available(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
+        mock_tf_variables_handler.return_value = Mock()
+        mock_retrieve_manifest.return_value = self.mock_full_manifest
+
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+
+        # list_tags reads ".tags"; image.status reads ".status"/".status_category".
+        def fallback(command: Mock, key: str, _type: type, default: str) -> str:
+            if key.endswith(".tags"):
+                return (
+                    '[{"tag": "v2", "pushed_at": "", "digest": ""}, {"tag": "latest", "pushed_at": "", "digest": ""}]'
+                )
+            if key.endswith(".status"):
+                return "Available"
+            if key.endswith(".status_category"):
+                return "healthy"
+            return default
+
+        mock_cmd_runner_fns["get_result_value_with_fallback"].side_effect = fallback
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        handler = ImageHandler(display_manager=NullDisplay())
+        result = handler.get_status("jupyterlab")
+
+        self.assertEqual(result.name, "jupyterlab")
+        self.assertEqual(result.status, "Available")
+        self.assertEqual(result.status_category, "healthy")
+        self.assertEqual(result.latest_tag, "v2")  # 'latest' excluded
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_get_status_missing(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
+        mock_tf_variables_handler.return_value = Mock()
+        mock_retrieve_manifest.return_value = self.mock_full_manifest
+
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_fns["get_result_value_with_fallback"].return_value = "[]"
+
+        # list_tags succeeds (empty), then image.status raises ImageTagNotFoundError.
+        mock_cmd_runner_fns["run_command_sequence"].side_effect = [None, ImageTagNotFoundError("repo", "v1")]
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        handler = ImageHandler(display_manager=NullDisplay())
+        result = handler.get_status("jupyterlab")
+
+        self.assertEqual(result.status, "Missing")
+        self.assertEqual(result.status_category, "degraded")
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
     def test_list_tags_runs_command(
         self,
         mock_cmd_runner_class: Mock,
@@ -357,3 +425,9 @@ class TestImageHandler(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             handler.list_tags("jupyterlab")
+
+        with self.assertRaises(RuntimeError):
+            handler.get_vulnerabilities("jupyterlab")
+
+        with self.assertRaises(RuntimeError):
+            handler.get_status("jupyterlab")

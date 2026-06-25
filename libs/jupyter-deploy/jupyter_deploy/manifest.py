@@ -272,13 +272,37 @@ class JupyterDeployComponentVerbV1(BaseModel):
     method: str
 
 
+class JupyterDeployDisplayFieldV1(BaseModel):
+    """A single rendered value extracted from a resource's JSON for the health dashboard.
+
+    Exactly one of `path`, `count`, or `join` should be set:
+      - path: dotted path to a scalar (e.g. .metadata.namespace)
+      - count: dotted path to a list; renders its length
+      - join: list of dotted paths; renders the parts joined by `separator`
+    A `label` prefixes the value (e.g. "app-type: jupyterlab").
+    """
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    label: str = ""
+    path: str | None = None
+    count: str | None = None
+    join: list[str] | None = None
+    separator: str = "/"
+
+
 class JupyterDeployComponentDefinitionV1(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
     type: str
+    type_display: str | None = Field(alias="type-display", default=None)
     description: str = ""
     resource_name: str | None = Field(alias="resource-name", default=None)
-    scope: str
+    crd_group: str | None = Field(alias="crd-group", default=None)
+    crd_version: str | None = Field(alias="crd-version", default=None)
+    crd_plural: str | None = Field(alias="crd-plural", default=None)
+    scope: str | None = None
     query: str = ""
+    details: JupyterDeployDisplayFieldV1 | None = None
+    sub_component: JupyterDeployDisplayFieldV1 | None = Field(alias="sub-component", default=None)
     verbs: dict[str, JupyterDeployComponentVerbV1]
 
 

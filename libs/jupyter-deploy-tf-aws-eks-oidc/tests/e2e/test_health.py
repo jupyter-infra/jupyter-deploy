@@ -1,8 +1,12 @@
 """E2E tests for the jd health command on the EKS OIDC template."""
 
 import json
+import re
 
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
+
+# A CR sub-component renders as a non-empty "label: value" pair (e.g. "access-resources: 2").
+_LABELED_VALUE_RE = re.compile(r"^\S.*: \S.*$")
 
 EXPECTED_CRONJOBS = [
     "jwt-rotator",
@@ -16,7 +20,7 @@ def test_health_all_layers(e2e_deployment: EndToEndDeployment) -> None:
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "health"])
     output = result.stdout
 
-    for layer in ["cluster", "load-balancer", "components"]:
+    for layer in ["cluster", "load-balancer", "components", "images"]:
         assert layer in output, f"Expected layer '{layer}' in health output"
     assert "Connection" in output, "Expected 'Connection' in health output"
 
@@ -85,17 +89,39 @@ def test_health_components_layer(e2e_deployment: EndToEndDeployment) -> None:
     for name in manifest_components:
         assert name in names, f"Expected component '{name}' in health output"
 
+    # Components whose health is existence-based, keyed by manifest type.
+    crd_names = {n for n, c in manifest_components.items() if c.type == "CustomResourceDefinition"}
+    cr_names = {n for n, c in manifest_components.items() if c.type == "CustomResourceWithoutStatus"}
+    # The eks-oidc template declares the 3 Workspace CRDs + the access-strategy and template CRs.
+    assert len(crd_names) >= 3, f"Expected >= 3 CustomResourceDefinition components, got {sorted(crd_names)}"
+    assert len(cr_names) >= 2, f"Expected >= 2 CustomResourceWithoutStatus components, got {sorted(cr_names)}"
+
     for entry in layers:
         assert entry["layer"] == "components"
-        if entry["name"] in EXPECTED_CRONJOBS:
+        name = entry["name"]
+        if name in EXPECTED_CRONJOBS:
             assert entry["status_category"] in ("healthy", "in-progress"), (
-                f"CronJob '{entry['name']}' unexpected status_category: {entry['status_category']}"
+                f"CronJob '{name}' unexpected status_category: {entry['status_category']}"
             )
         else:
             assert entry["status_category"] == "healthy", (
-                f"Component '{entry['name']}' not healthy: status_category={entry['status_category']}"
+                f"Component '{name}' not healthy: status_category={entry['status_category']}"
             )
         assert entry["status"] != ""
+
+        if name in crd_names:
+            # CRD rows surface the served API version (e.g. v1alpha1) in details.
+            assert entry["status"] == "Present", f"CRD '{name}' status: {entry['status']}"
+            assert entry["detail"] == "v1alpha1", f"CRD '{name}' detail: {entry['detail']}"
+
+        if name in cr_names:
+            # Access-strategy / template rows surface their namespace in details and a labeled
+            # value (access-resources count / access-strategy ref) in the sub-component cell.
+            assert entry["status"] == "Present", f"CR '{name}' status: {entry['status']}"
+            assert entry["detail"] != "", f"CR '{name}' should surface its namespace in detail"
+            assert _LABELED_VALUE_RE.match(entry["sub_component"]), (
+                f"CR '{name}' sub-component should be a 'label: value' pair, got: {entry['sub_component']!r}"
+            )
 
 
 def test_health_load_balancer_layer(e2e_deployment: EndToEndDeployment) -> None:
@@ -111,6 +137,32 @@ def test_health_load_balancer_layer(e2e_deployment: EndToEndDeployment) -> None:
     assert layers[0]["status_category"] == "healthy"
     assert layers[0]["name"] != ""
     assert layers[0]["status"] == "Active"
+
+
+def test_health_images_layer(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify --images reports one row per image, available with its latest tag."""
+    e2e_deployment.ensure_deployed()
+
+    manifest = e2e_deployment.get_manifest()
+    manifest_images = manifest.get_images()
+
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "health", "--images", "--json"])
+    data = json.loads(result.stdout)
+
+    layers = data["layers"]
+    assert len(layers) == len(manifest_images), f"Expected {len(manifest_images)} images, got {len(layers)}"
+
+    names = {entry["name"] for entry in layers}
+    for name in manifest_images:
+        assert name in names, f"Expected image '{name}' in health output"
+
+    for entry in layers:
+        assert entry["layer"] == "images"
+        # Status reflects ECR presence; a deployed image must be available.
+        assert entry["status"] == "Available"
+        assert entry["status_category"] == "healthy"
+        # Detail is the latest non-'latest' tag.
+        assert entry["detail"] != "latest"
 
 
 def test_health_connection_flag(e2e_deployment: EndToEndDeployment) -> None:

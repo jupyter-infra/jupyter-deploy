@@ -27,6 +27,22 @@ def _get_cronjob_names(e2e_deployment: EndToEndDeployment) -> list[str]:
     return [name for name, comp in _get_manifest_components(e2e_deployment).items() if comp.type == "CronJob"]
 
 
+def _get_custom_resource_names(e2e_deployment: EndToEndDeployment) -> list[str]:
+    return [
+        name
+        for name, comp in _get_manifest_components(e2e_deployment).items()
+        if comp.type == "CustomResourceWithoutStatus"
+    ]
+
+
+def _get_crd_names(e2e_deployment: EndToEndDeployment) -> list[str]:
+    return [
+        name
+        for name, comp in _get_manifest_components(e2e_deployment).items()
+        if comp.type == "CustomResourceDefinition"
+    ]
+
+
 def _poll_component_status(
     e2e_deployment: EndToEndDeployment, name: str, target_status: str, timeout_s: int = 120, interval_s: int = 5
 ) -> None:
@@ -63,7 +79,12 @@ def _get_component_last_updated(e2e_deployment: EndToEndDeployment, name: str) -
 
 
 def test_component_list(e2e_deployment: EndToEndDeployment) -> None:
-    """Verify list shows table with all components."""
+    """Verify list shows table with all components.
+
+    The table renders at a fixed terminal width, so long names/types may be truncated;
+    exact-name coverage is in the --text and --json variants. Here we assert that a
+    truncation-tolerant prefix of each name and display type appears in the output.
+    """
     e2e_deployment.ensure_deployed()
 
     manifest_components = _get_manifest_components(e2e_deployment)
@@ -71,10 +92,12 @@ def test_component_list(e2e_deployment: EndToEndDeployment) -> None:
     output = result.stdout
 
     for name in manifest_components:
-        assert name in output, f"Expected component '{name}' in list output"
+        assert name[:20] in output, f"Expected component '{name}' in list output"
 
-    for comp_type in {comp.type for comp in manifest_components.values()}:
-        assert comp_type in output, f"Expected type '{comp_type}' in list output"
+    # The Type column shows the display type (type-display when set, else type).
+    for comp in manifest_components.values():
+        display_type = comp.type_display or comp.type
+        assert display_type[:20] in output, f"Expected type '{display_type}' in list output"
 
 
 def test_component_list_json(e2e_deployment: EndToEndDeployment) -> None:
@@ -93,8 +116,10 @@ def test_component_list_json(e2e_deployment: EndToEndDeployment) -> None:
     by_name = {c["name"]: c for c in components}
     for name, comp_def in manifest_components.items():
         assert name in by_name, f"Expected component '{name}' in JSON output"
-        assert by_name[name]["type"] == comp_def.type, (
-            f"Type mismatch for '{name}': expected '{comp_def.type}', got '{by_name[name]['type']}'"
+        # list returns the display type (type-display when set, else the internal type).
+        expected_type = comp_def.type_display or comp_def.type
+        assert by_name[name]["type"] == expected_type, (
+            f"Type mismatch for '{name}': expected '{expected_type}', got '{by_name[name]['type']}'"
         )
         actual_desc = by_name[name]["description"]
         assert actual_desc == comp_def.description, (
@@ -128,6 +153,54 @@ def test_component_status_happy_case(e2e_deployment: EndToEndDeployment) -> None
     for name in _get_all_names(e2e_deployment):
         result = e2e_deployment.cli.run_command(["jupyter-deploy", "component", "status", "--name", name])
         assert f"{name} status:" in result.stdout, f"Expected '{name} status:' in output:\n{result.stdout}"
+
+
+@pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_custom_resource_component_status_present(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify CustomResourceWithoutStatus components report a present/default verdict via health."""
+    e2e_deployment.ensure_deployed()
+
+    cr_names = _get_custom_resource_names(e2e_deployment)
+    assert cr_names, "Expected CustomResourceWithoutStatus components (oauth-access-strategy, jupyterlab-template)"
+
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "health", "--components", "--json"])
+    data = json.loads(result.stdout)
+    by_name = {entry["name"]: entry for entry in data["layers"]}
+
+    for name in cr_names:
+        assert name in by_name, f"Expected CR component '{name}' in health output"
+        entry = by_name[name]
+        # Existence-based health: a deployed CR is healthy and reports 'Present'.
+        assert entry["status_category"] == "healthy", f"{name}: {entry}"
+        assert entry["status"] == "Present", f"{name} unexpected status: {entry['status']}"
+
+
+@pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_cluster_custom_resource_crd_status_present(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify the Workspace CRDs report present via cluster-scoped existence checks."""
+    e2e_deployment.ensure_deployed()
+
+    crd_names = _get_crd_names(e2e_deployment)
+    assert crd_names, "Expected CustomResourceDefinition components for the Workspace CRDs"
+
+    for name in crd_names:
+        result = e2e_deployment.cli.run_command(["jupyter-deploy", "component", "status", "--name", name])
+        assert f"{name} status: Present" in result.stdout, f"Expected '{name}' Present:\n{result.stdout}"
+
+
+@pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_cluster_custom_resource_crd_show(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify show returns the CRD object for a cluster-scoped component."""
+    e2e_deployment.ensure_deployed()
+
+    crd_names = _get_crd_names(e2e_deployment)
+    assert crd_names, "Expected CustomResourceDefinition components for the Workspace CRDs"
+
+    name = crd_names[0]
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "component", "show", "--name", name, "--json"])
+    data = json.loads(result.stdout)
+    assert "resource" in data, f"Expected 'resource' in JSON response, got: {list(data.keys())}"
+    assert data["resource"]["kind"] == "CustomResourceDefinition"
 
 
 @pytest.mark.usefixtures("kubernetes_cluster_login")
@@ -176,6 +249,21 @@ def test_component_show_job(e2e_deployment: EndToEndDeployment) -> None:
     assert "name" in data, f"Expected 'name' in JSON response, got: {list(data.keys())}"
     assert "resource" in data, f"Expected 'resource' in JSON response, got: {list(data.keys())}"
     assert data["name"] == name
+
+
+@pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_component_show_custom_resource(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify show --json returns the resource for a CustomResourceWithoutStatus component."""
+    e2e_deployment.ensure_deployed()
+
+    cr_names = _get_custom_resource_names(e2e_deployment)
+    assert cr_names, "Expected at least one CustomResourceWithoutStatus component"
+
+    name = cr_names[0]
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "component", "show", "--name", name, "--json"])
+    data = json.loads(result.stdout)
+    assert "name" in data, f"Expected 'name' in JSON response, got: {list(data.keys())}"
+    assert "resource" in data, f"Expected 'resource' in JSON response, got: {list(data.keys())}"
 
 
 def test_component_show_description(e2e_deployment: EndToEndDeployment) -> None:

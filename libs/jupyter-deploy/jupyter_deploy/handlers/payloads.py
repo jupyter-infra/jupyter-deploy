@@ -10,6 +10,7 @@ class HealthLayer(str, Enum):
     CLUSTER = "cluster"
     LOAD_BALANCER = "load-balancer"
     COMPONENTS = "components"
+    IMAGES = "images"
 
 
 @dataclass
@@ -64,6 +65,16 @@ class ImageTag:
 
 
 @dataclass
+class ImageStatusResult:
+    """Result of jd image status: whether the image is present in ECR."""
+
+    name: str
+    status: str
+    status_category: str
+    latest_tag: str
+
+
+@dataclass
 class ImageVulnerability:
     """Single vulnerability entry."""
 
@@ -74,6 +85,7 @@ class ImageVulnerability:
     installed_version: str
     fixed_version: str
     score: float
+    epss_score: float | None = None
 
 
 @dataclass

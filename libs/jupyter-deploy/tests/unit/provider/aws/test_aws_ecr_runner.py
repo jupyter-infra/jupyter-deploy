@@ -3,8 +3,10 @@ import unittest
 from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
+import botocore.exceptions
+
 from jupyter_deploy.engine.supervised_execution import NullDisplay
-from jupyter_deploy.exceptions import InstructionNotFoundError
+from jupyter_deploy.exceptions import ImageTagNotFoundError, InstructionNotFoundError
 from jupyter_deploy.provider.aws.aws_ecr_runner import AwsEcrRunner
 from jupyter_deploy.provider.resolved_argdefs import ResolvedInstructionArgument, StrResolvedInstructionArgument
 
@@ -62,6 +64,63 @@ class TestDescribeRepository(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             runner._describe_repository(resolved_arguments=resolved_args)
+
+
+class TestDescribeImage(unittest.TestCase):
+    def _resolved_args(self) -> dict[str, ResolvedInstructionArgument]:
+        return {
+            "repository_name": StrResolvedInstructionArgument(
+                argument_name="repository_name", value="my-app/jupyterlab"
+            ),
+            "image_tag": StrResolvedInstructionArgument(argument_name="image_tag", value="v1"),
+        }
+
+    @patch("jupyter_deploy.api.aws.ecr.ecr_repository.describe_image")
+    def test_emits_available_on_success(self, mock_describe: Mock) -> None:
+        runner = AwsEcrRunner(NullDisplay(), region_name="us-west-2")
+        mock_describe.return_value = {"imageTags": ["v1"]}
+
+        result = runner._describe_image(resolved_arguments=self._resolved_args())
+
+        mock_describe.assert_called_once_with(runner.client, repository_name="my-app/jupyterlab", image_tag="v1")
+        self.assertEqual(result["Status"].value, "Available")
+        self.assertEqual(result["StatusCategory"].value, "healthy")
+
+    def test_raises_image_tag_not_found_when_image_missing(self) -> None:
+        runner = AwsEcrRunner(NullDisplay(), region_name="us-west-2")
+
+        class FakeImageNotFound(Exception):
+            pass
+
+        runner.client = Mock()
+        runner.client.exceptions.ImageNotFoundException = FakeImageNotFound
+
+        with (
+            patch("jupyter_deploy.api.aws.ecr.ecr_repository.describe_image", side_effect=FakeImageNotFound()),
+            self.assertRaises(ImageTagNotFoundError),
+        ):
+            runner._describe_image(resolved_arguments=self._resolved_args())
+
+    def test_other_errors_bubble_up(self) -> None:
+        runner = AwsEcrRunner(NullDisplay(), region_name="us-west-2")
+
+        class FakeImageNotFound(Exception):
+            pass
+
+        # Only ImageNotFoundException is translated; any other error (e.g. permission denied)
+        # propagates unchanged rather than being mistaken for a missing tag.
+        runner.client = Mock()
+        runner.client.exceptions.ImageNotFoundException = FakeImageNotFound
+
+        access_denied = botocore.exceptions.ClientError(
+            {"Error": {"Code": "AccessDeniedException", "Message": "not authorized"}},
+            "DescribeImages",
+        )
+        with (
+            patch("jupyter_deploy.api.aws.ecr.ecr_repository.describe_image", side_effect=access_denied),
+            self.assertRaises(botocore.exceptions.ClientError),
+        ):
+            runner._describe_image(resolved_arguments=self._resolved_args())
 
 
 class TestListImageTags(unittest.TestCase):
@@ -145,3 +204,16 @@ class TestExecuteInstruction(unittest.TestCase):
 
         runner.execute_instruction("list-image-tags", resolved_args)
         mock_list.assert_called_once()
+
+    @patch("jupyter_deploy.api.aws.ecr.ecr_repository.describe_image")
+    def test_routes_describe_image(self, mock_describe: Mock) -> None:
+        runner = AwsEcrRunner(NullDisplay(), region_name="us-west-2")
+        mock_describe.return_value = {"imageTags": ["v1"]}
+
+        resolved_args: dict[str, ResolvedInstructionArgument] = {
+            "repository_name": StrResolvedInstructionArgument(argument_name="repository_name", value="repo"),
+            "image_tag": StrResolvedInstructionArgument(argument_name="image_tag", value="v1"),
+        }
+
+        runner.execute_instruction("describe-image", resolved_args)
+        mock_describe.assert_called_once()
