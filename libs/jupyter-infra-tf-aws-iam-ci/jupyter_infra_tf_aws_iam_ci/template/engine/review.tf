@@ -103,6 +103,13 @@ resource "aws_iam_policy" "review_run" {
   })
 
   tags = local.default_tags
+
+  lifecycle {
+    precondition {
+      condition     = length(var.review_repos) > 0
+      error_message = "review_repos must be non-empty when create_review_resources is true."
+    }
+  }
 }
 
 # Publish role — assumed by jupyter-deploy CI to build and push the review image.
