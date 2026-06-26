@@ -6,8 +6,9 @@
 # against a PR ref range. The image holds no credentials; AWS and GitHub creds
 # are passed in as environment at run time.
 #
-# All tool versions are pinned so a given image tag is reproducible and the
-# supply chain is auditable. The roborev tarball is checksum-verified.
+# Tool versions are pinned so a given image tag is reproducible. The roborev
+# tarball is additionally SHA256-verified; gh and claude-code are pinned but not
+# checksum-verified, as first-party releases.
 
 FROM node:24-bookworm-slim
 
@@ -34,14 +35,14 @@ RUN curl -sfLO "https://github.com/roborev-dev/roborev/releases/download/v${ROBO
     && rm -f "roborev_${ROBOREV_VERSION}_linux_amd64.tar.gz" \
     && roborev version
 
-# gh CLI — pinned release tarball.
+# gh CLI used by roborev to interact with GitHub — pinned release tarball. Not checksum-verified, as it's a first-party release.
 RUN curl -sfLO "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
     && tar xzf "gh_${GH_VERSION}_linux_amd64.tar.gz" \
     && install "gh_${GH_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh \
     && rm -rf "gh_${GH_VERSION}_linux_amd64" "gh_${GH_VERSION}_linux_amd64.tar.gz" \
     && gh --version
 
-# claude-code agent — pinned npm release. roborev invokes `claude`.
+# claude-code agent used by roborev — pinned npm release. Not checksum-verified, as it's a first-party release.
 RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
     && claude --version
 
