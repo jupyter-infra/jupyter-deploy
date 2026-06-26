@@ -115,7 +115,7 @@ resource "aws_iam_policy" "review_run" {
 # Publish role — assumed by jupyter-deploy CI to build and push the review image.
 module "role_review_publish" {
   count  = local.review_count
-  source = "./modules/review_role"
+  source = "./modules/iam_role"
 
   role_name          = "${var.review_resource_prefix}-publish-${local.doc_postfix}"
   oidc_provider_arn  = local.oidc_provider_arn
@@ -130,7 +130,7 @@ module "role_review_publish" {
 # Run role — assumed by consumer repos to pull the image and run reviews.
 module "role_review_run" {
   count  = local.review_count
-  source = "./modules/review_role"
+  source = "./modules/iam_role"
 
   role_name          = "${var.review_resource_prefix}-run-${local.doc_postfix}"
   oidc_provider_arn  = local.oidc_provider_arn

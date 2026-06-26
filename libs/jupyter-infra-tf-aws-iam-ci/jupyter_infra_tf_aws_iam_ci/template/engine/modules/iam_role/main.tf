@@ -1,3 +1,9 @@
+locals {
+  # Single-repo callers pass github_repo; multi-repo callers pass github_repos.
+  trust_repos          = length(var.github_repos) > 0 ? var.github_repos : [var.github_repo]
+  attached_policy_arns = concat(var.managed_policy_arns, var.policy_arns)
+}
+
 # IAM role assumed by GitHub Actions via OIDC
 resource "aws_iam_role" "this" {
   name                 = var.role_name
@@ -17,7 +23,10 @@ resource "aws_iam_role" "this" {
             "${var.oidc_provider_url}:aud" = "sts.amazonaws.com"
           }
           StringLike = {
-            "${var.oidc_provider_url}:sub" = "repo:${var.github_org}/${var.github_repo}:${var.oidc_trust_subject}"
+            "${var.oidc_provider_url}:sub" = [
+              for repo in local.trust_repos :
+              "repo:${var.github_org}/${repo}:${var.oidc_trust_subject}"
+            ]
           }
         }
       }
@@ -29,11 +38,11 @@ resource "aws_iam_role" "this" {
   })
 }
 
-# Attach managed policies
+# Attach managed and customer-managed policies
 resource "aws_iam_role_policy_attachment" "managed" {
-  count      = length(var.managed_policy_arns)
+  count      = length(local.attached_policy_arns)
   role       = aws_iam_role.this.name
-  policy_arn = var.managed_policy_arns[count.index]
+  policy_arn = local.attached_policy_arns[count.index]
 }
 
 # Secrets Manager read/write access (e.g. auth state)
