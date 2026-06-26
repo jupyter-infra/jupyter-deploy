@@ -15,7 +15,7 @@
 #     this workflow is inert:
 #       REVIEW_PUBLISH_ROLE_ARN  <- review_publish_iam_role_arn
 #       REVIEW_ECR_REPOSITORY    <- review_image_repository_url
-#       REVIEW_AWS_REGION        optional, defaults to us-west-2
+#       REVIEW_AWS_REGION        <- region (optional; defaults to us-east-1)
 
 name: Build review image
 
@@ -51,7 +51,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.REVIEW_PUBLISH_ROLE_ARN }}
-          aws-region: ${{ vars.REVIEW_AWS_REGION || 'us-west-2' }}
+          aws-region: ${{ vars.REVIEW_AWS_REGION || 'us-east-1' }}
 
       - name: Pull previous image for cache
         run: just ci-review-pull "${{ vars.REVIEW_ECR_REPOSITORY }}" || true
