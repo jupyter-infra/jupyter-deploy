@@ -26,9 +26,18 @@ from jupyter_deploy.cli.teams_app import teams_app
 from jupyter_deploy.cli.users_app import users_app
 from jupyter_deploy.cli.variables_decorator import with_project_variables
 from jupyter_deploy.engine.enum import EngineType
+from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
 from jupyter_deploy.enum import StoreType
-from jupyter_deploy.exceptions import LogCleanupError, OpenWebBrowserError, UrlNotAvailableError
+from jupyter_deploy.exceptions import (
+    LocalStateNotPersistedError,
+    LogCleanupError,
+    OpenWebBrowserError,
+    ProjectIdNotAvailableError,
+    ProjectStoreAccessConfigurationError,
+    ProjectStoreNotFoundError,
+    UrlNotAvailableError,
+)
 from jupyter_deploy.handlers.init_handler import InitHandler
 from jupyter_deploy.handlers.project import config_handler
 from jupyter_deploy.handlers.project.down_handler import DownHandler
@@ -472,6 +481,16 @@ def config(
                 console.print(":bulb: To apply the changes, run: [bold cyan]jd up[/]")
 
 
+def _push_to_store(console: Console, display_manager: DisplayManager, handler: UpHandler, verbose: bool) -> None:
+    """Push the project to the remote store, with verbose/spinner display."""
+    if verbose:
+        console.print("Saving configuration to the remote store")
+        handler.push_to_store()
+    else:
+        with display_manager.spinner("Saving configuration to the remote store..."):
+            handler.push_to_store()
+
+
 @runner.app.command()
 def up(
     project_dir: Annotated[
@@ -516,12 +535,47 @@ def up(
         if verbose:
             console.rule("[bold]jupyter-deploy:[/] applying infrastructure changes")
         completion_context = None
+        local_state_error: LocalStateNotPersistedError | None = None
         with display_manager:
             try:
                 completion_context = handler.apply(config_file_path, auto_approve)
             except LogCleanupError as e:
                 # Log cleanup failed, but main operation succeeded - warn and continue
                 console.print(f":warning: log clean up failed: {e}", style="yellow")
+            except LocalStateNotPersistedError as e:
+                # The apply failed before the remote backend was configured, so the
+                # engine state (and any resources it tracks) is still local.
+                #
+                # We only stash the error here and handle it AFTER the `with` block:
+                # ProgressDisplayManager runs a Rich `Live` for the duration of this
+                # block, and the rescue push below calls `_push_to_store()`, which (in
+                # non-verbose mode) opens a `console.status` spinner — itself a `Live`.
+                # Rich allows only one active `Live` at a time, so pushing here would
+                # raise `LiveError`. Deferring until the block exits also mirrors the
+                # success path, which calls `_push_to_store()` after this same block.
+                local_state_error = e
+
+        if local_state_error is not None:
+            # Reached only when apply failed with the state still local (see above).
+            # Push regardless to migrate the local state to the remote backend and
+            # upload the project snapshot, so the partial deployment is recoverable.
+            # Warn (don't fail) on store-resolution problems, then re-raise the
+            # original apply error so the exit code and UX are unchanged.
+            console.line()
+            try:
+                _push_to_store(console, display_manager, handler, verbose)
+                console.print(
+                    ":white_check_mark: Saved partial deployment to the remote store; "
+                    "recover it with [bold cyan]jd init --restore-project[/].",
+                    style="green",
+                )
+            except (ProjectIdNotAvailableError, ProjectStoreNotFoundError, ProjectStoreAccessConfigurationError) as e:
+                console.print(
+                    f":warning: Could not save the partial deployment to the remote store: {e}",
+                    style="yellow",
+                )
+            # Surface the genuine apply failure now that the rescue push is done.
+            raise local_state_error.original_error
 
         # Display completion summary if available
         # Verbose mode prints everything, so no need to add a summary
@@ -533,12 +587,7 @@ def up(
                 print(line)
             console.line()
 
-        if verbose:
-            console.print("Saving configuration to the remote store")
-            handler.push_to_store()
-        else:
-            with display_manager.spinner("Saving configuration to the remote store..."):
-                handler.push_to_store()
+        _push_to_store(console, display_manager, handler, verbose)
 
         console.print("Infrastructure changes applied successfully.", style="green")
         console.line()

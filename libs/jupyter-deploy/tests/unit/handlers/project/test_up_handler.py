@@ -6,9 +6,11 @@ from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition
 from jupyter_deploy.engine.supervised_execution import NullDisplay
 from jupyter_deploy.enum import StoreType
 from jupyter_deploy.exceptions import (
+    LocalStateNotPersistedError,
     ProjectIdNotAvailableError,
     ProjectStoreAccessConfigurationError,
     ProjectStoreNotFoundError,
+    SupervisedExecutionError,
 )
 from jupyter_deploy.handlers.project.up_handler import UpHandler
 from jupyter_deploy.manifest import JupyterDeployManifestV1, JupyterDeployProjectStoreV1
@@ -115,6 +117,62 @@ class TestUpHandler(unittest.TestCase):
 
         self.assertEqual(str(context.exception), "Apply failed")
         mock_tf_handler.apply.assert_called_once()
+
+    @patch("jupyter_deploy.engine.terraform.tf_up.TerraformUpHandler")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("pathlib.Path.cwd")
+    def test_apply_raises_local_state_error_when_backend_not_configured(
+        self, mock_cwd: Mock, mock_retrieve_manifest: Mock, mock_tf_handler_cls: Mock
+    ) -> None:
+        path = Path("/mock/path")
+        mock_cwd.return_value = Path("/mock/cwd")
+        mock_retrieve_manifest.return_value = self.mock_manifest
+        mock_tf_handler = Mock()
+        apply_error = SupervisedExecutionError("up", 3, "terraform apply failed")
+        mock_tf_handler.apply.side_effect = apply_error
+        mock_tf_handler.engine_dir_path = Path("/mock/cwd/engine")
+        mock_tf_handler_cls.return_value = mock_tf_handler
+
+        handler = UpHandler(display_manager=NullDisplay())
+        handler._store_access_manager = Mock()
+        # State is still local — the remote backend was never configured.
+        handler._store_access_manager.is_configured.return_value = False
+
+        with self.assertRaises(LocalStateNotPersistedError) as context:
+            handler.apply(path)
+
+        # The signal carries the genuine apply failure for the caller to re-raise.
+        self.assertIs(context.exception.original_error, apply_error)
+        # The original command and exit code are preserved as defense-in-depth.
+        self.assertEqual(context.exception.command, "up")
+        self.assertEqual(context.exception.retcode, 3)
+
+    @patch("jupyter_deploy.engine.terraform.tf_up.TerraformUpHandler")
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("pathlib.Path.cwd")
+    def test_apply_reraises_plain_error_when_backend_already_configured(
+        self, mock_cwd: Mock, mock_retrieve_manifest: Mock, mock_tf_handler_cls: Mock
+    ) -> None:
+        path = Path("/mock/path")
+        mock_cwd.return_value = Path("/mock/cwd")
+        mock_retrieve_manifest.return_value = self.mock_manifest
+        mock_tf_handler = Mock()
+        apply_error = SupervisedExecutionError("up", 1, "terraform apply failed")
+        mock_tf_handler.apply.side_effect = apply_error
+        mock_tf_handler.engine_dir_path = Path("/mock/cwd/engine")
+        mock_tf_handler_cls.return_value = mock_tf_handler
+
+        handler = UpHandler(display_manager=NullDisplay())
+        handler._store_access_manager = Mock()
+        # State already lives on the remote backend — nothing to rescue.
+        handler._store_access_manager.is_configured.return_value = True
+
+        with self.assertRaises(SupervisedExecutionError) as context:
+            handler.apply(path)
+
+        # The original error propagates unchanged, NOT a LocalStateNotPersistedError.
+        self.assertIs(context.exception, apply_error)
+        self.assertNotIsInstance(context.exception, LocalStateNotPersistedError)
 
     @patch("jupyter_deploy.engine.terraform.tf_up.TerraformUpHandler")
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")

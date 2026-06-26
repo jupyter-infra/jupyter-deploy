@@ -9,7 +9,11 @@ from jupyter_deploy.engine.terraform import tf_up
 from jupyter_deploy.engine.terraform.tf_constants import TF_ENGINE_DIR
 from jupyter_deploy.engine.terraform.tf_outputs import TerraformOutputsHandler
 from jupyter_deploy.engine.terraform.tf_store_access import TerraformStoreAccessManager
-from jupyter_deploy.exceptions import ProjectIdNotAvailableError
+from jupyter_deploy.exceptions import (
+    LocalStateNotPersistedError,
+    ProjectIdNotAvailableError,
+    SupervisedExecutionError,
+)
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler, write_store_config
 from jupyter_deploy.provider.store.store_manager_factory import StoreManagerFactory
 
@@ -72,8 +76,24 @@ class UpHandler(BaseProjectHandler):
 
         Returns:
             CompletionContext with completion summary, or None if not available.
+
+        Raises:
+            LocalStateNotPersistedError: If the apply fails while the engine state is
+                still local (no remote backend configured yet). The caller MUST push
+                to the store to migrate the local state, then let the error propagate.
+            SupervisedExecutionError: If the apply fails with the state already on the
+                remote backend (nothing to rescue).
         """
-        return self._handler.apply(config_file_path, auto_approve)
+        try:
+            return self._handler.apply(config_file_path, auto_approve)
+        except SupervisedExecutionError as e:
+            # If the remote backend is already configured, the state is safe on the
+            # remote store and there is nothing to rescue — let the error propagate.
+            if self._store_access_manager.is_configured():
+                raise
+            # State is still local: signal the caller to persist it before exiting.
+            # The signal carries the original error so the caller can re-raise it.
+            raise LocalStateNotPersistedError(e) from e
 
     def push_to_store(self) -> None:
         """Push the project to the remote store.

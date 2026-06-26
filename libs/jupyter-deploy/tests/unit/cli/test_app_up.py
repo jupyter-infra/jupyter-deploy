@@ -8,7 +8,12 @@ from typer.testing import CliRunner
 
 from jupyter_deploy.cli.app import runner as app_runner
 from jupyter_deploy.cli.simple_display import SimpleDisplayManager
-from jupyter_deploy.exceptions import LogCleanupError
+from jupyter_deploy.exceptions import (
+    LocalStateNotPersistedError,
+    LogCleanupError,
+    ProjectIdNotAvailableError,
+    SupervisedExecutionError,
+)
 
 
 class TestUpCommand(unittest.TestCase):
@@ -200,3 +205,45 @@ class TestUpCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(call_order, ["apply", "push_to_store"])
+
+    @patch("jupyter_deploy.cli.app.UpHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_up_pushes_to_store_when_local_state_not_persisted(
+        self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
+
+        mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler(config_file_exists=True)
+        mock_up_handler_cls.return_value = mock_up_handler_instance
+        original_error = SupervisedExecutionError("up", 7, "terraform apply failed")
+        mock_up_fns["apply"].side_effect = LocalStateNotPersistedError(original_error)
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up"])
+
+        # The genuine apply failure must surface with its original exit code (7, not
+        # a generic 1), confirming the CLI re-raises original_error, not the signal...
+        self.assertEqual(result.exit_code, 7)
+        # ...but push_to_store must run anyway to migrate local state + project files.
+        mock_up_fns["push_to_store"].assert_called_once()
+
+    @patch("jupyter_deploy.cli.app.UpHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_up_apply_failure_surfaces_even_if_rescue_push_fails(
+        self, mock_project_ctx_manager: Mock, mock_up_handler_cls: Mock
+    ) -> None:
+        mock_project_ctx_manager.side_effect = TestUpCommand.mock_project_dir
+
+        mock_up_handler_instance, mock_up_fns = self.get_mock_up_handler(config_file_exists=True)
+        mock_up_handler_cls.return_value = mock_up_handler_instance
+        original_error = SupervisedExecutionError("up", 5, "terraform apply failed")
+        mock_up_fns["apply"].side_effect = LocalStateNotPersistedError(original_error)
+        # The deployment_id may be unresolvable on an early failure; the rescue push
+        # warns and the original apply error still surfaces with its exit code.
+        mock_up_fns["push_to_store"].side_effect = ProjectIdNotAvailableError("deployment_id not available")
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["up"])
+
+        self.assertEqual(result.exit_code, 5)
+        mock_up_fns["push_to_store"].assert_called_once()

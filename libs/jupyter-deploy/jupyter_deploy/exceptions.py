@@ -211,6 +211,29 @@ class SupervisedExecutionError(JupyterDeployError, Exception):
         super().__init__(message)
 
 
+class LocalStateNotPersistedError(SupervisedExecutionError):
+    """Raised when a supervised apply fails while the engine state is still local.
+
+    The remote backend is configured only after a successful first apply, so a failure
+    before that leaves the state on local disk only. On an ephemeral runner (CI,
+    sandbox) that state — and any cloud resources it tracks — is lost when the process
+    exits. The caller is expected to catch this, push the project to the store (which
+    migrates the local state to the remote backend), then re-raise `original_error`.
+
+    This is a control-flow signal carrying the underlying apply failure: the caller
+    surfaces `original_error` (the genuine error) once the rescue push is done.
+    Subclassing SupervisedExecutionError is defense-in-depth — if a caller forgets to
+    unwrap, the original command and exit code are still available for a graceful exit.
+
+    Attributes:
+        original_error: The underlying apply failure to surface after the rescue push.
+    """
+
+    def __init__(self, original_error: SupervisedExecutionError) -> None:
+        self.original_error = original_error
+        super().__init__(original_error.command, original_error.retcode, str(original_error))
+
+
 # ============================================================================
 # Instruction execution errors
 # ============================================================================
