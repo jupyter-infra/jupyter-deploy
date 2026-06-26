@@ -1,4 +1,7 @@
-# CI-optimized E2E image: extends base image with Python deps, Playwright, and workspace code.
+# CI-optimized E2E image: extends the foundational image with Python deps,
+# Playwright, and workspace code. Template-shared — base and eks-oidc tests run
+# in the same image; the TEMPLATE build-arg selects the published-package
+# pyproject for pypi-mode installs (see the pypi branch below).
 #
 # Layer strategy (dep-first COPY):
 #   1. Copy dependency manifests only → uv sync (cached when deps unchanged)
@@ -20,6 +23,11 @@ ARG INSTALL_MODE=workspace
 ARG INSTALL_VARIANT=release
 ARG PKG_VERSION=""
 ARG EXTRA_INDEX_URL=https://test.pypi.org/simple/
+# Template under test (only applies when INSTALL_MODE=pypi): selects which
+# .github/e2e-<template>/pyproject.*.toml declares the published package.
+#   "base"     — jupyter-deploy-tf-aws-ec2-base
+#   "eks-oidc" — jupyter-deploy-tf-aws-eks-oidc
+ARG TEMPLATE=base
 
 # --- Dependency layer (cached when pyproject.toml unchanged) ---
 # Copy manifests and create stub files that hatchling validates (LICENSE, README.md).
@@ -29,9 +37,10 @@ USER root
 COPY --chown=testuser:testuser pyproject.toml /workspace/
 COPY --chown=testuser:testuser libs/jupyter-deploy/pyproject.toml /workspace/libs/jupyter-deploy/
 COPY --chown=testuser:testuser libs/jupyter-deploy-tf-aws-ec2-base/pyproject.toml /workspace/libs/jupyter-deploy-tf-aws-ec2-base/
+COPY --chown=testuser:testuser libs/jupyter-deploy-tf-aws-eks-oidc/pyproject.toml /workspace/libs/jupyter-deploy-tf-aws-eks-oidc/
 COPY --chown=testuser:testuser libs/jupyter-infra-tf-aws-iam-ci/pyproject.toml /workspace/libs/jupyter-infra-tf-aws-iam-ci/
 COPY --chown=testuser:testuser libs/pytest-jupyter-deploy/pyproject.toml /workspace/libs/pytest-jupyter-deploy/
-RUN for lib in jupyter-deploy jupyter-deploy-tf-aws-ec2-base jupyter-infra-tf-aws-iam-ci pytest-jupyter-deploy; do \
+RUN for lib in jupyter-deploy jupyter-deploy-tf-aws-ec2-base jupyter-deploy-tf-aws-eks-oidc jupyter-infra-tf-aws-iam-ci pytest-jupyter-deploy; do \
         touch /workspace/libs/$lib/LICENSE /workspace/libs/$lib/README.md; \
     done && chown -R testuser /workspace/libs
 USER testuser
@@ -48,14 +57,13 @@ USER root
 COPY --chown=testuser:testuser . /workspace/
 USER testuser
 
-# Release mode: replace workspace pyproject.toml with a rendered template that
-# declares PyPI deps. Which template is selected by INSTALL_VARIANT.
-COPY --chown=testuser:testuser .github/e2e-base/pyproject.release.toml /workspace/.github/e2e-base/pyproject.release.toml
-COPY --chown=testuser:testuser .github/e2e-base/pyproject.canary.toml /workspace/.github/e2e-base/pyproject.canary.toml
+# The pyproject templates (.github/e2e-<template>/pyproject.{release,canary}.toml)
+# arrive with the full-source COPY above; TEMPLATE selects which template dir.
 
-# Workspace mode: re-run uv sync to register editable packages.
+# Workspace mode: re-run uv sync to register editable packages (registers the
+# package under test from local source — base AND eks-oidc are workspace members).
 # Release mode: render template, uv sync (resolves everything including the
-# package under test from the configured index), then install Playwright.
+# published package under test from the configured index), then install Playwright.
 #   release variant: sed-render placeholders from pyproject.release.toml
 #   canary variant: copy pyproject.canary.toml as-is (no placeholders)
 RUN if [ "$INSTALL_MODE" = "pypi" ]; then \
@@ -63,22 +71,22 @@ RUN if [ "$INSTALL_MODE" = "pypi" ]; then \
         rm -rf .venv && \
         uv cache clean && \
         if [ "$INSTALL_VARIANT" = "canary" ]; then \
-            mv .github/e2e-base/pyproject.canary.toml pyproject.toml && \
-            rm -f .github/e2e-base/pyproject.release.toml; \
+            cp ".github/e2e-${TEMPLATE}/pyproject.canary.toml" pyproject.toml; \
         else \
             sed -e "s|{{PKG_VERSION}}|${PKG_VERSION}|g" \
                 -e "s|{{EXTRA_INDEX_URL}}|${EXTRA_INDEX_URL}|g" \
-                .github/e2e-base/pyproject.release.toml > pyproject.toml && \
-            rm -f .github/e2e-base/pyproject.canary.toml && \
+                ".github/e2e-${TEMPLATE}/pyproject.release.toml" > pyproject.toml && \
             # Strip workspace source — uv errors on it outside workspace context
             sed -i '/\[tool\.uv\.sources\.jupyter-deploy\]/,+1d' libs/pytest-jupyter-deploy/pyproject.toml; \
         fi && \
+        # Drop the now-unused pyproject templates so the image ships no stale copies.
+        rm -rf .github/e2e-base .github/e2e-eks-oidc && \
         uv sync && \
         .venv/bin/playwright install firefox && \
         ln -sf ~/.cache/ms-playwright/firefox-*/firefox/firefox ~/.local/bin/firefox; \
     else \
         cd /workspace && \
-        rm -f .github/e2e-base/pyproject.release.toml .github/e2e-base/pyproject.canary.toml && \
+        rm -rf .github/e2e-base .github/e2e-eks-oidc && \
         uv sync --all-packages && \
         uv run playwright install firefox && \
         ln -sf ~/.cache/ms-playwright/firefox-*/firefox/firefox ~/.local/bin/firefox; \

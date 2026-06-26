@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 
-# Destroy-time script: removes operator-managed Workspaces and WorkspaceTemplates
-# BEFORE the operator and its nodes are torn down.
+# Destroy-time script: removes operator-managed Workspaces, WorkspaceTemplates and
+# WorkspaceAccessStrategies BEFORE the operator and its nodes are torn down.
 #
 # Why this is needed:
-#   The jupyter-k8s operator protects Workspace and WorkspaceTemplate resources
-#   with finalizers (and Templates that reference an AccessStrategy will soon pin
-#   one on it too). Those finalizers are only cleared by the operator's
-#   controller-manager. On `terraform destroy`, the node groups (which host the
-#   controller-manager) and the Helm releases that ship these CRs are torn down
-#   concurrently — so Helm's uninstall blocks on a finalizer the now-dead operator
-#   can never clear, hits its timeout ("context deadline exceeded"), and aborts
-#   the whole destroy. We delete Workspaces then Templates (every namespace);
-#   WorkspaceAccessStrategy is the top-level construct and is left to Helm.
+#   The jupyter-k8s operator protects Workspace, WorkspaceTemplate AND
+#   WorkspaceAccessStrategy resources with finalizers. Those finalizers are only
+#   cleared by the operator's controller-manager. On `terraform destroy`, the node
+#   groups (which host the controller-manager) and the Helm releases that ship
+#   these CRs are torn down concurrently — so Helm's uninstall blocks on a
+#   finalizer the now-dead operator can never clear, hits its timeout ("context
+#   deadline exceeded"), and aborts the whole destroy. We delete the CRs
+#   innermost-first (Workspaces → Templates → AccessStrategies, every namespace)
+#   while the operator is still alive, so each Helm uninstall is a no-op.
+#   (workspace-defaults ships the WorkspaceTemplate; the router chart ships the
+#   WorkspaceAccessStrategy — clearing all three covers every release.)
 #
 #   This null_resource depends_on the operator/CR Helm releases and node groups,
 #   so its destroy provisioner runs FIRST (destroy is reverse-dependency order) —
@@ -32,14 +34,16 @@ GRACEFUL_WAIT_SECONDS=120
 SLEEP_INTERVAL=10
 
 # Operator CRDs we tear down, in deletion order. Workspaces reference Templates,
-# so they must go first. WorkspaceAccessStrategy is the top-level construct and is
-# left to the Helm uninstall — but Templates can reference an AccessStrategy, which
-# will soon pin a deletion-blocking finalizer on it, so we must clear ALL Templates
-# (every namespace) before the access-strategy Helm release is uninstalled.
+# and Templates reference an AccessStrategy — and the operator pins a
+# deletion-blocking finalizer on each. Clear them innermost-first (Workspaces,
+# then Templates, then AccessStrategies) while the operator is still alive, before
+# any Helm release that ships them (workspace-defaults: Template; router chart:
+# AccessStrategy) tries to uninstall them.
 WORKSPACE_KIND="workspaces.workspace.jupyter.org"
 TEMPLATE_KIND="workspacetemplates.workspace.jupyter.org"
+ACCESS_STRATEGY_KIND="workspaceaccessstrategies.workspace.jupyter.org"
 
-FINALIZER_KINDS="$WORKSPACE_KIND $TEMPLATE_KIND"
+FINALIZER_KINDS="$WORKSPACE_KIND $TEMPLATE_KIND $ACCESS_STRATEGY_KIND"
 
 setup_kubeconfig() {
     echo "Configuring kubectl for cluster $CLUSTER_NAME..."
@@ -70,13 +74,17 @@ count_remaining() {
     echo "$total"
 }
 
-# Issue a non-blocking delete on every operator CR. Workspaces first.
+# Issue a non-blocking delete on every operator CR, innermost reference first:
+# Workspaces → Templates → AccessStrategies.
 delete_custom_resources() {
     echo "Deleting Workspaces (all namespaces)..."
     kubectl delete "$WORKSPACE_KIND" --all-namespaces --all --wait=false --ignore-not-found 2>&1 || true
 
     echo "Deleting WorkspaceTemplates (all namespaces)..."
     kubectl delete "$TEMPLATE_KIND" --all-namespaces --all --wait=false --ignore-not-found 2>&1 || true
+
+    echo "Deleting WorkspaceAccessStrategies (all namespaces)..."
+    kubectl delete "$ACCESS_STRATEGY_KIND" --all-namespaces --all --wait=false --ignore-not-found 2>&1 || true
 }
 
 # Wait for the operator to clear finalizers and let the resources disappear.

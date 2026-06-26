@@ -92,6 +92,7 @@ jobs:
       install-mode: ${{ inputs.install-mode || 'workspace' }}
       install-variant: ${{ inputs.install-variant || 'release' }}
       pkg-version: ${{ inputs.pkg-version }}
+      template: eks-oidc
 
   # --- Deploy bookend ---
 
@@ -161,13 +162,6 @@ jobs:
         id: install-just
         uses: ./.github/actions/install-just
 
-      # `jd init` discovers templates via entry points, which only register when
-      # the template package is installed. The eks-oidc package is a workspace
-      # member but not a dependency of the root, so a plain `uv run` won't install
-      # it — sync all workspace packages to register the aws:eks:oidc template.
-      - name: Sync workspace (install template packages)
-        run: uv sync --all-packages
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -192,32 +186,24 @@ jobs:
       - name: Import auth state
         run: just auth-import sandbox-ci
 
-      - name: Initialize project
-        run: |
-          mkdir -p sandbox-e2e
-          uv run jd init -E terraform -P aws -I eks -T oidc sandbox-e2e
-
-      - name: Prepare configuration
-        run: |
-          set -a
-          source .env
-          set +a
-          envsubst < libs/jupyter-deploy-tf-aws-eks-oidc/tests/e2e/configurations/base.yaml > sandbox-e2e/variables.yaml
-
-      - name: Configure project
-        run: cd sandbox-e2e && uv run jd config -v
-
-      - name: Deploy
-        id: deploy
-        run: cd sandbox-e2e && uv run jd up -y -v
-
       - name: Pull pre-built E2E image
-        if: success()
         run: just ci-e2e-eks-pull ${{ inputs.oauth-app-num }} ${{ needs.build-image.outputs.ecr-tag }}
 
+      # Deploy from INSIDE the pre-built container, so a pypi-mode image deploys the
+      # PUBLISHED package — not the runner's workspace code. Unlike base (which wraps
+      # deploy in the test_deployment pytest), this runs jd init/config/up as explicit
+      # log-streaming steps so the ~30-min EKS deploy is readable in this job. The
+      # job timeout-minutes (90) bounds the deploy; no pytest deploy-timeout needed.
+      - name: Deploy (jd init / config / up)
+        id: deploy
+        run: just ci-e2e-eks-deploy sandbox-e2e sandbox-ci
+
+      # Verify against the now-EXISTING deployment (jd config re-init only, no redeploy).
       - name: Verify deployment
         if: success()
-        run: just test-e2e-eks-oidc sandbox-e2e "test_deployment" "full-deploy=true,skip-sync=true,ci-dir=sandbox-ci"
+        run: >-
+          just test-e2e-eks-oidc sandbox-e2e "test_deployment"
+          "full-deploy=true,skip-sync=true,ci-dir=sandbox-ci"
 
       - name: Export auth state
         if: always() && steps.install-just.outcome == 'success'
@@ -270,11 +256,29 @@ jobs:
       ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
       timeout-minutes: 120
 
+  # All mutating EKS tests, selected by the `mutating` marker so new ones (GPU,
+  # autoscaling, …) are picked up without editing this workflow. The fresh deploy
+  # uses tests/e2e/configurations/base.yaml, which satisfies their config needs
+  # (e.g. idle shutdown's workspaces_idle_shutdown_timeout_min=1).
+  test-mutating:
+    name: "Mutating tests"
+    needs: [build-image, test-non-mutating]
+    uses: ./.github/workflows/e2e-eks-oidc-job.yml
+    secrets: inherit
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      ref: ${{ inputs.ref }}
+      ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
+      marker: mutating
+      mutate: true
+      timeout-minutes: 60
+
   # --- Cleanup: destroy cluster (only if all tests passed) ---
 
   cleanup:
     name: "Cleanup: destroy cluster"
-    needs: [test-non-mutating]
+    needs: [test-non-mutating, test-mutating]
     if: success() && inputs.destroy-after
     runs-on: ubuntu-latest
     timeout-minutes: 30

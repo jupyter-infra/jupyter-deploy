@@ -1,9 +1,12 @@
-"""Probe workspace network reachability to verify NetworkPolicy enforcement.
+"""Probe in-cluster network reachability to verify NetworkPolicy enforcement.
 
 Runs a throwaway `curl` pod in a chosen namespace and attempts a TCP/HTTP
-connection to a workspace Service. A NetworkPolicy that denies the source
-manifests as a connection timeout; an allowed source connects (any HTTP status,
-including 404, counts as reachable).
+connection to a target Service. A NetworkPolicy that denies the source manifests
+as a connection timeout; an allowed source connects (any HTTP status, including
+404, counts as reachable).
+
+`probe_service` is the generic primitive (any in-cluster host:port); it backs
+`probe_workspace`, which targets a workspace's operator-generated Service.
 
 Requires NetworkPolicy enforcement to be active on the cluster (on EKS, the VPC
 CNI addon must set enableNetworkPolicy=true) — otherwise every probe is allowed.
@@ -43,22 +46,21 @@ def _wait_for_terminated_exit_code(pod_name: str, namespace: str, timeout_s: int
     raise RuntimeError(f"probe pod '{pod_name}' in ns '{namespace}' did not terminate within {timeout_s}s")
 
 
-def probe_workspace(
-    workspace_name: str,
+def probe_service(
+    host: str,
+    port: int,
     *,
     from_namespace: str,
-    workspace_namespace: str = "default",
-    port: int = 8888,
     pod_labels: dict[str, str] | None = None,
     connect_timeout_s: int = 8,
     pod_name: str = "netpol-probe",
 ) -> bool:
-    """Attempt to reach a workspace Service from a pod in from_namespace.
+    """Attempt to reach an in-cluster host:port from a pod in from_namespace.
 
-    Runs a one-shot curl pod (optionally carrying pod_labels, to prove the policy
-    does not key on pod labels), connects to the workspace Service on port, then
-    reads the container's terminated exit code (not kubectl's, which is
-    unreliable for run --rm). The pod is always deleted on the way out.
+    Runs a one-shot curl pod (optionally carrying pod_labels, e.g. to satisfy or
+    probe a policy's podSelector), connects to http://host:port/, then reads the
+    container's terminated exit code (not kubectl's, which is unreliable for
+    run --rm). The pod is always deleted on the way out.
 
     Returns:
         True if the connection was allowed (curl reached the endpoint),
@@ -69,7 +71,6 @@ def probe_workspace(
             (e.g. DNS failure, image pull error) — an ambiguous result that must
             not be silently read as "denied".
     """
-    host = workspace_service_host(workspace_name, workspace_namespace)
     url = f"http://{host}:{port}/"
 
     overrides: dict = {"spec": {"restartPolicy": "Never"}}
@@ -117,6 +118,65 @@ def probe_workspace(
     raise RuntimeError(
         f"probe to {url} from ns '{from_namespace}' failed ambiguously (curl exit {exit_code}) — "
         "not a clean allow (0) or deny (28)"
+    )
+
+
+def probe_service_allowed(
+    host: str,
+    port: int,
+    *,
+    from_namespace: str,
+    pod_labels: dict[str, str] | None = None,
+    attempts: int = 5,
+    connect_timeout_s: int = 8,
+    pod_name: str = "netpol-probe",
+) -> bool:
+    """Probe repeatedly, returning True as soon as one probe is allowed.
+
+    Each attempt runs a fresh pod (unique name) so no terminating pod from a prior
+    attempt collides with the next.
+    """
+
+    # The AWS VPC CNI programs a NetworkPolicy's label-based allow rules for a new
+    # source pod asynchronously, so a single probe from a freshly-created pod can
+    # spuriously time out before the allow rule is in place (it fails closed). This
+    # retry converges on the steady-state answer for ALLOW assertions; default-deny
+    # is immediate and stable, so deny assertions should use probe_service directly.
+    for attempt in range(attempts):
+        if probe_service(
+            host,
+            port,
+            from_namespace=from_namespace,
+            pod_labels=pod_labels,
+            connect_timeout_s=connect_timeout_s,
+            pod_name=f"{pod_name}-{attempt}",
+        ):
+            return True
+    return False
+
+
+def probe_workspace(
+    workspace_name: str,
+    *,
+    from_namespace: str,
+    workspace_namespace: str = "default",
+    port: int = 8888,
+    pod_labels: dict[str, str] | None = None,
+    connect_timeout_s: int = 8,
+    pod_name: str = "netpol-probe",
+) -> bool:
+    """Attempt to reach a workspace Service from a pod in from_namespace.
+
+    Thin wrapper over probe_service that resolves the workspace's
+    operator-generated Service host. See probe_service for return/raise semantics.
+    """
+    return probe_service(
+        workspace_service_host(workspace_name, workspace_namespace),
+        port,
+        from_namespace=from_namespace,
+        pod_labels=pod_labels,
+        connect_timeout_s=connect_timeout_s,
+        pod_name=pod_name,
     )
 
 

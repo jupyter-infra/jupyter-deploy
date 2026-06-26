@@ -22,6 +22,22 @@ locals {
   github_orgs_unique = distinct([for t in local.oauth_teams_parsed : t.org])
 }
 
+# Shared namespace where workspace-layer resources live (WorkspaceTemplate,
+# AccessStrategy, RBAC RoleBindings). Lives here in the platform layer because the
+# operator/router charts and the workspaces.tf resources all sit on top of it; on
+# destroy it must outlive every release that ships objects into it (those releases
+# depend_on it, so it is torn down after them).
+resource "kubernetes_namespace_v1" "shared" {
+  metadata {
+    name = var.workspace_shared_namespace
+    labels = {
+      "app.kubernetes.io/managed-by" = "jupyter-deploy"
+    }
+  }
+
+  depends_on = [aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user, module.node_group]
+}
+
 resource "helm_release" "traefik_crds" {
   name             = "traefik-crds"
   repository       = local.traefik_crds_repo
@@ -32,7 +48,15 @@ resource "helm_release" "traefik_crds" {
 
   # Access policy associations must outlive all K8s resources — without them the
   # K8s/Helm provider loses authorization and destroy operations fail with "forbidden".
-  depends_on = [aws_eks_addon.cert_manager, aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user]
+  #
+  # module.node_group: EVERY resource in this platform layer depends on the node
+  # groups (see also kubernetes_namespace_v1.shared / jupyter_k8s / workspace_router).
+  # On create this guarantees nodes exist before anything schedules pods; on destroy
+  # (reverse order) it keeps the node groups — and the operator scheduled on them —
+  # alive until every release has finished uninstalling. Without it the node groups
+  # and helm uninstalls tear down concurrently; the operator dies mid-uninstall and
+  # CR finalizers never clear → "context deadline exceeded" (run 28182357633).
+  depends_on = [aws_eks_addon.cert_manager, aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user, module.node_group]
 }
 
 resource "helm_release" "jupyter_k8s" {
@@ -61,7 +85,7 @@ resource "helm_release" "jupyter_k8s" {
     },
   ]
 
-  depends_on = [aws_eks_addon.cert_manager, helm_release.traefik_crds]
+  depends_on = [aws_eks_addon.cert_manager, helm_release.traefik_crds, kubernetes_namespace_v1.shared, module.node_group]
 }
 
 resource "helm_release" "workspace_router" {
@@ -180,5 +204,5 @@ resource "helm_release" "workspace_router" {
     },
   ]
 
-  depends_on = [helm_release.jupyter_k8s, aws_eks_addon.cert_manager, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup, kubernetes_namespace_v1.shared]
+  depends_on = [module.node_group, helm_release.jupyter_k8s, aws_eks_addon.cert_manager, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup, kubernetes_namespace_v1.shared]
 }

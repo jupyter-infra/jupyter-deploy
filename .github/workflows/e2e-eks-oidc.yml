@@ -48,3 +48,22 @@ jobs:
       ref: ${{ inputs.ref }}
       ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
       timeout-minutes: 120
+
+  # All mutating EKS tests, selected by the `mutating` marker so new ones (GPU,
+  # autoscaling, …) are picked up without editing this workflow. Some require the
+  # deployment to be configured a certain way (e.g. idle shutdown needs
+  # workspaces_idle_shutdown_timeout_min=1, set in tests/e2e/configurations/base.yaml);
+  # a restored sandbox deployed with an older config may fail those.
+  test-mutating:
+    name: "Mutating tests"
+    needs: [build-image, test-non-mutating]
+    uses: ./.github/workflows/e2e-eks-oidc-job.yml
+    secrets: inherit
+    with:
+      oauth-app-num: ${{ inputs.oauth-app-num }}
+      test-filter: ${{ inputs.test-filter }}
+      ref: ${{ inputs.ref }}
+      ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
+      marker: mutating
+      mutate: true
+      timeout-minutes: 60

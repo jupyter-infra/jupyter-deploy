@@ -133,11 +133,17 @@ jobs:
           echo "::error::Test PyPI install failed after 2 attempts"
           exit 1
 
-  # TODO: add e2e-eks-oidc-release gate once PyPI canary workflows are wired up
+  e2e-eks-oidc-release:
+    name: E2E release gate (eks-oidc template)
+    needs: [test-pypi-install, build]
+    uses: ./.github/workflows/e2e-eks-oidc-release.yml
+    secrets: inherit
+    with:
+      pkg-version: ${{ needs.build.outputs.version }}
 
   prod-pypi-publish:
     name: Publish to PyPI
-    needs: [test-pypi-install, build]
+    needs: [e2e-eks-oidc-release, build]
     runs-on: ubuntu-latest
     permissions:
       id-token: write

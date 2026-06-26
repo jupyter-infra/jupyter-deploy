@@ -1,0 +1,21 @@
+name: E2E canary (eks-oidc template)
+
+on:
+  schedule:
+    # Weekly: Sunday midnight UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  canary:
+    if: github.repository == 'jupyter-infra/jupyter-deploy'
+    uses: ./.github/workflows/e2e-eks-oidc-fresh.yml
+    with:
+      oauth-app-num: "6"
+      install-mode: pypi
+      install-variant: canary
+    secrets: inherit

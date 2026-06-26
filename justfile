@@ -649,7 +649,7 @@ ci-e2e-base-build cache_from="" extra_args="":
     fi
 
     {{container-tool}} build \
-        -f .github/e2e-base/Dockerfile \
+        -f .github/e2e-shared/Dockerfile \
         --build-arg BASE_IMAGE=jupyter-deploy-e2e:base \
         $CACHE_ARG \
         {{extra_args}} \
@@ -722,6 +722,79 @@ ci-e2e-eks-pull oauth_app_num tag="latest" ci_dir="sandbox-ci":
     {{container-tool}} pull "$ECR_URL:{{tag}}"
     {{container-tool}} tag "$ECR_URL:{{tag}}" jupyter-deploy-e2e-base:latest
     echo "✓ Pulled and tagged as jupyter-deploy-e2e-base:latest"
+
+# Deploy an EKS OIDC project from scratch INSIDE the pre-built E2E container.
+# Unlike the base template (which wraps deploy in the test_deployment pytest), this
+# runs jd init/config/up as explicit, log-streaming steps so the ~30-min EKS deploy
+# is readable in its own CI job. Deploying in-container means a pypi-mode image
+# deploys the PUBLISHED package, not the runner's workspace code. The verify test
+# runs separately afterwards via `just test-e2e-eks-oidc <dir> test_deployment full-deploy=true`.
+#
+# Prerequisite: `.env` already generated on the host (just env-setup-eks "" ...).
+# Usage: just ci-e2e-eks-deploy <project-dir> [ci-dir]
+ci-e2e-eks-deploy project_dir="sandbox-e2e" ci_dir="sandbox-ci":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    EKS_CONFIG="libs/jupyter-deploy-tf-aws-eks-oidc/tests/e2e/configurations/base.yaml"
+    if [ ! -f "$EKS_CONFIG" ]; then
+        echo "Error: EKS config not found at $EKS_CONFIG"
+        exit 1
+    fi
+    if [ ! -d "{{ci_dir}}" ]; then
+        echo "Error: CI directory '{{ci_dir}}' does not exist"
+        exit 1
+    fi
+
+    # AWS_REGION must be set: the compose file interpolates ${AWS_REGION} from the
+    # shell env to inject it into the container, and the SDK treats "" as broken.
+    # In CI it is exported by configure-aws-credentials; fall back to local AWS
+    # config for dev runs. (AWS creds flow the same way via compose interpolation.)
+    : "${AWS_REGION:=$(aws configure get region 2>/dev/null || true)}"
+    if [ -z "${AWS_REGION:-}" ]; then
+        echo "Error: AWS_REGION is not set and no default region in AWS config"
+        exit 1
+    fi
+    export AWS_REGION
+
+    # Start the pre-built container with the project dir + CI dir mounted.
+    mkdir -p "{{justfile_directory()}}/{{project_dir}}"
+    OVERRIDE_FILE="{{justfile_directory()}}/docker-compose.e2e-override.yml"
+    {
+        echo "services:"
+        echo "  e2e:"
+        echo "    image: jupyter-deploy-e2e-base:latest"
+        echo "    volumes:"
+        echo "      - ./{{project_dir}}:/workspace/{{project_dir}}"
+        echo "      - ./{{ci_dir}}:/workspace/{{ci_dir}}"
+    } > "$OVERRIDE_FILE"
+    trap 'rm -f "$OVERRIDE_FILE"' EXIT
+
+    echo "Starting E2E container (pre-built image)..."
+    mkdir -p ~/.kube  # must exist before compose up; Docker creates missing bind-mount sources as root
+    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} down
+    {{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} -f "$OVERRIDE_FILE" up -d --no-build
+
+    # Deploy via explicit jd steps inside the container. Activate the venv directly
+    # (not `uv run`, which would re-sync the workspace and clobber a pypi install).
+    EXEC="{{container-tool}} compose --project-directory {{justfile_directory()}} -f {{e2e-compose-file}} exec -e PYTHONUNBUFFERED=1 e2e bash -c"
+
+    # init first (writes template files into the empty project dir), then drop in
+    # the rendered variables.yaml, then config + up.
+    echo "=== jd init ==="
+    $EXEC ". .venv/bin/activate && cd /workspace && jupyter-deploy init -E terraform -P aws -I eks -T oidc {{project_dir}}"
+
+    echo "=== render variables.yaml from $EKS_CONFIG ==="
+    set -a
+    source {{justfile_directory()}}/.env
+    set +a
+    envsubst < "$EKS_CONFIG" > "{{project_dir}}/variables.yaml"
+
+    echo "=== jd config ==="
+    $EXEC ". .venv/bin/activate && cd /workspace/{{project_dir}} && jupyter-deploy config -v"
+    echo "=== jd up ==="
+    $EXEC ". .venv/bin/activate && cd /workspace/{{project_dir}} && jupyter-deploy up -y -v"
+    echo "✓ EKS deployment complete"
 
 # --- CLI release E2E commands ---
 

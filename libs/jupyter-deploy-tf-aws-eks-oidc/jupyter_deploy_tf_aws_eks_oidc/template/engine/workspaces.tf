@@ -30,35 +30,21 @@ resource "null_resource" "destroy_workspaces" {
     command     = self.triggers.script
   }
 
-  # Everything the cleanup needs alive when it runs must be listed here, so that
-  # on destroy this resource is torn down first:
-  #   - operator + node group: the controller-manager must be running to clear the
-  #     finalizers, and it is scheduled onto the "components" node group.
-  #   - cluster + access entries/associations: the script authenticates via
-  #     `aws eks get-token`; without the caller's access association, kubectl gets
-  #     "forbidden". These must outlive every K8s operation.
+  # On destroy this runs FIRST (before any of these are torn down). We depend only
+  # on platform-layer helm.tf resources; each of them pins the node groups, cluster
+  # and caller access associations, so everything the cleanup needs stays alive:
+  #   - the operator (controller-manager) must run to clear finalizers — it is
+  #     scheduled on the "components" node group.
+  #   - the script authenticates via `aws eks get-token`; without the cluster +
+  #     caller access associations kubectl is "forbidden".
+  #   - the shared namespace holds the CRs the script deletes.
   depends_on = [
     helm_release.jupyter_k8s,
     helm_release.workspace_router,
     helm_release.workspace_defaults,
     helm_release.github_rbac,
-    module.node_group,
     kubernetes_namespace_v1.shared,
-    module.eks_cluster,
-    aws_eks_access_policy_association.admin_role,
-    aws_eks_access_policy_association.admin_user,
   ]
-}
-
-resource "kubernetes_namespace_v1" "shared" {
-  metadata {
-    name = var.workspace_shared_namespace
-    labels = {
-      "app.kubernetes.io/managed-by" = "jupyter-deploy"
-    }
-  }
-
-  depends_on = [module.eks_cluster, aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user]
 }
 
 resource "helm_release" "github_rbac" {
@@ -66,6 +52,9 @@ resource "helm_release" "github_rbac" {
   chart            = "${path.module}/../charts/github-rbac"
   namespace        = var.workspace_shared_namespace
   create_namespace = false
+  # Uninstall can wait on RoleBinding teardown during a slow destroy; give it the
+  # same 600s headroom as the other CR-bearing releases (default is 5 min).
+  timeout = 600
 
   set = concat(
     [
@@ -98,6 +87,10 @@ resource "helm_release" "workspace_defaults" {
   chart            = "${path.module}/../charts/workspace-defaults"
   namespace        = var.workspace_shared_namespace
   create_namespace = false
+  # Ships the jupyterlab WorkspaceTemplate (operator-finalized). Install AND
+  # uninstall wait on the operator reconciling/clearing it; the 5-min provider
+  # default can lag on a slow/contended cluster during a mass destroy.
+  timeout = 600
 
   set = concat([
     {

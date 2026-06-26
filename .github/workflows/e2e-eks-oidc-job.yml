@@ -17,6 +17,11 @@ on:
         required: false
         type: string
         default: ""
+      marker:
+        description: "Pytest marker to select (e.g. mutating); defaults to all e2e tests"
+        required: false
+        type: string
+        default: ""
       mutate:
         description: "Enable mutating test cases"
         required: false
@@ -115,6 +120,9 @@ jobs:
           OPTIONS="ci-dir=sandbox-ci"
           if [ "${{ inputs.mutate }}" = "true" ]; then
             OPTIONS="mutate=true,${OPTIONS}"
+          fi
+          if [ -n "${{ inputs.marker }}" ]; then
+            OPTIONS="marker=${{ inputs.marker }},${OPTIONS}"
           fi
           if [ -n "${{ inputs.ecr-tag }}" ]; then
             OPTIONS="skip-sync=true,${OPTIONS}"

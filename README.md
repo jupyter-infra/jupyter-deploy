@@ -2,7 +2,8 @@
 
 [![Documentation](https://readthedocs.org/projects/jupyter-deploy/badge/?version=latest)](https://jupyter-deploy.readthedocs.io/en/latest/)
 [![CI](https://github.com/jupyter-infra/jupyter-deploy/actions/workflows/ci.yml/badge.svg)](https://github.com/jupyter-infra/jupyter-deploy/actions/workflows/ci.yml)
-[![Canary](https://img.shields.io/github/actions/workflow/status/jupyter-infra/jupyter-deploy/e2e-base-canary.yml?label=canary)](https://github.com/jupyter-infra/jupyter-deploy/actions/workflows/e2e-base-canary.yml)
+[![base-template-e2e](https://img.shields.io/github/actions/workflow/status/jupyter-infra/jupyter-deploy/e2e-base-canary.yml?label=base-template-e2e)](https://github.com/jupyter-infra/jupyter-deploy/actions/workflows/e2e-base-canary.yml)
+[![eks-oidc-template-e2e](https://img.shields.io/github/actions/workflow/status/jupyter-infra/jupyter-deploy/e2e-eks-oidc-canary.yml?label=eks-oidc-template-e2e)](https://github.com/jupyter-infra/jupyter-deploy/actions/workflows/e2e-eks-oidc-canary.yml)
 [![PyPI - jupyter-deploy](https://img.shields.io/pypi/v/jupyter-deploy?label=jupyter-deploy)](https://pypi.org/project/jupyter-deploy/)
 [![PyPI - base template](https://img.shields.io/pypi/v/jupyter-deploy-tf-aws-ec2-base?label=base-template)](https://pypi.org/project/jupyter-deploy-tf-aws-ec2-base/)
 [![PyPI - eks-oidc template](https://img.shields.io/pypi/v/jupyter-deploy-tf-aws-eks-oidc?label=eks-oidc-template)](https://pypi.org/project/jupyter-deploy-tf-aws-eks-oidc/)
@@ -48,7 +49,7 @@ jd --help
 
 - [jupyter-deploy](./libs/jupyter-deploy/README.md): Core package providing the command line interface tool (CLI).
 - [jupyter-deploy-tf-aws-ec2-base](./libs/jupyter-deploy-tf-aws-ec2-base/README.md): A template to deploy a single JupyterLab app to an EC2 instance, serve it on your own domain and control access with GitHub identities.
-- [jupyter-deploy-tf-aws-eks-oidc](./libs/jupyter-deploy-tf-aws-eks-oidc/README.md): A template for multi-tenants JupyterLab or other interactive apps to an AWS EKS cluster, serve them on your own domain and control access with GitHub identities.
+- [jupyter-deploy-tf-aws-eks-oidc](./libs/jupyter-deploy-tf-aws-eks-oidc/README.md): A template for multi-tenant JupyterLab or other interactive apps to an AWS EKS cluster, serve them on your own domain and control access with GitHub identities.
 - [jupyter-infra-tf-aws-iam-ci](./libs/jupyter-infra-tf-aws-iam-ci/README.md): The template to configure the AWS resources for the CI.
 - [pytest-jupyter-deploy](./libs/pytest-jupyter-deploy/README.md): The pytest plugin for E2E tests that integrates with Playwright.
 

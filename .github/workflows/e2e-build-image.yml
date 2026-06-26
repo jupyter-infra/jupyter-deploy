@@ -27,6 +27,11 @@ on:
         required: false
         type: string
         default: ""
+      template:
+        description: "Template under test when install-mode=pypi: base (default) or eks-oidc"
+        required: false
+        type: string
+        default: "base"
     outputs:
       ecr-tag:
         description: "ECR image tag for test jobs to pull"
@@ -82,6 +87,7 @@ jobs:
           if [ "${{ inputs.install-mode }}" = "pypi" ]; then
             BUILD_ARGS="$BUILD_ARGS --build-arg INSTALL_VARIANT=${{ inputs.install-variant }}"
             BUILD_ARGS="$BUILD_ARGS --build-arg PKG_VERSION=${{ inputs.pkg-version }}"
+            BUILD_ARGS="$BUILD_ARGS --build-arg TEMPLATE=${{ inputs.template }}"
           fi
           just ci-e2e-base-build "$ECR_URL:latest" "$BUILD_ARGS"
 

@@ -6,7 +6,7 @@ This document describes the one-time setup required for the E2E CI workflows.
 
 - AWS account with the CI infrastructure template deployed (`jupyter-infra-tf-aws-iam-ci`)
 - A dedicated GitHub bot account for automated testing
-- GitHub OAuth apps (1-5) registered under the bot account
+- GitHub OAuth apps (1-6) registered under the bot account
 
 ## Bot Account Setup
 
@@ -51,7 +51,9 @@ Create GitHub 5 OAuth apps under the bot account at:
 
 Each app corresponds to a deployment slot (subdomain). For each app, set:
 - **Homepage URL**: `https://<subdomain>.<domain>`
-- **Authorization callback URL**: `https://<subdomain>.<domain>/oauth2/callback`
+- **Authorization callback URL**:
+   - **with oauth2-proxy**: `https://<subdomain>.<domain>/oauth2/callback`
+   - **with dex**: `https://<subdomain>.<domain>/dex/callback`
 
 Store the client ID and client secret in the CI infrastructure template
 (`github_oauth_app_*` variables).
