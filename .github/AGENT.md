@@ -88,3 +88,7 @@ jobs:
 ## Setup
 
 See [SETUP.md](SETUP.md) for one-time CI infrastructure setup.
+
+## roborev review environment
+
+The roborev review run role (`tf-aws-iam-ci` with `create_review_resources = true`) trusts `repo:<org>/<repo>:environment:review` via OIDC. OIDC only proves a job declared the `review` environment, not that the workflow was trusted, so the `review` GitHub Actions environment in each `review_repos` repo **MUST** have protection rules (required reviewers and/or restricted branches/tags). Without them, a malicious PR (or a `pull_request_target` workflow) could assume the run role on its own terms.

@@ -42,6 +42,8 @@ jd config
 jd up
 ```
 
+> When `create_review_resources = true`: each `review_repos` repo's `review` GitHub Actions environment MUST have protection rules (required reviewers and/or restricted branches/tags). The run role trusts `repo:<org>/<repo>:environment:review` via OIDC, which only proves a job declared the environment, not that the workflow was trusted; without protection rules a malicious PR could assume the run role on its own terms.
+
 ### Inspect outputs
 ```bash
 # View all outputs
