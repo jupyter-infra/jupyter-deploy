@@ -1,0 +1,222 @@
+# Automated roborev PR review.
+#
+# Triggered on pull_request_target so it runs with base-repo credentials even
+# for fork PRs (a plain pull_request workflow gets no OIDC token from a fork).
+# The review fires per PR revision, in parallel with CI, regardless of CI result.
+#
+# SECURITY: pull_request_target runs with repository credentials. This job must
+# never execute code from the PR. It checks out the trusted base branch, fetches
+# the PR head as git objects only, and hands roborev a ref range. The review
+# container holds only the Bedrock creds (mounted, not env), never the GITHUB_TOKEN:
+# roborev prints the review and the runner posts it. The IAM role can only pull the
+# image and invoke Bedrock, and the token can only comment and set statuses, so a
+# prompt-injected review of a malicious diff can at worst spend model tokens and
+# produce a misleading comment.
+#
+# Inert until these repo variables are set (after tf-aws-iam-ci is deployed with
+# create_review_resources = true and the review image is published):
+#   REVIEW_RUN_ROLE_ARN   IAM role ARN (review_run_iam_role_arn output)
+#   REVIEW_IMAGE          ECR image ref, e.g. <repo-url>:latest
+#   REVIEW_BEDROCK_MODEL  Bedrock model / inference-profile ID (e.g. us.anthropic.claude-opus-4-8)
+#   REVIEW_AWS_REGION     optional, defaults to us-west-2
+
+name: roborev review
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "PR number to review"
+        required: true
+        type: string
+      smoke:
+        description: "Smoke test only: verify the OIDC to Bedrock chain, skip review"
+        type: boolean
+        default: false
+
+# One review per PR; a new push cancels the in-flight review for that PR.
+concurrency:
+  group: roborev-review-${{ github.event.pull_request.number || inputs.pr }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+  id-token: write
+
+jobs:
+  review:
+    name: roborev review
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: >-
+      github.event.pull_request.draft != true
+      && vars.REVIEW_RUN_ROLE_ARN != ''
+      && vars.REVIEW_IMAGE != ''
+      && vars.REVIEW_BEDROCK_MODEL != ''
+    environment: review
+    steps:
+      # Trusted base branch only. The PR head is fetched as data later, never run.
+      - name: Checkout base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Resolve PR and head SHA
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_FROM_EVENT: ${{ github.event.pull_request.number }}
+          HEAD_FROM_EVENT: ${{ github.event.pull_request.head.sha }}
+          PR_FROM_INPUT: ${{ inputs.pr }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            pr="$PR_FROM_INPUT"
+          else
+            pr="$PR_FROM_EVENT"
+          fi
+
+          # Current head of the PR. The stale-head guard below compares this to the
+          # revision that triggered the run, so superseded revisions are skipped
+          # before any model tokens are spent.
+          current_head=$(gh api "repos/$REPO/pulls/$pr" --jq .head.sha)
+
+          if [ "$EVENT_NAME" != "workflow_dispatch" ] && [ "$HEAD_FROM_EVENT" != "$current_head" ]; then
+            echo "PR #$pr head moved ($HEAD_FROM_EVENT -> $current_head); skipping superseded revision."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          base=$(gh api "repos/$REPO/pulls/$pr" --jq .base.sha)
+          {
+            echo "pr=$pr"
+            echo "head=$current_head"
+            echo "base=$base"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        if: steps.pr.outputs.skip != 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.REVIEW_RUN_ROLE_ARN }}
+          aws-region: ${{ vars.REVIEW_AWS_REGION || 'us-west-2' }}
+          # Pin the session to 1h: long enough for the 30-min job with margin, short
+          # enough to keep the leaked-credential window small. Keep this above the job
+          # timeout; a longer job means raising both.
+          role-duration-seconds: 3600
+
+      # Keep the AWS creds out of the container env: write the OIDC session creds to
+      # a file the smoke/review containers read via a read-only mount, so the keys
+      # are not passed with -e. The gh token is never given to the container; the
+      # runner posts the review comment itself (see "Run review and post comment").
+      - name: Stage AWS credentials for mounting
+        if: steps.pr.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/aws"
+          {
+            echo "[default]"
+            echo "aws_access_key_id=$AWS_ACCESS_KEY_ID"
+            echo "aws_secret_access_key=$AWS_SECRET_ACCESS_KEY"
+            echo "aws_session_token=$AWS_SESSION_TOKEN"
+          } > "$RUNNER_TEMP/aws/credentials"
+          # The container runs as uid 1000 (node), a different uid than the runner,
+          # so the mounted file must be readable by others for the container to read.
+          chmod 644 "$RUNNER_TEMP/aws/credentials"
+
+      - name: Pull review image
+        if: steps.pr.outputs.skip != 'true'
+        env:
+          REVIEW_IMAGE: ${{ vars.REVIEW_IMAGE }}
+        run: |
+          set -euo pipefail
+          registry="${REVIEW_IMAGE%%/*}"
+          aws ecr get-login-password --region "${{ vars.REVIEW_AWS_REGION || 'us-west-2' }}" \
+            | docker login --username AWS --password-stdin "$registry"
+          docker pull "$REVIEW_IMAGE"
+
+      - name: Mark review in progress
+        if: steps.pr.outputs.skip != 'true' && !inputs.smoke
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api -X POST "repos/$REPO/statuses/${{ steps.pr.outputs.head }}" \
+            -f context=roborev/review -f state=pending \
+            -f description="review running" > /dev/null
+
+      - name: Smoke test (Bedrock reachability)
+        if: steps.pr.outputs.skip != 'true' && inputs.smoke
+        env:
+          REVIEW_IMAGE: ${{ vars.REVIEW_IMAGE }}
+        run: |
+          set -euo pipefail
+          out=$(docker run --rm \
+            -v "$RUNNER_TEMP/aws:/home/node/.aws:ro" \
+            -e AWS_REGION -e AWS_DEFAULT_REGION \
+            -e CLAUDE_CODE_USE_BEDROCK=1 \
+            -e ANTHROPIC_MODEL="${{ vars.REVIEW_BEDROCK_MODEL }}" \
+            "$REVIEW_IMAGE" claude -p "Reply with exactly: BEDROCK_OK")
+          echo "model replied: $out"
+          [[ "$out" == *BEDROCK_OK* ]]
+
+      - name: Run review and post comment
+        id: run
+        if: steps.pr.outputs.skip != 'true' && !inputs.smoke
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          REVIEW_IMAGE: ${{ vars.REVIEW_IMAGE }}
+          PR: ${{ steps.pr.outputs.pr }}
+          HEAD_SHA: ${{ steps.pr.outputs.head }}
+          BASE_SHA: ${{ steps.pr.outputs.base }}
+        run: |
+          set -euo pipefail
+          # Fetch the PR head as git objects only. Never checked out, never executed.
+          git fetch --no-tags origin "+${HEAD_SHA}:refs/roborev/head" 2>/dev/null \
+            || git fetch --no-tags origin "pull/${PR}/head:refs/roborev/head"
+          base_sha=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+
+          # The review runs in the container with only the mounted Bedrock creds and
+          # prints the comment to stdout (logs go to stderr). The gh token is never
+          # passed to the container; the runner posts the captured output below, so
+          # the diff-processing context never holds the token.
+          docker run --rm \
+            -v "$RUNNER_TEMP/aws:/home/node/.aws:ro" \
+            -e AWS_REGION -e AWS_DEFAULT_REGION \
+            -e CLAUDE_CODE_USE_BEDROCK=1 \
+            -e ANTHROPIC_MODEL="${{ vars.REVIEW_BEDROCK_MODEL }}" \
+            -v "$PWD:/workspace" -w /workspace \
+            "$REVIEW_IMAGE" \
+            sh -c "git config --global --add safe.directory /workspace \
+              && roborev ci review --ref ${base_sha}..${HEAD_SHA} \
+                   --pr ${PR} --gh-repo ${REPO} \
+                   --min-severity medium --reasoning standard" \
+            > "$RUNNER_TEMP/review.md"
+
+          [ -s "$RUNNER_TEMP/review.md" ] || { echo "review produced no output"; exit 1; }
+          gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/review.md"
+
+      # Always close out the pending status, even if fetch/review failed or the
+      # run was cancelled, so no PR is left with a dangling "review running".
+      - name: Report status
+        if: always() && steps.pr.outputs.skip != 'true' && !inputs.smoke
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ steps.pr.outputs.head }}
+          OUTCOME: ${{ steps.run.outcome }}
+        run: |
+          set -euo pipefail
+          state=error
+          [ "$OUTCOME" = "success" ] && state=success
+          gh api -X POST "repos/${REPO}/statuses/${HEAD_SHA}" \
+            -f context=roborev/review -f state="$state" \
+            -f description="review $state" > /dev/null
