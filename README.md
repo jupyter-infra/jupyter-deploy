@@ -55,7 +55,8 @@ jd --help
 
 ## Contributing
 
-Refer to the [Contributing guide](./CONTRIBUTING.md).
+Refer to the [Contributing guide](./CONTRIBUTING.md). Pull requests get an automated AI code
+review, and you can run the same review locally before pushing with `just review`.
 
 ## License
 
