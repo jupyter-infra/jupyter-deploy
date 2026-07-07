@@ -1,0 +1,7 @@
+# roborev review policy for this repo, shared by CI and local reviews.
+# Read by `roborev ci review` in .github/workflows/roborev-review.yml and by
+# the local post-commit hook (`roborev init`). Reference: https://roborev.io/configuration/
+
+[ci]
+agents = ["claude-code"]
+review_types = ["default", "security"]

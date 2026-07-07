@@ -1040,3 +1040,19 @@ ci-review-pull ecr_url tag="latest":
     {{container-tool}} pull "{{ecr_url}}:{{tag}}"
     {{container-tool}} tag "{{ecr_url}}:{{tag}}" jupyter-deploy-review:latest
     echo "✓ Pulled and tagged as jupyter-deploy-review:latest"
+
+# --- roborev local review ---
+
+# AI review of the current branch vs main (roborev, runs locally, no daemon)
+review:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v roborev >/dev/null 2>&1 || { echo "roborev not found. Install it from https://roborev.io, then optionally run 'just review-setup'."; exit 1; }
+    roborev review --branch --local --wait
+
+# Opt-in: install the roborev post-commit hook for continuous local review
+review-setup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v roborev >/dev/null 2>&1 || { echo "roborev not found. Install it from https://roborev.io first."; exit 1; }
+    roborev init --agent claude-code
