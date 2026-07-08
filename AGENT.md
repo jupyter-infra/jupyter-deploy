@@ -114,33 +114,7 @@ Always run from the root of the repository:
 
 ## Automated code review
 
-Open PRs are reviewed automatically by [roborev](https://roborev.io)
-in CI (`.github/workflows/roborev-review.yml`): each revision gets one review comment,
-backed by Claude on Bedrock. The review is informational, maintainers still approve and merge.
-
-You can run the same review locally before pushing. Install roborev from
-[roborev.io](https://roborev.io), then:
-
-```bash
-just review        # review the current branch vs main, on demand
-```
-
-`just review` runs `roborev review --branch --local --wait`: no daemon, no background
-process, using whatever coding agent you have installed (claude-code, codex, gemini, ...).
-It shares the policy file [`.roborev.toml`](.roborev.toml) with CI. CI runs the full matrix
-defined there (the `default` and `security` review types); a local run does a single review,
-so push to get the complete CI review.
-
-For a continuous loop where every commit is reviewed automatically (opt-in):
-
-```bash
-just review-setup  # one-time: installs the roborev post-commit hook
-# then, after any commit:
-roborev show HEAD  # see the latest review
-roborev refine     # iterate: review, fix, repeat until clean
-```
-
-Local review is optional; CI reviews every PR regardless.
+Open PRs are reviewed automatically in CI by [roborev](https://roborev.io) (policy in [`.roborev.toml`](.roborev.toml)). Run the same review locally with `just review`; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## General coding rules
 1. you MUST NOT silence linters without the user's permission
