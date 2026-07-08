@@ -92,9 +92,12 @@ def test_health_components_layer(e2e_deployment: EndToEndDeployment) -> None:
     # Components whose health is existence-based, keyed by manifest type.
     crd_names = {n for n, c in manifest_components.items() if c.type == "CustomResourceDefinition"}
     cr_names = {n for n, c in manifest_components.items() if c.type == "CustomResourceWithoutStatus"}
+    helm_names = {n for n, c in manifest_components.items() if c.type == "HelmRelease"}
     # The eks-oidc template declares the 3 Workspace CRDs + the access-strategy and template CRs.
     assert len(crd_names) >= 3, f"Expected >= 3 CustomResourceDefinition components, got {sorted(crd_names)}"
     assert len(cr_names) >= 2, f"Expected >= 2 CustomResourceWithoutStatus components, got {sorted(cr_names)}"
+    # The 5 platform charts are surfaced as HelmRelease components.
+    assert len(helm_names) == 5, f"Expected 5 HelmRelease components, got {sorted(helm_names)}"
 
     for entry in layers:
         assert entry["layer"] == "components"
@@ -122,6 +125,16 @@ def test_health_components_layer(e2e_deployment: EndToEndDeployment) -> None:
             assert _LABELED_VALUE_RE.match(entry["sub_component"]), (
                 f"CR '{name}' sub-component should be a 'label: value' pair, got: {entry['sub_component']!r}"
             )
+
+        if name in helm_names:
+            # HelmRelease rows report the release status, the target namespace in details,
+            # and a "resources: <count>" sub-component with a positive object count. In JSON
+            # output sub_component is the raw payload; the table renders it as "resources: N".
+            assert entry["status"] == "deployed", f"HelmRelease '{name}' status: {entry['status']}"
+            assert entry["detail"] != "", f"HelmRelease '{name}' should surface its namespace in detail"
+            sub = json.loads(entry["sub_component"])
+            assert sub["name"] == "resources", f"HelmRelease '{name}' sub-component label: {sub['name']!r}"
+            assert int(sub["status"]) > 0, f"HelmRelease '{name}' should track at least one resource: {sub!r}"
 
 
 def test_health_load_balancer_layer(e2e_deployment: EndToEndDeployment) -> None:
