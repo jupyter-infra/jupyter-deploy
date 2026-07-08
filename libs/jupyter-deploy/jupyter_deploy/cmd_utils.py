@@ -73,7 +73,7 @@ def switch_dir(dir_path: Path | None) -> Generator:
         os.chdir(original_dir)
 
 
-def run_cmd_and_capture_output(cmds: list[str], exec_dir: Path | None = None) -> str:
+def run_cmd_and_capture_output(cmds: list[str], exec_dir: Path | None = None, stdin_input: str | None = None) -> str:
     """Run command, returns output.
 
     Raises:
@@ -82,6 +82,7 @@ def run_cmd_and_capture_output(cmds: list[str], exec_dir: Path | None = None) ->
     with switch_dir(exec_dir):
         result = subprocess.run(
             cmds,
+            input=stdin_input,
             capture_output=True,
             text=True,
             check=True,

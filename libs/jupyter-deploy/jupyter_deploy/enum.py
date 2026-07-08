@@ -160,6 +160,7 @@ class JupyterDeployTool(str, Enum):
 
     AWS_CLI = "aws-cli"
     AWS_SSM_PLUGIN = "aws-ssm-plugin"
+    HELM = "helm"
     JQ = "jq"
     KUBECTL = "kubectl"
     TERRAFORM = "terraform"
