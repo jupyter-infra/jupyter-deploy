@@ -91,5 +91,6 @@ The template requires the following tools installed locally:
 - [Terraform](https://developer.hashicorp.com/terraform/install) (>= 1.6)
 - [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) (for `jd cluster login` and direct cluster access)
+- [Helm](https://helm.sh/docs/intro/install/) (for `jd component reconcile`)
 
 `jupyter-deploy` will prompt you to install any missing tool during `jd config`.

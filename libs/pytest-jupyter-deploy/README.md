@@ -82,7 +82,7 @@ def test_requires_env_vars(e2e_deployment: EndToEndDeployment) -> None:
 ## E2E Test Container Image
 
 This package bundles a Dockerfile and docker-compose.yml for a containerized E2E test environment
-with Python, Terraform, AWS CLI, and Playwright pre-installed. The image is template-independent
+with Python, Terraform, AWS CLI, kubectl, Helm, and Playwright pre-installed. The image is template-independent
 and used by the [jupyter-deploy justfile](https://github.com/jupyter-infra/jupyter-deploy/blob/main/justfile)
 to run E2E tests locally.
 

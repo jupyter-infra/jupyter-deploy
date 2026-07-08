@@ -145,6 +145,7 @@ The template provides two variable presets:
 |---|---|
 | `cluster_name` | Name of the EKS cluster |
 | `cluster_endpoint` | API server endpoint URL for the EKS cluster |
+| `cluster_arn` | ARN of the EKS cluster |
 | `cluster_ca_certificate` | Base64-encoded CA certificate for the EKS cluster |
 | `region` | AWS region where the cluster is deployed |
 | `deployment_id` | Unique deployment identifier |

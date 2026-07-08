@@ -109,6 +109,9 @@ jd component restart --name oauth2-proxy
 
 # trigger a CronJob manually
 jd component trigger --name jwt-rotator
+
+# reconcile a HelmRelease (re-assert desired state, recreating deleted objects)
+jd component reconcile --name workspace-router-chart
 ```
 
 ## Take down

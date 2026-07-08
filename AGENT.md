@@ -233,6 +233,37 @@ Examples (for project-dir == sandbox-e2e, ci-dir == sandbox-ci):
 **Gotcha:** `JD_E2E_RBAC_TEAM` in `.env` MUST match the team in `oauth_allowed_teams` that the sandbox was deployed with.
 The RBAC RoleBinding on the cluster grants workspace access to that group — if they don't match, all impersonation-based workspace tests will fail with `Forbidden`.
 
+## Deploying and Tearing Down Projects
+
+These operations mutate live cloud infrastructure. Follow them exactly.
+
+**IMPORTANT: You MUST ALWAYS let a `jd up` or `jd down` run to completion.**
+Never interrupt, kill, cancel, or time out an in-progress `jd up`/`jd down` (or the
+underlying `terraform` process). A full EKS deploy/destroy can take 20-30 minutes;
+run it in the background and wait for it to finish rather than aborting. Interrupting
+an apply mid-run is how partial/duplicate deployments and orphaned resources happen.
+
+**IMPORTANT:** `jd up` automatically backs up the project (files + terraform state) to
+the remote store (an S3 bucket) after a full run — **even if the run ends in failure.**
+
+**IMPORTANT:** A NEW variable added to the template won't apply to an existing deployment
+until you also add it to that deployment's `<project-dir>/variables.yaml` `overrides:`
+block (a fresh `jd init` picks it up automatically; an existing project does not).
+
+To teardown a deployment:
+- confirm with the user that it's okay
+- run `jd down -y` (let it complete — see above)
+- once fully succeeded:
+  - remove the store entry with `jd projects delete <PROJECT-ID> --store-type s3-only`
+  - delete the local `<project-dir>`
+- if you hit issues:
+  - see logs with `jd history show down`; possibly retry
+  - `cd <project-dir>/engine` and try the `terraform` command directly
+  - if all else fails, look up AWS resources by tag (`DeploymentId`) via the Resource
+    Groups Tagging API and clean them up manually. **Note:** tags may not capture every
+    resource — watch for resources created by Kubernetes operators (LBs, ENIs, security
+    groups, VPC endpoints).
+
 ## Debugging and Investigating Deployments
 
 **Important:** Most `jd` commands (`init` excepted) assume the `cwd` is a particular project; change dir, or use the `--path` attribute (most commands support it).
