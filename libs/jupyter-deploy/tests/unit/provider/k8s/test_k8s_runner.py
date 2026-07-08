@@ -152,7 +152,9 @@ class TestK8sApiRunner(unittest.TestCase):
             instruction_name="k8s.batch.get-cronjob-status", resolved_arguments=resolved_args
         )
 
-        mock_batch_runner_class.assert_called_once_with(ANY, api_client=mock_api_client)
+        mock_batch_runner_class.assert_called_once_with(
+            ANY, api_client=mock_api_client, kubeconfig_path="/tmp/kubeconfig"
+        )
         mock_batch_runner.execute_instruction.assert_called_once_with(
             instruction_name="get-cronjob-status", resolved_arguments=resolved_args
         )

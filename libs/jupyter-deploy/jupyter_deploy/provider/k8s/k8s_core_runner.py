@@ -15,6 +15,7 @@ from jupyter_deploy.exceptions import (
     InteractiveSessionTimeoutError,
 )
 from jupyter_deploy.provider.instruction_runner import InstructionRunner
+from jupyter_deploy.provider.k8s.kubeconfig_verify import verify_kubeconfig_context
 from jupyter_deploy.provider.resolved_argdefs import (
     ResolvedInstructionArgument,
     StrResolvedInstructionArgument,
@@ -134,12 +135,16 @@ class K8sCoreRunner(InstructionRunner):
         scope_arg = require_arg(resolved_arguments, "scope", StrResolvedInstructionArgument)
         container_arg = retrieve_optional_arg(resolved_arguments, "container", StrResolvedInstructionArgument, "")
         extra_arg = retrieve_optional_arg(resolved_arguments, "extra", StrResolvedInstructionArgument, "")
+        expected_cluster_config = retrieve_optional_arg(
+            resolved_arguments, "expected_cluster_config", StrResolvedInstructionArgument, ""
+        ).value
 
         self.display_manager.info(f"Getting logs for deployment {name_arg.value} in namespace: {scope_arg.value}")
 
         pod_name = self._resolve_pod_name(name_arg.value, scope_arg.value)
         container = container_arg.value if container_arg.value and container_arg.value != "default" else None
 
+        verify_kubeconfig_context(expected_cluster_config or None, self._kubeconfig_path)
         kubectl_cmd = ["kubectl", "logs", pod_name, "--namespace", scope_arg.value]
         if self._kubeconfig_path:
             kubectl_cmd.extend(["--kubeconfig", self._kubeconfig_path])
@@ -215,6 +220,9 @@ class K8sCoreRunner(InstructionRunner):
             resolved_arguments, "deployment_name", StrResolvedInstructionArgument, ""
         )
         name_arg = retrieve_optional_arg(resolved_arguments, "name", StrResolvedInstructionArgument, "")
+        expected_cluster_config = retrieve_optional_arg(
+            resolved_arguments, "expected_cluster_config", StrResolvedInstructionArgument, ""
+        ).value
 
         if deployment_name_arg.value:
             pod_name = self._resolve_pod_name(deployment_name_arg.value, scope_arg.value)
@@ -225,6 +233,7 @@ class K8sCoreRunner(InstructionRunner):
 
         container = container_arg.value if container_arg.value and container_arg.value != "default" else None
 
+        verify_kubeconfig_context(expected_cluster_config or None, self._kubeconfig_path)
         kubectl_cmd = ["kubectl", "exec", "-it", pod_name, "-n", scope_arg.value]
         if self._kubeconfig_path:
             kubectl_cmd.extend(["--kubeconfig", self._kubeconfig_path])

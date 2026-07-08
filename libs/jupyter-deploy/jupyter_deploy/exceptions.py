@@ -442,6 +442,26 @@ class ResourceNotFoundError(InstructionError, RuntimeError):
         super().__init__(msg)
 
 
+class InvalidKubernetesClusterTargetError(InstructionError, RuntimeError):
+    """Raised when a kubectl/helm subprocess would act on the wrong cluster.
+
+    The active kubeconfig context does not match the deployment's expected cluster
+    config, so the operation is refused to avoid mutating an unintended cluster.
+
+    Attributes:
+        current_context: The active kubectl context name (empty if unreadable)
+        expected_cluster_config: The value the active context must match (e.g. cluster ARN)
+    """
+
+    def __init__(self, current_context: str, expected_cluster_config: str) -> None:
+        self.current_context = current_context
+        self.expected_cluster_config = expected_cluster_config
+        super().__init__(
+            f"Invalid kubectl context: '{current_context}' does not match the project's "
+            f"cluster '{expected_cluster_config}'."
+        )
+
+
 class InstructionNotFoundError(InstructionError, RuntimeError):
     """Raised when an instruction cannot be found or is not implemented."""
 
