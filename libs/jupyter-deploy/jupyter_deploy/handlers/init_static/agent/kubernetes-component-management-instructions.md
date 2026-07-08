@@ -1,7 +1,8 @@
-Components are the platform-level Kubernetes resources supporting your apps (e.g. router,
+Components are the platform-level resources supporting your apps (e.g. router,
 identity provider, controllers). Each one is backed by a Kubernetes **Deployment** (a
-long-running workload) or a **CronJob** (a scheduled job). You address a component by
-`--name`; `jd component list` reports each one's name and type.
+long-running workload), a **CronJob** (a scheduled job), or a **HelmRelease** (a chart
+managing a set of objects). You address a component by `--name`; `jd component list`
+reports each one's name and type.
 
 ```bash
 # list the components declared by this template (with their Deployment/CronJob type)
@@ -40,4 +41,13 @@ jd component restart --name COMPONENT-NAME
 
 # trigger a one-off Job from a CronJob-backed component (not valid for a Deployment)
 jd component trigger --name COMPONENT-NAME
+
+# reconcile a HelmRelease-backed component (re-assert desired state; not valid for a Deployment or CronJob)
+jd component reconcile --name COMPONENT-NAME
 ```
+
+Helm only acts on the diff between chart releases, so an object deleted out-of-band (a
+manual `kubectl delete`, an evicted CRD) is never recreated by a plain `helm upgrade`.
+`jd component reconcile` re-applies the release's stored manifest to the live cluster,
+recreating drifted or missing managed objects on demand. It requires a `helm` client on
+the host.

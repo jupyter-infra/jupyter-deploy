@@ -15,7 +15,7 @@ class TestComponentApp(unittest.TestCase):
         result = runner.invoke(component_app, ["--help"])
 
         self.assertEqual(result.exit_code, 0)
-        for cmd in ["list", "status", "show", "logs", "restart", "trigger"]:
+        for cmd in ["list", "status", "show", "logs", "restart", "trigger", "reconcile"]:
             self.assertTrue(result.stdout.index(cmd) > 0, f"missing command: {cmd}")
 
     def test_no_arg_defaults_to_help(self) -> None:
@@ -305,8 +305,6 @@ class TestComponentRestartCommand(unittest.TestCase):
         mock_handler.restart_component.assert_called_once_with(name="traefik")
         self.assertIn("Restarted", result.stdout)
 
-
-class TestComponentRestartPathCommand(unittest.TestCase):
     @patch("jupyter_deploy.handlers.resource.component_handler.ComponentHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_restart_switches_dir_with_path(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
@@ -317,6 +315,41 @@ class TestComponentRestartPathCommand(unittest.TestCase):
 
         runner = CliRunner()
         result = runner.invoke(component_app, ["restart", "--name", "traefik", "--path", "/my/project"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_project_dir.assert_called_once_with(Path("/my/project"))
+
+
+class TestComponentReconcileCommand(unittest.TestCase):
+    @patch("jupyter_deploy.handlers.resource.component_handler.ComponentHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_reconcile_calls_reconcile_component(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
+        mock_project_dir.return_value.__enter__ = Mock(return_value=None)
+        mock_project_dir.return_value.__exit__ = Mock(return_value=None)
+        mock_handler: Mock = Mock()
+        mock_handler.reconcile_component.return_value = "service/foo configured"
+        mock_handler_class.return_value = mock_handler
+
+        runner = CliRunner()
+        result = runner.invoke(component_app, ["reconcile", "--name", "workspace-router-chart"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_handler.reconcile_component.assert_called_once_with(name="workspace-router-chart")
+        self.assertIn("Reconciled", result.stdout)
+
+    @patch("jupyter_deploy.handlers.resource.component_handler.ComponentHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_reconcile_switches_dir_with_path(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
+        mock_project_dir.return_value.__enter__ = Mock(return_value=None)
+        mock_project_dir.return_value.__exit__ = Mock(return_value=None)
+        mock_handler: Mock = Mock()
+        mock_handler.reconcile_component.return_value = ""
+        mock_handler_class.return_value = mock_handler
+
+        runner = CliRunner()
+        result = runner.invoke(
+            component_app, ["reconcile", "--name", "workspace-router-chart", "--path", "/my/project"]
+        )
 
         self.assertEqual(result.exit_code, 0)
         mock_project_dir.assert_called_once_with(Path("/my/project"))

@@ -246,6 +246,23 @@ class ComponentHandler(BaseProjectHandler):
         cli_paramdefs = self._build_cli_paramdefs(resource_name, component, namespace)
         runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
 
+    def reconcile_component(self, name: str) -> str:
+        """Re-assert a component's desired state, returns the reconcile output."""
+        component = self.project_manifest.get_component(name)
+        self._validate_verb(name, component, "reconcile")
+        namespace = self._resolve_namespace(component)
+        resource_name = self._get_resource_name(name, component)
+        cmd_name = self._get_command_name(component, "reconcile")
+        command = self.project_manifest.get_command(cmd_name)
+        runner = cmd_runner.ManifestCommandRunner(
+            display_manager=self.display_manager,
+            output_handler=self._output_handler,
+            variable_handler=self._variable_handler,
+        )
+        cli_paramdefs = self._build_cli_paramdefs(resource_name, component, namespace)
+        runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
+        return runner.get_result_value_with_fallback(command, f"{cmd_name}.output", str, "")
+
     def trigger_component(self, name: str) -> str:
         """Trigger a Job from a CronJob component. Returns the Job name."""
         component = self.project_manifest.get_component(name)
