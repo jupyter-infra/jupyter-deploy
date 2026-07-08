@@ -131,10 +131,8 @@ $ jd component restart [OPTIONS]
 Bring the actual resources in line with the component declaration.
 
 Update managed resources that drifted and re-create resources deleted
-out-of-band.
-
-However, resources that were removed from the declaration since the last
-<jd component reconcile> or <jd up> may become orphaned.
+out-of-band. However, resources that were removed from the declaration
+since the last <jd component reconcile> or <jd up> will become orphaned.
 
 Run either from a project directory that you created with <jd init>;
 or pass --path <project-dir>.
