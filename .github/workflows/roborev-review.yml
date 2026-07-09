@@ -65,6 +65,11 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
           fetch-depth: 0
+          # The checkout is bind-mounted into the review container, which must
+          # never hold the gh token, so do not persist it into .git/config.
+          # The PR-head fetch later works anonymously (public repo); the
+          # runner's gh calls use the env token.
+          persist-credentials: false
 
       - name: Resolve PR and head SHA
         id: pr
@@ -120,16 +125,18 @@ jobs:
         if: steps.pr.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/aws"
+          # Scratch HOME for the container: it runs as the runner's uid (see the
+          # docker run steps), which has no home in the image, and claude-code,
+          # gh, and git all need a writable HOME for their runtime state.
+          mkdir -p "$RUNNER_TEMP/aws" "$RUNNER_TEMP/home"
           {
             echo "[default]"
             echo "aws_access_key_id=$AWS_ACCESS_KEY_ID"
             echo "aws_secret_access_key=$AWS_SECRET_ACCESS_KEY"
             echo "aws_session_token=$AWS_SESSION_TOKEN"
           } > "$RUNNER_TEMP/aws/credentials"
-          # The container runs as uid 1000 (node), a different uid than the runner,
-          # so the mounted file must be readable by others for the container to read.
-          chmod 644 "$RUNNER_TEMP/aws/credentials"
+          # The containers run as the runner's uid, so owner-only is enough.
+          chmod 600 "$RUNNER_TEMP/aws/credentials"
 
       - name: Pull review image
         if: steps.pr.outputs.skip != 'true'
@@ -159,6 +166,9 @@ jobs:
         run: |
           set -euo pipefail
           out=$(docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -e HOME=/home/node \
+            -v "$RUNNER_TEMP/home:/home/node" \
             -v "$RUNNER_TEMP/aws:/home/node/.aws:ro" \
             -e AWS_REGION -e AWS_DEFAULT_REGION \
             -e CLAUDE_CODE_USE_BEDROCK=1 \
@@ -188,7 +198,16 @@ jobs:
           # prints the comment to stdout (logs go to stderr). The gh token is never
           # passed to the container; the runner posts the captured output below, so
           # the diff-processing context never holds the token.
+          # --user matches the runner's uid so the bind-mounted workspace stays
+          # writable: for diffs over roborev's inline prompt cap it writes a
+          # snapshot file under the repo (.roborev/) and an entry in
+          # .git/info/exclude, which fail with EACCES under the image's default
+          # uid. On failure roborev's stdout holds the failure summary, so print
+          # it instead of leaving it captured and unseen.
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -e HOME=/home/node \
+            -v "$RUNNER_TEMP/home:/home/node" \
             -v "$RUNNER_TEMP/aws:/home/node/.aws:ro" \
             -e AWS_REGION -e AWS_DEFAULT_REGION \
             -e CLAUDE_CODE_USE_BEDROCK=1 \
@@ -199,7 +218,9 @@ jobs:
               && roborev ci review --ref ${base_sha}..${HEAD_SHA} \
                    --pr ${PR} --gh-repo ${REPO} \
                    --min-severity medium --reasoning standard" \
-            > "$RUNNER_TEMP/review.md"
+            > "$RUNNER_TEMP/review.md" \
+            || { rc=$?; echo "roborev failed (exit $rc); container stdout:"; \
+                 cat "$RUNNER_TEMP/review.md"; exit "$rc"; }
 
           [ -s "$RUNNER_TEMP/review.md" ] || { echo "review produced no output"; exit 1; }
           gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/review.md"
