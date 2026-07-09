@@ -125,9 +125,10 @@ jobs:
         if: steps.pr.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          # Scratch HOME for the container: it runs as the runner's uid (see the
-          # docker run steps), which has no home in the image, and claude-code,
-          # gh, and git all need a writable HOME for their runtime state.
+          # The containers run as the runner's uid (see the docker run steps),
+          # which has no home directory in the image. claude-code, gh, and git
+          # need a writable HOME for their runtime state, so create a directory
+          # to mount at /home/node.
           mkdir -p "$RUNNER_TEMP/aws" "$RUNNER_TEMP/home"
           {
             echo "[default]"
