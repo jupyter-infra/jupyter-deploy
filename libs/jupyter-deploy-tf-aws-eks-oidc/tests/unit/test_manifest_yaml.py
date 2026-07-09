@@ -13,8 +13,20 @@ class TestManifest(unittest.TestCase):
     MANIFEST_PATH: Path = TEMPLATE_PATH / "manifest.yaml"
     MANIFEST: dict[str, Any] | None = None
     VARIABLES_CONFIG: dict[str, Any] | None = None
-    EXPECTED_REQUIREMENTS = ["terraform", "awscli", "kubectl"]
-    EXPECTED_VALUES = ["deployment_id", "open_url", "aws_region"]
+    EXPECTED_REQUIREMENTS = ["terraform", "awscli", "kubectl", "helm"]
+    # Values that core handlers resolve by name via get_declared_output_def; removing any
+    # of these from the manifest would break the CLI (unlike command args, which source
+    # their output directly and do not need a values entry).
+    EXPECTED_VALUES = [
+        "deployment_id",
+        "open_url",
+        "aws_region",
+        "kubeconfig_path",
+        "cluster_name",
+        "cluster_endpoint",
+        "cluster_ca_certificate",
+        "server_default_scope",
+    ]
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -195,6 +207,43 @@ class TestManifest(unittest.TestCase):
             cr_kinds,
             f"Expected a CustomResourceWithoutStatus of kind WorkspaceTemplate, got kinds: {cr_kinds}",
         )
+
+    def test_helm_release_components_declared_with_reconcile(self) -> None:
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        components = self.MANIFEST.get("components", {})
+        helm_components = {name: c for name, c in components.items() if c["type"] == "HelmRelease"}
+
+        # All five chart releases are surfaced as components.
+        self.assertEqual(
+            len(helm_components),
+            5,
+            f"Expected 5 HelmRelease components, got {len(helm_components)}: {list(helm_components)}",
+        )
+        for name, comp in helm_components.items():
+            self.assertIn("reconcile", comp["verbs"], f"HelmRelease component '{name}' must declare a reconcile verb")
+            self.assertIn("resource-name", comp, f"HelmRelease component '{name}' must declare its release name")
+
+    def test_helm_requirement_declared(self) -> None:
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        requirement_names = {req["name"] for req in self.MANIFEST.get("requirements", [])}
+        self.assertIn("helm", requirement_names, "Template must require the helm CLI for reconcile")
+
+    def test_helmrelease_status_emits_sub_component(self) -> None:
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        cmd = next(
+            (c for c in self.MANIFEST.get("commands", []) if c["cmd"] == "component.helmrelease.status"),
+            None,
+        )
+        self.assertIsNotNone(cmd, "component.helmrelease.status command must exist")
+        result_names = {r["result-name"] for r in cmd.get("results", [])}
+        # The health dashboard renders this as "Sub-component: <namespace>, <N> resources".
+        self.assertIn("component.helmrelease.status.sub_component", result_names)
 
     def test_component_verbs_have_matching_commands(self) -> None:
         if self.MANIFEST is None:

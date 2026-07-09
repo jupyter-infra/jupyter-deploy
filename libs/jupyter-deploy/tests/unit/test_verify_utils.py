@@ -90,6 +90,32 @@ class TestCheckYqInstallation(unittest.TestCase):
         )
 
 
+class TestCheckHelmInstallation(unittest.TestCase):
+    @patch("jupyter_deploy.verify_utils._check_installation")
+    def test_passes_tool_name_install_url_and_version_cmds(self, mock_check: Mock) -> None:
+        verify_utils._check_helm_installation()
+        mock_check.assert_called_once_with(
+            tool_name="helm",
+            installation_url="https://helm.sh/docs/intro/install/",
+            version_cmds=["version", "--short"],
+        )
+
+    @patch("jupyter_deploy.cmd_utils.check_executable_installation")
+    def test_raises_when_helm_not_installed(self, mock_check: Mock) -> None:
+        mock_check.return_value = (False, None, "Command 'helm' not found")
+
+        with self.assertRaises(ToolRequiredError) as context:
+            verify_utils._check_helm_installation()
+
+        self.assertEqual(context.exception.tool_name, "helm")
+
+    def test_helm_is_mapped(self) -> None:
+        self.assertIs(
+            verify_utils._TOOL_VERIFICATION_FN_MAP[JupyterDeployTool.HELM],
+            verify_utils._check_helm_installation,
+        )
+
+
 class TestVerifyToolsInstallation(unittest.TestCase):
     def test_succeeds_for_empty_list(self) -> None:
         # Should not raise

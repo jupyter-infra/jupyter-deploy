@@ -112,6 +112,20 @@ handles ordering, but if a destroy stalls for 15+ minutes on subnet deletion, lo
 leftover NLB tagged with the cluster name and delete it with
 `aws elbv2 delete-load-balancer`.
 
+## Orphaned AWS resources after an incomplete destroy
+
+Some AWS resources are created by in-cluster controllers (AWS Load Balancer Controller,
+external-dns), not by Terraform, so they are **not** in the Terraform state.
+They also may not carry the `DeploymentId` tag, so a tag search alone can miss them.
+Check for and remove the following resources:
+- Network Load Balancers still referencing the (now-deleted) cluster VPC
+- Target groups outlive the NLB. They are tagged kubernetes.io/cluster/<cluster-name>=owned
+
+**Important:** verify each resource's owning cluster/VPC before deleting. Target groups
+and external-dns Route53 records are tagged with the *owning cluster name* — a same-account
+cluster in another region (or a different template's deployment) will have its own, and
+those must be left alone.
+
 ## `kubectl` / `jd cluster login` returns Forbidden
 
 The cluster is created with `bootstrap_cluster_creator_admin_permissions = false`, so

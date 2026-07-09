@@ -12,6 +12,7 @@ from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.enum import StatusCategory
 from jupyter_deploy.exceptions import InstructionError, InstructionNotFoundError
 from jupyter_deploy.provider.instruction_runner import InstructionRunner
+from jupyter_deploy.provider.k8s.kubeconfig_verify import verify_kubeconfig_context
 from jupyter_deploy.provider.resolved_argdefs import (
     ResolvedInstructionArgument,
     StrResolvedInstructionArgument,
@@ -36,10 +37,13 @@ class K8sBatchInstruction(str, Enum):
 class K8sBatchRunner(InstructionRunner):
     """Runner class for Kubernetes Batch API instructions."""
 
-    def __init__(self, display_manager: DisplayManager, api_client: client.ApiClient) -> None:
+    def __init__(
+        self, display_manager: DisplayManager, api_client: client.ApiClient, kubeconfig_path: str | None = None
+    ) -> None:
         super().__init__(display_manager)
         self.batch_api = client.BatchV1Api(api_client)
         self.core_api = client.CoreV1Api(api_client)
+        self._kubeconfig_path = kubeconfig_path
 
     def _get_cronjob_status(
         self, resolved_arguments: dict[str, ResolvedInstructionArgument]
@@ -147,12 +151,18 @@ class K8sBatchRunner(InstructionRunner):
         scope_arg = require_arg(resolved_arguments, "scope", StrResolvedInstructionArgument)
         query_arg = require_arg(resolved_arguments, "query", StrResolvedInstructionArgument)
         extra_arg = retrieve_optional_arg(resolved_arguments, "extra", StrResolvedInstructionArgument, "")
+        expected_cluster_config = retrieve_optional_arg(
+            resolved_arguments, "expected_cluster_config", StrResolvedInstructionArgument, ""
+        ).value
 
         self.display_manager.info(f"Getting logs for cronjob: {name_arg.value}")
 
         pod_name = self._resolve_cronjob_pod_name(name_arg.value, scope_arg.value, query_arg.value)
 
+        verify_kubeconfig_context(expected_cluster_config or None, self._kubeconfig_path)
         kubectl_cmd = ["kubectl", "logs", pod_name, "--namespace", scope_arg.value]
+        if self._kubeconfig_path:
+            kubectl_cmd.extend(["--kubeconfig", self._kubeconfig_path])
         if extra_arg.value:
             kubectl_cmd.extend(extra_arg.value.split())
 

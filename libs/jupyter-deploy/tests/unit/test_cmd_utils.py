@@ -162,6 +162,18 @@ class TestRunCmdAndCaptureOutput(unittest.TestCase):
         run_cmd_and_capture_output(["sudo", "whoami"])
         mock_run.assert_called_once_with(
             ["sudo", "whoami"],
+            input=None,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    @patch("subprocess.run")
+    def test_passes_stdin_input(self, mock_run: Mock) -> None:
+        run_cmd_and_capture_output(["kubectl", "apply", "-f", "-"], stdin_input="manifest-body")
+        mock_run.assert_called_once_with(
+            ["kubectl", "apply", "-f", "-"],
+            input="manifest-body",
             capture_output=True,
             text=True,
             check=True,
@@ -194,6 +206,7 @@ class TestRunCmdAndCaptureOutput(unittest.TestCase):
         # Verify subprocess.run was called with correct arguments
         mock_run.assert_called_once_with(
             ["ls", "-la"],
+            input=None,
             capture_output=True,
             text=True,
             check=True,

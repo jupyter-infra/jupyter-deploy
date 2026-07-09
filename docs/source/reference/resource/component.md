@@ -19,6 +19,7 @@ $ jd component [OPTIONS] COMMAND [ARGS]...
 * `show`: Display detailed information about a...
 * `logs`: Print the logs of a component.
 * `restart`: Restart a persisting component.
+* `reconcile`: Bring the actual resources in line with...
 * `trigger`: Trigger an ephemeral job from a...
 
 ## `component list`
@@ -122,6 +123,29 @@ $ jd component restart [OPTIONS]
 **Options**:
 
 * `--name TEXT`: Name of the component to restart.  [required]
+* `-p, --path PATH`: Directory of the project.
+* `--help`: Show this message and exit.
+
+## `component reconcile`
+
+Bring the actual resources in line with the component declaration.
+
+Update managed resources that drifted and re-create resources deleted
+out-of-band. However, resources that were removed from the declaration
+since the last <jd component reconcile> or <jd up> will become orphaned.
+
+Run either from a project directory that you created with <jd init>;
+or pass --path <project-dir>.
+
+**Usage**:
+
+```console
+$ jd component reconcile [OPTIONS]
+```
+
+**Options**:
+
+* `--name TEXT`: Name of the release component to reconcile.  [required]
 * `-p, --path PATH`: Directory of the project.
 * `--help`: Show this message and exit.
 

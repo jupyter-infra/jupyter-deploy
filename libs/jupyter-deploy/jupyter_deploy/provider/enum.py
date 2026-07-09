@@ -17,6 +17,7 @@ class ApiGroup(str, Enum):
 
     AWS = "aws"
     K8S = "k8s"
+    HELM = "helm"
 
     @classmethod
     def from_api_name(cls, api_name: str) -> "ApiGroup":

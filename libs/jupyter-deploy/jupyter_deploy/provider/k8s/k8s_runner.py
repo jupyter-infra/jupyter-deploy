@@ -90,7 +90,9 @@ class K8sApiRunner(InstructionRunner):
             self._service_runners[service_name] = service_runner
             return service_runner
         elif service_name == K8sService.BATCH:
-            service_runner = K8sBatchRunner(self.display_manager, api_client=api_client)
+            service_runner = K8sBatchRunner(
+                self.display_manager, api_client=api_client, kubeconfig_path=self.kubeconfig_path
+            )
             self._service_runners[service_name] = service_runner
             return service_runner
 

@@ -34,6 +34,21 @@ def _mock_component_cronjob() -> JupyterDeployComponentDefinitionV1:
     )
 
 
+def _mock_component_helmrelease() -> JupyterDeployComponentDefinitionV1:
+    return JupyterDeployComponentDefinitionV1(
+        **{  # type: ignore[arg-type]
+            "type": "HelmRelease",
+            "scope": "workspace_router_namespace",
+            "resource-name": "jupyter-k8s-aws-oidc",
+            "verbs": {
+                "status": {"method": "helm.status"},
+                "show": {"method": "helm.show"},
+                "reconcile": {"method": "helm.reconcile"},
+            },
+        }
+    )
+
+
 def _mock_component_custom_resource() -> JupyterDeployComponentDefinitionV1:
     return JupyterDeployComponentDefinitionV1(
         **{  # type: ignore[arg-type]
@@ -723,3 +738,73 @@ class TestComponentHandlerTriggerComponent(unittest.TestCase):
             handler = ComponentHandler(display_manager=Mock())
             with self.assertRaises(RuntimeError):
                 handler.trigger_component("jwt-rotator")
+
+
+@patch("jupyter_deploy.handlers.resource.component_handler.tf_variables.TerraformVariablesHandler")
+@patch("jupyter_deploy.handlers.resource.component_handler.tf_outputs.TerraformOutputsHandler")
+@patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+class TestComponentHandlerReconcileComponent(unittest.TestCase):
+    def test_calls_reconcile_command_and_returns_output(
+        self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock
+    ) -> None:
+        manifest: Mock = Mock()
+        manifest.get_engine.return_value = "terraform"
+        manifest.template.engine = "terraform"
+        manifest.get_component.return_value = _mock_component_helmrelease()
+        mock_manifest_fn.return_value = manifest
+
+        mock_output_handler: Mock = mock_outputs.return_value
+        mock_output_handler.get_full_project_outputs.return_value = _NS_OUTPUTS
+
+        mock_runner: Mock = Mock()
+        mock_runner.get_result_value_with_fallback.return_value = "service/foo configured"
+
+        with patch("jupyter_deploy.handlers.resource.component_handler.cmd_runner.ManifestCommandRunner") as mock_cmd:
+            mock_cmd.return_value = mock_runner
+            manifest.get_command.return_value = Mock()
+
+            handler = ComponentHandler(display_manager=Mock())
+            result = handler.reconcile_component("workspace-router-chart")
+
+        self.assertEqual(result, "service/foo configured")
+        manifest.get_command.assert_called_once_with("component.helmrelease.reconcile")
+        mock_runner.run_command_sequence.assert_called_once()
+        cli_paramdefs = mock_runner.run_command_sequence.call_args.kwargs["cli_paramdefs"]
+        # resource-name overrides the component key when building the release name
+        self.assertEqual(cli_paramdefs["name"].value, "jupyter-k8s-aws-oidc")
+        self.assertEqual(cli_paramdefs["scope"].value, "router-ns")
+
+    def test_raises_invalid_verb_for_reconcile_on_deployment(
+        self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock
+    ) -> None:
+        manifest: Mock = Mock()
+        manifest.get_engine.return_value = "terraform"
+        manifest.template.engine = "terraform"
+        manifest.get_component.return_value = _mock_component_deployment()
+        mock_manifest_fn.return_value = manifest
+
+        handler = ComponentHandler(display_manager=Mock())
+
+        with self.assertRaises(InvalidComponentVerbError) as ctx:
+            handler.reconcile_component("traefik")
+
+        self.assertEqual(ctx.exception.verb, "reconcile")
+        self.assertEqual(ctx.exception.component_type, "Deployment")
+
+    def test_error_bubbles_up(self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock) -> None:
+        manifest: Mock = Mock()
+        manifest.get_engine.return_value = "terraform"
+        manifest.template.engine = "terraform"
+        manifest.get_component.return_value = _mock_component_helmrelease()
+        mock_manifest_fn.return_value = manifest
+
+        mock_output_handler: Mock = mock_outputs.return_value
+        mock_output_handler.get_full_project_outputs.return_value = _NS_OUTPUTS
+
+        with patch("jupyter_deploy.handlers.resource.component_handler.cmd_runner.ManifestCommandRunner") as mock_cmd:
+            mock_cmd.return_value.run_command_sequence.side_effect = RuntimeError("API failure")
+            manifest.get_command.return_value = Mock()
+
+            handler = ComponentHandler(display_manager=Mock())
+            with self.assertRaises(RuntimeError):
+                handler.reconcile_component("workspace-router-chart")

@@ -55,6 +55,15 @@ def _check_jq_installation() -> None:
     )
 
 
+def _check_helm_installation() -> None:
+    """Shell out to verify `helm` install, raise ToolRequiredError if not found."""
+    return _check_installation(
+        tool_name="helm",
+        installation_url="https://helm.sh/docs/intro/install/",
+        version_cmds=["version", "--short"],
+    )
+
+
 def _check_kubectl_installation() -> None:
     """Shell out to verify `kubectl` install, raise ToolRequiredError if not found."""
     return _check_installation(
@@ -75,6 +84,7 @@ def _check_yq_installation() -> None:
 _TOOL_VERIFICATION_FN_MAP: dict[JupyterDeployTool, Callable[[], None]] = {
     JupyterDeployTool.AWS_CLI: _check_aws_cli_installation,
     JupyterDeployTool.AWS_SSM_PLUGIN: _check_ssm_plugin_installation,
+    JupyterDeployTool.HELM: _check_helm_installation,
     JupyterDeployTool.JQ: _check_jq_installation,
     JupyterDeployTool.KUBECTL: _check_kubectl_installation,
     JupyterDeployTool.TERRAFORM: _check_terraform_installation,

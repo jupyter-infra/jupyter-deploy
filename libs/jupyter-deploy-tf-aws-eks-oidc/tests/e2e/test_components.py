@@ -1,8 +1,10 @@
 """E2E tests for component commands on the EKS OIDC template."""
 
 import json
+import subprocess
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from pytest_jupyter_deploy.cli import JDCliError
@@ -41,6 +43,10 @@ def _get_crd_names(e2e_deployment: EndToEndDeployment) -> list[str]:
         for name, comp in _get_manifest_components(e2e_deployment).items()
         if comp.type == "CustomResourceDefinition"
     ]
+
+
+def _get_helmrelease_names(e2e_deployment: EndToEndDeployment) -> list[str]:
+    return [name for name, comp in _get_manifest_components(e2e_deployment).items() if comp.type == "HelmRelease"]
 
 
 def _poll_component_status(
@@ -204,6 +210,21 @@ def test_cluster_custom_resource_crd_show(e2e_deployment: EndToEndDeployment) ->
 
 
 @pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_helmrelease_component_status_deployed(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify each HelmRelease component reports its deployed status."""
+    e2e_deployment.ensure_deployed()
+
+    helm_names = _get_helmrelease_names(e2e_deployment)
+    assert helm_names, "Expected HelmRelease components for the platform charts"
+
+    for name in helm_names:
+        result = e2e_deployment.cli.run_command(["jupyter-deploy", "component", "status", "--name", name])
+        # helm reports `deployed` for a healthy release; a superseded revision would also be acceptable.
+        assert f"{name} status:" in result.stdout, f"Expected status line for '{name}':\n{result.stdout}"
+        assert "deployed" in result.stdout, f"Expected '{name}' to be deployed:\n{result.stdout}"
+
+
+@pytest.mark.usefixtures("kubernetes_cluster_login")
 def test_component_status_not_found(e2e_deployment: EndToEndDeployment) -> None:
     """Verify status for a non-existent component fails gracefully."""
     e2e_deployment.ensure_deployed()
@@ -264,6 +285,42 @@ def test_component_show_custom_resource(e2e_deployment: EndToEndDeployment) -> N
     data = json.loads(result.stdout)
     assert "name" in data, f"Expected 'name' in JSON response, got: {list(data.keys())}"
     assert "resource" in data, f"Expected 'resource' in JSON response, got: {list(data.keys())}"
+
+
+@pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_helmrelease_component_show(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify show --json returns the helm release info for a HelmRelease component.
+
+    Targets the router release specifically because it carries the GitHub OAuth client
+    secret in its chart config — the case that must be redacted.
+    """
+    e2e_deployment.ensure_deployed()
+
+    name = "workspace-router-chart"
+    assert name in _get_helmrelease_names(e2e_deployment), f"Expected a HelmRelease component named '{name}'"
+
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "component", "show", "--name", name, "--json"])
+    data = json.loads(result.stdout)
+    # `name` is the helm release name (the component's resource-name), not the component name.
+    assert data["name"] == "jupyter-k8s-aws-oidc", f"Unexpected release name for '{name}': {data['name']}"
+    # The resource is the `helm status --output json` payload (with the manifest redacted).
+    resource = json.loads(data["resource"]) if isinstance(data["resource"], str) else data["resource"]
+    assert resource.get("info", {}).get("status") == "deployed", f"Unexpected release info for '{name}': {resource}"
+    assert "version" in resource, f"Expected a revision 'version' in release info for '{name}'"
+
+    # The rendered manifest is replaced with a placeholder, not the full YAML blob.
+    assert resource.get("manifest") == "<redacted>", (
+        f"Expected manifest to be redacted, got: {resource.get('manifest')}"
+    )
+
+    # `resources` is a per-kind breakdown of the managed objects.
+    resources = resource.get("resources")
+    assert isinstance(resources, dict), f"Expected 'resources' to be a dict, got: {resources!r}"
+    assert resources, f"Expected a non-empty per-kind resource breakdown for '{name}'"
+
+    # The GitHub OAuth client secret must be redacted, never exposed in plaintext.
+    client_secret = resource.get("config", {}).get("github", {}).get("clientSecret")
+    assert client_secret == "****", f"Expected github.clientSecret to be redacted, got: {client_secret!r}"
 
 
 def test_component_show_description(e2e_deployment: EndToEndDeployment) -> None:
@@ -415,3 +472,135 @@ def test_component_trigger_not_found(e2e_deployment: EndToEndDeployment) -> None
 
     with pytest.raises(JDCliError):
         e2e_deployment.cli.run_command(["jupyter-deploy", "component", "trigger", "--name", "i-do-not-exist"])
+
+
+# ── component reconcile ──────────────────────────────────────────────────────
+
+# The workspace-defaults chart ships the `jupyterlab` WorkspaceTemplate carrying the
+# `workspace.jupyter.org/default-template` label. Removing that label out-of-band and
+# reconciling the release must restore it — a safe, revertible drift on a managed object.
+_RECONCILE_RELEASE_COMPONENT = "workspace-defaults-chart"
+_DEFAULT_TEMPLATE_KIND = "workspacetemplate"
+_DEFAULT_TEMPLATE_NAME = "jupyterlab"
+_DEFAULT_TEMPLATE_LABEL = "workspace.jupyter.org/default-template"
+_PATCHES_DIR = Path(__file__).parent / "patches"
+
+
+def _resolve_component_namespace(e2e_deployment: EndToEndDeployment, name: str) -> str:
+    """Resolve a component's namespace from its manifest scope output."""
+    comp = _get_manifest_components(e2e_deployment)[name]
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "show", "--output", comp.scope, "--text"])
+    return result.stdout.strip()
+
+
+def _kubectl_get_label(kind: str, name: str, namespace: str, label: str) -> str | None:
+    """Return the value of a label on a resource, or None if the label is absent."""
+    jsonpath = "{.metadata.labels." + label.replace(".", "\\.") + "}"
+    result = subprocess.run(
+        ["kubectl", "get", kind, name, "-n", namespace, "-o", f"jsonpath={jsonpath}"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout if result.stdout != "" else None
+
+
+@pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_component_reconcile_noop_on_no_drift(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify reconcile is idempotent: re-running with no drift changes nothing.
+
+    The first apply over helm-created objects reports `configured` (it writes the
+    last-applied-configuration annotation), so idempotency is asserted on a second
+    back-to-back reconcile: with nothing drifted, every object must report `unchanged`
+    (never `configured`/`created`) and the release stays healthy.
+    """
+    e2e_deployment.ensure_deployed()
+
+    # First reconcile settles the last-applied-configuration annotations.
+    first = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "component", "reconcile", "--name", _RECONCILE_RELEASE_COMPONENT]
+    )
+    assert "Reconciled" in first.stdout, f"Expected 'Reconciled' in output:\n{first.stdout}"
+
+    # Second reconcile with no intervening drift must be a genuine no-op.
+    second = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "component", "reconcile", "--name", _RECONCILE_RELEASE_COMPONENT]
+    )
+    assert "Reconciled" in second.stdout, f"Expected 'Reconciled' in output:\n{second.stdout}"
+    assert "configured" not in second.stdout and "created" not in second.stdout, (
+        f"Expected an idempotent no-op reconcile (all 'unchanged'), got:\n{second.stdout}"
+    )
+
+    status = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "component", "status", "--name", _RECONCILE_RELEASE_COMPONENT]
+    )
+    assert "deployed" in status.stdout, f"Release not healthy after no-op reconcile:\n{status.stdout}"
+
+
+@pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_component_reconcile_add_back_missing_label(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify reconcile re-asserts a chart-managed field removed out-of-band.
+
+    Removes the `default-template` label from the jupyterlab WorkspaceTemplate (a
+    kubectl patch helm's template-diff would never notice), reconciles the release,
+    and asserts the label is restored — the core drift-recovery scenario of issue #294.
+    """
+    e2e_deployment.ensure_deployed()
+
+    namespace = _resolve_component_namespace(e2e_deployment, _RECONCILE_RELEASE_COMPONENT)
+
+    original = _kubectl_get_label(_DEFAULT_TEMPLATE_KIND, _DEFAULT_TEMPLATE_NAME, namespace, _DEFAULT_TEMPLATE_LABEL)
+    assert original is not None, (
+        f"Expected {_DEFAULT_TEMPLATE_NAME} to carry the {_DEFAULT_TEMPLATE_LABEL} label before the test"
+    )
+
+    # Remove the label out-of-band via a merge patch (value: null drops the key).
+    patch = (_PATCHES_DIR / "remove-default-template-label.json").read_text()
+    subprocess.run(
+        [
+            "kubectl",
+            "patch",
+            _DEFAULT_TEMPLATE_KIND,
+            _DEFAULT_TEMPLATE_NAME,
+            "-n",
+            namespace,
+            "--type=merge",
+            "-p",
+            patch,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert (
+        _kubectl_get_label(_DEFAULT_TEMPLATE_KIND, _DEFAULT_TEMPLATE_NAME, namespace, _DEFAULT_TEMPLATE_LABEL) is None
+    ), "Label should be removed before reconcile"
+
+    result = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "component", "reconcile", "--name", _RECONCILE_RELEASE_COMPONENT]
+    )
+    assert "Reconciled" in result.stdout, f"Expected 'Reconciled' in output:\n{result.stdout}"
+
+    restored = _kubectl_get_label(_DEFAULT_TEMPLATE_KIND, _DEFAULT_TEMPLATE_NAME, namespace, _DEFAULT_TEMPLATE_LABEL)
+    assert restored == original, (
+        f"Expected reconcile to restore label {_DEFAULT_TEMPLATE_LABEL}={original}, got {restored!r}"
+    )
+
+
+@pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_component_reconcile_wrong_type(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify reconcile fails for a Deployment component (wrong type)."""
+    e2e_deployment.ensure_deployed()
+
+    name = _get_deployment_names(e2e_deployment)[0]
+    with pytest.raises(JDCliError):
+        e2e_deployment.cli.run_command(["jupyter-deploy", "component", "reconcile", "--name", name])
+
+
+@pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_component_reconcile_not_found(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify reconcile for a non-existent component fails gracefully."""
+    e2e_deployment.ensure_deployed()
+
+    with pytest.raises(JDCliError):
+        e2e_deployment.cli.run_command(["jupyter-deploy", "component", "reconcile", "--name", "i-do-not-exist"])

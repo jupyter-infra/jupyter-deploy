@@ -21,6 +21,7 @@ from jupyter_deploy.exceptions import (
     InvalidComponentVerbError,
     InvalidInstructionArgumentError,
     InvalidInstructionResultError,
+    InvalidKubernetesClusterTargetError,
     InvalidManifestError,
     InvalidPresetError,
     InvalidProjectPathError,
@@ -215,9 +216,15 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         raise typer.Exit(code=1) from None
 
     except InvalidComponentVerbError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(f"Available actions for '{e.component_name}': {', '.join(e.valid_verbs)}")
+        raise typer.Exit(code=1) from None
+
+    except InvalidKubernetesClusterTargetError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        console.print(":bulb: Run [bold cyan]jd cluster login[/].")
         raise typer.Exit(code=1) from None
 
     except ResourceNotFoundError as e:

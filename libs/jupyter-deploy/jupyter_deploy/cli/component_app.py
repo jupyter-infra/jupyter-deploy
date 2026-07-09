@@ -188,6 +188,36 @@ def restart(
 
 
 @component_app.command()
+def reconcile(
+    name: Annotated[str, typer.Option("--name", help="Name of the release component to reconcile.")],
+    project_dir: Annotated[
+        Path | None,
+        typer.Option("--path", "-p", help="Directory of the project."),
+    ] = None,
+) -> None:
+    """Bring the actual resources in line with the component declaration.
+
+    Update managed resources that drifted and re-create resources deleted
+    out-of-band. However, resources that were removed from the declaration
+    since the last <jd component reconcile> or <jd up> will become orphaned.
+
+    Run either from a project directory that you created with <jd init>;
+    or pass --path <project-dir>.
+    """
+    console = Console()
+    with handle_cli_errors(console), cmd_utils.project_dir(project_dir):
+        simple_display_manager = SimpleDisplayManager(console=console)
+        handler = component_handler.ComponentHandler(display_manager=simple_display_manager)
+
+        with simple_display_manager.spinner(f"Reconciling {name}..."):
+            output = handler.reconcile_component(name=name)
+
+        simple_display_manager.success(f"Reconciled '{name}'.")
+        if output:
+            console.print(output)
+
+
+@component_app.command()
 def trigger(
     name: Annotated[str, typer.Option("--name", help="Name of the CronJob component to trigger.")],
     project_dir: Annotated[

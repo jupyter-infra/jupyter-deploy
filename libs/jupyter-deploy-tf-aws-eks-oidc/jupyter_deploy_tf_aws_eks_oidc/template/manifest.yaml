@@ -12,6 +12,7 @@ requirements:
 - name: awscli
 - name: kubectl
 - name: yq
+- name: helm
 values:
 - name: deployment_id
   source: output
@@ -25,9 +26,6 @@ values:
 - name: kubeconfig_path
   source: output
   source-key: kubeconfig_path
-- name: workspace_shared_namespace
-  source: output
-  source-key: workspace_shared_namespace
 - name: cluster_name
   source: output
   source-key: cluster_name
@@ -37,24 +35,9 @@ values:
 - name: cluster_ca_certificate
   source: output
   source-key: cluster_ca_certificate
-- name: workspace_base_url
-  source: output
-  source-key: workspace_base_url
-- name: workspace_patch_start
-  source: output
-  source-key: workspace_patch_start
-- name: workspace_patch_stop
-  source: output
-  source-key: workspace_patch_stop
 - name: server_default_scope
   source: output
   source-key: server_default_scope
-- name: workspace_router_namespace
-  source: output
-  source-key: workspace_router_namespace
-- name: workspace_operator_namespace
-  source: output
-  source-key: workspace_operator_namespace
 project-store:
   store-type: s3-only
 multi-host: true
@@ -381,6 +364,9 @@ commands:
     - api-attribute: extra
       source: cli
       source-key: extra
+    - api-attribute: expected_cluster_config
+      source: output
+      source-key: cluster_arn
   results:
   - result-name: server.logs
     source: result
@@ -487,6 +473,9 @@ commands:
     - api-attribute: container
       source: cli
       source-key: service
+    - api-attribute: expected_cluster_config
+      source: output
+      source-key: cluster_arn
 - cmd: component.customresourcewithoutstatus.status
   sequence:
   - api-name: k8s.custom.get
@@ -632,6 +621,9 @@ commands:
     - api-attribute: extra
       source: cli
       source-key: extra
+    - api-attribute: expected_cluster_config
+      source: output
+      source-key: cluster_arn
   results:
   - result-name: component.deployment.logs.logs
     source: result
@@ -705,6 +697,9 @@ commands:
     - api-attribute: extra
       source: cli
       source-key: extra
+    - api-attribute: expected_cluster_config
+      source: output
+      source-key: cluster_arn
   results:
   - result-name: component.cronjob.logs.logs
     source: result
@@ -723,6 +718,69 @@ commands:
   - result-name: component.cronjob.trigger.job_name
     source: result
     source-key: '[0].JobName'
+- cmd: component.helmrelease.status
+  sequence:
+  - api-name: helm.status
+    arguments:
+    - api-attribute: name
+      source: cli
+      source-key: name
+    - api-attribute: scope
+      source: cli
+      source-key: scope
+    - api-attribute: expected_cluster_config
+      source: output
+      source-key: cluster_arn
+  results:
+  - result-name: component.helmrelease.status.status
+    source: result
+    source-key: '[0].Status'
+  - result-name: component.helmrelease.status.status_category
+    source: result
+    source-key: '[0].StatusCategory'
+  - result-name: component.helmrelease.status.details
+    source: result
+    source-key: '[0].Details'
+  - result-name: component.helmrelease.status.sub_component
+    source: result
+    source-key: '[0].SubComponent'
+- cmd: component.helmrelease.show
+  sequence:
+  - api-name: helm.show
+    arguments:
+    - api-attribute: name
+      source: cli
+      source-key: name
+    - api-attribute: scope
+      source: cli
+      source-key: scope
+    - api-attribute: expected_cluster_config
+      source: output
+      source-key: cluster_arn
+  results:
+  - result-name: component.helmrelease.show.name
+    source: result
+    source-key: '[0].Name'
+  - result-name: component.helmrelease.show.resource
+    source: result
+    source-key: '[0].Resource'
+- cmd: component.helmrelease.reconcile
+  sequence:
+  - api-name: helm.reconcile
+    arguments:
+    - api-attribute: name
+      source: cli
+      source-key: name
+    - api-attribute: scope
+      source: cli
+      source-key: scope
+    - api-attribute: expected_cluster_config
+      source: output
+      source-key: cluster_arn
+  results:
+  - result-name: component.helmrelease.reconcile.output
+    source: result
+    source-key: '[0].Output'
 - cmd: image.status
   sequence:
   - api-name: aws.ecr.describe-image
@@ -984,6 +1042,66 @@ components:
         method: k8s.batch.get-job-logs
       trigger:
         method: k8s.batch.create-job-from-cronjob
+  traefik-crds:
+    type: HelmRelease
+    description: Traefik CRDs chart
+    resource-name: traefik-crds
+    scope: workspace_router_namespace
+    verbs:
+      status:
+        method: helm.status
+      show:
+        method: helm.show
+      reconcile:
+        method: helm.reconcile
+  workspace-operator-chart:
+    type: HelmRelease
+    description: Workspace operator chart (jupyter-k8s)
+    resource-name: jupyter-k8s
+    scope: workspace_operator_namespace
+    verbs:
+      status:
+        method: helm.status
+      show:
+        method: helm.show
+      reconcile:
+        method: helm.reconcile
+  workspace-router-chart:
+    type: HelmRelease
+    description: Workspace router chart (routing, auth, web UI)
+    resource-name: jupyter-k8s-aws-oidc
+    scope: workspace_router_namespace
+    verbs:
+      status:
+        method: helm.status
+      show:
+        method: helm.show
+      reconcile:
+        method: helm.reconcile
+  github-rbac-chart:
+    type: HelmRelease
+    description: GitHub team RBAC RoleBindings chart
+    resource-name: github-rbac
+    scope: workspace_shared_namespace
+    verbs:
+      status:
+        method: helm.status
+      show:
+        method: helm.show
+      reconcile:
+        method: helm.reconcile
+  workspace-defaults-chart:
+    type: HelmRelease
+    description: Default WorkspaceTemplate and access strategy chart
+    resource-name: workspace-defaults
+    scope: workspace_shared_namespace
+    verbs:
+      status:
+        method: helm.status
+      show:
+        method: helm.show
+      reconcile:
+        method: helm.reconcile
 supervised-execution:
   config:
     config.terraform-plan:
