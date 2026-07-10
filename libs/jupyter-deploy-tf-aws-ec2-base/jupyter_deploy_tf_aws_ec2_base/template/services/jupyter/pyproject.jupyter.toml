@@ -1,9 +1,14 @@
 [project]
 name = "jupyter"
-version = "0.5.2"
+version = "0.5.3"
 description = "A basic image with jupyterlab and server-documents"
 requires-python = ">=3.12"
 dependencies = [
     "jupyter-server-documents>=0.2.4",
-    "jupyterlab>=4.4.2",
+    # Pinned <4.6 deliberately: JupyterLab 4.6 bundles the @jupyter/ydoc frontend
+    # singleton at 4.0, but jupyter-server-documents' transitive RTC deps
+    # (jupyter-collaboration-ui, jupyter-docprovider) only ship ydoc-^3 frontends
+    # in their stable releases, so 4.6 breaks extension activation (slow first
+    # draw). Unpin once those ship ydoc-4 stable — see jupyter-deploy#303.
+    "jupyterlab>=4.4.2,<4.6",
 ]
