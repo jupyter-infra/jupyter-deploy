@@ -37,7 +37,7 @@ variable "kubernetes_version" {
 
     Refer to: https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
 
-    Recommended: 1.35
+    Recommended: 1.36
   EOT
   type        = string
 }
@@ -141,6 +141,11 @@ variable "node_groups" {
 
     Nodes are labeled with 'jupyter-deploy/role' matching their role, and
     pod affinity rules schedule pods to the appropriate node group.
+
+    Node groups span multiple AZs. Because EBS volumes are AZ-locked, a workspace
+    whose volume lives in one AZ can only be scheduled onto a node in that same AZ.
+    Keep the workspaces desired_size >= 2 (until autoscaling lands) so nodes are
+    spread across AZs; a single node can strand a workspace in the other AZ.
 
     The ami_type key controls the EKS-optimized AMI. Set to "default" (or omit)
     to auto-detect from instance capabilities:

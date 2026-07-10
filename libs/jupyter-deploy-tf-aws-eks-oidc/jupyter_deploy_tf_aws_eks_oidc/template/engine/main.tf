@@ -63,7 +63,7 @@ resource "random_id" "postfix" {
 
 locals {
   template_name    = "tf-aws-eks-oidc"
-  template_version = "0.1.2"
+  template_version = "0.1.3"
 
   default_tags = {
     Source       = "jupyter-deploy"
@@ -205,6 +205,33 @@ resource "aws_eks_access_policy_association" "admin_user" {
   depends_on = [aws_eks_access_entry.admin_user]
 }
 
+# AMI type is resolved HERE at the root, not inside the node_group module: a data
+# source declared inside a module inherits that module's `depends_on`
+# (module.node_group depends_on null_resource.core_node_addons), so it would be
+# deferred to apply-time whenever that dependency has a pending change, making
+# ami_type "known after apply" and FORCING a node-group replacement on every
+# re-apply. At the root there is no depends_on, so the read stays plan-time-stable.
+#
+# One lookup per distinct instance type (keyed by type) feeds an auto-detected AMI
+# type; a node group may still override it by setting an explicit ami_type.
+data "aws_ec2_instance_type" "node_group" {
+  for_each = toset([for ng in var.node_groups : ng.instance_type])
+
+  instance_type = each.key
+}
+
+locals {
+  # Map each distinct instance type to its auto-detected EKS AL2023 ami_type.
+  resolved_ami_type = {
+    for it, info in data.aws_ec2_instance_type.node_group : it => (
+      length(try(info.gpus, [])) > 0 && contains(try(info.supported_architectures, ["x86_64"]), "x86_64") ? "AL2023_x86_64_NVIDIA" :
+      length(try(info.neuron_devices, [])) > 0 ? "AL2023_x86_64_NEURON" :
+      !contains(try(info.supported_architectures, ["x86_64"]), "x86_64") ? "AL2023_ARM_64_STANDARD" :
+      "AL2023_x86_64_STANDARD"
+    )
+  }
+}
+
 module "node_group" {
   source   = "./modules/node_group"
   for_each = { for ng in var.node_groups : ng.name => ng }
@@ -214,7 +241,7 @@ module "node_group" {
   node_role_arn   = module.node_role.role_arn
   subnet_ids      = module.vpc.private_subnet_ids
   instance_type   = each.value.instance_type
-  ami_type        = lookup(each.value, "ami_type", "default")
+  ami_type        = lookup(each.value, "ami_type", "default") == "default" ? local.resolved_ami_type[each.value.instance_type] : each.value.ami_type
   role_label      = each.value.role
   disk_size_gb    = tonumber(each.value.disk_size_gb)
   min_size        = tonumber(each.value.min_size)

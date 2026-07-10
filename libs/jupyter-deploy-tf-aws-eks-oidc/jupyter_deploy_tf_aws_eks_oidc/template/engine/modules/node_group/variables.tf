@@ -20,7 +20,7 @@ variable "instance_type" {
 
 variable "ami_type" {
   type        = string
-  description = "EKS AMI type. Set to 'default' to auto-detect from instance capabilities."
+  description = "Concrete EKS AMI type (e.g. AL2023_x86_64_STANDARD)."
 }
 
 variable "role_label" {

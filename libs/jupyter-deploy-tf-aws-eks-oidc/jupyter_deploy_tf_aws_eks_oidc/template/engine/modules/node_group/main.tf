@@ -1,31 +1,17 @@
-data "aws_ec2_instance_type" "this" {
-  instance_type = var.instance_type
-}
-
-locals {
-  has_gpu    = try(length(data.aws_ec2_instance_type.this.gpus) > 0, false)
-  has_neuron = try(length(data.aws_ec2_instance_type.this.neuron_devices) > 0, false)
-
-  supported_architectures = try(data.aws_ec2_instance_type.this.supported_architectures, ["x86_64"])
-  architecture            = contains(local.supported_architectures, "x86_64") ? "x86_64" : "arm64"
-
-  # Map instance capabilities to EKS AL2023 ami_type values
-  resolved_ami_type = (
-    local.has_gpu && local.architecture == "x86_64" ? "AL2023_x86_64_NVIDIA" :
-    local.has_neuron ? "AL2023_x86_64_NEURON" :
-    local.architecture == "arm64" ? "AL2023_ARM_64_STANDARD" :
-    "AL2023_x86_64_STANDARD"
-  )
-
-  ami_type = var.ami_type == "default" ? local.resolved_ami_type : var.ami_type
-}
-
+# ami_type MUST arrive already resolved to a concrete EKS AMI type — do NOT
+# reintroduce a `data "aws_ec2_instance_type"` here. A data source declared inside
+# a module inherits the module's `depends_on` (this module depends_on
+# null_resource.core_node_addons), so the read is deferred to apply-time
+# ("known after apply") whenever that dependency has a pending change. That makes
+# ami_type unknown at plan time and FORCES a full node-group replacement on every
+# re-apply, even when the AMI type is unchanged. Resolution therefore happens at
+# the root, where there is no depends_on to defer the read (see main.tf).
 resource "aws_eks_node_group" "this" {
   cluster_name    = var.cluster_name
   node_group_name = var.node_group_name
   node_role_arn   = var.node_role_arn
   subnet_ids      = var.subnet_ids
-  ami_type        = local.ami_type
+  ami_type        = var.ami_type
 
   instance_types = [var.instance_type]
   disk_size      = var.disk_size_gb

@@ -1,6 +1,6 @@
 cluster_name_prefix              = "jupyter-deploy-eks"
 region                           = "us-west-2"
-kubernetes_version               = "1.35"
+kubernetes_version               = "1.36"
 workspace_rbac_namespaces        = ["default"]
 admin_role_names                 = []
 admin_user_names                 = []
@@ -10,9 +10,9 @@ workspace_operator_namespace     = "jupyter-k8s-system"
 workspace_router_namespace       = "jupyter-k8s-router"
 workspace_shared_namespace       = "jupyter-k8s-shared"
 workspace_operator_chart_oci     = "oci://ghcr.io/jupyter-infra/charts/jupyter-k8s"
-workspace_operator_chart_version = "0.1.2"
+workspace_operator_chart_version = "0.2.0"
 workspace_router_chart_oci       = "oci://ghcr.io/jupyter-infra/charts/jupyter-k8s-aws-oidc"
-workspace_router_chart_version   = "0.1.0"
+workspace_router_chart_version   = "0.1.1"
 traefik_crd_chart_version        = "1.15.0"
 
 workspaces_default_access_type           = "OwnerOnly"
@@ -45,6 +45,6 @@ node_groups = [
     disk_size_gb  = "50"
     min_size      = "1"
     max_size      = "5"
-    desired_size  = "1"
+    desired_size  = "2"
   }
 ]
