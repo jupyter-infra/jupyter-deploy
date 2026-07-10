@@ -1,5 +1,5 @@
 apiVersion: v2
 name: workspace-defaults
-version: 0.1.2
+version: 0.1.3
 description: Default workspace resources (access strategy, workspace template)
 type: application

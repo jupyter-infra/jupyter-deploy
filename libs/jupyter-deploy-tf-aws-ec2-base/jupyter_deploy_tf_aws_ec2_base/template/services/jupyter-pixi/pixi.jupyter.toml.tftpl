@@ -11,7 +11,7 @@ platforms = [
     "linux-64",
 %{ endif ~}
 ]
-version = "0.5.2"
+version = "0.5.3"
 
 [tasks]
 
@@ -19,5 +19,9 @@ version = "0.5.2"
 python = ">=3.12"
 
 [pypi-dependencies]
-jupyterlab = ">=4.4.2,<5"
+# Pinned <4.6 deliberately: 4.6 bundles @jupyter/ydoc 4.0, but the RTC deps
+# transitively pulled by jupyter-server-documents only ship ydoc-^3 frontends
+# in stable releases, breaking extension activation (slow first draw).
+# Unpin once those ship ydoc-4 stable — see jupyter-deploy#303.
+jupyterlab = ">=4.4.2,<4.6"
 jupyter-server-documents = ">=0.1.0a0"
