@@ -10,7 +10,10 @@ Auth model:
 
 import pytest
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
-from pytest_jupyter_deploy.workspaces.kubectl import ensure_workspace_no_longer_exists
+from pytest_jupyter_deploy.workspaces.kubectl import (
+    ensure_workspace_no_longer_exists,
+    kubectl_get_workspace_jsonpath,
+)
 from pytest_jupyter_deploy.workspaces.web_app import WebAppNavigator
 
 pytestmark = pytest.mark.usefixtures("kubernetes_cluster_login")
@@ -68,6 +71,31 @@ def test_create_default_workspace(dex_oauth_web_app: WebAppNavigator) -> None:
 
         # Click Open on the card → new tab → JupyterLab should load
         dex_oauth_web_app.open_workspace_from_card(workspace_name)
+        dex_oauth_web_app.verify_jupyterlab_loaded()
+
+
+@skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
+def test_create_private_workspace(dex_oauth_web_app: WebAppNavigator) -> None:
+    """Create a private (OwnerOnly) workspace through the UI and verify it comes up.
+
+    Regression test for jupyter-k8s-ui#40: the create form used to send the invalid
+    access-type value "Private" (instead of the CRD enum "OwnerOnly") when the Private
+    toggle was selected, so private-workspace creation failed with a 422 and the
+    workspace never reached Running. Here we select Private, create, assert the
+    workspace reaches Running and persists accessType=OwnerOnly, and verify the owner
+    can open it → JupyterLab loads.
+    """
+    with dex_oauth_web_app.default_workspace(private=True) as workspace_name:
+        dex_oauth_web_app.wait_for_running()
+
+        access_type = kubectl_get_workspace_jsonpath(workspace_name, "{.spec.accessType}")
+        assert access_type == "OwnerOnly", f"Expected accessType=OwnerOnly, got '{access_type}'"
+
+        # The owner can open their own private workspace → JupyterLab loads.
+        open_button = dex_oauth_web_app.get_open_button()
+        assert open_button.is_visible(), "Expected Open button on the owner's Running private workspace"
+
+        dex_oauth_web_app.open_workspace_from_details_page()
         dex_oauth_web_app.verify_jupyterlab_loaded()
 
 

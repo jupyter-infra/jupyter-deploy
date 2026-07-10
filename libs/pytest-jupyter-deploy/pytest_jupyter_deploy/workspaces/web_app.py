@@ -72,11 +72,14 @@ class WebAppNavigator:
 
     # ── Workspace creation ────────────────────────────────────────────────────
 
-    def create_default_workspace(self) -> str:
+    def create_default_workspace(self, private: bool = False) -> str:
         """Create a workspace through the UI and return its auto-generated name.
 
         Navigates to the create page, reads the auto-generated name, clicks Create,
         and waits for the workspace to appear on its detail page.
+
+        With private=True, selects the "Private" access toggle before creating
+        (the form defaults to "Public"), producing an OwnerOnly workspace.
         """
         self.goto_create_page()
 
@@ -84,6 +87,9 @@ class WebAppNavigator:
         name_field.wait_for(state="visible", timeout=30000)
         workspace_name = name_field.input_value()
         assert workspace_name != "", "Expected auto-generated workspace name"
+
+        if private:
+            self.page.get_by_role("button", name="Private", exact=True).click()
 
         create_button = self.page.get_by_role("button", name="Create Workspace")
         create_button.click()
@@ -94,13 +100,15 @@ class WebAppNavigator:
         return workspace_name
 
     @contextmanager
-    def default_workspace(self) -> Generator[str, None, None]:
+    def default_workspace(self, private: bool = False) -> Generator[str, None, None]:
         """Create a workspace via the UI and delete it via kubectl on exit.
+
+        With private=True, creates an OwnerOnly (private) workspace.
 
         Yields the workspace name. Cleanup is best-effort — if the workspace
         was already deleted (by the test or a creation failure), no error is raised.
         """
-        name = self.create_default_workspace()
+        name = self.create_default_workspace(private=private)
         try:
             yield name
         finally:
