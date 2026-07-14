@@ -1,0 +1,46 @@
+# Ballast Deployment for Cluster Autoscaler scale-up E2E tests.
+#
+# Sleep pods pinned to a target node pool, each requesting a large CPU slice and spread
+# one-per-node. Once enough of them exceed the free capacity on the current nodes, the
+# surplus goes Pending and Cluster Autoscaler must grow the pool's ASG to schedule them.
+#
+# Rendered by ballast.py via string.Template. The node-selector and tolerations blocks are
+# pre-rendered (already indented) so pools with and without taints share one manifest.
+# NOTE: do not add other placeholder-style tokens to comments here — string.Template would
+# try to substitute them.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${name}
+  namespace: ${namespace}
+spec:
+  replicas: ${replicas}
+  selector:
+    matchLabels:
+      app: ${name}
+  template:
+    metadata:
+      labels:
+        app: ${name}
+    spec:
+      nodeSelector:
+${node_selector_yaml}
+      tolerations:
+${tolerations_yaml}
+      terminationGracePeriodSeconds: 5
+      # Spread across nodes so requests can't all pack onto one node — forces the
+      # scheduler to need MORE nodes rather than bin-packing tightly.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: ${name}
+      containers:
+        - name: ballast
+          image: ${image}
+          command: ["sh", "-c", "echo ballast ready; sleep 3600"]
+          resources:
+            requests:
+              cpu: "${cpu_request}"

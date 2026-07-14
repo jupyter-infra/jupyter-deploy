@@ -78,3 +78,5 @@ ignore: |
   build/
   *.egg-info/
   **/charts/*/templates/
+  # string.Template manifests (templated blocks, not valid YAML until rendered)
+  **/kubernetes/ballast-pod.yaml
