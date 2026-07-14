@@ -49,6 +49,11 @@ output "workspace_shared_namespace" {
   value       = var.workspace_shared_namespace
 }
 
+output "kube_system_namespace" {
+  description = "The kube-system namespace, where core add-on DaemonSets (vpc-cni, kube-proxy) run."
+  value       = "kube-system"
+}
+
 output "workspace_base_url" {
   description = "Base URL for workspace access."
   value       = local.workspaces_base_url

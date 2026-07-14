@@ -49,6 +49,10 @@ def _get_helmrelease_names(e2e_deployment: EndToEndDeployment) -> list[str]:
     return [name for name, comp in _get_manifest_components(e2e_deployment).items() if comp.type == "HelmRelease"]
 
 
+def _get_daemonset_names(e2e_deployment: EndToEndDeployment) -> list[str]:
+    return [name for name, comp in _get_manifest_components(e2e_deployment).items() if comp.type == "DaemonSet"]
+
+
 def _poll_component_status(
     e2e_deployment: EndToEndDeployment, name: str, target_status: str, timeout_s: int = 120, interval_s: int = 5
 ) -> None:
@@ -225,6 +229,20 @@ def test_helmrelease_component_status_deployed(e2e_deployment: EndToEndDeploymen
 
 
 @pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_daemonset_component_status_ready(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify DaemonSet components (aws-node, kube-proxy) report Ready (#298)."""
+    e2e_deployment.ensure_deployed()
+
+    daemonset_names = _get_daemonset_names(e2e_deployment)
+    assert "aws-node" in daemonset_names, f"Expected aws-node DaemonSet component, got: {daemonset_names}"
+    assert "kube-proxy" in daemonset_names, f"Expected kube-proxy DaemonSet component, got: {daemonset_names}"
+
+    # Core add-on DaemonSets are always present; fluent-bit only when logging is enabled.
+    for name in ("aws-node", "kube-proxy"):
+        _poll_component_status(e2e_deployment, name, "Ready")
+
+
+@pytest.mark.usefixtures("kubernetes_cluster_login")
 def test_component_status_not_found(e2e_deployment: EndToEndDeployment) -> None:
     """Verify status for a non-existent component fails gracefully."""
     e2e_deployment.ensure_deployed()
@@ -257,6 +275,28 @@ def test_component_show_deployment_json(e2e_deployment: EndToEndDeployment) -> N
     assert "name" in data, f"Expected 'name' in JSON response, got: {list(data.keys())}"
     assert "resource" in data, f"Expected 'resource' in JSON response, got: {list(data.keys())}"
     assert data["name"] == name
+
+
+@pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_component_show_daemonset(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify show returns output for a DaemonSet component (#298 show verb)."""
+    e2e_deployment.ensure_deployed()
+
+    daemonset_names = _get_daemonset_names(e2e_deployment)
+    assert "aws-node" in daemonset_names, f"Expected aws-node DaemonSet component, got: {daemonset_names}"
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "component", "show", "--name", "aws-node"])
+    assert result.stdout.strip(), "Expected non-empty output for DaemonSet component show"
+
+
+@pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_component_show_daemonset_json(e2e_deployment: EndToEndDeployment) -> None:
+    """Verify show --json returns the DaemonSet resource with expected fields."""
+    e2e_deployment.ensure_deployed()
+
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "component", "show", "--name", "aws-node", "--json"])
+    data = json.loads(result.stdout)
+    assert data.get("name") == "aws-node", f"Expected name 'aws-node', got: {data.get('name')}"
+    assert data["resource"]["kind"] == "DaemonSet", f"Expected kind 'DaemonSet', got: {data['resource'].get('kind')}"
 
 
 @pytest.mark.usefixtures("kubernetes_cluster_login")

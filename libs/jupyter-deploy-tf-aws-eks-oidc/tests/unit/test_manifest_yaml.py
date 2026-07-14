@@ -260,3 +260,33 @@ class TestManifest(unittest.TestCase):
                     command_names,
                     f"Component '{name}' verb '{verb}' requires command '{expected_cmd}' in manifest",
                 )
+
+    def test_component_scopes_resolve_to_terraform_outputs(self) -> None:
+        # A component's `scope` is resolved at runtime via get_full_project_outputs, so every
+        # scope MUST name a terraform output — otherwise `jd health`/`component status` errors.
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        outputs_tf = (TEMPLATE_PATH / "engine" / "outputs.tf").read_text()
+        tf_output_names = set(re.findall(r'^output "(\w+)"', outputs_tf, re.MULTILINE))
+
+        for name, comp in self.MANIFEST.get("components", {}).items():
+            scope = comp.get("scope")
+            if scope is None:
+                continue
+            self.assertIn(
+                scope,
+                tf_output_names,
+                f"Component '{name}' scope '{scope}' not found as an output in outputs.tf",
+            )
+
+    def test_daemonset_components_declared(self) -> None:
+        # #298: DaemonSet components (aws-node, kube-proxy, fluent-bit) surface add-on /
+        # log-shipping health in `jd health`.
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        components = self.MANIFEST.get("components", {})
+        daemonset_names = {name for name, comp in components.items() if comp["type"] == "DaemonSet"}
+        self.assertIn("aws-node", daemonset_names)
+        self.assertIn("kube-proxy", daemonset_names)

@@ -93,11 +93,16 @@ def test_health_components_layer(e2e_deployment: EndToEndDeployment) -> None:
     crd_names = {n for n, c in manifest_components.items() if c.type == "CustomResourceDefinition"}
     cr_names = {n for n, c in manifest_components.items() if c.type == "CustomResourceWithoutStatus"}
     helm_names = {n for n, c in manifest_components.items() if c.type == "HelmRelease"}
+    daemonset_names = {n for n, c in manifest_components.items() if c.type == "DaemonSet"}
     # The eks-oidc template declares the 3 Workspace CRDs + the access-strategy and template CRs.
     assert len(crd_names) >= 3, f"Expected >= 3 CustomResourceDefinition components, got {sorted(crd_names)}"
     assert len(cr_names) >= 2, f"Expected >= 2 CustomResourceWithoutStatus components, got {sorted(cr_names)}"
     # The 5 platform charts are surfaced as HelmRelease components.
     assert len(helm_names) == 5, f"Expected 5 HelmRelease components, got {sorted(helm_names)}"
+    # Core add-on DaemonSets (aws-node, kube-proxy) are surfaced as DaemonSet components (#298).
+    assert {"aws-node", "kube-proxy"} <= daemonset_names, (
+        f"Expected aws-node + kube-proxy DaemonSet components, got {sorted(daemonset_names)}"
+    )
 
     for entry in layers:
         assert entry["layer"] == "components"

@@ -591,6 +591,52 @@ commands:
   - result-name: component.deployment.status.sub_component
     source: result
     source-key: '[0].SubComponent'
+- cmd: component.daemonset.status
+  sequence:
+  - api-name: k8s.apps.get-daemonset-status
+    arguments:
+    - api-attribute: name
+      source: cli
+      source-key: name
+    - api-attribute: scope
+      source: cli
+      source-key: scope
+  results:
+  - result-name: component.daemonset.status.status
+    source: result
+    source-key: '[0].Status'
+  - result-name: component.daemonset.status.status_category
+    source: result
+    source-key: '[0].StatusCategory'
+  - result-name: component.daemonset.status.details
+    source: result
+    source-key: '[0].Details'
+  - result-name: component.daemonset.status.sub_component
+    source: result
+    source-key: '[0].SubComponent'
+- cmd: component.statefulset.status
+  sequence:
+  - api-name: k8s.apps.get-statefulset-status
+    arguments:
+    - api-attribute: name
+      source: cli
+      source-key: name
+    - api-attribute: scope
+      source: cli
+      source-key: scope
+  results:
+  - result-name: component.statefulset.status.status
+    source: result
+    source-key: '[0].Status'
+  - result-name: component.statefulset.status.status_category
+    source: result
+    source-key: '[0].StatusCategory'
+  - result-name: component.statefulset.status.details
+    source: result
+    source-key: '[0].Details'
+  - result-name: component.statefulset.status.sub_component
+    source: result
+    source-key: '[0].SubComponent'
 - cmd: component.deployment.show
   sequence:
   - api-name: k8s.apps.get-deployment
@@ -606,6 +652,40 @@ commands:
     source: result
     source-key: '[0].Name'
   - result-name: component.deployment.show.resource
+    source: result
+    source-key: '[0].Resource'
+- cmd: component.daemonset.show
+  sequence:
+  - api-name: k8s.apps.get-daemonset
+    arguments:
+    - api-attribute: name
+      source: cli
+      source-key: name
+    - api-attribute: scope
+      source: cli
+      source-key: scope
+  results:
+  - result-name: component.daemonset.show.name
+    source: result
+    source-key: '[0].Name'
+  - result-name: component.daemonset.show.resource
+    source: result
+    source-key: '[0].Resource'
+- cmd: component.statefulset.show
+  sequence:
+  - api-name: k8s.apps.get-statefulset
+    arguments:
+    - api-attribute: name
+      source: cli
+      source-key: name
+    - api-attribute: scope
+      source: cli
+      source-key: scope
+  results:
+  - result-name: component.statefulset.show.name
+    source: result
+    source-key: '[0].Name'
+  - result-name: component.statefulset.show.resource
     source: result
     source-key: '[0].Resource'
 - cmd: component.deployment.logs
@@ -1102,6 +1182,50 @@ components:
         method: helm.show
       reconcile:
         method: helm.reconcile
+  aws-node:
+    type: DaemonSet
+    description: VPC CNI networking agent
+    resource-name: aws-node
+    scope: kube_system_namespace
+    verbs:
+      status:
+        method: k8s.apps.get-daemonset-status
+      show:
+        method: k8s.apps.get-daemonset
+  kube-proxy:
+    type: DaemonSet
+    description: Service networking proxy
+    resource-name: kube-proxy
+    scope: kube_system_namespace
+    verbs:
+      status:
+        method: k8s.apps.get-daemonset-status
+      show:
+        method: k8s.apps.get-daemonset
+  fluent-bit:
+    type: DaemonSet
+    description: Ships component and workspace pod logs to CloudWatch
+    resource-name: fluent-bit
+    scope: kube_system_namespace
+    verbs:
+      status:
+        method: k8s.apps.get-daemonset-status
+      show:
+        method: k8s.apps.get-daemonset
+  cluster-autoscaler:
+    type: Deployment
+    description: Scales managed node groups on pending pods
+    resource-name: cluster-autoscaler
+    scope: kube_system_namespace
+    verbs:
+      status:
+        method: k8s.apps.get-deployment-status
+      show:
+        method: k8s.apps.get-deployment
+      logs:
+        method: k8s.core.deployment-logs
+      restart:
+        method: k8s.apps.rollout-restart
 supervised-execution:
   config:
     config.terraform-plan:
