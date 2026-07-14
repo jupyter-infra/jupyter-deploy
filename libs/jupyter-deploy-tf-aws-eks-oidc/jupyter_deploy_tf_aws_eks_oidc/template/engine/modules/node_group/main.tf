@@ -27,4 +27,10 @@ resource "aws_eks_node_group" "this" {
   }
 
   tags = var.combined_tags
+
+  # Cluster Autoscaler moves desired_size within min/max (see platform_cluster_autoscaler.tf);
+  # ignore it so a subsequent `jd up` doesn't fight CA by resetting the count to var.desired_size.
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
 }
