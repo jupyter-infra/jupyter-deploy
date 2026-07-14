@@ -56,7 +56,7 @@ resource "helm_release" "traefik_crds" {
   # alive until every release has finished uninstalling. Without it the node groups
   # and helm uninstalls tear down concurrently; the operator dies mid-uninstall and
   # CR finalizers never clear → "context deadline exceeded" (run 28182357633).
-  depends_on = [null_resource.cluster_addons, aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user, module.node_group]
+  depends_on = [null_resource.platform, aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user, module.node_group]
 }
 
 resource "helm_release" "jupyter_k8s" {
@@ -85,7 +85,7 @@ resource "helm_release" "jupyter_k8s" {
     },
   ]
 
-  depends_on = [null_resource.cluster_addons, helm_release.traefik_crds, kubernetes_namespace_v1.shared, module.node_group]
+  depends_on = [null_resource.platform, helm_release.traefik_crds, kubernetes_namespace_v1.shared, module.node_group]
 }
 
 resource "helm_release" "workspace_router" {
@@ -204,5 +204,5 @@ resource "helm_release" "workspace_router" {
     },
   ]
 
-  depends_on = [module.node_group, helm_release.jupyter_k8s, null_resource.cluster_addons, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup, kubernetes_namespace_v1.shared]
+  depends_on = [module.node_group, helm_release.jupyter_k8s, null_resource.platform, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup, kubernetes_namespace_v1.shared]
 }

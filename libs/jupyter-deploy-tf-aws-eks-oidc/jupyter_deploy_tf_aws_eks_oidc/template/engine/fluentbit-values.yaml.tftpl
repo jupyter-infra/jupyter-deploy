@@ -1,0 +1,96 @@
+# Values for the aws-for-fluent-bit Helm chart, rendered by helm.tf.
+#
+# Design (see observability-plan.md):
+#   tail (CRI parser) -> kubernetes filter (labels + ANNOTATIONS on, so created-by is
+#   available) -> rewrite_tag routing platform vs workspace namespaces -> two
+#   cloudwatch_logs outputs. Log GROUP is keyed by namespace (the plugin allows only a
+#   literal prefix + one trailing accessor); pod/owner/workspace identity goes in the
+#   log STREAM name:
+#     platform:   group /jupyter-deploy/${deployment_id}/components/<namespace>   stream <pod>
+#     workspaces: group /jupyter-deploy/${deployment_id}/workspaces/<namespace>   stream <created-by>.<workspace-name>.<pod>
+#
+# NOTE: the per-workspace/owner log-group template relies on the kubernetes filter
+# populating annotations; validated by the mutate E2E logging test.
+#
+# Record-accessor syntax is the `cloudwatch_logs` (C plugin) form: $kubernetes['key']
+# with NO wrapping $(...). The $(...) form belongs to the older Go `cloudwatch` plugin
+# and is rejected here ("bad input character '('").
+
+# Without this the chart's fullname is fluent-bit-aws-for-fluent-bit; override it so the
+# DaemonSet is simply "fluent-bit" — matches the manifest component's resource-name.
+fullnameOverride: fluent-bit
+
+serviceAccount:
+  create: false
+  name: fluent-bit
+
+# Run on every node, tolerate all taints (workspace nodes included).
+tolerations:
+  - operator: Exists
+
+# We define inputs/filters/outputs explicitly below; disable the chart's managed
+# CloudWatch output so we can route to two log-group templates.
+cloudWatchLogs:
+  enabled: false
+
+input:
+  enabled: true
+  tag: "kube.*"
+  path: "/var/log/containers/*.log"
+  db: "/var/log/flb_kube.db"
+  multilineParser: "cri"
+  # Back-fill existing log files on first sight so we don't lose a pod's early
+  # logs when Fluent Bit starts after the pod (the tail plugin otherwise reads
+  # from the end of the file). The DB above dedupes across restarts.
+  extraInputs: |
+    Read_from_Head    On
+
+filter:
+  enabled: true
+  # Enrich each record with pod metadata. Annotations are OFF by default in the chart —
+  # turn them on so the workspace owner (workspace.jupyter.org/created-by annotation,
+  # propagated to the pod) is available to the log-group template.
+  extraFilters: |
+    Labels On
+    Annotations On
+
+# Route by namespace, then ship each group to its own CloudWatch log-group template.
+# $${deployment_id} etc. are Terraform interpolations, not Fluent Bit syntax.
+additionalFilters: |
+  [FILTER]
+      Name          rewrite_tag
+      Match         kube.*
+      Rule          $kubernetes['namespace_name'] ^(${platform_namespaces_regex})$ platform.$TAG false
+      Emitter_Name  re_platform
+  [FILTER]
+      Name          rewrite_tag
+      Match         kube.*
+      Rule          $kubernetes['namespace_name'] ^(${workspace_namespaces_regex})$ workspace.$TAG false
+      Emitter_Name  re_workspace
+
+# Drop everything that did not match a platform/workspace namespace (kube.* untagged).
+additionalOutputs: |
+  # log_group_template accepts a literal PREFIX then a SINGLE trailing record-accessor
+  # (a literal like '/' may not FOLLOW an accessor — that errors "expecting end of file").
+  # So the group is keyed by namespace, and the pod/owner/workspace identity goes into the
+  # log_stream_template (accessors there may be chained with '.').
+  [OUTPUT]
+      Name              cloudwatch_logs
+      Match             platform.*
+      region            ${region}
+      log_group_template  /jupyter-deploy/${deployment_id}/components/$kubernetes['namespace_name']
+      log_group_name    /jupyter-deploy/${deployment_id}/components/unknown
+      log_stream_template $kubernetes['pod_name']
+      log_stream_name   unknown
+      auto_create_group true
+      log_retention_days ${log_retention_days}
+  [OUTPUT]
+      Name              cloudwatch_logs
+      Match             workspace.*
+      region            ${region}
+      log_group_template  /jupyter-deploy/${deployment_id}/workspaces/$kubernetes['namespace_name']
+      log_group_name    /jupyter-deploy/${deployment_id}/workspaces/unknown
+      log_stream_template $kubernetes['annotations']['workspace.jupyter.org/created-by'].$kubernetes['labels']['workspace.jupyter.org/workspace-name'].$kubernetes['pod_name']
+      log_stream_name   unknown
+      auto_create_group true
+      log_retention_days ${log_retention_days}

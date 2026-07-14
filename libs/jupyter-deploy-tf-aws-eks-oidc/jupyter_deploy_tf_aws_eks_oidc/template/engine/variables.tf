@@ -144,8 +144,10 @@ variable "node_groups" {
 
     Node groups span multiple AZs. Because EBS volumes are AZ-locked, a workspace
     whose volume lives in one AZ can only be scheduled onto a node in that same AZ.
-    Keep the workspaces desired_size >= 2 (until autoscaling lands) so nodes are
-    spread across AZs; a single node can strand a workspace in the other AZ.
+    Cluster Autoscaler (platform_cluster_autoscaler.tf) scales every node group within
+    its min/max on pending pods. Keep the workspaces min_size >= the AZ count (2) so a
+    node always exists per AZ even at the scale-down floor; a single node can strand a
+    workspace in the other AZ.
 
     The ami_type key controls the EKS-optimized AMI. Set to "default" (or omit)
     to auto-detect from instance capabilities:
@@ -435,6 +437,69 @@ variable "traefik_crd_chart_version" {
     Refer to: https://github.com/traefik/traefik-helm-chart/releases
 
     Recommended: 1.15.0
+  EOT
+  type        = string
+}
+
+variable "cluster_autoscaler_chart_version" {
+  description = <<-EOT
+    The version of the cluster-autoscaler Helm chart to install.
+
+    Cluster Autoscaler scales the managed node groups within their min/max on pending
+    pods. The chart version is decoupled from the controller image tag, which tracks
+    the cluster's Kubernetes minor version.
+    Refer to: https://github.com/kubernetes/autoscaler/releases
+
+    Recommended: 9.58.0
+  EOT
+  type        = string
+}
+
+variable "enable_component_logging" {
+  description = <<-EOT
+    Whether to ship platform component and workspace pod logs to CloudWatch Logs.
+
+    When true, a Fluent Bit DaemonSet tails pod logs and ships them to CloudWatch under
+    log groups prefixed with /jupyter-deploy/<deployment-id>/. Platform components
+    (router + operator namespaces) and workspace pods are shipped; other namespaces are not.
+
+    NOTE: workspace pods are user workloads — enabling this ships their stdout/stderr to
+    your AWS account. The Authorization header is redacted from Traefik access logs.
+
+    When enabled, logging is a platform prerequisite: the operator/router/workspace stack
+    depends on the Fluent Bit release via the platform barrier (see platform.tf), so a
+    logging install failure blocks the deployment rather than degrading silently.
+
+    Recommended: true
+  EOT
+  type        = bool
+}
+
+variable "component_log_retention_days" {
+  description = <<-EOT
+    Retention in days for the CloudWatch log groups created by component logging.
+
+    This is distinct from cluster_log_retention_days, which controls the EKS
+    control-plane logs. Only used when enable_component_logging is true.
+
+    Recommended: 7
+  EOT
+  type        = number
+
+  validation {
+    condition     = var.component_log_retention_days >= 1 && var.component_log_retention_days <= 3653
+    error_message = "component_log_retention_days must be between 1 and 3653."
+  }
+}
+
+variable "fluentbit_chart_version" {
+  description = <<-EOT
+    The version of the aws-for-fluent-bit Helm chart to install for component logging.
+
+    Only used when enable_component_logging is true.
+    Refer to: https://github.com/aws/eks-charts/tree/master/stable/aws-for-fluent-bit
+
+    Recommended: 0.2.0
   EOT
   type        = string
 }

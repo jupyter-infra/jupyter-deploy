@@ -69,6 +69,28 @@ module "external_dns_policy" {
   combined_tags = local.combined_tags
 }
 
+module "fluentbit_policy" {
+  count       = var.enable_component_logging ? 1 : 0
+  source      = "./modules/iam_policy"
+  policy_name = "${local.resource_name_prefix}-fluent-bit-logs"
+  statements = [
+    {
+      actions = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams",
+        "logs:DescribeLogGroups",
+        "logs:PutRetentionPolicy",
+      ]
+      resources = [
+        "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/jupyter-deploy/${random_id.postfix.hex}/*",
+      ]
+    },
+  ]
+  combined_tags = local.combined_tags
+}
+
 # --- Roles ---
 
 module "cluster_role" {
@@ -114,5 +136,14 @@ module "external_dns_role" {
   role_name          = "${local.resource_name_prefix}-external-dns"
   assume_role_policy = data.aws_iam_policy_document.pod_identity_trust.json
   policy_arns        = [module.external_dns_policy[0].policy_arn]
+  combined_tags      = local.combined_tags
+}
+
+module "fluentbit_role" {
+  count              = var.enable_component_logging ? 1 : 0
+  source             = "./modules/iam_role"
+  role_name          = "${local.resource_name_prefix}-fluent-bit"
+  assume_role_policy = data.aws_iam_policy_document.pod_identity_trust.json
+  policy_arns        = [module.fluentbit_policy[0].policy_arn]
   combined_tags      = local.combined_tags
 }

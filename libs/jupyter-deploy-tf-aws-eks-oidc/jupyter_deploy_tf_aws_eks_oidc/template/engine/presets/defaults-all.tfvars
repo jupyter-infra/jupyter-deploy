@@ -15,6 +15,12 @@ workspace_router_chart_oci       = "oci://ghcr.io/jupyter-infra/charts/jupyter-k
 workspace_router_chart_version   = "0.1.1"
 traefik_crd_chart_version        = "1.15.0"
 
+cluster_autoscaler_chart_version = "9.58.0"
+
+enable_component_logging     = true
+component_log_retention_days = 7
+fluentbit_chart_version      = "0.2.0"
+
 workspaces_default_access_type           = "OwnerOnly"
 workspaces_default_ownership_type        = "OwnerOnly"
 workspaces_idle_shutdown_enabled         = true
@@ -43,7 +49,7 @@ node_groups = [
     instance_type = "c5.2xlarge"
     ami_type      = "default"
     disk_size_gb  = "50"
-    min_size      = "1"
+    min_size      = "2"
     max_size      = "5"
     desired_size  = "2"
   }

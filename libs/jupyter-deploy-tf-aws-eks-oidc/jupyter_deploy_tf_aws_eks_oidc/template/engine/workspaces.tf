@@ -80,6 +80,8 @@ resource "helm_release" "github_rbac" {
     ]),
   )
 
+  # Ordering on the platform barrier (incl. optional logging) is inherited transitively
+  # via helm_release.workspace_router, which depends_on null_resource.platform.
   depends_on = [kubernetes_namespace_v1.shared, helm_release.workspace_router]
 }
 
