@@ -26,7 +26,11 @@ class K8sAppsInstruction(str, Enum):
     """Instructions supported by the K8s Apps (AppsV1) runner."""
 
     GET_DEPLOYMENT_STATUS = "get-deployment-status"
+    GET_DAEMONSET_STATUS = "get-daemonset-status"
+    GET_STATEFULSET_STATUS = "get-statefulset-status"
     GET_DEPLOYMENT = "get-deployment"
+    GET_DAEMONSET = "get-daemonset"
+    GET_STATEFULSET = "get-statefulset"
     ROLLOUT_RESTART = "rollout-restart"
 
 
@@ -80,6 +84,62 @@ class K8sAppsRunner(InstructionRunner):
             "SubComponent": StrResolvedInstructionResult(result_name="SubComponent", value=sub_component),
         }
 
+    def _get_daemonset_status(
+        self, resolved_arguments: dict[str, ResolvedInstructionArgument]
+    ) -> dict[str, ResolvedInstructionResult]:
+        name_arg = require_arg(resolved_arguments, "name", StrResolvedInstructionArgument)
+        scope_arg = require_arg(resolved_arguments, "scope", StrResolvedInstructionArgument)
+
+        self.display_manager.info(f"Getting daemonset status: {name_arg.value}")
+        status = k8s_apps.get_daemonset_status(self.apps_api, name=name_arg.value, namespace=scope_arg.value)
+
+        if status.ready:
+            status_display = "Ready"
+            status_category = StatusCategory.HEALTHY
+        elif status.updated_pods < status.desired_pods:
+            status_display = "Updating"
+            status_category = StatusCategory.IN_PROGRESS
+        else:
+            status_display = "Degraded"
+            status_category = StatusCategory.DEGRADED
+        details = f"{status.ready_pods}/{status.desired_pods} nodes"
+
+        return {
+            "Name": StrResolvedInstructionResult(result_name="Name", value=status.name),
+            "Status": StrResolvedInstructionResult(result_name="Status", value=status_display),
+            "StatusCategory": StrResolvedInstructionResult(result_name="StatusCategory", value=status_category),
+            "Details": StrResolvedInstructionResult(result_name="Details", value=details),
+            "SubComponent": StrResolvedInstructionResult(result_name="SubComponent", value=_EMPTY_SUB_COMPONENT),
+        }
+
+    def _get_statefulset_status(
+        self, resolved_arguments: dict[str, ResolvedInstructionArgument]
+    ) -> dict[str, ResolvedInstructionResult]:
+        name_arg = require_arg(resolved_arguments, "name", StrResolvedInstructionArgument)
+        scope_arg = require_arg(resolved_arguments, "scope", StrResolvedInstructionArgument)
+
+        self.display_manager.info(f"Getting statefulset status: {name_arg.value}")
+        status = k8s_apps.get_statefulset_status(self.apps_api, name=name_arg.value, namespace=scope_arg.value)
+
+        if status.ready:
+            status_display = "Ready"
+            status_category = StatusCategory.HEALTHY
+        elif status.updated_replicas < status.total_replicas:
+            status_display = "Updating"
+            status_category = StatusCategory.IN_PROGRESS
+        else:
+            status_display = "Degraded"
+            status_category = StatusCategory.DEGRADED
+        details = f"{status.ready_replicas}/{status.total_replicas} replicas"
+
+        return {
+            "Name": StrResolvedInstructionResult(result_name="Name", value=status.name),
+            "Status": StrResolvedInstructionResult(result_name="Status", value=status_display),
+            "StatusCategory": StrResolvedInstructionResult(result_name="StatusCategory", value=status_category),
+            "Details": StrResolvedInstructionResult(result_name="Details", value=details),
+            "SubComponent": StrResolvedInstructionResult(result_name="SubComponent", value=_EMPTY_SUB_COMPONENT),
+        }
+
     def _get_deployment(
         self, resolved_arguments: dict[str, ResolvedInstructionArgument]
     ) -> dict[str, ResolvedInstructionResult]:
@@ -88,6 +148,34 @@ class K8sAppsRunner(InstructionRunner):
 
         self.display_manager.info(f"Getting deployment details: {name_arg.value}")
         info = k8s_apps.get_deployment(self.apps_api, name=name_arg.value, namespace=scope_arg.value)
+
+        return {
+            "Name": StrResolvedInstructionResult(result_name="Name", value=info.name),
+            "Resource": StrResolvedInstructionResult(result_name="Resource", value=json.dumps(info.resource)),
+        }
+
+    def _get_daemonset(
+        self, resolved_arguments: dict[str, ResolvedInstructionArgument]
+    ) -> dict[str, ResolvedInstructionResult]:
+        name_arg = require_arg(resolved_arguments, "name", StrResolvedInstructionArgument)
+        scope_arg = require_arg(resolved_arguments, "scope", StrResolvedInstructionArgument)
+
+        self.display_manager.info(f"Getting daemonset details: {name_arg.value}")
+        info = k8s_apps.get_daemonset(self.apps_api, name=name_arg.value, namespace=scope_arg.value)
+
+        return {
+            "Name": StrResolvedInstructionResult(result_name="Name", value=info.name),
+            "Resource": StrResolvedInstructionResult(result_name="Resource", value=json.dumps(info.resource)),
+        }
+
+    def _get_statefulset(
+        self, resolved_arguments: dict[str, ResolvedInstructionArgument]
+    ) -> dict[str, ResolvedInstructionResult]:
+        name_arg = require_arg(resolved_arguments, "name", StrResolvedInstructionArgument)
+        scope_arg = require_arg(resolved_arguments, "scope", StrResolvedInstructionArgument)
+
+        self.display_manager.info(f"Getting statefulset details: {name_arg.value}")
+        info = k8s_apps.get_statefulset(self.apps_api, name=name_arg.value, namespace=scope_arg.value)
 
         return {
             "Name": StrResolvedInstructionResult(result_name="Name", value=info.name),
@@ -117,8 +205,16 @@ class K8sAppsRunner(InstructionRunner):
 
         if instruction == K8sAppsInstruction.GET_DEPLOYMENT_STATUS:
             return self._get_deployment_status(resolved_arguments)
+        elif instruction == K8sAppsInstruction.GET_DAEMONSET_STATUS:
+            return self._get_daemonset_status(resolved_arguments)
+        elif instruction == K8sAppsInstruction.GET_STATEFULSET_STATUS:
+            return self._get_statefulset_status(resolved_arguments)
         elif instruction == K8sAppsInstruction.GET_DEPLOYMENT:
             return self._get_deployment(resolved_arguments)
+        elif instruction == K8sAppsInstruction.GET_DAEMONSET:
+            return self._get_daemonset(resolved_arguments)
+        elif instruction == K8sAppsInstruction.GET_STATEFULSET:
+            return self._get_statefulset(resolved_arguments)
         elif instruction == K8sAppsInstruction.ROLLOUT_RESTART:
             return self._rollout_restart(resolved_arguments)
 

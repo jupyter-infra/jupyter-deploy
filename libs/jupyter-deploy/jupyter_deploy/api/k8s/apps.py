@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from kubernetes.client import ApiClient, AppsV1Api, CoreV1Api
+from kubernetes.client import AppsV1Api, CoreV1Api
 
 
 @dataclass(frozen=True)
@@ -15,12 +15,39 @@ class DeploymentStatus:
 
 
 @dataclass(frozen=True)
+class DaemonSetStatus:
+    name: str
+    ready: bool
+    ready_pods: int
+    desired_pods: int
+    updated_pods: int
+
+
+@dataclass(frozen=True)
+class StatefulSetStatus:
+    name: str
+    ready: bool
+    ready_replicas: int
+    total_replicas: int
+    updated_replicas: int
+
+
+@dataclass(frozen=True)
 class DeploymentInfo:
     name: str
     image: str
     replicas: int
     ready_replicas: int
     conditions: list[dict[str, str]]
+    resource: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ResourceInfo:
+    """Minimal show payload (name + full serialized resource) for kinds whose `show`
+    verb only needs the raw object — DaemonSet, StatefulSet."""
+
+    name: str
     resource: dict[str, Any] = field(default_factory=dict)
 
 
@@ -63,6 +90,48 @@ def get_deployment_status(apps_api: AppsV1Api, name: str, namespace: str) -> Dep
     )
 
 
+def get_daemonset_status(apps_api: AppsV1Api, name: str, namespace: str) -> DaemonSetStatus:
+    """Return pod counts and readiness for a DaemonSet.
+
+    A DaemonSet is Ready when every node that should run a pod has one scheduled,
+    ready and available: desired == ready == available.
+    """
+    daemonset = apps_api.read_namespaced_daemon_set(name=name, namespace=namespace)
+    ds_name = daemonset.metadata.name if daemonset.metadata else ""
+    status = daemonset.status
+    desired = status.desired_number_scheduled or 0 if status else 0
+    ready = status.number_ready or 0 if status else 0
+    available = status.number_available or 0 if status else 0
+    updated = status.updated_number_scheduled or 0 if status else 0
+    return DaemonSetStatus(
+        name=ds_name,
+        ready=desired > 0 and desired == ready == available,
+        ready_pods=ready,
+        desired_pods=desired,
+        updated_pods=updated,
+    )
+
+
+def get_statefulset_status(apps_api: AppsV1Api, name: str, namespace: str) -> StatefulSetStatus:
+    """Return replica counts and readiness for a StatefulSet.
+
+    A StatefulSet is Ready when all desired replicas are ready: replicas == readyReplicas.
+    """
+    statefulset = apps_api.read_namespaced_stateful_set(name=name, namespace=namespace)
+    sts_name = statefulset.metadata.name if statefulset.metadata else ""
+    status = statefulset.status
+    total = status.replicas or 0 if status else 0
+    ready = status.ready_replicas or 0 if status else 0
+    updated = status.updated_replicas or 0 if status else 0
+    return StatefulSetStatus(
+        name=sts_name,
+        ready=total > 0 and total == ready,
+        ready_replicas=ready,
+        total_replicas=total,
+        updated_replicas=updated,
+    )
+
+
 def get_deployment(apps_api: AppsV1Api, name: str, namespace: str) -> DeploymentInfo:
     """Return detailed info including the full serialized resource."""
     deployment = apps_api.read_namespaced_deployment(name=name, namespace=namespace)
@@ -75,7 +144,7 @@ def get_deployment(apps_api: AppsV1Api, name: str, namespace: str) -> Deployment
     replicas = spec.replicas or 0 if spec else 0
     ready = status.ready_replicas or 0 if status else 0
     conditions = _parse_conditions(deployment)
-    resource: dict[str, Any] = ApiClient().sanitize_for_serialization(deployment)
+    resource: dict[str, Any] = apps_api.api_client.sanitize_for_serialization(deployment)
     return DeploymentInfo(
         name=deploy_name,
         image=image,
@@ -84,6 +153,22 @@ def get_deployment(apps_api: AppsV1Api, name: str, namespace: str) -> Deployment
         conditions=conditions,
         resource=resource,
     )
+
+
+def get_daemonset(apps_api: AppsV1Api, name: str, namespace: str) -> ResourceInfo:
+    """Return the full serialized DaemonSet resource."""
+    daemonset = apps_api.read_namespaced_daemon_set(name=name, namespace=namespace)
+    ds_name = daemonset.metadata.name if daemonset.metadata else ""
+    resource: dict[str, Any] = apps_api.api_client.sanitize_for_serialization(daemonset)
+    return ResourceInfo(name=ds_name, resource=resource)
+
+
+def get_statefulset(apps_api: AppsV1Api, name: str, namespace: str) -> ResourceInfo:
+    """Return the full serialized StatefulSet resource."""
+    statefulset = apps_api.read_namespaced_stateful_set(name=name, namespace=namespace)
+    sts_name = statefulset.metadata.name if statefulset.metadata else ""
+    resource: dict[str, Any] = apps_api.api_client.sanitize_for_serialization(statefulset)
+    return ResourceInfo(name=sts_name, resource=resource)
 
 
 @dataclass(frozen=True)

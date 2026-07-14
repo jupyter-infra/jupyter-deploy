@@ -1,16 +1,53 @@
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 from kubernetes.client import AppsV1Api
 from kubernetes.client.exceptions import ApiException
 
 from jupyter_deploy.api.k8s.apps import (
+    DaemonSetStatus,
     DeploymentInfo,
     DeploymentStatus,
+    ResourceInfo,
+    StatefulSetStatus,
+    get_daemonset,
+    get_daemonset_status,
     get_deployment,
     get_deployment_status,
+    get_statefulset,
+    get_statefulset_status,
     rollout_restart,
 )
+
+
+def _mock_daemonset(
+    name: str = "aws-node",
+    desired: int = 3,
+    ready: int = 3,
+    available: int = 3,
+    updated: int = 3,
+) -> Mock:
+    daemonset: Mock = Mock()
+    daemonset.metadata.name = name
+    daemonset.status.desired_number_scheduled = desired
+    daemonset.status.number_ready = ready
+    daemonset.status.number_available = available
+    daemonset.status.updated_number_scheduled = updated
+    return daemonset
+
+
+def _mock_statefulset(
+    name: str = "prometheus",
+    total: int = 2,
+    ready: int = 2,
+    updated: int = 2,
+) -> Mock:
+    statefulset: Mock = Mock()
+    statefulset.metadata.name = name
+    statefulset.status.replicas = total
+    statefulset.status.ready_replicas = ready
+    statefulset.status.updated_replicas = updated
+    return statefulset
 
 
 def _mock_deployment(
@@ -75,11 +112,104 @@ class TestGetDeploymentStatus(unittest.TestCase):
             get_deployment_status(mock_api, name="missing", namespace="default")
 
 
-class TestGetDeployment(unittest.TestCase):
-    @patch("jupyter_deploy.api.k8s.apps.ApiClient")
-    def test_returns_deployment_info(self, mock_api_client_cls: Mock) -> None:
-        mock_api_client_cls.return_value.sanitize_for_serialization.return_value = {"kind": "Deployment"}
+class TestGetDaemonsetStatus(unittest.TestCase):
+    def test_returns_ready_when_all_scheduled(self) -> None:
         mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_daemon_set.return_value = _mock_daemonset()
+
+        result = get_daemonset_status(mock_api, name="aws-node", namespace="kube-system")
+
+        self.assertIsInstance(result, DaemonSetStatus)
+        self.assertEqual(result.name, "aws-node")
+        self.assertTrue(result.ready)
+        self.assertEqual(result.ready_pods, 3)
+        self.assertEqual(result.desired_pods, 3)
+
+    def test_not_ready_when_ready_below_desired(self) -> None:
+        mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_daemon_set.return_value = _mock_daemonset(ready=2, available=2)
+
+        result = get_daemonset_status(mock_api, name="aws-node", namespace="kube-system")
+
+        self.assertFalse(result.ready)
+        self.assertEqual(result.ready_pods, 2)
+
+    def test_not_ready_when_zero_desired(self) -> None:
+        mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_daemon_set.return_value = _mock_daemonset(desired=0, ready=0, available=0, updated=0)
+
+        result = get_daemonset_status(mock_api, name="aws-node", namespace="kube-system")
+
+        self.assertFalse(result.ready)
+
+    def test_passes_name_and_namespace(self) -> None:
+        mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_daemon_set.return_value = _mock_daemonset()
+
+        get_daemonset_status(mock_api, name="kube-proxy", namespace="kube-system")
+
+        mock_api.read_namespaced_daemon_set.assert_called_once_with(name="kube-proxy", namespace="kube-system")
+
+    def test_raises_on_not_found(self) -> None:
+        mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_daemon_set.side_effect = ApiException(status=404, reason="Not Found")
+
+        with self.assertRaises(ApiException):
+            get_daemonset_status(mock_api, name="missing", namespace="default")
+
+
+class TestGetStatefulsetStatus(unittest.TestCase):
+    def test_returns_ready_when_all_replicas_ready(self) -> None:
+        mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_stateful_set.return_value = _mock_statefulset()
+
+        result = get_statefulset_status(mock_api, name="prometheus", namespace="monitoring")
+
+        self.assertIsInstance(result, StatefulSetStatus)
+        self.assertEqual(result.name, "prometheus")
+        self.assertTrue(result.ready)
+        self.assertEqual(result.ready_replicas, 2)
+        self.assertEqual(result.total_replicas, 2)
+
+    def test_not_ready_when_ready_below_total(self) -> None:
+        mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_stateful_set.return_value = _mock_statefulset(ready=1)
+
+        result = get_statefulset_status(mock_api, name="prometheus", namespace="monitoring")
+
+        self.assertFalse(result.ready)
+        self.assertEqual(result.ready_replicas, 1)
+
+    def test_not_ready_when_zero_replicas(self) -> None:
+        mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_stateful_set.return_value = _mock_statefulset(total=0, ready=0, updated=0)
+
+        result = get_statefulset_status(mock_api, name="prometheus", namespace="monitoring")
+
+        self.assertFalse(result.ready)
+
+    def test_raises_on_not_found(self) -> None:
+        mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_stateful_set.side_effect = ApiException(status=404, reason="Not Found")
+
+        with self.assertRaises(ApiException):
+            get_statefulset_status(mock_api, name="missing", namespace="default")
+
+
+def _mock_apps_api(serialized: dict) -> Mock:
+    """AppsV1Api mock whose api_client.sanitize_for_serialization returns `serialized`.
+
+    api_client is an instance attribute, so it is not on the class spec and must be
+    attached explicitly."""
+    mock_api: Mock = Mock(spec=AppsV1Api)
+    mock_api.api_client = Mock()
+    mock_api.api_client.sanitize_for_serialization.return_value = serialized
+    return mock_api
+
+
+class TestGetDeployment(unittest.TestCase):
+    def test_returns_deployment_info(self) -> None:
+        mock_api = _mock_apps_api({"kind": "Deployment"})
         mock_api.read_namespaced_deployment.return_value = _mock_deployment(image="dex:v2.36")
 
         result = get_deployment(mock_api, name="dex", namespace="auth")
@@ -97,6 +227,44 @@ class TestGetDeployment(unittest.TestCase):
 
         with self.assertRaises(ApiException):
             get_deployment(mock_api, name="missing", namespace="default")
+
+
+class TestGetDaemonset(unittest.TestCase):
+    def test_returns_resource_info(self) -> None:
+        mock_api = _mock_apps_api({"kind": "DaemonSet"})
+        mock_api.read_namespaced_daemon_set.return_value = _mock_daemonset(name="aws-node")
+
+        result = get_daemonset(mock_api, name="aws-node", namespace="kube-system")
+
+        self.assertIsInstance(result, ResourceInfo)
+        self.assertEqual(result.name, "aws-node")
+        self.assertEqual(result.resource, {"kind": "DaemonSet"})
+
+    def test_raises_on_not_found(self) -> None:
+        mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_daemon_set.side_effect = ApiException(status=404, reason="Not Found")
+
+        with self.assertRaises(ApiException):
+            get_daemonset(mock_api, name="missing", namespace="default")
+
+
+class TestGetStatefulset(unittest.TestCase):
+    def test_returns_resource_info(self) -> None:
+        mock_api = _mock_apps_api({"kind": "StatefulSet"})
+        mock_api.read_namespaced_stateful_set.return_value = _mock_statefulset(name="prometheus")
+
+        result = get_statefulset(mock_api, name="prometheus", namespace="monitoring")
+
+        self.assertIsInstance(result, ResourceInfo)
+        self.assertEqual(result.name, "prometheus")
+        self.assertEqual(result.resource, {"kind": "StatefulSet"})
+
+    def test_raises_on_not_found(self) -> None:
+        mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_stateful_set.side_effect = ApiException(status=404, reason="Not Found")
+
+        with self.assertRaises(ApiException):
+            get_statefulset(mock_api, name="missing", namespace="default")
 
 
 class TestRolloutRestart(unittest.TestCase):
