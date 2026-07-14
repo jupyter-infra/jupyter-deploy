@@ -11,6 +11,12 @@ dependencies = [
 [tool.uv.sources]
 jupyter-deploy = { workspace = true }
 pytest-jupyter-deploy = { workspace = true }
+# Template packages: dev-only, so a fresh `uv sync` registers their
+# `jupyter_deploy.terraform_templates` entry points and `jd init` finds them. They are
+# NOT core deps of the CLI (which stays template-agnostic) — only of this dev monorepo.
+jupyter-deploy-tf-aws-ec2-base = { workspace = true }
+jupyter-deploy-tf-aws-eks-oidc = { workspace = true }
+jupyter-infra-tf-aws-iam-ci = { workspace = true }
 
 [tool.uv.workspace]
 members = [
@@ -32,6 +38,9 @@ dev-dependencies = [
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
     "pytest-jupyter-deploy",
+    "jupyter-deploy-tf-aws-ec2-base",
+    "jupyter-deploy-tf-aws-eks-oidc",
+    "jupyter-infra-tf-aws-iam-ci",
     "pytest-playwright>=0.6.2",
     "ruff>=0.11.8",
     "typer>=0.15.4",
