@@ -3,6 +3,7 @@
 import json
 import re
 
+import pytest
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 
 # A CR sub-component renders as a non-empty "label: value" pair (e.g. "access-resources: 2").
@@ -10,9 +11,11 @@ _LABELED_VALUE_RE = re.compile(r"^\S.*: \S.*$")
 
 EXPECTED_CRONJOBS = [
     "jwt-rotator",
+    "web-app-session-rotator",
 ]
 
 
+@pytest.mark.usefixtures("kubernetes_cluster_login")
 def test_health_all_layers(e2e_deployment: EndToEndDeployment) -> None:
     """Verify jd health runs all layers and reports status for each."""
     e2e_deployment.ensure_deployed()
@@ -25,6 +28,7 @@ def test_health_all_layers(e2e_deployment: EndToEndDeployment) -> None:
     assert "Connection" in output, "Expected 'Connection' in health output"
 
 
+@pytest.mark.usefixtures("kubernetes_cluster_login")
 def test_health_json(e2e_deployment: EndToEndDeployment) -> None:
     """Verify --json returns valid JSON with expected fields."""
     e2e_deployment.ensure_deployed()
@@ -72,6 +76,7 @@ def test_health_cluster_layer(e2e_deployment: EndToEndDeployment) -> None:
     assert layers[0]["skipped"] is False
 
 
+@pytest.mark.usefixtures("kubernetes_cluster_login")
 def test_health_components_layer(e2e_deployment: EndToEndDeployment) -> None:
     """Verify --components returns one row per manifest component."""
     e2e_deployment.ensure_deployed()
@@ -97,8 +102,9 @@ def test_health_components_layer(e2e_deployment: EndToEndDeployment) -> None:
     # The eks-oidc template declares the 3 Workspace CRDs + the access-strategy and template CRs.
     assert len(crd_names) >= 3, f"Expected >= 3 CustomResourceDefinition components, got {sorted(crd_names)}"
     assert len(cr_names) >= 2, f"Expected >= 2 CustomResourceWithoutStatus components, got {sorted(cr_names)}"
-    # The 5 platform charts are surfaced as HelmRelease components.
-    assert len(helm_names) == 5, f"Expected 5 HelmRelease components, got {sorted(helm_names)}"
+    # The 7 platform charts are surfaced as HelmRelease components (five core charts plus
+    # cluster-autoscaler and fluent-bit; the latter present because logging defaults on).
+    assert len(helm_names) == 7, f"Expected 7 HelmRelease components, got {sorted(helm_names)}"
     # Core add-on DaemonSets (aws-node, kube-proxy) are surfaced as DaemonSet components (#298).
     assert {"aws-node", "kube-proxy"} <= daemonset_names, (
         f"Expected aws-node + kube-proxy DaemonSet components, got {sorted(daemonset_names)}"

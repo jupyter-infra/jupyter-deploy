@@ -215,11 +215,12 @@ class TestManifest(unittest.TestCase):
         components = self.MANIFEST.get("components", {})
         helm_components = {name: c for name, c in components.items() if c["type"] == "HelmRelease"}
 
-        # All five chart releases are surfaced as components.
+        # All seven chart releases are surfaced as components (five platform charts plus
+        # the cluster-autoscaler and fluent-bit charts added for autoscaling / logging).
         self.assertEqual(
             len(helm_components),
-            5,
-            f"Expected 5 HelmRelease components, got {len(helm_components)}: {list(helm_components)}",
+            7,
+            f"Expected 7 HelmRelease components, got {len(helm_components)}: {list(helm_components)}",
         )
         for name, comp in helm_components.items():
             self.assertIn("reconcile", comp["verbs"], f"HelmRelease component '{name}' must declare a reconcile verb")

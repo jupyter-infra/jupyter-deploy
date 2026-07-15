@@ -944,6 +944,50 @@ commands:
     source: result
     source-key: '[0].ScannerType'
 components:
+  aws-node:
+    type: DaemonSet
+    description: VPC CNI networking agent
+    resource-name: aws-node
+    scope: kube_system_namespace
+    verbs:
+      status:
+        method: k8s.apps.get-daemonset-status
+      show:
+        method: k8s.apps.get-daemonset
+  kube-proxy:
+    type: DaemonSet
+    description: Service networking proxy
+    resource-name: kube-proxy
+    scope: kube_system_namespace
+    verbs:
+      status:
+        method: k8s.apps.get-daemonset-status
+      show:
+        method: k8s.apps.get-daemonset
+  fluent-bit:
+    type: DaemonSet
+    description: Ships component and workspace pod logs to CloudWatch
+    resource-name: fluent-bit
+    scope: kube_system_namespace
+    verbs:
+      status:
+        method: k8s.apps.get-daemonset-status
+      show:
+        method: k8s.apps.get-daemonset
+  cluster-autoscaler:
+    type: Deployment
+    description: Scales managed node groups on pending pods
+    resource-name: cluster-autoscaler
+    scope: kube_system_namespace
+    verbs:
+      status:
+        method: k8s.apps.get-deployment-status
+      show:
+        method: k8s.apps.get-deployment
+      logs:
+        method: k8s.core.deployment-logs
+      restart:
+        method: k8s.apps.rollout-restart
   workspace-crd:
     type: CustomResourceDefinition
     description: Workspace CRD
@@ -1122,6 +1166,30 @@ components:
         method: k8s.batch.get-job-logs
       trigger:
         method: k8s.batch.create-job-from-cronjob
+  cluster-autoscaler-chart:
+    type: HelmRelease
+    description: Cluster Autoscaler chart
+    resource-name: cluster-autoscaler
+    scope: kube_system_namespace
+    verbs:
+      status:
+        method: helm.status
+      show:
+        method: helm.show
+      reconcile:
+        method: helm.reconcile
+  fluent-bit-chart:
+    type: HelmRelease
+    description: Fluent Bit log-shipping chart (component logging)
+    resource-name: fluent-bit
+    scope: kube_system_namespace
+    verbs:
+      status:
+        method: helm.status
+      show:
+        method: helm.show
+      reconcile:
+        method: helm.reconcile
   traefik-crds:
     type: HelmRelease
     description: Traefik CRDs chart
@@ -1182,50 +1250,6 @@ components:
         method: helm.show
       reconcile:
         method: helm.reconcile
-  aws-node:
-    type: DaemonSet
-    description: VPC CNI networking agent
-    resource-name: aws-node
-    scope: kube_system_namespace
-    verbs:
-      status:
-        method: k8s.apps.get-daemonset-status
-      show:
-        method: k8s.apps.get-daemonset
-  kube-proxy:
-    type: DaemonSet
-    description: Service networking proxy
-    resource-name: kube-proxy
-    scope: kube_system_namespace
-    verbs:
-      status:
-        method: k8s.apps.get-daemonset-status
-      show:
-        method: k8s.apps.get-daemonset
-  fluent-bit:
-    type: DaemonSet
-    description: Ships component and workspace pod logs to CloudWatch
-    resource-name: fluent-bit
-    scope: kube_system_namespace
-    verbs:
-      status:
-        method: k8s.apps.get-daemonset-status
-      show:
-        method: k8s.apps.get-daemonset
-  cluster-autoscaler:
-    type: Deployment
-    description: Scales managed node groups on pending pods
-    resource-name: cluster-autoscaler
-    scope: kube_system_namespace
-    verbs:
-      status:
-        method: k8s.apps.get-deployment-status
-      show:
-        method: k8s.apps.get-deployment
-      logs:
-        method: k8s.core.deployment-logs
-      restart:
-        method: k8s.apps.rollout-restart
 supervised-execution:
   config:
     config.terraform-plan:
