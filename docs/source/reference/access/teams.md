@@ -29,16 +29,16 @@ or pass --path <project-dir>.
 **Usage**:
 
 ```console
-$ jd teams add [OPTIONS] TEAMS...
+$ jd teams add [OPTIONS] {teams}...
 ```
 
 **Arguments**:
 
-* `TEAMS...`: Names of the teams to add to the allowlist.  [required]
+* `teams...`: Names of the teams to add to the allowlist.  [required]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `teams remove`
@@ -51,16 +51,16 @@ or pass --path <project-dir>.
 **Usage**:
 
 ```console
-$ jd teams remove [OPTIONS] TEAMS...
+$ jd teams remove [OPTIONS] {teams}...
 ```
 
 **Arguments**:
 
-* `TEAMS...`: Names of the teams to remove from the allowlist.  [required]
+* `teams...`: Names of the teams to remove from the allowlist.  [required]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `teams set`
@@ -73,16 +73,16 @@ or pass --path <project-dir>.
 **Usage**:
 
 ```console
-$ jd teams set [OPTIONS] TEAMS...
+$ jd teams set [OPTIONS] {teams}...
 ```
 
 **Arguments**:
 
-* `TEAMS...`: Names of the teams to allowlist.  [required]
+* `teams...`: Names of the teams to allowlist.  [required]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `teams list`
@@ -100,5 +100,5 @@ $ jd teams list [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.

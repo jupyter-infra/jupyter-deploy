@@ -16,7 +16,7 @@ $ jd down [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project to bring down.
+* `-p, --path <path>`: Directory of the project to bring down.
 * `-y, --answer-yes`: Destroy resources without confirmation prompt.
 * `-v, --verbose`: Show full output without progress bar.
 * `--help`: Show this message and exit.

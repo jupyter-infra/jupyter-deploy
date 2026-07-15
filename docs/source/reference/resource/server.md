@@ -39,9 +39,9 @@ $ jd server status [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the server to check status for.
-* `-p, --path PATH`: Directory of the project whose server to send a health check.
-* `--scope TEXT`: Scope or group the server belongs to.
+* `--name <str>`: Name of the server to check status for.
+* `-p, --path <path>`: Directory of the project whose server to send a health check.
+* `--scope <str>`: Scope or group the server belongs to.
 * `--help`: Show this message and exit.
 
 ## `server start`
@@ -61,10 +61,10 @@ $ jd server start [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the server to start.
-* `-p, --path PATH`: Directory of the project whose server to start.
-* `-s, --service TEXT`: Service to start ('all', 'jupyter', or other available services).  [default: all]
-* `--scope TEXT`: Scope or group the server belongs to.
+* `--name <str>`: Name of the server to start.
+* `-p, --path <path>`: Directory of the project whose server to start.
+* `-s, --service <str>`: Service to start ('all', 'jupyter', or other available services).  [default: all]
+* `--scope <str>`: Scope or group the server belongs to.
 * `--help`: Show this message and exit.
 
 ## `server stop`
@@ -84,10 +84,10 @@ $ jd server stop [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the server to stop.
-* `-p, --path PATH`: Directory of the project whose server to stop.
-* `-s, --service TEXT`: Service to stop ('all', 'jupyter', or other available services).  [default: all]
-* `--scope TEXT`: Scope or group the server belongs to.
+* `--name <str>`: Name of the server to stop.
+* `-p, --path <path>`: Directory of the project whose server to stop.
+* `-s, --service <str>`: Service to stop ('all', 'jupyter', or other available services).  [default: all]
+* `--scope <str>`: Scope or group the server belongs to.
 * `--help`: Show this message and exit.
 
 ## `server restart`
@@ -107,10 +107,10 @@ $ jd server restart [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the server to restart.
-* `-p, --path PATH`: Directory of the project whose server to restart.
-* `-s, --service TEXT`: Service to restart ('all', 'jupyter', or other available services).  [default: all]
-* `--scope TEXT`: Scope or group the server belongs to.
+* `--name <str>`: Name of the server to restart.
+* `-p, --path <path>`: Directory of the project whose server to restart.
+* `-s, --service <str>`: Service to restart ('all', 'jupyter', or other available services).  [default: all]
+* `--scope <str>`: Scope or group the server belongs to.
 * `--help`: Show this message and exit.
 
 ## `server logs`
@@ -139,10 +139,10 @@ $ jd server logs [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the server whose logs to display.
-* `-p, --path PATH`: Directory of the project whose server logs to display.
-* `-s, --service TEXT`: Name of the service whose logs to display.  [default: default]
-* `--scope TEXT`: Scope or group the server belongs to.
+* `--name <str>`: Name of the server whose logs to display.
+* `-p, --path <path>`: Directory of the project whose server logs to display.
+* `-s, --service <str>`: Name of the service whose logs to display.  [default: default]
+* `--scope <str>`: Scope or group the server belongs to.
 * `--help`: Show this message and exit.
 
 ## `server exec`
@@ -171,10 +171,10 @@ $ jd server exec [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the server in which to execute the command.
-* `-p, --path PATH`: Directory of the project.
-* `-s, --service TEXT`: Name of the service in which to execute the command.  [default: default]
-* `--scope TEXT`: Scope or group the server belongs to.
+* `--name <str>`: Name of the server in which to execute the command.
+* `-p, --path <path>`: Directory of the project.
+* `-s, --service <str>`: Name of the service in which to execute the command.  [default: default]
+* `--scope <str>`: Scope or group the server belongs to.
 * `--help`: Show this message and exit.
 
 ## `server connect`
@@ -203,10 +203,10 @@ $ jd server connect [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the server to connect to.
-* `-p, --path PATH`: Directory of the project.
-* `-s, --service TEXT`: Name of the service to connect to.  [default: default]
-* `--scope TEXT`: Scope or group the server belongs to.
+* `--name <str>`: Name of the server to connect to.
+* `-p, --path <path>`: Directory of the project.
+* `-s, --service <str>`: Name of the service to connect to.  [default: default]
+* `--scope <str>`: Scope or group the server belongs to.
 * `--help`: Show this message and exit.
 
 ## `server list`
@@ -224,10 +224,10 @@ $ jd server list [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project whose servers to list.
-* `--scope TEXT`: Scope or group to list servers from.
-* `-n, --limit INTEGER`: Maximum number of servers to return.
-* `--continue-from TEXT`: Continuation token from a previous list call.
+* `-p, --path <path>`: Directory of the project whose servers to list.
+* `--scope <str>`: Scope or group to list servers from.
+* `-n, --limit <int>`: Maximum number of servers to return.
+* `--continue-from <str>`: Continuation token from a previous list call.
 * `--json`: Output as JSON.
 * `--help`: Show this message and exit.
 
@@ -246,8 +246,8 @@ $ jd server show [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the server to show details for.  [required]
-* `-p, --path PATH`: Directory of the project.
-* `--scope TEXT`: Scope or group the server belongs to.
+* `--name <str>`: Name of the server to show details for.  [required]
+* `-p, --path <path>`: Directory of the project.
+* `--scope <str>`: Scope or group the server belongs to.
 * `--json`: Output as JSON.
 * `--help`: Show this message and exit.

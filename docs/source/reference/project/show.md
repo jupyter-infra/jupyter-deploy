@@ -24,12 +24,12 @@ $ jd show [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project to show information.
+* `-p, --path <path>`: Directory of the project to show information.
 * `--info`: Display core project and template information.
 * `--outputs`: Display outputs information.
 * `--variables`: Display variables information.
-* `-v, --variable TEXT`: Get the value of a specific variable by name.
-* `-o, --output TEXT`: Get the value of a specific output by name.
+* `-v, --variable <str>`: Get the value of a specific variable by name.
+* `-o, --output <str>`: Get the value of a specific output by name.
 * `--template-name`: Display the template name.
 * `--template-version`: Display the template version.
 * `--template-engine`: Display the template engine.

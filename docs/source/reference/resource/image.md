@@ -35,7 +35,7 @@ $ jd image list [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--json`: Output as JSON.
 * `--text`: Output as plain names.
 * `--help`: Show this message and exit.
@@ -55,8 +55,8 @@ $ jd image show [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the image.
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the image.
+* `-p, --path <path>`: Directory of the project.
 * `--json`: Output as JSON.
 * `--help`: Show this message and exit.
 
@@ -77,8 +77,8 @@ $ jd image status [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the image.
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the image.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `image tags`
@@ -96,8 +96,8 @@ $ jd image tags [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the image.
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the image.
+* `-p, --path <path>`: Directory of the project.
 * `--json`: Output as JSON.
 * `--text`: Output as plain tag names.
 * `--help`: Show this message and exit.
@@ -125,8 +125,8 @@ $ jd image vulnerabilities [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the image.
-* `--tag TEXT`: Image tag to check.
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the image.
+* `--tag <str>`: Image tag to check.
+* `-p, --path <path>`: Directory of the project.
 * `--json`: Output as JSON.
 * `--help`: Show this message and exit.

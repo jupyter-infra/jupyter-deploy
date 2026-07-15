@@ -10,7 +10,7 @@ $ jd health [OPTIONS] COMMAND [ARGS]...
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--cluster`: Check only the cluster layer.
 * `--load-balancer`: Check only the load balancer layer.
 * `--components`: Check only the components layer.

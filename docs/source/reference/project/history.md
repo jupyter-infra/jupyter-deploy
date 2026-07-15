@@ -28,17 +28,17 @@ or pass --path <project-dir>.
 **Usage**:
 
 ```console
-$ jd history list [OPTIONS] COMMAND:{config|up|down}
+$ jd history list [OPTIONS] {command}:<config|up|down>
 ```
 
 **Arguments**:
 
-* `COMMAND:{config|up|down}`: Command that generated the logs.  [required]
+* `command:<config|up|down>`: Command that generated the logs.  [required]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
-* `-n INTEGER RANGE`: Maximum number of logs to display  [default: 20; x>=1]
+* `-p, --path <path>`: Directory of the project.
+* `-n <int range>`: Maximum number of logs to display  [default: 20; x>=1]
 * `--text`: Output plain text without Rich markup.
 * `--help`: Show this message and exit.
 
@@ -58,19 +58,19 @@ Use --skip/-s to offset the first line returned (from the end of the content).
 **Usage**:
 
 ```console
-$ jd history show [OPTIONS] [COMMAND]:[config|up|down]
+$ jd history show [OPTIONS] [command]:<config|up|down>
 ```
 
 **Arguments**:
 
-* `[COMMAND]:[config|up|down]`: Command that generated the log. If omitted, show latest log from any command.
+* `command:<config|up|down>`: Command that generated the log. If omitted, show latest log from any command.
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
-* `-n INTEGER RANGE`: Show Nth most recent log for the command.  [default: 1; x>=1]
-* `-l, --lines INTEGER RANGE`: Show only last L lines of the log content.  [x>=1]
-* `-s, --skip INTEGER RANGE`: Skip S lines from end (for pagination).  [default: 0; x>=0]
+* `-p, --path <path>`: Directory of the project.
+* `-n <int range>`: Show Nth most recent log for the command.  [default: 1; x>=1]
+* `-l, --lines <int range>`: Show only last L lines of the log content.  [x>=1]
+* `-s, --skip <int range>`: Skip S lines from end (for pagination).  [default: 0; x>=0]
 * `--help`: Show this message and exit.
 
 ## `history clear`
@@ -83,15 +83,15 @@ or pass --path <project-dir>.
 **Usage**:
 
 ```console
-$ jd history clear [OPTIONS] COMMAND:{config|up|down}
+$ jd history clear [OPTIONS] {command}:<config|up|down>
 ```
 
 **Arguments**:
 
-* `COMMAND:{config|up|down}`: Command type to clear: config, up, or down.  [required]
+* `command:<config|up|down>`: Command type to clear: config, up, or down.  [required]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
-* `-k, --keep INTEGER RANGE`: Number of most recent logs to retain.  [default: 20; x>=1]
+* `-p, --path <path>`: Directory of the project.
+* `-k, --keep <int range>`: Number of most recent logs to retain.  [default: 20; x>=1]
 * `--help`: Show this message and exit.

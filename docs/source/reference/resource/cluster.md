@@ -33,7 +33,7 @@ $ jd cluster login [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project whose cluster to configure access for.
+* `-p, --path <path>`: Directory of the project whose cluster to configure access for.
 * `--help`: Show this message and exit.
 
 ## `cluster status`
@@ -51,7 +51,7 @@ $ jd cluster status [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project whose cluster to check status.
+* `-p, --path <path>`: Directory of the project whose cluster to check status.
 * `--help`: Show this message and exit.
 
 ## `cluster show`
@@ -69,6 +69,6 @@ $ jd cluster show [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project whose cluster to show details for.
+* `-p, --path <path>`: Directory of the project whose cluster to show details for.
 * `--json`: Output as JSON.
 * `--help`: Show this message and exit.

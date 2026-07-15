@@ -29,16 +29,16 @@ or pass --path <project-dir>.
 **Usage**:
 
 ```console
-$ jd users add [OPTIONS] USERS...
+$ jd users add [OPTIONS] {users}...
 ```
 
 **Arguments**:
 
-* `USERS...`: Name of the users to add to the allowlist.  [required]
+* `users...`: Name of the users to add to the allowlist.  [required]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `users remove`
@@ -51,16 +51,16 @@ or pass --path <project-dir>.
 **Usage**:
 
 ```console
-$ jd users remove [OPTIONS] USERS...
+$ jd users remove [OPTIONS] {users}...
 ```
 
 **Arguments**:
 
-* `USERS...`: Name of the users to remove from the allowlist.  [required]
+* `users...`: Name of the users to remove from the allowlist.  [required]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `users set`
@@ -73,16 +73,16 @@ or pass --path <project-dir>.
 **Usage**:
 
 ```console
-$ jd users set [OPTIONS] USERS...
+$ jd users set [OPTIONS] {users}...
 ```
 
 **Arguments**:
 
-* `USERS...`: Names of the users to allowlist.  [required]
+* `users...`: Names of the users to allowlist.  [required]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `users list`
@@ -100,5 +100,5 @@ $ jd users list [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.

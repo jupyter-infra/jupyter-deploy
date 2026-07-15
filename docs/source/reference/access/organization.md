@@ -28,16 +28,16 @@ or pass --path <project-dir>.
 **Usage**:
 
 ```console
-$ jd organization set [OPTIONS] ORGANIZATION
+$ jd organization set [OPTIONS] {organization}
 ```
 
 **Arguments**:
 
-* `ORGANIZATION`: Name of the organization to allowlist.  [required]
+* `organization`: Name of the organization to allowlist.  [required]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `organization unset`
@@ -55,7 +55,7 @@ $ jd organization unset [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `organization get`
@@ -73,5 +73,5 @@ $ jd organization get [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.

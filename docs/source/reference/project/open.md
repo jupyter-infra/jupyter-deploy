@@ -18,7 +18,7 @@ $ jd open [OPTIONS]
 
 **Options**:
 
-* `--server-name TEXT`: Name of the server to open.
-* `--scope TEXT`: Scope or group the server belongs to.
-* `-p, --path PATH`: Directory of the project to open.
+* `--server-name <str>`: Name of the server to open.
+* `--scope <str>`: Scope or group the server belongs to.
+* `-p, --path <path>`: Directory of the project to open.
 * `--help`: Show this message and exit.

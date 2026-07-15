@@ -19,15 +19,15 @@ $ jd config [OPTIONS]
 
 **Options**:
 
-* `-d, --defaults TEXT`: Name of the preset defaults to use: 'all', 'none' or template-specific preset names.  [default: all]
+* `-d, --defaults <str>`: Name of the preset defaults to use: 'all', 'none' or template-specific preset names.  [default: all]
 * `-r, --reset`: Delete previously recorded variables and secrets.
 * `--skip-verify`: Avoid verifying that the project dependencies are configured.
-* `-f, --output-filename TEXT`: Name of the file to store the configuration to.
-* `--store-type [s3-only|s3-ddb]`: Override the project store type.
-* `--store-id TEXT`: Pin a specific store.
+* `-f, --output-filename <str>`: Name of the file to store the configuration to.
+* `--store-type <s3-only|s3-ddb>`: Override the project store type.
+* `--store-id <str>`: Pin a specific store.
 * `--restore-secrets`: Restore all masked secret variable value.
-* `--restore-secret TEXT`: Restore the specific variable secret value.
+* `--restore-secret <str>`: Restore the specific variable secret value.
 * `--reset-store-id`: Clear the pinned store ID and rediscover the store.
-* `--reset-variable TEXT`: Reset a variable to its default, or to null to trigger re-prompt.
+* `--reset-variable <str>`: Reset a variable to its default, or to null to trigger re-prompt.
 * `-v, --verbose`: Show full output without progress bar.
 * `--help`: Show this message and exit.

@@ -38,9 +38,9 @@ $ jd host status [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the host to check status for.
-* `-p, --path PATH`: Directory of the project whose host to check status.
-* `--for [connection]`: Check the status of specific agent or access point within the host.
+* `--name <str>`: Name of the host to check status for.
+* `-p, --path <path>`: Directory of the project whose host to check status.
+* `--for <connection>`: Check the status of specific agent or access point within the host.
 * `--help`: Show this message and exit.
 
 ## `host stop`
@@ -58,8 +58,8 @@ $ jd host stop [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the host to stop.
-* `-p, --path PATH`: Directory of the project whose host to stop.
+* `--name <str>`: Name of the host to stop.
+* `-p, --path <path>`: Directory of the project whose host to stop.
 * `--help`: Show this message and exit.
 
 ## `host start`
@@ -77,8 +77,8 @@ $ jd host start [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the host to start.
-* `-p, --path PATH`: Directory of the project whose host to start.
+* `--name <str>`: Name of the host to start.
+* `-p, --path <path>`: Directory of the project whose host to start.
 * `--help`: Show this message and exit.
 
 ## `host restart`
@@ -96,8 +96,8 @@ $ jd host restart [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the host to restart.
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the host to restart.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `host connect`
@@ -115,8 +115,8 @@ $ jd host connect [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the host to connect to.
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the host to connect to.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `host exec`
@@ -140,8 +140,8 @@ $ jd host exec [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the host on which to execute the command.
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the host on which to execute the command.
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `host list`
@@ -159,10 +159,10 @@ $ jd host list [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project whose hosts to list.
-* `--query TEXT`: Filter expression to narrow the list of hosts.
-* `-n, --limit INTEGER`: Maximum number of hosts to return.
-* `--continue-from TEXT`: Continuation token from a previous list call.
+* `-p, --path <path>`: Directory of the project whose hosts to list.
+* `--query <str>`: Filter expression to narrow the list of hosts.
+* `-n, --limit <int>`: Maximum number of hosts to return.
+* `--continue-from <str>`: Continuation token from a previous list call.
 * `--json`: Output as JSON.
 * `--help`: Show this message and exit.
 
@@ -181,7 +181,7 @@ $ jd host show [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the host to show details for.  [required]
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the host to show details for.  [required]
+* `-p, --path <path>`: Directory of the project.
 * `--json`: Output as JSON.
 * `--help`: Show this message and exit.

@@ -37,7 +37,7 @@ $ jd component list [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project.
+* `-p, --path <path>`: Directory of the project.
 * `--json`: Output as JSON.
 * `--text`: Output as comma-separated names.
 * `--help`: Show this message and exit.
@@ -57,8 +57,8 @@ $ jd component status [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the component to check.  [required]
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the component to check.  [required]
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `component show`
@@ -78,8 +78,8 @@ $ jd component show [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the component to show details for.  [required]
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the component to show details for.  [required]
+* `-p, --path <path>`: Directory of the project.
 * `-d, --description`: Show description instead of full details.
 * `--json`: Output as JSON.
 * `--help`: Show this message and exit.
@@ -101,8 +101,8 @@ $ jd component logs [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the component whose logs to display.  [required]
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the component whose logs to display.  [required]
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `component restart`
@@ -122,8 +122,8 @@ $ jd component restart [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the component to restart.  [required]
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the component to restart.  [required]
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `component reconcile`
@@ -145,8 +145,8 @@ $ jd component reconcile [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the release component to reconcile.  [required]
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the release component to reconcile.  [required]
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.
 
 ## `component trigger`
@@ -166,6 +166,6 @@ $ jd component trigger [OPTIONS]
 
 **Options**:
 
-* `--name TEXT`: Name of the CronJob component to trigger.  [required]
-* `-p, --path PATH`: Directory of the project.
+* `--name <str>`: Name of the CronJob component to trigger.  [required]
+* `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.

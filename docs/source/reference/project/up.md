@@ -17,8 +17,8 @@ $ jd up [OPTIONS]
 
 **Options**:
 
-* `-p, --path PATH`: Directory of the project to bring up.
-* `-f, --config-filename TEXT`: Name of a file in the project directory containing the execution configuration.
+* `-p, --path <path>`: Directory of the project to bring up.
+* `-f, --config-filename <str>`: Name of a file in the project directory containing the execution configuration.
 * `-y, --answer-yes`: Apply changes without confirmation prompt.
 * `-v, --verbose`: Show full output without progress bar.
 * `--help`: Show this message and exit.
