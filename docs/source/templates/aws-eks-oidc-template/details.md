@@ -60,6 +60,7 @@ The template deploys a `github-rbac` local chart that creates namespace-scoped R
 
 - Each namespace in `workspace_rbac_namespaces` gets a Role granting workspace CRUD permissions.
 - RoleBindings associate the Role with GitHub teams from `oauth_allowed_teams`.
+- The same teams get a read-only (`get`/`list`) Role in `workspace_shared_namespace` for discovering shared `WorkspaceTemplate` and `WorkspaceAccessStrategy` resources.
 - Roles in `admin_role_names` and users in `admin_user_names` additionally get a `cluster-workspace-admin` ClusterRoleBinding for cross-namespace workspace management.
 
 ## Presets

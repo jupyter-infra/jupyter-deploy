@@ -1,0 +1,41 @@
+# Read-only discovery of shared WorkspaceTemplates and WorkspaceAccessStrategies.
+#
+# The operator resolves a workspace's templateRef/accessStrategyRef into the shared
+# namespace using its OWN service account, so this grant is NOT required for a
+# workspace to be created against a shared template — it only lets an end-user LIST
+# those shared resources with their own token, which is what the web-app editor needs
+# to populate its template/access-strategy dropdowns.
+#
+# Read-only by design (get/list, no create/update/delete): users discover shared
+# templates and access strategies, they do not mutate them. No watch — the web-app
+# does one-shot list/get for its dropdowns, not an informer-style watch. Lands in
+# {{ .Release.Namespace }} — the shared namespace the release is installed into
+# (var.workspace_shared_namespace) — unlike the workspace Role, which is pinned to the
+# explicit .Values.namespaces loop.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: github-shared-discovery-reader
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: ["workspace.jupyter.org"]
+    resources: ["workspacetemplates", "workspaceaccessstrategies"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: github-shared-discovery-reader-binding
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: github-shared-discovery-reader
+subjects:
+{{- range $org := .Values.orgs }}
+{{- range $team := $org.teams }}
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: {{ $.Values.oidcGroupPrefix }}{{ $org.name }}:{{ $team }}
+{{- end }}
+{{- end }}

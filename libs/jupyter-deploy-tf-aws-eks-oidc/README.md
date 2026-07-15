@@ -242,7 +242,7 @@ The template creates several IAM roles:
 
 ### RBAC
 
-The template deploys a `github-rbac` local chart that creates namespace-scoped Role and RoleBinding resources. Each namespace in `workspace_rbac_namespaces` gets a Role granting workspace CRUD permissions, bound to the GitHub teams in `oauth_allowed_teams`.
+The template deploys a `github-rbac` local chart that creates namespace-scoped Role and RoleBinding resources. Each namespace in `workspace_rbac_namespaces` gets a Role granting workspace CRUD permissions, bound to the GitHub teams in `oauth_allowed_teams`. Those teams also get a read-only (`get`/`list`) Role in `workspace_shared_namespace` for discovering shared `WorkspaceTemplate` and `WorkspaceAccessStrategy` resources.
 
 ### Presets
 
