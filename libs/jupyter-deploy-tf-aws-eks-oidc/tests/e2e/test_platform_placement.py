@@ -58,7 +58,7 @@ def _assert_nodes_are_components(namespace: str, description: str, node_names: l
 ADDON_CONTROLLERS = [
     ("kube-system", "k8s-app=kube-dns", "coredns"),
     ("kube-system", "app=ebs-csi-controller", "ebs-csi controller"),
-    ("kube-system", "app.kubernetes.io/name=external-dns", "external-dns"),
+    ("external-dns", "app.kubernetes.io/name=external-dns", "external-dns"),
     ("kube-system", "app.kubernetes.io/instance=cluster-autoscaler", "cluster-autoscaler"),
     ("cert-manager", "app.kubernetes.io/instance=cert-manager", "cert-manager (+ webhook, cainjector)"),
 ]
