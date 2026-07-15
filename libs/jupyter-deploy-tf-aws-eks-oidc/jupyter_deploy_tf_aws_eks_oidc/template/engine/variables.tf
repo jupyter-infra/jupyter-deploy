@@ -466,10 +466,6 @@ variable "enable_component_logging" {
     NOTE: workspace pods are user workloads — enabling this ships their stdout/stderr to
     your AWS account. The Authorization header is redacted from Traefik access logs.
 
-    When enabled, logging is a platform prerequisite: the operator/router/workspace stack
-    depends on the Fluent Bit release via the platform barrier (see platform.tf), so a
-    logging install failure blocks the deployment rather than degrading silently.
-
     Recommended: true
   EOT
   type        = bool
