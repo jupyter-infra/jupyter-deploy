@@ -125,3 +125,13 @@ def eks_domain(getting_started_url: str) -> str:
     """Return the full domain for this EKS deployment."""
     parsed = urlparse(getting_started_url)
     return parsed.netloc
+
+
+@pytest.fixture(scope="session")
+def shared_namespace(e2e_deployment: EndToEndDeployment) -> str:
+    """Return the shared namespace where templates + access strategies live."""
+    e2e_deployment.ensure_deployed()
+    result = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "show", "--output", "workspace_shared_namespace", "--text"]
+    )
+    return result.stdout.strip()
