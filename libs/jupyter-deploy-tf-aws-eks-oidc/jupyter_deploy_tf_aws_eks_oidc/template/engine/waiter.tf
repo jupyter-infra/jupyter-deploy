@@ -29,6 +29,7 @@ resource "null_resource" "wait_for_routing_ready" {
   depends_on = [
     helm_release.workspace_router,
     helm_release.jupyter_k8s,
+    helm_release.karpenter_nodepools,
     aws_eks_identity_provider_config.dex,
   ]
 }

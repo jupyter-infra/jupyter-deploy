@@ -31,9 +31,7 @@ locals {
 # so discovery does not depend on that implicit behavior (and to scope the write-IAM
 # condition below to exactly these ASGs). One pair of tags per node group.
 resource "aws_autoscaling_group_tag" "ca_enabled" {
-  for_each = module.node_group
-
-  autoscaling_group_name = each.value.autoscaling_group_name
+  autoscaling_group_name = aws_eks_node_group.platform.resources[0].autoscaling_groups[0].name
   tag {
     key                 = "k8s.io/cluster-autoscaler/enabled"
     value               = "true"
@@ -42,9 +40,7 @@ resource "aws_autoscaling_group_tag" "ca_enabled" {
 }
 
 resource "aws_autoscaling_group_tag" "ca_owned" {
-  for_each = module.node_group
-
-  autoscaling_group_name = each.value.autoscaling_group_name
+  autoscaling_group_name = aws_eks_node_group.platform.resources[0].autoscaling_groups[0].name
   tag {
     key                 = "k8s.io/cluster-autoscaler/${local.cluster_name}"
     value               = "owned"
@@ -171,13 +167,13 @@ resource "helm_release" "cluster_autoscaler" {
     # Components node-group placement (no taints in this template, so nodeSelector only).
     {
       name  = "nodeSelector.jupyter-deploy/role"
-      value = "components"
+      value = "platform"
     },
   ]
 
   depends_on = [
     null_resource.cluster_addons,
-    module.node_group,
+    aws_eks_node_group.platform,
     aws_eks_pod_identity_association.cluster_autoscaler,
     aws_autoscaling_group_tag.ca_enabled,
     aws_autoscaling_group_tag.ca_owned,

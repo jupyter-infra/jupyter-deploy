@@ -303,8 +303,9 @@ class TestHostHandler(unittest.TestCase):
         mock_manifest_fns["get_command"].assert_called_once_with("host.list")
         mock_cmd_runner_fns["run_command_sequence"].assert_called_once()
         cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
-        self.assertIn("query", cli_paramdefs)
-        self.assertEqual(cli_paramdefs["query"].value, "")
+        # --query and --role are merged into a single "role" param passed to the manifest.
+        self.assertIn("role", cli_paramdefs)
+        self.assertEqual(cli_paramdefs["role"].value, "")
         mock_cmd_runner_fns["get_result_value"].assert_called_once_with(mock_cmd, "host.list", list)
         mock_cmd_runner_fns["get_result_value_with_fallback"].assert_called_once_with(
             mock_cmd, "host.list.next_token", str, ""

@@ -102,9 +102,11 @@ def test_health_components_layer(e2e_deployment: EndToEndDeployment) -> None:
     # The eks-oidc template declares the 3 Workspace CRDs + the access-strategy and template CRs.
     assert len(crd_names) >= 3, f"Expected >= 3 CustomResourceDefinition components, got {sorted(crd_names)}"
     assert len(cr_names) >= 2, f"Expected >= 2 CustomResourceWithoutStatus components, got {sorted(cr_names)}"
-    # The 7 platform charts are surfaced as HelmRelease components (five core charts plus
-    # cluster-autoscaler and fluent-bit; the latter present because logging defaults on).
-    assert len(helm_names) == 7, f"Expected 7 HelmRelease components, got {sorted(helm_names)}"
+    # The 10 platform charts are surfaced as HelmRelease components: five core charts
+    # (traefik-crds, workspace-defaults, workspace-operator, workspace-router, github-rbac)
+    # plus cluster-autoscaler, fluent-bit (logging defaults on), and the three Karpenter
+    # autoscaling charts (karpenter-chart, keda-chart, prometheus-chart).
+    assert len(helm_names) == 10, f"Expected 10 HelmRelease components, got {sorted(helm_names)}"
     # Core add-on DaemonSets (aws-node, kube-proxy) are surfaced as DaemonSet components (#298).
     assert {"aws-node", "kube-proxy"} <= daemonset_names, (
         f"Expected aws-node + kube-proxy DaemonSet components, got {sorted(daemonset_names)}"

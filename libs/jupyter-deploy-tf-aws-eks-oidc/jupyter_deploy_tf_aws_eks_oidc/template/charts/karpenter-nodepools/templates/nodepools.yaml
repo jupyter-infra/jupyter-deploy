@@ -1,0 +1,91 @@
+# NodePools define scheduling constraints and node lifecycle for Karpenter.
+# Routing pool: always-on, conservative consolidation, small instances.
+# Workspace pool: scale-to-zero, aggressive consolidation, diverse instances.
+# Both carry taints so only pods with matching tolerations can land here.
+# The floor budget entry (nodes: "1") ensures the last node is always
+# disruptable — without it, 10%/20% rounds down to 0 on small clusters,
+# blocking consolidation and preventing true scale-to-zero.
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: routing
+spec:
+  template:
+    metadata:
+      labels:
+        jupyter-deploy/role: routing
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: routing
+      taints:
+        - key: jupyter-deploy/role
+          value: routing
+          effect: NoSchedule
+      requirements:
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: ["c6i", "m6i"]
+        - key: karpenter.k8s.aws/instance-size
+          operator: In
+          values: ["large", "xlarge", "2xlarge"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+      expireAfter: 504h
+  limits:
+    cpu: {{ .Values.routingLimitsCpu | quote }}
+    memory: {{ .Values.routingLimitsMemory | quote }}
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 120s
+    budgets:
+      - nodes: "20%"
+      - nodes: "1"
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: workspaces
+spec:
+  template:
+    metadata:
+      labels:
+        jupyter-deploy/role: workspaces
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: workspaces
+      taints:
+        - key: jupyter-deploy/role
+          value: workspaces
+          effect: NoSchedule
+      requirements:
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: {{ splitList "," .Values.workspaceCpuInstanceFamilies | toJson }}
+        - key: karpenter.k8s.aws/instance-cpu
+          operator: In
+          values: ["2", "4", "8", "16", "32"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+      expireAfter: 504h
+  limits:
+    cpu: {{ .Values.workspaceLimitsCpu | quote }}
+    memory: {{ .Values.workspaceLimitsMemory | quote }}
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 60s
+    budgets:
+      - nodes: "10%"
+      - nodes: "1"

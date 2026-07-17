@@ -10,7 +10,7 @@ locals {
   # tolerates a system-NG taint. DaemonSet parts of an addon (vpc-cni, kube-proxy, the
   # ebs-csi node plugin) are NOT pinned: they must run on every node, workspaces included.
   components_node_selector = {
-    "jupyter-deploy/role" = "components"
+    "jupyter-deploy/role" = "platform"
   }
 }
 

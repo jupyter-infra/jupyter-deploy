@@ -198,23 +198,18 @@ class TestVariablesYaml(unittest.TestCase):
         missing = preset_vars - set(commented_vars.keys())
         self.assertEqual(len(missing), 0, f"Preset variables missing from commented overrides: {missing}")
 
-    # The VPC module hardcodes 2 AZs (modules/vpc/main.tf: slice(..., 0, 2)). If that
-    # ever changes, bump this constant to match.
-    _AZ_COUNT = 2
+    def test_karpenter_workspace_limits_set_in_preset(self) -> None:
+        """workspace_max_cpu and workspace_max_memory must be set in the preset.
 
-    def test_workspaces_min_size_covers_all_azs(self) -> None:
-        """workspaces min_size must be >= AZ count so Cluster Autoscaler's scale-down floor
-        keeps one node per AZ — otherwise an idle scale-down can strand a workspace whose
-        EBS volume lives in an AZ with no node (the #300 AZ-stranding regression)."""
-        node_groups = self.DEFAULTS_ALL_TFVARS["node_groups"]
-        workspaces = next((ng for ng in node_groups if ng["role"] == "workspaces"), None)
-        self.assertIsNotNone(workspaces, "expected a node group with role 'workspaces' in the preset")
-        min_size = int(workspaces["min_size"])
-        self.assertGreaterEqual(
-            min_size,
-            self._AZ_COUNT,
-            f"workspaces min_size ({min_size}) must be >= AZ count ({self._AZ_COUNT}) to avoid AZ-stranding",
-        )
+        Karpenter replaces the old workspaces MNG — the NodePool CPU/memory limits
+        are the equivalent safety cap that prevents unbounded scale-out.
+        """
+        self.assertIn("workspace_max_cpu", self.DEFAULTS_ALL_TFVARS,
+                      "workspace_max_cpu must be set in defaults-all.tfvars")
+        self.assertIn("workspace_max_memory", self.DEFAULTS_ALL_TFVARS,
+                      "workspace_max_memory must be set in defaults-all.tfvars")
+        self.assertIn("workspace_cpu_instance_families", self.DEFAULTS_ALL_TFVARS,
+                      "workspace_cpu_instance_families must be set in defaults-all.tfvars")
 
     @classmethod
     def _parse_commented_overrides(cls) -> dict:

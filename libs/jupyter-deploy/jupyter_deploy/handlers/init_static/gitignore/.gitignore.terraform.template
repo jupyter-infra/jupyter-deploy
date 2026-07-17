@@ -8,3 +8,6 @@ jdinputs.*
 *.tfstate
 *.tfstate.*
 .terraform.lock.hcl
+
+# Python virtual environment — reproducible locally, too large to store remotely
+.venv/

@@ -31,10 +31,10 @@ resource "null_resource" "destroy_workspaces" {
   }
 
   # On destroy this runs FIRST (before any of these are torn down). We depend only
-  # on platform-layer helm.tf resources; each of them pins the node groups, cluster
-  # and caller access associations, so everything the cleanup needs stays alive:
+  # on platform-layer helm.tf resources; each of them pins the platform node group,
+  # cluster and caller access associations, so everything the cleanup needs stays alive:
   #   - the operator (controller-manager) must run to clear finalizers — it is
-  #     scheduled on the "components" node group.
+  #     scheduled on the platform node group.
   #   - the script authenticates via `aws eks get-token`; without the cluster +
   #     caller access associations kubectl is "forbidden".
   #   - the shared namespace holds the CRs the script deletes.

@@ -89,6 +89,7 @@ module "vpc" {
   source               = "./modules/vpc"
   resource_name_prefix = local.resource_name_prefix
   combined_tags        = local.combined_tags
+  private_subnet_tags  = { "karpenter.sh/discovery" = local.cluster_name }
 }
 
 # On destroy: cleans up resources NOT in Terraform state that block VPC deletion.
@@ -205,57 +206,50 @@ resource "aws_eks_access_policy_association" "admin_user" {
   depends_on = [aws_eks_access_entry.admin_user]
 }
 
-# AMI type is resolved HERE at the root, not inside the node_group module: a data
-# source declared inside a module inherits that module's `depends_on`
-# (module.node_group depends_on null_resource.core_node_addons), so it would be
-# deferred to apply-time whenever that dependency has a pending change, making
-# ami_type "known after apply" and FORCING a node-group replacement on every
-# re-apply. At the root there is no depends_on, so the read stays plan-time-stable.
-#
-# One lookup per distinct instance type (keyed by type) feeds an auto-detected AMI
-# type; a node group may still override it by setting an explicit ami_type.
-data "aws_ec2_instance_type" "node_group" {
-  for_each = toset([for ng in var.node_groups : ng.instance_type])
-
-  instance_type = each.key
+# AMI type resolved at root (not inside a module) to keep it plan-time-stable.
+# A data source inside a module with depends_on gets deferred to apply-time,
+# making ami_type "known after apply" and forcing a node-group replacement every
+# re-apply. At the root there is no depends_on, so the lookup is stable.
+data "aws_ec2_instance_type" "platform" {
+  instance_type = var.platform_instance_type
 }
 
 locals {
-  # Map each distinct instance type to its auto-detected EKS AL2023 ami_type.
-  resolved_ami_type = {
-    for it, info in data.aws_ec2_instance_type.node_group : it => (
-      length(try(info.gpus, [])) > 0 && contains(try(info.supported_architectures, ["x86_64"]), "x86_64") ? "AL2023_x86_64_NVIDIA" :
-      length(try(info.neuron_devices, [])) > 0 ? "AL2023_x86_64_NEURON" :
-      !contains(try(info.supported_architectures, ["x86_64"]), "x86_64") ? "AL2023_ARM_64_STANDARD" :
-      "AL2023_x86_64_STANDARD"
-    )
-  }
+  platform_ami_type = (
+    length(try(data.aws_ec2_instance_type.platform.gpus, [])) > 0 ? "AL2023_x86_64_NVIDIA" :
+    length(try(data.aws_ec2_instance_type.platform.neuron_devices, [])) > 0 ? "AL2023_x86_64_NEURON" :
+    !contains(try(data.aws_ec2_instance_type.platform.supported_architectures, ["x86_64"]), "x86_64") ? "AL2023_ARM_64_STANDARD" :
+    "AL2023_x86_64_STANDARD"
+  )
 }
 
-module "node_group" {
-  source   = "./modules/node_group"
-  for_each = { for ng in var.node_groups : ng.name => ng }
+# ── Platform managed node group ───────────────────────────────────────────────
+# Hosts control-plane-only pods: Karpenter controller, KEDA operator,
+# jupyter-k8s operator, CoreDNS, cert-manager, external-dns.
+# Routing and workspace pods run on Karpenter-managed NodePools.
+# min=2 ensures one node per AZ for HA.
 
+resource "aws_eks_node_group" "platform" {
   cluster_name    = module.eks_cluster.cluster_name
-  node_group_name = "${local.cluster_name}-${each.key}"
+  node_group_name = "${local.cluster_name}-platform"
   node_role_arn   = module.node_role.role_arn
   subnet_ids      = module.vpc.private_subnet_ids
-  instance_type   = each.value.instance_type
-  ami_type        = lookup(each.value, "ami_type", "default") == "default" ? local.resolved_ami_type[each.value.instance_type] : each.value.ami_type
-  role_label      = each.value.role
-  disk_size_gb    = tonumber(each.value.disk_size_gb)
-  min_size        = tonumber(each.value.min_size)
-  max_size        = tonumber(each.value.max_size)
-  desired_size    = tonumber(each.value.desired_size)
-  combined_tags   = local.combined_tags
+  ami_type        = local.platform_ami_type
+  instance_types  = [var.platform_instance_type]
+  disk_size       = var.platform_disk_size_gb
 
-  # The node-role policy attachments and VPC routing are already ordered via the
-  # references above (node_role.role_arn and vpc.private_subnet_ids, whose outputs
-  # depend_on their attachments/route tables). The DaemonSet addons are NOT in
-  # that closure — vpc-cni and kube-proxy only reference the cluster, so they are
-  # siblings of the node group and otherwise drain in the first destroy wave,
-  # killing pod networking on still-running nodes. Gate on core_node_addons so the
-  # nodes come up after, and tear down before, those addons (see eks_addons.tf).
+  labels = {
+    "jupyter-deploy/role" = "platform"
+  }
+
+  scaling_config {
+    min_size     = var.platform_min_size
+    max_size     = var.platform_max_size
+    desired_size = var.platform_min_size
+  }
+
+  tags = local.combined_tags
+
   depends_on = [null_resource.core_node_addons]
 }
 

@@ -35,7 +35,7 @@ resource "kubernetes_namespace_v1" "shared" {
     }
   }
 
-  depends_on = [aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user, module.node_group]
+  depends_on = [aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user, aws_eks_node_group.platform, module.karpenter]
 }
 
 resource "helm_release" "traefik_crds" {
@@ -49,14 +49,14 @@ resource "helm_release" "traefik_crds" {
   # Access policy associations must outlive all K8s resources — without them the
   # K8s/Helm provider loses authorization and destroy operations fail with "forbidden".
   #
-  # module.node_group: EVERY resource in this platform layer depends on the node
+  # aws_eks_node_group.platform: EVERY resource in this platform layer depends on the node
   # groups (see also kubernetes_namespace_v1.shared / jupyter_k8s / workspace_router).
   # On create this guarantees nodes exist before anything schedules pods; on destroy
   # (reverse order) it keeps the node groups — and the operator scheduled on them —
   # alive until every release has finished uninstalling. Without it the node groups
   # and helm uninstalls tear down concurrently; the operator dies mid-uninstall and
   # CR finalizers never clear → "context deadline exceeded" (run 28182357633).
-  depends_on = [null_resource.platform, aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user, module.node_group]
+  depends_on = [null_resource.platform, aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user, aws_eks_node_group.platform]
 }
 
 resource "helm_release" "jupyter_k8s" {
@@ -81,11 +81,11 @@ resource "helm_release" "jupyter_k8s" {
     },
     {
       name  = "manager.nodeSelector.jupyter-deploy/role"
-      value = "components"
+      value = "platform"
     },
   ]
 
-  depends_on = [null_resource.platform, helm_release.traefik_crds, kubernetes_namespace_v1.shared, module.node_group]
+  depends_on = [null_resource.platform, helm_release.traefik_crds, kubernetes_namespace_v1.shared, aws_eks_node_group.platform]
 }
 
 resource "helm_release" "workspace_router" {
@@ -129,7 +129,7 @@ resource "helm_release" "workspace_router" {
       },
       {
         name  = "nodeSelector.jupyter-deploy/role"
-        value = "components"
+        value = "routing"
       },
     ],
     # Dex GitHub connector: controls which org/team members can authenticate via OIDC.
@@ -204,5 +204,5 @@ resource "helm_release" "workspace_router" {
     },
   ]
 
-  depends_on = [module.node_group, helm_release.jupyter_k8s, null_resource.platform, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup, kubernetes_namespace_v1.shared]
+  depends_on = [aws_eks_node_group.platform, module.karpenter, helm_release.jupyter_k8s, null_resource.platform, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup, kubernetes_namespace_v1.shared]
 }

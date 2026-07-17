@@ -30,7 +30,7 @@ resource "kubernetes_service_account_v1" "fluent_bit" {
     }
   }
 
-  depends_on = [null_resource.cluster_addons, module.node_group]
+  depends_on = [null_resource.cluster_addons, aws_eks_node_group.platform]
 }
 
 # Pod Identity: bind the fluent-bit SA to the CloudWatch-logs role.
@@ -72,7 +72,7 @@ resource "helm_release" "fluent_bit" {
 
   depends_on = [
     null_resource.cluster_addons,
-    module.node_group,
+    aws_eks_node_group.platform,
     kubernetes_service_account_v1.fluent_bit,
     aws_eks_pod_identity_association.fluent_bit,
   ]

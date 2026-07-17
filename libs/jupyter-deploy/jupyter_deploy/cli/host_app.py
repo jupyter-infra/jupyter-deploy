@@ -217,6 +217,10 @@ def list_hosts(
         Path | None,
         typer.Option("--path", "-p", help="Directory of the project whose hosts to list."),
     ] = None,
+    role: Annotated[
+        str | None,
+        typer.Option("--role", help="Filter by node role: platform, routing, or workspaces."),
+    ] = None,
     query: Annotated[str, typer.Option("--query", help="Filter expression to narrow the list of hosts.")] = "",
     limit: Annotated[int | None, typer.Option("--limit", "-n", help="Maximum number of hosts to return.")] = None,
     continue_from: Annotated[
@@ -229,6 +233,8 @@ def list_hosts(
 
     Run either from a project directory that you created with <jd init>;
     or pass --path <project-dir>.
+
+    Use --role to filter by node tier: platform, routing, or workspaces.
     """
     console = Console()
     with handle_cli_errors(console), cmd_utils.project_dir(project_dir):
@@ -236,7 +242,7 @@ def list_hosts(
         handler = host_handler.HostHandler(display_manager=simple_display_manager)
 
         with simple_display_manager.spinner("Listing hosts..."):
-            result, next_token = handler.list_hosts(query=query, limit=limit, continue_from=continue_from)
+            result, next_token = handler.list_hosts(query=query, limit=limit, continue_from=continue_from, role=role)
 
         if json_output:
             data: dict[str, object] = {"hosts": result}
@@ -245,9 +251,11 @@ def list_hosts(
             console.print(json.dumps(data), highlight=False, markup=False, soft_wrap=True)
             return
 
+        if role:
+            console.print(f"Hosts (role=[bold cyan]{role}[/]):")
         if result:
             for name in result:
-                console.print(f"[bold cyan]{name}[/]")
+                console.print(f"  [bold cyan]{name}[/]")
         else:
             console.print("[bold cyan]None[/]")
 

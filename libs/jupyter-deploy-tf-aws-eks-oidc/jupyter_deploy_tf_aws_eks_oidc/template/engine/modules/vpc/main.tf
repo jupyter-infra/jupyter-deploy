@@ -42,7 +42,7 @@ resource "aws_subnet" "private" {
   cidr_block        = local.private_cidrs[count.index]
   availability_zone = local.azs[count.index]
 
-  tags = merge(var.combined_tags, {
+  tags = merge(var.combined_tags, var.private_subnet_tags, {
     Name                              = "${var.resource_name_prefix}-private-${local.azs[count.index]}"
     "kubernetes.io/role/internal-elb" = "1"
   })

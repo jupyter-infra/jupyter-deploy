@@ -3,6 +3,11 @@ set -euo pipefail
 
 # Destroy-time script: cleans up AWS resources NOT in Terraform state.
 #
+# 0. Karpenter nodes — EC2 instances provisioned by Karpenter are outside
+#    Terraform state. Their ENIs reference the Karpenter security group, so
+#    they must be terminated before Terraform destroys the VPC/SGs or the
+#    destroy fails with DependencyViolation.
+#
 # 1. Route53 records — created by external-dns from K8s Service annotations.
 #    external-dns dies with the cluster and can't self-clean; stale records with
 #    old ownership TXT entries block redeployments on the same subdomain.
@@ -21,6 +26,77 @@ FULL_DOMAIN="${full_domain}"
 CLUSTER_NAME="${cluster_name}"
 MAX_WAIT_SECONDS=60
 SLEEP_INTERVAL=10
+
+# --- Phase 0a: Uninstall Karpenter Helm release while controller is still alive ---
+#
+# Helm uninstall must happen BEFORE Karpenter nodes are terminated. If nodes are
+# gone first, the Karpenter controller pod dies and Helm can't reach its webhook,
+# causing "failed to delete release: karpenter" during terraform destroy.
+
+echo "Uninstalling Karpenter Helm release..."
+aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$REGION" > /dev/null 2>&1 || true
+if helm status karpenter -n karpenter > /dev/null 2>&1; then
+    helm uninstall karpenter -n karpenter --no-hooks --wait=false 2>&1 || true
+    echo "  Karpenter Helm release uninstalled."
+else
+    echo "  Karpenter Helm release not found, skipping."
+fi
+
+# --- Phase 0b: Karpenter node cleanup ---
+
+echo "Terminating Karpenter-managed EC2 instances for cluster $CLUSTER_NAME..."
+
+karpenter_instances=$(aws ec2 describe-instances \
+    --region "$REGION" \
+    --filters \
+        "Name=tag:karpenter.sh/cluster-name,Values=$CLUSTER_NAME" \
+        "Name=instance-state-name,Values=running,pending,stopping" \
+    --query 'Reservations[].Instances[].InstanceId' \
+    --output text 2>/dev/null | tr '\t' ' ')
+
+if [ -n "$karpenter_instances" ]; then
+    echo "  Terminating instances: $karpenter_instances"
+    aws ec2 terminate-instances --instance-ids $karpenter_instances --region "$REGION" > /dev/null
+    echo "  Waiting for instances to terminate..."
+    aws ec2 wait instance-terminated --instance-ids $karpenter_instances --region "$REGION"
+    echo "  All Karpenter instances terminated."
+
+    # Wait for VPC CNI to release ENIs (async after instance termination)
+    echo "  Waiting 15s for ENI release..."
+    sleep 15
+
+    # Delete any ENIs in the VPC that are still available (VPC CNI orphans)
+    echo "  Cleaning up orphaned ENIs in VPC $VPC_ID..."
+    eni_ids=$(aws ec2 describe-network-interfaces \
+        --region "$REGION" \
+        --filters "Name=vpc-id,Values=$VPC_ID" "Name=status,Values=available" \
+        --query 'NetworkInterfaces[].NetworkInterfaceId' \
+        --output text 2>/dev/null | tr '\t' ' ')
+    if [ -n "$eni_ids" ]; then
+        for eni in $eni_ids; do
+            echo "    Deleting ENI: $eni"
+            aws ec2 delete-network-interface --network-interface-id "$eni" --region "$REGION" 2>&1 || true
+        done
+        echo "  ENI cleanup complete."
+    else
+        echo "  No orphaned ENIs found."
+    fi
+else
+    echo "  No Karpenter instances found."
+    # Still check for any orphaned ENIs from previous incomplete destroys
+    echo "  Checking for orphaned ENIs in VPC $VPC_ID..."
+    eni_ids=$(aws ec2 describe-network-interfaces \
+        --region "$REGION" \
+        --filters "Name=vpc-id,Values=$VPC_ID" "Name=status,Values=available" \
+        --query 'NetworkInterfaces[].NetworkInterfaceId' \
+        --output text 2>/dev/null | tr '\t' ' ')
+    if [ -n "$eni_ids" ]; then
+        for eni in $eni_ids; do
+            echo "    Deleting ENI: $eni"
+            aws ec2 delete-network-interface --network-interface-id "$eni" --region "$REGION" 2>&1 || true
+        done
+    fi
+fi
 
 # --- Phase 1: DNS record cleanup ---
 

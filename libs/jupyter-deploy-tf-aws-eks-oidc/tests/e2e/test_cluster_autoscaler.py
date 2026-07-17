@@ -18,10 +18,10 @@ from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.kubernetes.ballast import ballast_deployment
 from pytest_jupyter_deploy.kubernetes.nodes import get_node_allocatable_cpu_millicores, get_node_names
 
-# The components MNG is labeled jupyter-deploy/role=components; this template has no node
+# The platform MNG is labeled jupyter-deploy/role=platform; this template has no node
 # taints, so ballast pods pin via nodeSelector alone (no tolerations).
-COMPONENTS_NODE_SELECTOR = {"jupyter-deploy/role": "components"}
-COMPONENTS_LABEL_SELECTOR = "jupyter-deploy/role=components"
+COMPONENTS_NODE_SELECTOR = {"jupyter-deploy/role": "platform"}
+COMPONENTS_LABEL_SELECTOR = "jupyter-deploy/role=platform"
 # Public image pulled directly over the nodes' NAT egress (no ECR pull-through needed here).
 BALLAST_IMAGE = "public.ecr.aws/docker/library/busybox:1.36"
 

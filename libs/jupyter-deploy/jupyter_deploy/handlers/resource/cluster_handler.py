@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 from jupyter_deploy.engine.engine_outputs import EngineOutputsHandler
@@ -142,3 +143,42 @@ class ClusterHandler(BaseProjectHandler):
         )
         runner.run_command_sequence(command, cli_paramdefs={})
         return collect_results(runner, command)
+
+    def list_nodepools(self) -> list[Any]:
+        """Returns list of Karpenter NodePool resources."""
+        command = self.project_manifest.get_command("pool.list")
+        runner = cmd_runner.ManifestCommandRunner(
+            display_manager=self.display_manager,
+            output_handler=self._output_handler,
+            variable_handler=self._variable_handler,
+        )
+        runner.run_command_sequence(command, cli_paramdefs={})
+        raw = runner.get_result_value(command, "pool.list", str)
+        return json.loads(raw) if isinstance(raw, str) else raw
+
+    def get_nodepool_status(self, name: str) -> dict[str, Any]:
+        """Returns detailed status for a specific NodePool."""
+        from jupyter_deploy.provider.resolved_clidefs import StrResolvedCliParameter
+        command = self.project_manifest.get_command("pool.status")
+        runner = cmd_runner.ManifestCommandRunner(
+            display_manager=self.display_manager,
+            output_handler=self._output_handler,
+            variable_handler=self._variable_handler,
+        )
+        cli_paramdefs = {
+            "name": StrResolvedCliParameter(parameter_name="name", value=name),
+        }
+        runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
+        return collect_results(runner, command)
+
+    def list_scaling_events(self) -> list[Any]:
+        """Returns list of Karpenter NodeClaims (scaling events)."""
+        command = self.project_manifest.get_command("pool.scaling")
+        runner = cmd_runner.ManifestCommandRunner(
+            display_manager=self.display_manager,
+            output_handler=self._output_handler,
+            variable_handler=self._variable_handler,
+        )
+        runner.run_command_sequence(command, cli_paramdefs={})
+        raw = runner.get_result_value(command, "pool.scaling", str)
+        return json.loads(raw) if isinstance(raw, str) else raw

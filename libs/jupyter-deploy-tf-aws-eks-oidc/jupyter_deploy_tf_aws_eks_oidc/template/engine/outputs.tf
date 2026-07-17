@@ -54,6 +54,21 @@ output "kube_system_namespace" {
   value       = "kube-system"
 }
 
+output "karpenter_namespace" {
+  description = "Kubernetes namespace for the Karpenter controller and NodePool resources."
+  value       = "karpenter"
+}
+
+output "keda_namespace" {
+  description = "Kubernetes namespace for the KEDA operator."
+  value       = "keda"
+}
+
+output "monitoring_namespace" {
+  description = "Kubernetes namespace for Prometheus and monitoring components."
+  value       = "monitoring"
+}
+
 output "workspace_base_url" {
   description = "Base URL for workspace access."
   value       = local.workspaces_base_url
@@ -76,12 +91,12 @@ output "jupyterlab_image_uri" {
 
 output "jupyterlab_ecr_repository_name" {
   description = "ECR repository name for the JupyterLab workspace image."
-  value       = var.workspace_app_jupyterlab_use ? module.app_jupyterlab[0].repository_name : ""
+  value       = try(module.app_jupyterlab[0].repository_name, "")
 }
 
 output "jupyterlab_image_tag" {
   description = "Current image tag for the JupyterLab workspace image."
-  value       = var.workspace_app_jupyterlab_use ? module.app_jupyterlab[0].image_tag : ""
+  value       = try(module.app_jupyterlab[0].image_tag, "")
 }
 
 output "kubeconfig_path" {

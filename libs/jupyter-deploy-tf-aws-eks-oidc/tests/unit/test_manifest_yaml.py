@@ -219,8 +219,8 @@ class TestManifest(unittest.TestCase):
         # the cluster-autoscaler and fluent-bit charts added for autoscaling / logging).
         self.assertEqual(
             len(helm_components),
-            7,
-            f"Expected 7 HelmRelease components, got {len(helm_components)}: {list(helm_components)}",
+            10,
+            f"Expected 10 HelmRelease components, got {len(helm_components)}: {list(helm_components)}",
         )
         for name, comp in helm_components.items():
             self.assertIn("reconcile", comp["verbs"], f"HelmRelease component '{name}' must declare a reconcile verb")
@@ -280,6 +280,48 @@ class TestManifest(unittest.TestCase):
                 tf_output_names,
                 f"Component '{name}' scope '{scope}' not found as an output in outputs.tf",
             )
+
+    def test_cluster_autoscaling_commands_declared(self) -> None:
+        """pool.list, pool.status, pool.scaling must be in manifest."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        command_names = {cmd["cmd"] for cmd in self.MANIFEST.get("commands", [])}
+        for expected in ("pool.list", "pool.status", "pool.scaling"):
+            self.assertIn(expected, command_names, f"Expected command '{expected}' in manifest")
+
+    def test_cluster_autoscaling_commands_have_results(self) -> None:
+        """Each cluster autoscaling command must declare at least one result."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        expected_results = {
+            "pool.list": {"pool.list"},
+            "pool.status": {"pool.status.name", "pool.status.resource"},
+            "pool.scaling": {"pool.scaling"},
+        }
+        commands_by_name = {cmd["cmd"]: cmd for cmd in self.MANIFEST.get("commands", [])}
+        for cmd_name, required_results in expected_results.items():
+            self.assertIn(cmd_name, commands_by_name, f"Command '{cmd_name}' not found")
+            result_names = {r["result-name"] for r in commands_by_name[cmd_name].get("results", [])}
+            for result in required_results:
+                self.assertIn(result, result_names,
+                              f"Command '{cmd_name}' missing result '{result}'")
+
+    def test_host_list_command_supports_role_param(self) -> None:
+        """host.list command must wire a 'role' source-key for the --role filter."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        cmd = next((c for c in self.MANIFEST.get("commands", []) if c["cmd"] == "host.list"), None)
+        self.assertIsNotNone(cmd, "host.list command must exist in manifest")
+        # The role filter is passed as a CLI source-key in the sequence arguments.
+        source_keys = {
+            arg.get("source-key")
+            for step in cmd.get("sequence", [])
+            for arg in step.get("arguments", [])
+        }
+        self.assertIn("role", source_keys, "host.list sequence must wire 'role' as a source-key")
 
     def test_daemonset_components_declared(self) -> None:
         # #298: DaemonSet components (aws-node, kube-proxy, fluent-bit) surface add-on /

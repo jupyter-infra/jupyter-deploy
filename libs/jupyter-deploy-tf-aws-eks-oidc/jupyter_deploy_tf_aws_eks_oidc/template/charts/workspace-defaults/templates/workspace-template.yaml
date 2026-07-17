@@ -40,6 +40,11 @@ spec:
     fsGroup: 1000
   defaultNodeSelector:
     jupyter-deploy/role: workspaces
+  defaultTolerations:
+    - key: jupyter-deploy/role
+      operator: Equal
+      value: workspaces
+      effect: NoSchedule
   defaultIdleShutdown:
     enabled: {{ .Values.workspaceTemplate.idleShutdown.enabled }}
     idleTimeoutInMinutes: {{ .Values.workspaceTemplate.idleShutdown.timeoutMinutes }}

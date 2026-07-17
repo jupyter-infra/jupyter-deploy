@@ -1,0 +1,11 @@
+# Karpenter NodePools and EC2NodeClasses for jupyter-deploy
+# All values are injected by helm.tf — do not set manually.
+
+clusterName: ""
+nodeInstanceProfile: ""
+routingLimitsCpu: "32"
+routingLimitsMemory: "128Gi"
+workspaceLimitsCpu: "512"
+workspaceLimitsMemory: "2048Gi"
+# Comma-separated list of EC2 instance families for workspace nodes
+workspaceCpuInstanceFamilies: "c6i,m6i,r6i"

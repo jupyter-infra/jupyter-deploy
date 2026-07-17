@@ -32,25 +32,25 @@ workspace_app_jupyterlab_app_type        = "jupyterlab"
 workspace_app_jupyterlab_image_name      = "jupyterlab-v0.1.0"
 workspace_app_jupyterlab_image_build     = "v1"
 
-node_groups = [
-  {
-    name          = "components"
-    role          = "components"
-    instance_type = "t3.medium"
-    ami_type      = "default"
-    disk_size_gb  = "50"
-    min_size      = "1"
-    max_size      = "3"
-    desired_size  = "2"
-  },
-  {
-    name          = "workspaces"
-    role          = "workspaces"
-    instance_type = "c5.2xlarge"
-    ami_type      = "default"
-    disk_size_gb  = "50"
-    min_size      = "2"
-    max_size      = "5"
-    desired_size  = "2"
-  }
-]
+platform_instance_type = "m5.large"
+platform_disk_size_gb  = 50
+platform_min_size      = 2
+platform_max_size      = 3
+
+karpenter_version  = "1.3.3"
+keda_version       = "2.16.1"
+prometheus_version = "27.0.0"
+
+routing_max_cpu    = "32"
+routing_max_memory = "128Gi"
+
+workspace_max_cpu    = "512"
+workspace_max_memory = "2048Gi"
+
+workspace_cpu_instance_families = ["c6i", "m6i", "r6i"]
+
+cluster_autoscaler_chart_version = "9.58.0"
+
+enable_component_logging     = true
+component_log_retention_days = 7
+fluentbit_chart_version      = "0.2.0"

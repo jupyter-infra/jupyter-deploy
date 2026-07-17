@@ -1,0 +1,5 @@
+apiVersion: v2
+name: karpenter-nodepools
+version: 0.1.5
+description: Karpenter EC2NodeClasses and NodePools for routing and workspace nodes
+type: application

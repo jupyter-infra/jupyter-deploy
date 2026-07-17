@@ -24,5 +24,10 @@ resource "null_resource" "platform" {
     null_resource.cluster_addons,
     helm_release.cluster_autoscaler,
     helm_release.fluent_bit,
+    # Karpenter + KEDA must be ready before any workspace service starts — NodePools
+    # must exist so workspace pods can be scheduled on Karpenter-provisioned nodes.
+    module.karpenter,
+    module.keda,
+    module.prometheus,
   ]
 }
