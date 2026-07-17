@@ -36,6 +36,15 @@ spec:
     maxSize: "100Gi"
     defaultStorageClassName: {{ .Values.workspaceTemplate.storageClassName }}
     defaultMountPath: "/home/jovyan"
+  # Gate workspace readiness on the app actually accepting connections, so the
+  # operator does not flip status.condition[Available]=True before the server is
+  # up. Complements the access-strategy startupProbe.
+  defaultReadinessProbe:
+    tcpSocket:
+      port: {{ .Values.workspaceTemplate.readinessProbe.port }}
+    initialDelaySeconds: {{ .Values.workspaceTemplate.readinessProbe.initialDelaySeconds }}
+    periodSeconds: {{ .Values.workspaceTemplate.readinessProbe.periodSeconds }}
+    failureThreshold: {{ .Values.workspaceTemplate.readinessProbe.failureThreshold }}
   defaultPodSecurityContext:
     fsGroup: 1000
   defaultNodeSelector:

@@ -7,6 +7,7 @@ from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.engine.terraform import tf_outputs, tf_variables
 from jupyter_deploy.exceptions import ResourceNameRequiredError
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
+from jupyter_deploy.handlers.payloads import ServerDetail
 from jupyter_deploy.handlers.resource.resource_utils import collect_results, evaluate_status_rules
 from jupyter_deploy.provider import manifest_command_runner as cmd_runner
 from jupyter_deploy.provider.resolved_clidefs import ResolvedCliParameter, StrResolvedCliParameter
@@ -96,7 +97,7 @@ class ServerHandler(BaseProjectHandler):
         resource_json = runner.get_result_value(command, "server.status.resource", str)
         return evaluate_status_rules(resource_json, rules)
 
-    def show_server(self, name: str, scope: str | None = None) -> dict[str, Any]:
+    def show_server(self, name: str, scope: str | None = None) -> ServerDetail:
         """Returns detailed information about a server."""
         resolved_scope = self._resolve_scope(scope)
         command = self.project_manifest.get_command("server.show")
@@ -112,7 +113,8 @@ class ServerHandler(BaseProjectHandler):
                 "scope": StrResolvedCliParameter(parameter_name="scope", value=resolved_scope),
             },
         )
-        return collect_results(runner, command)
+        results = collect_results(runner, command)
+        return ServerDetail(name=results.get("name", ""), resource=results.get("resource", {}))
 
     def _build_cli_paramdefs(
         self,

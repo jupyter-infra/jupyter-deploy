@@ -46,6 +46,7 @@ from jupyter_deploy.handlers.project.open_handler import OpenHandler
 from jupyter_deploy.handlers.project.show_handler import ShowHandler
 from jupyter_deploy.handlers.project.up_handler import UpHandler
 from jupyter_deploy.infrastructure.enum import AWSInfrastructureType, InfrastructureType
+from jupyter_deploy.manifest import JupyterDeployManifest
 from jupyter_deploy.provider.enum import ProviderType
 
 
@@ -658,6 +659,96 @@ def down(
             )
 
 
+def _print_single_tenant_open_hints(console: Console, manifest: JupyterDeployManifest) -> None:
+    """Troubleshooting hints for single-tenant templates (one host, one server).
+
+    Keyed purely on which host.*/server.* commands the manifest declares — the
+    original `jd open` behaviour, preserved verbatim for the base template.
+    """
+    has_host_status = manifest.has_command("host.status")
+    has_server_status = manifest.has_command("server.status")
+    has_host_restart = manifest.has_command("host.restart")
+    has_host_start = manifest.has_command("host.start")
+    has_server_restart = manifest.has_command("server.restart")
+    has_server_start = manifest.has_command("server.start")
+    has_host_connect = manifest.has_command("host.connect")
+
+    if not (has_host_status or has_server_status or has_host_connect):
+        return
+
+    console.line()
+    console.print("[bold]Having trouble?[/]")
+
+    if has_host_status:
+        console.print(":mag: verify that your host is running: [bold cyan]jd host status[/]")
+        if has_host_restart:
+            console.print(":wrench: try restarting it: [bold cyan]jd host restart[/]")
+        elif has_host_start:
+            console.print(":wrench: not running? Try starting it: [bold cyan]jd host start[/]")
+
+    if has_server_status:
+        console.print(":mag: verify that your server is running: [bold cyan]jd server status[/]")
+        if has_server_restart:
+            console.print(":wrench: try restarting it: [bold cyan]jd server restart[/]")
+        elif has_server_start:
+            console.print(":wrench: not running? Try starting it: [bold cyan]jd server start[/]")
+
+    if has_host_connect:
+        console.print(":bulb: or connect to your host (when running): [bold cyan]jd host connect[/]")
+    console.line()
+
+
+def _print_multi_tenant_open_hints(
+    console: Console, manifest: JupyterDeployManifest, server_name: str | None, scope: str
+) -> None:
+    """Troubleshooting hints for multi-tenant templates (shared cluster, many servers).
+
+    Branches on what the user asked to open so the hints match the target:
+    - a specific server (`--server-name`): how to check/find that server, then the stack;
+    - the default getting-started page (plain `jd open`): the stack health check.
+
+    Extensible: a future target (e.g. `--component-name`) adds another branch here.
+    Each hint is gated on the manifest actually declaring the underlying command.
+    """
+    has_health = manifest.health is not None
+    scope_suffix = f" --scope {scope}" if scope else ""
+
+    lines: list[str] = []
+    if server_name is not None:
+        # Opened a specific server: point at that server first, then broaden out.
+        if manifest.has_command("server.status"):
+            lines.append(
+                f":mag: verify the server is ready: [bold cyan]jd server status --name {server_name}{scope_suffix}[/]"
+            )
+        if manifest.has_command("server.list"):
+            lines.append(f":mag: list the available servers: [bold cyan]jd server list{scope_suffix}[/]")
+        if has_health:
+            lines.append(":mag: check the overall deployment health: [bold cyan]jd health[/]")
+    else:
+        # Opened the default getting-started page: the stack health check is the go-to.
+        if has_health:
+            lines.append(":mag: check the deployment health: [bold cyan]jd health[/]")
+
+    if not lines:
+        return
+
+    console.line()
+    console.print("[bold]Having trouble?[/]")
+    for line in lines:
+        console.print(line)
+    console.line()
+
+
+def _print_open_troubleshooting(
+    console: Console, manifest: JupyterDeployManifest, server_name: str | None, scope: str
+) -> None:
+    """Dispatch to tenant-appropriate `jd open` troubleshooting hints."""
+    if manifest.multi_server or manifest.multi_host:
+        _print_multi_tenant_open_hints(console, manifest, server_name, scope)
+    else:
+        _print_single_tenant_open_hints(console, manifest)
+
+
 @runner.app.command()
 def open(
     server_name: Annotated[str | None, typer.Option("--server-name", help="Name of the server to open.")] = None,
@@ -700,36 +791,7 @@ def open(
         finally:
             # Show troubleshooting help based on available commands in manifest (only if URL was available)
             if not url_unavailable:
-                manifest = handler.project_manifest
-                has_host_status = manifest.has_command("host.status")
-                has_server_status = manifest.has_command("server.status")
-                has_host_restart = manifest.has_command("host.restart")
-                has_host_start = manifest.has_command("host.start")
-                has_server_restart = manifest.has_command("server.restart")
-                has_server_start = manifest.has_command("server.start")
-                has_host_connect = manifest.has_command("host.connect")
-
-                if has_host_status or has_server_status or has_host_connect:
-                    console.line()
-                    console.print("[bold]Having trouble?[/]")
-
-                    if has_host_status:
-                        console.print(":mag: verify that your host is running: [bold cyan]jd host status[/]")
-                        if has_host_restart:
-                            console.print(":wrench: try restarting it: [bold cyan]jd host restart[/]")
-                        elif has_host_start:
-                            console.print(":wrench: not running? Try starting it: [bold cyan]jd host start[/]")
-
-                    if has_server_status:
-                        console.print(":mag: verify that your server is running: [bold cyan]jd server status[/]")
-                        if has_server_restart:
-                            console.print(":wrench: try restarting it: [bold cyan]jd server restart[/]")
-                        elif has_server_start:
-                            console.print(":wrench: not running? Try starting it: [bold cyan]jd server start[/]")
-
-                    if has_host_connect:
-                        console.print(":bulb: or connect to your host (when running): [bold cyan]jd host connect[/]")
-                    console.line()
+                _print_open_troubleshooting(console, handler.project_manifest, server_name, scope)
 
         # Exit with error code if browser failed
         if browser_failed:

@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 from jupyter_deploy.enum import StatusCategory
 from jupyter_deploy.handlers.health_handler import HealthHandler
 from jupyter_deploy.handlers.payloads import (
+    ComponentStatus,
     HealthLayer,
     HealthLayerResult,
     ImageStatusResult,
@@ -82,8 +83,22 @@ class TestHealthHandlerCheckComponents(unittest.TestCase):
     def test_components_returns_row_per_component(self) -> None:
         handler, _, _, mock_comp, _ = _make_handler()
         mock_comp.get_all_status.return_value = [
-            {"name": "traefik", "status_category": StatusCategory.HEALTHY, "details": "3/3 pods", "sub_component": ""},
-            {"name": "dex", "status_category": StatusCategory.DEGRADED, "details": "0/1 pods", "sub_component": ""},
+            ComponentStatus(
+                name="traefik",
+                type="Deployment",
+                status="Ready",
+                status_category=StatusCategory.HEALTHY,
+                details="3/3 pods",
+                sub_component="",
+            ),
+            ComponentStatus(
+                name="dex",
+                type="Deployment",
+                status="Degraded",
+                status_category=StatusCategory.DEGRADED,
+                details="0/1 pods",
+                sub_component="",
+            ),
         ]
 
         results = handler._check_components()

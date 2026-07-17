@@ -1,0 +1,199 @@
+# EKS OIDC Template — Manage Workspaces (Web UI)
+
+vars: {
+  d2-config: {
+    layout-engine: dagre
+  }
+}
+
+classes: {
+  box: {
+    shape: rectangle
+    style: {
+      bold: true
+      stroke-width: 3
+      font-size: 20
+    }
+  }
+
+  green_flow: {
+    style: {
+      stroke: "#2e7d32"
+      stroke-width: 3
+    }
+  }
+
+  red_flow: {
+    style: {
+      stroke: "#c62828"
+      stroke-width: 3
+    }
+  }
+}
+
+direction: right
+
+# Column 1: User
+user: "User" {
+  style: {
+    fill: "#e8f5e9"
+    stroke: "#2e7d32"
+    stroke-width: 3
+    bold: true
+    font-size: 20
+  }
+
+  browser: "Web Browser" {
+    class: box
+    icon: ../shared/icons/firefox.svg
+    style: {
+      fill: "#c8e6c9"
+      stroke: "#388e3c"
+    }
+  }
+}
+
+# Column 2: AWS
+aws: "AWS Account" {
+  style: {
+    fill: "#fff3e0"
+    stroke: "#e65100"
+    stroke-width: 3
+    bold: true
+    font-size: 20
+  }
+
+  nlb: "Network\nLoad Balancer" {
+    class: box
+    icon: ../shared/icons/aws.svg
+    style: {
+      fill: "#ffe0b2"
+      stroke: "#f57c00"
+    }
+  }
+
+  eks_service: "EKS Service" {
+    grid-columns: 1
+    style: {
+      fill: "#e3f2fd"
+      stroke: "#1565c0"
+      stroke-width: 3
+      bold: true
+      font-size: 20
+    }
+
+    etcd: "etcd" {
+      shape: cylinder
+      icon: ../shared/icons/kubernetes.svg
+      style: {
+        bold: true
+        stroke-width: 3
+        font-size: 20
+        fill: "#bbdefb"
+        stroke: "#1565c0"
+      }
+    }
+
+    api_server: "API Server" {
+      class: box
+      icon: ../shared/icons/kubernetes.svg
+      style: {
+        fill: "#bbdefb"
+        stroke: "#1565c0"
+      }
+    }
+  }
+
+  eks_cluster: "EKS Cluster" {
+    style: {
+      fill: "#e3f2fd"
+      stroke: "#1565c0"
+      stroke-width: 3
+      bold: true
+      font-size: 20
+    }
+
+    router_ns: "jupyter-k8s-router" {
+      style: {
+        fill: "#dce8f5"
+        stroke: "#1565c0"
+        stroke-dash: 3
+      }
+
+      traefik: "Traefik" {
+        class: box
+        icon: ../shared/icons/traefik.svg
+        style: {
+          fill: "#bbdefb"
+          stroke: "#1565c0"
+        }
+      }
+
+      web_app: "Web UI" {
+        class: box
+        icon: ../shared/icons/jupyter.svg
+        style: {
+          fill: "#bbdefb"
+          stroke: "#1565c0"
+        }
+      }
+
+      dex: "Dex" {
+        class: box
+        icon: ../shared/icons/dex.svg
+        style: {
+          fill: "#bbdefb"
+          stroke: "#1565c0"
+        }
+      }
+    }
+  }
+}
+
+# Column 3: GitHub
+github: "GitHub" {
+  style: {
+    stroke: "#24292e"
+    stroke-dash: 5
+    fill: "#fafafa"
+  }
+
+  oauth_app: "OAuth App" {
+    class: box
+    icon: ../shared/icons/github.svg
+    style: {
+      fill: "#f5f5f5"
+      stroke: "#24292e"
+    }
+  }
+}
+
+# Flows: login (red)
+user.browser -> aws.nlb: "console-URL" {
+  class: red_flow
+}
+
+aws.nlb -> aws.eks_cluster.router_ns.traefik: "" {
+  class: red_flow
+}
+
+aws.eks_cluster.router_ns.traefik -> aws.eks_cluster.router_ns.dex: "authenticate" {
+  class: red_flow
+}
+
+aws.eks_cluster.router_ns.dex -> github.oauth_app: "OAuth2" {
+  class: red_flow
+}
+
+aws.eks_cluster.router_ns.dex -> aws.eks_cluster.router_ns.traefik: "user-token" {
+  class: red_flow
+}
+
+# Flows: management (green)
+aws.eks_cluster.router_ns.traefik -> aws.eks_cluster.router_ns.web_app: "user-token" {
+  class: green_flow
+}
+
+aws.eks_cluster.router_ns.web_app -> aws.eks_service.api_server: "get-workspaces" {
+  class: green_flow
+}

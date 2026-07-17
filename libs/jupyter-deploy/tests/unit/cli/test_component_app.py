@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 from typer.testing import CliRunner
 
 from jupyter_deploy.cli.component_app import component_app
+from jupyter_deploy.handlers.payloads import ComponentDetail, ComponentInfo
 
 
 class TestComponentApp(unittest.TestCase):
@@ -34,9 +35,9 @@ class TestComponentListCommand(unittest.TestCase):
         mock_project_dir.return_value.__exit__ = Mock(return_value=None)
         mock_handler: Mock = Mock()
         mock_handler.list_components.return_value = [
-            {"name": "traefik", "type": "Deployment", "description": "Ingress controller"},
-            {"name": "dex", "type": "Deployment", "description": "Identity provider"},
-            {"name": "jwt-rotator", "type": "CronJob", "description": "Rotates JWT keys"},
+            ComponentInfo(name="traefik", type="Deployment", description="Ingress controller"),
+            ComponentInfo(name="dex", type="Deployment", description="Identity provider"),
+            ComponentInfo(name="jwt-rotator", type="CronJob", description="Rotates JWT keys"),
         ]
         mock_handler_class.return_value = mock_handler
 
@@ -58,8 +59,8 @@ class TestComponentListCommand(unittest.TestCase):
         mock_project_dir.return_value.__exit__ = Mock(return_value=None)
         mock_handler: Mock = Mock()
         mock_handler.list_components.return_value = [
-            {"name": "traefik", "type": "Deployment", "description": "Ingress controller"},
-            {"name": "dex", "type": "Deployment", "description": "Identity provider"},
+            ComponentInfo(name="traefik", type="Deployment", description="Ingress controller"),
+            ComponentInfo(name="dex", type="Deployment", description="Identity provider"),
         ]
         mock_handler_class.return_value = mock_handler
 
@@ -79,8 +80,8 @@ class TestComponentListCommand(unittest.TestCase):
         mock_project_dir.return_value.__exit__ = Mock(return_value=None)
         mock_handler: Mock = Mock()
         mock_handler.list_components.return_value = [
-            {"name": "traefik", "type": "Deployment", "description": "Ingress controller"},
-            {"name": "dex", "type": "Deployment", "description": "Identity provider"},
+            ComponentInfo(name="traefik", type="Deployment", description="Ingress controller"),
+            ComponentInfo(name="dex", type="Deployment", description="Identity provider"),
         ]
         mock_handler_class.return_value = mock_handler
 
@@ -158,7 +159,7 @@ class TestComponentShowCommand(unittest.TestCase):
         mock_project_dir.return_value.__enter__ = Mock(return_value=None)
         mock_project_dir.return_value.__exit__ = Mock(return_value=None)
         mock_handler: Mock = Mock()
-        mock_handler.show_component.return_value = {"name": "traefik", "image": "traefik:v2.10"}
+        mock_handler.show_component.return_value = ComponentDetail(name="traefik", resource={"image": "traefik:v2.10"})
         mock_handler_class.return_value = mock_handler
 
         runner = CliRunner()
@@ -190,7 +191,9 @@ class TestComponentShowCommand(unittest.TestCase):
         mock_project_dir.return_value.__enter__ = Mock(return_value=None)
         mock_project_dir.return_value.__exit__ = Mock(return_value=None)
         mock_handler: Mock = Mock()
-        mock_handler.show_component.return_value = {"name": "traefik", "image": "traefik:v2.10", "replicas": 1}
+        mock_handler.show_component.return_value = ComponentDetail(
+            name="traefik", resource={"image": "traefik:v2.10", "replicas": 1}
+        )
         mock_handler_class.return_value = mock_handler
 
         runner = CliRunner()
@@ -207,7 +210,7 @@ class TestComponentShowCommand(unittest.TestCase):
         mock_project_dir.return_value.__enter__ = Mock(return_value=None)
         mock_project_dir.return_value.__exit__ = Mock(return_value=None)
         mock_handler: Mock = Mock()
-        mock_handler.show_component.return_value = {"name": "traefik"}
+        mock_handler.show_component.return_value = ComponentDetail(name="traefik")
         mock_handler_class.return_value = mock_handler
 
         runner = CliRunner()

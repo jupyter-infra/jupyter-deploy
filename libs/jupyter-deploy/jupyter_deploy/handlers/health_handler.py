@@ -111,7 +111,7 @@ class HealthHandler(BaseProjectHandler):
         results: list[HealthLayerResult] = []
 
         for comp in statuses:
-            category = comp.get("status_category", "")
+            category = comp.status_category
             if category == StatusCategory.DEGRADED:
                 status_category = StatusCategory.DEGRADED
             elif category == StatusCategory.IN_PROGRESS:
@@ -122,11 +122,11 @@ class HealthHandler(BaseProjectHandler):
             results.append(
                 HealthLayerResult(
                     layer=HealthLayer.COMPONENTS,
-                    name=comp["name"],
+                    name=comp.name,
                     status_category=status_category,
-                    status_text=comp.get("status", ""),
-                    detail=comp.get("details", ""),
-                    sub_component=comp.get("sub_component", ""),
+                    status_text=comp.status,
+                    detail=comp.details,
+                    sub_component=comp.sub_component,
                 )
             )
 

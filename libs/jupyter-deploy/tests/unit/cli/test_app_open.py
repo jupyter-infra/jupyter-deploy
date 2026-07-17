@@ -11,14 +11,24 @@ from jupyter_deploy.exceptions import OpenWebBrowserError, UrlNotAvailableError,
 class TestOpenCommand(unittest.TestCase):
     """Test cases for the open command."""
 
-    def get_mock_open_handler(self) -> tuple[Mock, dict[str, Mock]]:
-        """Return a mocked open handler with manifest commands."""
+    def get_mock_open_handler(
+        self, multi_server: bool = False, multi_host: bool = False
+    ) -> tuple[Mock, dict[str, Mock]]:
+        """Return a mocked open handler with manifest commands.
+
+        Defaults to a single-tenant manifest (multi_server/multi_host False). Pass
+        multi_server=True to exercise the multi-tenant troubleshooting branch.
+        """
         mock_open_handler = Mock()
         mock_open = Mock(return_value="https://example.com/jupyter")
         mock_manifest = Mock()
 
         # Default manifest with all commands available
         mock_manifest.has_command = Mock(return_value=True)
+        mock_manifest.multi_server = multi_server
+        mock_manifest.multi_host = multi_host
+        # Multi-tenant hints gate the health suggestion on a declared health block.
+        mock_manifest.health = object() if (multi_server or multi_host) else None
 
         mock_open_handler.open = mock_open
         mock_open_handler.project_manifest = mock_manifest
@@ -381,3 +391,104 @@ class TestOpenCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_open_fns["open"].assert_called_once_with(name=None, scope="team-a")
+
+    # --- Multi-tenant troubleshooting hints ---
+
+    @patch("jupyter_deploy.cli.app.OpenHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_open_command_multi_tenant_default_shows_health(
+        self, mock_project_ctx_manager: Mock, mock_open_handler_cls: Mock
+    ) -> None:
+        """Plain `jd open` on a multi-tenant template points at the health check, not host/server."""
+        mock_open_handler_instance, mock_open_fns = self.get_mock_open_handler(multi_server=True)
+        mock_open_handler_cls.return_value = mock_open_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["open"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Having trouble?", result.output)
+        self.assertIn("jd health", result.output)
+        # No single-tenant "your host"/"your server" hints on a shared cluster.
+        self.assertNotIn("jd host status", result.output)
+        self.assertNotIn("jd server status", result.output)
+
+    @patch("jupyter_deploy.cli.app.OpenHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_open_command_multi_tenant_server_name_shows_server_hints(
+        self, mock_project_ctx_manager: Mock, mock_open_handler_cls: Mock
+    ) -> None:
+        """`jd open --server-name` on a multi-tenant template targets that server, then broadens out."""
+        mock_open_handler_instance, mock_open_fns = self.get_mock_open_handler(multi_server=True)
+        mock_open_fns["open"].return_value = "https://example.com/workspaces/default/my-ws/"
+        mock_open_handler_cls.return_value = mock_open_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["open", "--server-name", "my-ws"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Having trouble?", result.output)
+        self.assertIn("jd server status --name my-ws", result.output)
+        self.assertIn("jd server list", result.output)
+        self.assertIn("jd health", result.output)
+        # No --scope in the hint when the user did not pass one.
+        self.assertNotIn("--scope", result.output)
+
+    @patch("jupyter_deploy.cli.app.OpenHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_open_command_multi_tenant_server_name_threads_scope(
+        self, mock_project_ctx_manager: Mock, mock_open_handler_cls: Mock
+    ) -> None:
+        """A user-supplied --scope is threaded into the server hints."""
+        mock_open_handler_instance, mock_open_fns = self.get_mock_open_handler(multi_server=True)
+        mock_open_fns["open"].return_value = "https://example.com/workspaces/team-a/my-ws/"
+        mock_open_handler_cls.return_value = mock_open_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["open", "--server-name", "my-ws", "--scope", "team-a"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("jd server status --name my-ws --scope team-a", result.output)
+        self.assertIn("jd server list --scope team-a", result.output)
+
+    @patch("jupyter_deploy.cli.app.OpenHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_open_command_multi_tenant_gates_hints_on_declared_commands(
+        self, mock_project_ctx_manager: Mock, mock_open_handler_cls: Mock
+    ) -> None:
+        """Multi-tenant server hints are gated on the manifest declaring the underlying commands."""
+        mock_open_handler_instance, mock_open_fns = self.get_mock_open_handler(multi_server=True)
+        mock_open_fns["open"].return_value = "https://example.com/workspaces/default/my-ws/"
+
+        # Only server.status is declared; no server.list and no health block.
+        def has_command(cmd: str) -> bool:
+            return cmd == "server.status"
+
+        mock_open_fns["project_manifest"].has_command = Mock(side_effect=has_command)
+        mock_open_fns["project_manifest"].health = None
+        mock_open_handler_cls.return_value = mock_open_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["open", "--server-name", "my-ws"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("jd server status --name my-ws", result.output)
+        self.assertNotIn("jd server list", result.output)
+        self.assertNotIn("jd health", result.output)
+
+    @patch("jupyter_deploy.cli.app.OpenHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_open_command_multi_tenant_no_hint_when_nothing_declared(
+        self, mock_project_ctx_manager: Mock, mock_open_handler_cls: Mock
+    ) -> None:
+        """No hint block on a multi-tenant template that declares no relevant commands or health."""
+        mock_open_handler_instance, mock_open_fns = self.get_mock_open_handler(multi_server=True)
+        mock_open_fns["project_manifest"].has_command = Mock(return_value=False)
+        mock_open_fns["project_manifest"].health = None
+        mock_open_handler_cls.return_value = mock_open_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["open"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertNotIn("Having trouble?", result.output)

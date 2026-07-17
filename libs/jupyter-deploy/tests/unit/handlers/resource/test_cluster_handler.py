@@ -197,10 +197,11 @@ class TestClusterHandler(unittest.TestCase):
         handler = ClusterHandler(display_manager=NullDisplay())
         result = handler.show_cluster()
 
-        self.assertEqual(result["name"], "my-cluster")
-        self.assertEqual(result["status"], "ACTIVE")
-        self.assertEqual(result["endpoint"], "https://ABC.eks.amazonaws.com")
-        self.assertEqual(result["version"], "1.29.0")
+        self.assertEqual(result.name, "my-cluster")
+        self.assertEqual(result.label, "EKS")
+        self.assertEqual(result.status, "ACTIVE")
+        self.assertEqual(result.endpoint, "https://ABC.eks.amazonaws.com")
+        self.assertEqual(result.version, "1.29.0")
         mock_manifest_fns["get_command"].assert_called_once_with("cluster.show")
         mock_cmd_runner_fns["run_command_sequence"].assert_called_once_with(mock_cmd, cli_paramdefs={})
 

@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from typer.testing import CliRunner
 
 from jupyter_deploy.cli.servers_app import servers_app
+from jupyter_deploy.handlers.payloads import ServerDetail
 from jupyter_deploy.manifest import InvalidServiceError
 
 
@@ -1364,7 +1365,7 @@ class TestServerShowCmd(unittest.TestCase):
         mock_server_handler = Mock()
 
         mock_server_handler.show_server = mock_show_server
-        mock_show_server.return_value = {"name": "my-ws", "resource": '{"spec": {}}'}
+        mock_show_server.return_value = ServerDetail(name="my-ws", resource={"spec": {}})
 
         return mock_server_handler, {
             "show_server": mock_show_server,
@@ -1415,7 +1416,7 @@ class TestServerShowCmd(unittest.TestCase):
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_json_output(self, mock_project_dir: Mock, mock_server_handler_class: Mock) -> None:
         mock_server_handler = Mock()
-        mock_server_handler.show_server.return_value = {"name": "my-ws", "resource": '{"spec": {}}'}
+        mock_server_handler.show_server.return_value = ServerDetail(name="my-ws", resource={"spec": {}})
         mock_server_handler_class.return_value = mock_server_handler
         mock_project_dir.return_value.__enter__.return_value = None
 

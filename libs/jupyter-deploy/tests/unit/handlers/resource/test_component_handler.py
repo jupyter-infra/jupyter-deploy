@@ -204,9 +204,9 @@ class TestComponentHandlerListComponents(unittest.TestCase):
         handler = ComponentHandler(display_manager=Mock())
         components = handler.list_components()
 
-        by_name = {c["name"]: c for c in components}
-        self.assertEqual(by_name["jupyterlab-template"]["type"], "WorkspaceTemplate")
-        self.assertEqual(by_name["traefik"]["type"], "Deployment")  # falls back to type
+        by_name = {c.name: c for c in components}
+        self.assertEqual(by_name["jupyterlab-template"].type, "WorkspaceTemplate")
+        self.assertEqual(by_name["traefik"].type, "Deployment")  # falls back to type
 
 
 @patch("jupyter_deploy.handlers.resource.component_handler.tf_variables.TerraformVariablesHandler")
@@ -281,9 +281,9 @@ class TestComponentHandlerGetAllStatus(unittest.TestCase):
             results = handler.get_all_status()
 
         self.assertEqual(len(results), 2)
-        self.assertEqual(results[0]["name"], "traefik")
-        self.assertEqual(results[0]["status"], "Ready")
-        self.assertEqual(results[1]["name"], "jwt-rotator")
+        self.assertEqual(results[0].name, "traefik")
+        self.assertEqual(results[0].status, "Ready")
+        self.assertEqual(results[1].name, "jwt-rotator")
         manifest.get_command.assert_any_call("component.deployment.status")
         manifest.get_command.assert_any_call("component.cronjob.status")
 
@@ -335,8 +335,8 @@ class TestComponentHandlerCustomResourceWithoutStatus(unittest.TestCase):
             handler = ComponentHandler(display_manager=Mock())
             results = handler.get_all_status()
 
-        self.assertEqual(results[0]["status"], "Present")
-        self.assertEqual(results[0]["status_category"], "healthy")
+        self.assertEqual(results[0].status, "Present")
+        self.assertEqual(results[0].status_category, "healthy")
         manifest.get_command.assert_called_with("component.customresourcewithoutstatus.status")
         cli_paramdefs = mock_runner.run_command_sequence.call_args.kwargs["cli_paramdefs"]
         self.assertEqual(cli_paramdefs["name"].value, "jupyterlab")
@@ -376,8 +376,8 @@ class TestComponentHandlerCustomResourceWithoutStatus(unittest.TestCase):
             handler = ComponentHandler(display_manager=Mock())
             results = handler.get_all_status()
 
-        self.assertEqual(results[0]["details"], "jupyter-k8s-shared")
-        self.assertEqual(results[0]["sub_component"], "access-strategy: oauth-access-strategy")
+        self.assertEqual(results[0].details, "jupyter-k8s-shared")
+        self.assertEqual(results[0].sub_component, "access-strategy: oauth-access-strategy")
 
     def test_missing_when_resource_not_found(
         self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock
@@ -392,8 +392,8 @@ class TestComponentHandlerCustomResourceWithoutStatus(unittest.TestCase):
             handler = ComponentHandler(display_manager=Mock())
             results = handler.get_all_status()
 
-        self.assertEqual(results[0]["status"], "Not Found")
-        self.assertEqual(results[0]["status_category"], "degraded")
+        self.assertEqual(results[0].status, "Not Found")
+        self.assertEqual(results[0].status_category, "degraded")
 
     def test_get_component_status_present(
         self, mock_manifest_fn: Mock, mock_outputs: Mock, mock_variables: Mock
@@ -482,13 +482,15 @@ class TestComponentHandlerCustomResourceDefinition(unittest.TestCase):
             handler = ComponentHandler(display_manager=Mock())
             results = handler.get_all_status()
 
-        self.assertEqual(results[0]["status"], "Present")
-        self.assertEqual(results[0]["status_category"], "healthy")
-        self.assertEqual(results[0]["details"], "v1alpha1")
+        self.assertEqual(results[0].status, "Present")
+        self.assertEqual(results[0].status_category, "healthy")
+        self.assertEqual(results[0].details, "v1alpha1")
         manifest.get_command.assert_called_with("component.customresourcedefinition.status")
         cli_paramdefs = mock_runner.run_command_sequence.call_args.kwargs["cli_paramdefs"]
         self.assertNotIn("scope", cli_paramdefs)
         self.assertEqual(cli_paramdefs["name"].value, "workspaces.workspace.jupyter.org")
+        # CRD coordinates stay injected for backward compatibility with manifests routing
+        # the CRD through the generic k8s.custom.get-cluster instruction.
         self.assertEqual(cli_paramdefs["group"].value, "apiextensions.k8s.io")
         self.assertEqual(cli_paramdefs["plural"].value, "customresourcedefinitions")
 
@@ -505,8 +507,8 @@ class TestComponentHandlerCustomResourceDefinition(unittest.TestCase):
             handler = ComponentHandler(display_manager=Mock())
             results = handler.get_all_status()
 
-        self.assertEqual(results[0]["status"], "Not Found")
-        self.assertEqual(results[0]["status_category"], "degraded")
+        self.assertEqual(results[0].status, "Not Found")
+        self.assertEqual(results[0].status_category, "degraded")
 
 
 @patch("jupyter_deploy.handlers.resource.component_handler.tf_variables.TerraformVariablesHandler")

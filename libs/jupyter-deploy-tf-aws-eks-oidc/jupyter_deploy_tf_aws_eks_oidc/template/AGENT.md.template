@@ -10,9 +10,13 @@ jupyter-k8s operator for workspace lifecycle management, and controls access wit
 
 The template deploys:
 - A VPC with public and private subnets across 2 AZs
-- An EKS cluster with managed node groups
+- An EKS cluster in the VPC with Identity provider configured for GitHub
+- Two EKS managed node groups: `components` (operators/platform pods) and `workspaces` (workspace pods),
+  each labelled `jupyter-deploy/role=<components|workspaces>` and autoscaled by the cluster-autoscaler
 - EKS add-ons: vpc-cni, kube-proxy, coredns, pod-identity-agent, ebs-csi-driver, cert-manager, external-dns
-- Helm releases: traefik-crds, jupyter-k8s operator, aws-traefik-dex (OIDC routing)
+- Helm releases: traefik-crds, jupyter-k8s operator, jupyter-k8s-aws-oidc (OIDC routing + web UI),
+  workspace-defaults and github-rbac (local charts), cluster-autoscaler, and optionally aws-for-fluent-bit
+  for send pod logs to CloudWatch.
 - Dex as an OIDC identity provider on the cluster for kubectl authentication
 
 Unlike the single-host EC2 template, this is a multi-app deployment: each user gets their own
@@ -75,6 +79,11 @@ owners may need to approve the OAuth app for it to access team membership; see G
 ### Manage the platform components
 {{ kubernetes-component-management-instructions }}
 
+### Inspect the workspace images
+{{ image-management-instructions }}
+
+{{ aws-inspector-scanning }}
+
 ### View the full terraform logs
 
 {{ history-logs-instructions }}
@@ -119,9 +128,13 @@ Applications are gated by a `_use` boolean variable (e.g. `workspace_app_jupyter
 ### Charts directory
 
 `./charts/` contains local Helm charts:
-- `workspace-defaults/` — deploys the default access strategy and template into the shared namespace. It makes it easy for workspace users to create workspace later
-To modify chart values, edit the `yamlencode({...})` block in the corresponding `.tf` file (`workspaces.tf`).
-Charts are deployed via `helm_release` with a local path, so changes take effect on the next `jd up`.
+- `workspace-defaults/` — deploys the default WorkspaceTemplate (and its workspace-ingress
+  NetworkPolicies) into the shared namespace, so workspace users can create workspaces later
+- `github-rbac/` — Roles/RoleBindings granting the `oauth_allowed_teams` GitHub teams workspace
+  permissions in each `workspace_rbac_namespaces` namespace, as well as read permission into
+  the shared namespace (`jupyter-k8s-shared`).
+Both are deployed via `helm_release` with a local path (see `workspaces.tf`), where values are passed
+through `set = [...]` blocks. Editing a chart's templates/values takes effect on the next `jd up`.
 
 ### Web UI
 
@@ -141,6 +154,12 @@ It handles the DNS race condition on fresh deploys because:
 
 The script waits for all routing deployments (traefik, dex, oauth2-proxy, authmiddleware) to become ready,
 and triggers on domain, cluster name, or router chart version/revision changes.
+
+### Core platform daemonset and operators
+
+- core daemonset: `vpc-cni` and `kube-proxy` EKS add-ons (`eks_addons.tf`).
+- autoscaling: cluster-autoscaler scales both node groups on pending pods (`platform_cluster_autoscaler.tf`).
+- logging: optional Fluent Bit DaemonSet ships pod logs to CloudWatch (`platform_logging.tf`, `var.enable_component_logging`).
 
 ### Destroy-time workspace cleanup
 

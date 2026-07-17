@@ -7,6 +7,7 @@ from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.engine.terraform import tf_outputs, tf_variables
 from jupyter_deploy.exceptions import InvalidComponentVerbError, ResourceNotFoundError
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
+from jupyter_deploy.handlers.payloads import ComponentDetail, ComponentInfo, ComponentStatus
 from jupyter_deploy.handlers.resource.resource_utils import collect_results, render_display_field
 from jupyter_deploy.manifest import JupyterDeployComponentDefinitionV1
 from jupyter_deploy.provider import manifest_command_runner as cmd_runner
@@ -14,13 +15,15 @@ from jupyter_deploy.provider.resolved_clidefs import ResolvedCliParameter, StrRe
 
 # Component types whose health is existence-based: the resource carries no controller-managed
 # status, so a successful get means "Present" and a 404 (ResourceNotFoundError) means "Not Found".
-# CustomResourceDefinition is cluster-scoped (no namespace), fetched via k8s.custom.get-cluster.
+# CustomResourceDefinition is cluster-scoped (no namespace).
 CUSTOM_RESOURCE_WITHOUT_STATUS = "CustomResourceWithoutStatus"
 CUSTOM_RESOURCE_DEFINITION = "CustomResourceDefinition"
 EXISTENCE_COMPONENT_TYPES = frozenset({CUSTOM_RESOURCE_WITHOUT_STATUS, CUSTOM_RESOURCE_DEFINITION})
 
 # CustomResourceDefinition is a well-known cluster-scoped kind: its CRD coordinates are fixed,
-# so components of this type don't declare them.
+# so components of this type don't declare them. These are still injected as CLI params so that
+# manifests routing the CRD through the generic k8s.custom.get-cluster instruction keep working;
+# the typed k8s.apiextensions.get-crd instruction simply ignores the extra coordinates.
 CRD_GROUP = "apiextensions.k8s.io"
 CRD_VERSION = "v1"
 CRD_PLURAL = "customresourcedefinitions"
@@ -105,14 +108,14 @@ class ComponentHandler(BaseProjectHandler):
                 cli_paramdefs[k] = StrResolvedCliParameter(parameter_name=k, value=v)
         return cli_paramdefs
 
-    def list_components(self) -> list[dict[str, str]]:
+    def list_components(self) -> list[ComponentInfo]:
         """Return the list of components with name, type, and description.
 
         `type` is the display type (type-display when set, else the internal type).
         """
         components = self.project_manifest.get_components()
         return [
-            {"name": name, "type": comp.type_display or comp.type, "description": comp.description}
+            ComponentInfo(name=name, type=comp.type_display or comp.type, description=comp.description)
             for name, comp in components.items()
         ]
 
@@ -121,10 +124,10 @@ class ComponentHandler(BaseProjectHandler):
         component = self.project_manifest.get_component(name)
         return component.description
 
-    def get_all_status(self) -> list[dict[str, str]]:
+    def get_all_status(self) -> list[ComponentStatus]:
         """Return status of all components for dashboard display."""
         components = self.project_manifest.get_components()
-        results: list[dict[str, str]] = []
+        results: list[ComponentStatus] = []
         for name, comp_def in components.items():
             namespace = self._resolve_namespace(comp_def)
             cmd_name = self._get_command_name(comp_def, "status")
@@ -159,14 +162,14 @@ class ComponentHandler(BaseProjectHandler):
                 details = f"{comp_def.type.lower()} '{name}' not found"
                 sub_component = ""
             results.append(
-                {
-                    "name": name,
-                    "type": comp_def.type,
-                    "status": status,
-                    "status_category": status_category,
-                    "details": details,
-                    "sub_component": sub_component,
-                }
+                ComponentStatus(
+                    name=name,
+                    type=comp_def.type,
+                    status=status,
+                    status_category=status_category,
+                    details=details,
+                    sub_component=sub_component,
+                )
             )
         return results
 
@@ -194,7 +197,7 @@ class ComponentHandler(BaseProjectHandler):
         runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
         return runner.get_result_value(command, f"{cmd_name}.status", str)
 
-    def show_component(self, name: str) -> dict[str, Any]:
+    def show_component(self, name: str) -> ComponentDetail:
         """Return detailed information about a component."""
         component = self.project_manifest.get_component(name)
         self._validate_verb(name, component, "show")
@@ -209,7 +212,8 @@ class ComponentHandler(BaseProjectHandler):
         )
         cli_paramdefs = self._build_cli_paramdefs(resource_name, component, namespace)
         runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
-        return collect_results(runner, command)
+        results = collect_results(runner, command)
+        return ComponentDetail(name=results.get("name", ""), resource=results.get("resource", {}))
 
     def get_component_logs(self, name: str, extra: list[str] | None = None) -> str:
         """Return logs for a component."""

@@ -23,6 +23,8 @@ Each node group auto-detects the appropriate EKS-optimized AMI type from the ins
 
 You can also set an explicit `ami_type` value per node group.
 
+Node group sizing and how capacity scales are covered in [AutoScaling](autoscaling.md).
+
 ## Application Images
 
 The template optionally creates infrastructure for building custom workspace images:
@@ -33,7 +35,15 @@ The template optionally creates infrastructure for building custom workspace ima
 
 The JupyterLab application image is built automatically on first deploy when `workspace_app_jupyterlab_use = true`.
 
-## IAM
+## Access and Permissions
+
+Access to the cluster is governed at two layers: **IAM** controls who can reach the
+Kubernetes API and administer the cluster, and **RBAC** controls what authenticated
+GitHub teams can do with workspaces. Team sign-in itself goes through GitHub OAuth via
+Dex — see [Prerequisites](prerequisites.md#grant-access-to-teams) for granting teams
+access.
+
+### IAM
 
 The template creates several IAM roles:
 
@@ -54,7 +64,7 @@ Three Helm releases are installed:
 
 Charts are pulled from OCI registries. The chart versions and OCI references are configurable for testing against staging registries.
 
-## RBAC
+### RBAC
 
 The template deploys a `github-rbac` local chart that creates namespace-scoped Role and RoleBinding resources:
 

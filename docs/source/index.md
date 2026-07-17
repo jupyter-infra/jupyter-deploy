@@ -52,6 +52,7 @@ Compatible with any cloud provider and any infrastructure-as-code engine.
 :hidden:
 
 getting-started/index
+concepts/index
 templates/index
 contributor-guide/index
 ```

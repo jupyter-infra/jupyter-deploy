@@ -27,6 +27,19 @@ workspaceTemplate:
   ownershipType: OwnerOnly
   # -- StorageClass for the workspace persistent volume.
   storageClassName: ebs-sc
+  # -- TCP readiness probe applied to workspace pods. The operator waits for this
+  # probe to pass before marking the workspace Available, so the app is reachable
+  # by the time users are redirected to it.
+  readinessProbe:
+    # -- Container port the probe connects to (the workspace app port).
+    port: 8888
+    # -- Seconds to wait after container start before the first probe.
+    initialDelaySeconds: 2
+    # -- Seconds between probe attempts.
+    periodSeconds: 3
+    # -- Consecutive failures tolerated before the probe is considered failed
+    # (with the values above, ~90s of startup grace).
+    failureThreshold: 30
   idleShutdown:
     # -- Whether to automatically stop idle workspaces.
     enabled: true

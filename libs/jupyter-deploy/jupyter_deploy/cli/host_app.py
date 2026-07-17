@@ -1,4 +1,5 @@
 import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated
 
@@ -289,7 +290,7 @@ def show(
             details = handler.show_host(name=name)
 
         if json_output:
-            console.print(json.dumps(details), highlight=False, markup=False, soft_wrap=True)
+            console.print(json.dumps(asdict(details)), highlight=False, markup=False, soft_wrap=True)
             return
 
-        console.print_json(json.dumps(details))
+        console.print_json(json.dumps(asdict(details)))

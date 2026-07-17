@@ -584,17 +584,8 @@ commands:
     source-key: '[0].Resource'
 - cmd: component.customresourcedefinition.status
   sequence:
-  - api-name: k8s.custom.get-cluster
+  - api-name: k8s.apiextensions.get-crd
     arguments:
-    - api-attribute: group
-      source: cli
-      source-key: group
-    - api-attribute: version
-      source: cli
-      source-key: version
-    - api-attribute: plural
-      source: cli
-      source-key: plural
     - api-attribute: name
       source: cli
       source-key: name
@@ -604,17 +595,8 @@ commands:
     source-key: '[0].Resource'
 - cmd: component.customresourcedefinition.show
   sequence:
-  - api-name: k8s.custom.get-cluster
+  - api-name: k8s.apiextensions.get-crd
     arguments:
-    - api-attribute: group
-      source: cli
-      source-key: group
-    - api-attribute: version
-      source: cli
-      source-key: version
-    - api-attribute: plural
-      source: cli
-      source-key: plural
     - api-attribute: name
       source: cli
       source-key: name
@@ -1053,9 +1035,9 @@ components:
       path: .spec.versions[0].name
     verbs:
       status:
-        method: k8s.custom.get-cluster
+        method: k8s.apiextensions.get-crd
       show:
-        method: k8s.custom.get-cluster
+        method: k8s.apiextensions.get-crd
   workspace-template-crd:
     type: CustomResourceDefinition
     description: WorkspaceTemplate CRD
@@ -1064,9 +1046,9 @@ components:
       path: .spec.versions[0].name
     verbs:
       status:
-        method: k8s.custom.get-cluster
+        method: k8s.apiextensions.get-crd
       show:
-        method: k8s.custom.get-cluster
+        method: k8s.apiextensions.get-crd
   workspace-access-strategy-crd:
     type: CustomResourceDefinition
     description: WorkspaceAccessStrategy CRD
@@ -1075,9 +1057,9 @@ components:
       path: .spec.versions[0].name
     verbs:
       status:
-        method: k8s.custom.get-cluster
+        method: k8s.apiextensions.get-crd
       show:
-        method: k8s.custom.get-cluster
+        method: k8s.apiextensions.get-crd
   oauth-access-strategy:
     type: CustomResourceWithoutStatus
     type-display: WorkspaceAccessStrategy

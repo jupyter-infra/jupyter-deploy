@@ -2,7 +2,7 @@ from pathlib import Path
 
 from jupyter_deploy.engine import outdefs
 from jupyter_deploy.engine.engine_outputs import EngineOutputsHandler
-from jupyter_deploy.exceptions import UrlNotAvailableError
+from jupyter_deploy.exceptions import CommandNotImplementedError, UrlNotAvailableError
 from jupyter_deploy.manifest import JupyterDeployManifest
 
 
@@ -27,14 +27,18 @@ class EngineOpenHandler:
             str: The URL to access the notebook app
 
         Raises:
+            CommandNotImplementedError: If the template does not declare an 'open_url' value
             UrlNotAvailableError: If URL cannot be retrieved or is empty
             ValueError: If the 'open_url' output is malformed in the manifest
-            NotImplementedError: If the 'open_url' output type is not implemented
             TypeError: If the 'open_url' output has incorrect type
-            KeyError: If the 'open_url' output is not defined in the manifest
         """
         try:
             url_outdef = self.output_handler.get_declared_output_def("open_url", outdefs.StrTemplateOutputDefinition)
+        except NotImplementedError:
+            # The manifest does not declare an 'open_url' value: this template has no
+            # single URL to open. Surface the standard "not implemented" error rather
+            # than letting the bare NotImplementedError escape as an uncaught traceback.
+            raise CommandNotImplementedError("open") from None
         except KeyError:
             raise UrlNotAvailableError("URL not available. Run 'jd config' then 'jd up'.") from None
 

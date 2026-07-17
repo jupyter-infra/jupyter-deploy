@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from typer.testing import CliRunner
 
 from jupyter_deploy.cli.cluster_app import cluster_app
+from jupyter_deploy.handlers.payloads import ClusterDetail
 
 
 class TestClusterApp(unittest.TestCase):
@@ -151,7 +152,7 @@ class TestClusterShowCommand(unittest.TestCase):
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_calls_show_cluster(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
         mock_handler: Mock = Mock()
-        mock_handler.show_cluster.return_value = {"name": "my-cluster", "status": "ACTIVE", "version": "1.30"}
+        mock_handler.show_cluster.return_value = ClusterDetail(name="my-cluster", status="ACTIVE", version="1.30")
         mock_handler_class.return_value = mock_handler
         mock_project_dir.return_value.__enter__.return_value = None
 
@@ -166,7 +167,7 @@ class TestClusterShowCommand(unittest.TestCase):
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_default_output_contains_details(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
         mock_handler: Mock = Mock()
-        mock_handler.show_cluster.return_value = {"name": "my-cluster", "status": "ACTIVE", "version": "1.30"}
+        mock_handler.show_cluster.return_value = ClusterDetail(name="my-cluster", status="ACTIVE", version="1.30")
         mock_handler_class.return_value = mock_handler
         mock_project_dir.return_value.__enter__.return_value = None
 
@@ -182,7 +183,7 @@ class TestClusterShowCommand(unittest.TestCase):
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_json_output(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
         mock_handler: Mock = Mock()
-        mock_handler.show_cluster.return_value = {"name": "my-cluster", "status": "ACTIVE", "version": "1.30"}
+        mock_handler.show_cluster.return_value = ClusterDetail(name="my-cluster", status="ACTIVE", version="1.30")
         mock_handler_class.return_value = mock_handler
         mock_project_dir.return_value.__enter__.return_value = None
 
@@ -199,7 +200,7 @@ class TestClusterShowCommand(unittest.TestCase):
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_switches_dir_with_path(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
         mock_handler: Mock = Mock()
-        mock_handler.show_cluster.return_value = {"name": "c", "status": "ACTIVE"}
+        mock_handler.show_cluster.return_value = ClusterDetail(name="c", status="ACTIVE")
         mock_handler_class.return_value = mock_handler
         mock_project_dir.return_value.__enter__.return_value = None
 

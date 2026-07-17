@@ -22,6 +22,7 @@ The platform layer runs on the components node group and handles routing, authen
 - **OAuth2 Proxy** — Handles the initial sign-in flow for unauthenticated users, redirecting them through Dex.
 - **Authmiddleware** — Validates JWT session cookies on every request via Traefik ForwardAuth. Issues cookies after successful authentication.
 - **Jupyter K8s** operator — Reconciles Workspace custom resources into Deployments, Services, and persistent volumes.
+- **Web UI** — Browser-based console for managing workspaces, served at the root of your domain. See [Web UI](web-ui.md).
 
 ![Platform components](diagrams/platform-components.svg)
 

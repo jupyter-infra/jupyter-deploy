@@ -1,4 +1,5 @@
 import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated
 
@@ -44,10 +45,10 @@ def list_components(
         components = handler.list_components()
 
         if json_output:
-            console.print(json.dumps(components), highlight=False, markup=False, soft_wrap=True)
+            console.print(json.dumps([asdict(c) for c in components]), highlight=False, markup=False, soft_wrap=True)
             return
         if text_output:
-            console.out(",".join(c["name"] for c in components))
+            console.out(",".join(c.name for c in components))
             return
 
         table = Table()
@@ -55,7 +56,7 @@ def list_components(
         table.add_column("Type")
         table.add_column("Description")
         for c in components:
-            table.add_row(c["name"], c["type"], c["description"])
+            table.add_row(c.name, c.type, c.description)
         console.print(table)
 
 
@@ -123,10 +124,10 @@ def show(
             details = handler.show_component(name=name)
 
         if json_output:
-            console.print(json.dumps(details), highlight=False, markup=False, soft_wrap=True)
+            console.print(json.dumps(asdict(details)), highlight=False, markup=False, soft_wrap=True)
             return
 
-        console.print_json(json.dumps(details))
+        console.print_json(json.dumps(asdict(details)))
 
 
 @component_app.command(context_settings={"allow_extra_args": True, "allow_interspersed_args": False})

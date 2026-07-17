@@ -405,9 +405,9 @@ class TestHostHandler(unittest.TestCase):
         result = handler.show_host(name="node-1")
 
         # Verify — keys come from manifest result-name with "host.show." prefix stripped
-        self.assertEqual(result["name"], "node-1")
-        self.assertEqual(result["status"], "Ready")
-        self.assertEqual(result["resource"], {"metadata": {"name": "node-1"}})
+        self.assertEqual(result.name, "node-1")
+        self.assertEqual(result.status, "Ready")
+        self.assertEqual(result.resource, {"metadata": {"name": "node-1"}})
 
         cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
         self.assertIn("name", cli_paramdefs)

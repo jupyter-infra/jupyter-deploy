@@ -160,6 +160,32 @@ class TestK8sApiRunner(unittest.TestCase):
         )
         self.assertEqual(result, expected_result)
 
+    @patch("jupyter_deploy.provider.k8s.k8s_runner.K8sApiextensionsRunner")
+    @patch("jupyter_deploy.provider.k8s.k8s_runner.K8sClientFactory")
+    def test_execute_instantiates_apiextensions_runner_and_delegates(
+        self, mock_factory: Mock, mock_apiext_runner_class: Mock
+    ) -> None:
+        mock_api_client: Mock = Mock()
+        mock_factory.from_kubeconfig.return_value = mock_api_client
+
+        mock_apiext_runner: Mock = Mock()
+        mock_apiext_runner_class.return_value = mock_apiext_runner
+        expected_result = {"result_key": Mock(spec=ResolvedInstructionResult)}
+        mock_apiext_runner.execute_instruction.return_value = expected_result
+
+        runner = K8sApiRunner(NullDisplay(), kubeconfig_path="/tmp/kubeconfig")
+        resolved_args: dict[str, ResolvedInstructionArgument] = {"arg1": Mock(spec=ResolvedInstructionArgument)}
+
+        result = runner.execute_instruction(
+            instruction_name="k8s.apiextensions.get-crd", resolved_arguments=resolved_args
+        )
+
+        mock_apiext_runner_class.assert_called_once_with(ANY, api_client=mock_api_client)
+        mock_apiext_runner.execute_instruction.assert_called_once_with(
+            instruction_name="get-crd", resolved_arguments=resolved_args
+        )
+        self.assertEqual(result, expected_result)
+
     @patch("jupyter_deploy.provider.k8s.k8s_runner.K8sCoreRunner")
     @patch("jupyter_deploy.provider.k8s.k8s_runner.K8sClientFactory")
     def test_uses_eks_cluster_when_all_params_provided(self, mock_factory: Mock, mock_core_runner_class: Mock) -> None:

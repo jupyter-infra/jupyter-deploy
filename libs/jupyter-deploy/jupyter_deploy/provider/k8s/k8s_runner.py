@@ -5,6 +5,7 @@ from kubernetes import client
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.exceptions import InstructionNotFoundError
 from jupyter_deploy.provider.instruction_runner import InstructionRunner
+from jupyter_deploy.provider.k8s.k8s_apiextensions_runner import K8sApiextensionsRunner
 from jupyter_deploy.provider.k8s.k8s_apps_runner import K8sAppsRunner
 from jupyter_deploy.provider.k8s.k8s_batch_runner import K8sBatchRunner
 from jupyter_deploy.provider.k8s.k8s_client_factory import K8sClientFactory
@@ -22,6 +23,7 @@ class K8sService(str, Enum):
     CUSTOM = "custom"
     APPS = "apps"
     BATCH = "batch"
+    APIEXTENSIONS = "apiextensions"
 
 
 class K8sApiRunner(InstructionRunner):
@@ -93,6 +95,10 @@ class K8sApiRunner(InstructionRunner):
             service_runner = K8sBatchRunner(
                 self.display_manager, api_client=api_client, kubeconfig_path=self.kubeconfig_path
             )
+            self._service_runners[service_name] = service_runner
+            return service_runner
+        elif service_name == K8sService.APIEXTENSIONS:
+            service_runner = K8sApiextensionsRunner(self.display_manager, api_client=api_client)
             self._service_runners[service_name] = service_runner
             return service_runner
 

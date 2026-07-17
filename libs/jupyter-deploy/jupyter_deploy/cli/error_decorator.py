@@ -80,7 +80,7 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         yield
 
     except ManifestNotFoundError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(
             ":bulb: Change your working directory to a project directory or create one with [bold cyan]jd init PATH[/]"
@@ -88,37 +88,37 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         raise typer.Exit(code=1) from None
 
     except ReadManifestError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(":bulb: Check file permissions or disk space for the manifest file")
         raise typer.Exit(code=1) from None
 
     except InvalidManifestError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(":bulb: Review your manifest.yaml file for syntax errors or missing required fields")
         raise typer.Exit(code=1) from None
 
     except CommandNotImplementedError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         raise typer.Exit(code=1) from None
 
     except InvalidProviderCredentialsError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         if e.original_message:
             console.line()
             console.print(e.original_message, style="dim")
         raise typer.Exit(code=1) from None
 
     except ProviderPermissionError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         if e.original_message:
             console.line()
             console.print(e.original_message, style="dim")
         raise typer.Exit(code=1) from None
 
     except ToolRequiredError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         if e.error_msg or e.installation_url:
             console.line()
 
@@ -129,31 +129,31 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         raise typer.Exit(code=1) from None
 
     except SupervisedExecutionError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(":bulb: To view the full logs, run: [bold cyan]jd history show[/]")
         raise typer.Exit(code=e.retcode) from None
 
     except InvalidPresetError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(f"Available presets: {', '.join(e.valid_presets)}")
         raise typer.Exit(code=1) from None
 
     except InvalidServiceError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(f"Available services: {', '.join(e.valid_services)}")
         raise typer.Exit(code=1) from None
 
     except InvalidStoreTypeError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(f"Available store types: {', '.join(e.valid_store_types)}")
         raise typer.Exit(code=1) from None
 
     except (UnreachableHostError, IncompatibleHostStateError) as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         if e.hint:
             # Use the specific hint if provided (e.g., from IncompatibleHostStateError)
@@ -165,7 +165,7 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         raise typer.Exit(code=1) from None
 
     except HostCommandInstructionError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         if e.stdout:
             console.rule("stdout")
             console.print(e.stdout)
@@ -178,25 +178,25 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         raise typer.Exit(code=e.retcode) from None
 
     except InvalidVariablesDotYamlError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(":bulb: Review your variables.yaml file for syntax errors", style="dim")
         raise typer.Exit(code=1) from None
 
     except LogNotFoundError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(":bulb: To see available logs: [bold cyan]jd history list CMD[/]")
         raise typer.Exit(code=1) from None
 
     except ResourceNameRequiredError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(f":bulb: Run [bold cyan]{e.list_command}[/] to see available {e.resource_type}s.")
         raise typer.Exit(code=1) from None
 
     except ComponentNotFoundError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(f"Available components: {', '.join(e.valid_components)}")
         console.print(":bulb: Run [bold cyan]jd component list[/] to see all components.")
@@ -228,7 +228,7 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         raise typer.Exit(code=1) from None
 
     except ResourceNotFoundError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         raise typer.Exit(code=1) from None
 
     except (
@@ -240,11 +240,11 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         InvalidInstructionResultError,
         LogCleanupError,
     ) as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         raise typer.Exit(code=1) from None
 
     except DownAutoApproveRequiredError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         if e.persisting_resources:
             console.print("  Persisting resources:")
             for resource in e.persisting_resources:
@@ -252,12 +252,12 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         raise typer.Exit(code=1) from None
 
     except (VariableNotFoundError, OutputNotFoundError) as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         # check if next steps provided, if so print them
         raise typer.Exit(code=1) from None
 
     except UrlNotAvailableError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print("Make sure you have configured and deployed your project.")
         console.print(":bulb: To configure the project, run: [bold cyan]jd config[/]")
@@ -265,32 +265,32 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         raise typer.Exit(code=1) from None
 
     except UrlNotSecureError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print("Only HTTPS URLs are allowed for security reasons.", style="red")
         raise typer.Exit(code=1) from None
 
     except OpenWebBrowserError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(f"URL: [bold cyan]{e.url}[/]")
         console.print(":bulb: Copy the URL and open it manually in your browser.")
         raise typer.Exit(code=1) from None
 
     except (ReadConfigurationError, WriteConfigurationError) as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.print(f"  File: {e.file_path}", style="dim")
         raise typer.Exit(code=1) from None
 
     except ProjectIdNotAvailableError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         if e.hint:
             console.line()
             console.print(f":bulb: {e.hint}")
         raise typer.Exit(code=1) from None
 
     except ProjectNotFoundInStoreError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         hint_cmd = "jd projects list --store-type"
         if e.store_type:
@@ -303,7 +303,7 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         raise typer.Exit(code=1) from None
 
     except ProjectStoreReadError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         if e.hint:
             console.print(f":bulb: {e.hint}", style="dim")
@@ -314,20 +314,20 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         raise typer.Exit(code=1) from None
 
     except ProjectStoreAccessConfigurationError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(":bulb: Run [bold cyan]jd up[/] again to retry the backend migration.")
         raise typer.Exit(code=1) from None
 
     except ProjectStoreNotFoundError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         if e.hint:
             console.line()
             console.print(f":bulb: {e.hint}")
         raise typer.Exit(code=1) from None
 
     except UnsupportedProviderRegionError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         if e.hint:
             console.line()
             console.print(f":bulb: {e.hint}")
@@ -335,7 +335,7 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
 
     # Keep base classes below so that child classes special handling take precedence
     except ConfigurationError as e:
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         if e.hint:
             console.line()
             console.print(f":bulb: {e.hint}", style="dim")
@@ -343,7 +343,7 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
 
     except JupyterDeployError as e:
         # Catch-all for any JupyterDeployError not specifically handled above
-        console.print(f":x: {e}", style="bold red")
+        console.print(f":x: {e}", style="bold red", highlight=False)
         raise typer.Exit(code=1) from None
 
     # Let all other exceptions bubble up naturally - they will be caught by Typer's default handler

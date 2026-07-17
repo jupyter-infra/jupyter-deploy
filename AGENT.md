@@ -91,6 +91,8 @@ All `local-exec` provisioners MUST set `interpreter = ["/bin/bash", "-c"]` — T
 With `bootstrap_cluster_creator_admin_permissions = false`, the caller's IAM role MUST be listed in `admin_role_names` to retain cluster access. A `check` block validates this at plan time.
 Destroy order is load-bearing and enforced via `depends_on` (see `eks_addons.tf`/`iam_role`/`vpc` comments): VPC+roles → DaemonSet addons (CNI/kube-proxy) → node groups → Deployment addons (coredns/ebs-csi/…) → Helm releases → workspaces, so the operator stays alive through Helm uninstalls.
 
+Do NOT bump the `version` in the local charts' `Chart.yaml` (`charts/*/Chart.yaml`) when editing chart contents. Only bump versions with the versioning script.
+
 ## CI infrastructure template package
 Code: `./libs/jupyter-infra-tf-aws-iam-ci`
 

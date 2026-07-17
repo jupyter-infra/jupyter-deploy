@@ -50,6 +50,9 @@ jd cluster login
 
 ## Access workspaces
 
+The web UI at the root of your domain lets users manage workspaces from the browser
+and download a `kubectl` setup script — see [Web UI](web-ui.md).
+
 ```bash
 # open the web UI
 jd open

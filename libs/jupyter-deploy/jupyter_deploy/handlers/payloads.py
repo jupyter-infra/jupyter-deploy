@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 from jupyter_deploy.enum import StatusCategory
 
@@ -99,3 +100,63 @@ class ImageVulnerabilitiesResult:
     critical_count: int
     high_count: int
     vulnerabilities: list[ImageVulnerability]
+
+
+@dataclass
+class ClusterDetail:
+    """Result of jd cluster show."""
+
+    name: str = ""
+    label: str = ""
+    status: str = ""
+    endpoint: str = ""
+    version: str = ""
+
+
+@dataclass
+class ComponentInfo:
+    """Entry in the component list.
+
+    `type` is the display type (type-display when set, else the internal type).
+    """
+
+    name: str
+    type: str
+    description: str
+
+
+@dataclass
+class ComponentStatus:
+    """Status of a single component for dashboard display."""
+
+    name: str
+    type: str
+    status: str
+    status_category: str
+    details: str
+    sub_component: str
+
+
+@dataclass
+class ComponentDetail:
+    """Result of jd component show."""
+
+    name: str = ""
+    resource: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class HostDetail:
+    """Result of jd host show."""
+
+    name: str = ""
+    status: str = ""
+    resource: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ServerDetail:
+    """Result of jd server show."""
+
+    name: str = ""
+    resource: dict[str, Any] = field(default_factory=dict)

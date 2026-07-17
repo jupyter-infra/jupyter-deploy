@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from typer.testing import CliRunner
 
 from jupyter_deploy.cli.host_app import host_app
+from jupyter_deploy.handlers.payloads import HostDetail
 
 
 class TestHostApp(unittest.TestCase):
@@ -908,7 +909,7 @@ class TestHostShowCommand(unittest.TestCase):
         mock_host_handler = Mock()
 
         mock_host_handler.show_host = mock_show_host
-        mock_show_host.return_value = {"name": "node-1", "status": "Ready"}
+        mock_show_host.return_value = HostDetail(name="node-1", status="Ready")
 
         return mock_host_handler, {
             "show_host": mock_show_host,
@@ -959,7 +960,7 @@ class TestHostShowCommand(unittest.TestCase):
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_json_output(self, mock_project_dir: Mock, mock_host_handler_class: Mock) -> None:
         mock_host_handler = Mock()
-        mock_host_handler.show_host.return_value = {"name": "node-1", "status": "Ready", "resource": '{"spec": {}}'}
+        mock_host_handler.show_host.return_value = HostDetail(name="node-1", status="Ready", resource={"spec": {}})
         mock_host_handler_class.return_value = mock_host_handler
         mock_project_dir.return_value.__enter__.return_value = None
 

@@ -419,8 +419,8 @@ class TestServerHandler(unittest.TestCase):
         result = handler.show_server(name="my-ws", scope="default")
 
         # Verify — keys come from manifest result-name with "server.show." prefix stripped
-        self.assertEqual(result["name"], "my-ws")
-        self.assertEqual(result["resource"], {"spec": {}})
+        self.assertEqual(result.name, "my-ws")
+        self.assertEqual(result.resource, {"spec": {}})
 
         cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
         self.assertIn("name", cli_paramdefs)

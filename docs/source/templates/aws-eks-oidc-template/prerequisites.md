@@ -19,70 +19,62 @@ If you do not own a domain yet, you can buy one through Amazon Route 53 using th
 
 ## Setup a GitHub OAuth app
 
-The template gates access to workspaces with GitHub identities via Dex as the OIDC provider. You will need to create a GitHub OAuth app for this purpose.
-
-### Personal vs. organization-owned OAuth app
-
-You grant workspace access to **GitHub teams**, and teams belong to a **GitHub
-organization**. Decide which organization owns the teams you want to grant access
-to, then reference them as `org:team` in the `oauth_allowed_teams` variable.
-
-- **Organization-owned app (recommended for teams)** — create the OAuth app under the
-  organization that owns those teams. Organization owners can then manage and audit the
-  app, and you avoid per-user approval friction.
-- **Personal app** — you can also create the app under your personal account. It still
-  authenticates organization members and reads their team membership, but the organization
-  may require [third-party application approval](https://docs.github.com/en/organizations/managing-oauth-access-to-your-organizations-data/approving-oauth-apps-for-your-organization) before the app can read private membership.
+The template gates workspace access with GitHub identities via Dex as the OIDC
+provider. You grant access to **GitHub teams** (referenced as `org:team`), so create
+the OAuth app under the organization that owns those teams — organization owners can
+then manage the app and read team membership without per-user approval. A personal app
+also works, but the organization may require
+[third-party application approval](https://docs.github.com/en/organizations/managing-oauth-access-to-your-organizations-data/approving-oauth-apps-for-your-organization)
+before it can read private membership.
 
 ### Create the app
 
-- For an **organization-owned** app, log on to GitHub on your web browser as a member of the relevant organization, go to your organization's
-  `Settings → Developer settings → OAuth Apps → New OAuth App`, or use the link
-  `https://github.com/organizations/<your-org>/settings/applications/new`.
-- For a **personal** app, use [this link](https://github.com/settings/applications/new).
+Create a new OAuth app: use your organization's
+`Settings → Developer settings → OAuth Apps → New OAuth App`
+(`https://github.com/organizations/<your-org>/settings/applications/new`), or
+[this link](https://github.com/settings/applications/new) for a personal app. See the
+GitHub [documentation](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app)
+for details.
 
-You can choose any name for the application; for example `jupyter-deploy-eks-oidc`.
+Set the fields as follows (choose any `<subdomain>`, using lowercase letters, digits,
+or hyphens; `<domain>` is your registered domain from above):
 
-Set `Homepage URL` to: `https://<subdomain>.<domain>`; for example `https://workspaces.mydomain.com`.
-`<domain>` corresponds to the domain above. You can choose any `<subdomain>` you like, but it must be a valid domain part (lowercase letters, digits, or hyphens).
+| Field | Value |
+|---|---|
+| Application name | any, e.g. `jupyter-deploy-eks-oidc` |
+| Homepage URL | `https://<subdomain>.<domain>` |
+| Authorization callback URL | `https://<subdomain>.<domain>/dex/callback` |
 
-Set `Authorization callback URL` to: `https://<subdomain>.<domain>/dex/callback`.
-Make sure it matches the `<domain>` and `<subdomain>` exactly.
+Then save the **client ID**, generate a **client secret**, and save that too — you
+supply both during `jd config`.
 
 ```{note}
 The callback URL uses `/dex/callback` (not `/oauth2/callback` as in the base template),
-because authentication goes through Dex as the OIDC identity provider.
+because authentication goes through Dex as the OIDC identity provider. It must match
+your `<subdomain>` and `<domain>` exactly.
 ```
 
-In the next page, write down and save your app client ID. Generate an app client secret, and write it down as well.
+### Grant access to teams
 
-Refer to GitHub [documentation](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) for more details.
+Two variables control who may access the cluster:
 
-### Grant access to organizations and teams
-
-You control which GitHub users may access your cluster with two variables:
-
-- `oauth_allowed_teams` — the GitHub teams that may sign in, each in `org:team` format
-  (for example `my-org:data-science`). Only members of these teams can authenticate.
-- `workspace_rbac_namespaces` — the Kubernetes namespaces in which those teams can create
-  and manage workspaces.
+- `oauth_allowed_teams` — GitHub teams that may sign in, each in `org:team` format
+  (e.g. `my-org:data-science`). Only members of these teams can authenticate.
+- `workspace_rbac_namespaces` — the Kubernetes namespaces in which those teams can
+  create and manage workspaces.
 
 ```bash
-# allow two teams from the my-org organization (pass each entry as a separate flag)
+# pass each team as a separate flag
 jd config \
   --oauth-allowed-teams my-org:data-science \
   --oauth-allowed-teams my-org:ml-platform \
   --workspace-rbac-namespaces default
 ```
 
-You can also set these in `variables.yaml` instead of on the command line. If you later
-change the allowed teams or namespaces, re-run `jd config` followed by `jd up`.
-
-```{note}
-The app must read team membership for the organization that owns these teams. An
-organization-owned app does this automatically; for a personal app, an organization owner
-must approve the app first.
-```
+You can also set these in `variables.yaml`. If you later change the teams or
+namespaces, re-run `jd config` followed by `jd up`. The app must be able to read team
+membership for the owning organization — automatic for an organization-owned app;
+for a personal app an organization owner must approve it first.
 
 ## Tools
 

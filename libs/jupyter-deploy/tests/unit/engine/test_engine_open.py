@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 from jupyter_deploy.engine.engine_open import EngineOpenHandler
 from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition
-from jupyter_deploy.exceptions import UrlNotAvailableError
+from jupyter_deploy.exceptions import CommandNotImplementedError, UrlNotAvailableError
 
 
 class TestEngineOpen(unittest.TestCase):
@@ -63,8 +63,9 @@ class TestEngineOpen(unittest.TestCase):
             output_handler=mock_outputs_handler,
         )
 
-        # Act & Verify - NotImplementedError should bubble up
-        with self.assertRaises(NotImplementedError):
+        # Act & Verify - a template without an 'open_url' value surfaces the standard
+        # CommandNotImplementedError, not a bare NotImplementedError traceback.
+        with self.assertRaises(CommandNotImplementedError):
             handler.get_url()
 
         mock_outputs_handler_fns["get_declared_output_def"].assert_called_once()
