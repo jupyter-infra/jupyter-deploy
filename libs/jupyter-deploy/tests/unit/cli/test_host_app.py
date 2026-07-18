@@ -796,7 +796,9 @@ class TestHostListCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_host_handler_class.assert_called_once()
-        mock_handler_fns["list_hosts"].assert_called_once_with(query="", limit=None, continue_from=None, role=None)
+        mock_handler_fns["list_hosts"].assert_called_once_with(
+            query="", limit=None, continue_from=None, role=None
+        )
 
     @patch("jupyter_deploy.handlers.resource.host_handler.HostHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -809,7 +811,9 @@ class TestHostListCommand(unittest.TestCase):
         result = runner.invoke(host_app, ["list", "--query", "role=worker"])
 
         self.assertEqual(result.exit_code, 0)
-        mock_handler_fns["list_hosts"].assert_called_once_with(query="role=worker", limit=None, continue_from=None, role=None)
+        mock_handler_fns["list_hosts"].assert_called_once_with(
+            query="role=worker", limit=None, continue_from=None, role=None
+        )
 
     @patch("jupyter_deploy.handlers.resource.host_handler.HostHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -822,7 +826,9 @@ class TestHostListCommand(unittest.TestCase):
         result = runner.invoke(host_app, ["list", "-n", "10", "--continue-from", "abc123"])
 
         self.assertEqual(result.exit_code, 0)
-        mock_handler_fns["list_hosts"].assert_called_once_with(query="", limit=10, continue_from="abc123", role=None)
+        mock_handler_fns["list_hosts"].assert_called_once_with(
+            query="", limit=10, continue_from="abc123", role=None
+        )
 
     @patch("jupyter_deploy.cli.host_app.SimpleDisplayManager")
     @patch("jupyter_deploy.cli.host_app.Console")
