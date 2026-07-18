@@ -151,6 +151,8 @@ List the hosts in the project.
 Run either from a project directory that you created with <jd init>;
 or pass --path <project-dir>.
 
+Use --role to filter by node tier: platform, routing, or workspaces.
+
 **Usage**:
 
 ```console
@@ -160,6 +162,7 @@ $ jd host list [OPTIONS]
 **Options**:
 
 * `-p, --path <path>`: Directory of the project whose hosts to list.
+* `--role <str>`: Filter by node role: platform, routing, or workspaces.
 * `--query <str>`: Filter expression to narrow the list of hosts.
 * `-n, --limit <int>`: Maximum number of hosts to return.
 * `--continue-from <str>`: Continuation token from a previous list call.

@@ -33,7 +33,7 @@ COMMAND_GROUPS = {
             " deployment: application servers, compute hosts, Kubernetes clusters,"
             " platform components, and container images."
         ),
-        "commands": ["server", "host", "cluster", "component", "image"],
+        "commands": ["server", "host", "cluster", "pool", "component", "image"],
     },
     "access": {
         "title": "Access Control Commands",

@@ -89,14 +89,9 @@ def test_routing_deployments_have_no_hardcoded_replicas(e2e_deployment: EndToEnd
     e2e_deployment.ensure_deployed()
 
     for name in ("traefik", "authmiddleware", "web-app"):
-        replicas_field = _kubectl(
-            "get", "deployment", name, "-n", ROUTER_NAMESPACE,
-            "-o", "jsonpath={.spec.replicas}",
-        )
-        # When the field is absent kubectl returns empty string.
-        # When KEDA HPA is managing it, it will be set by the HPA controller — but the
-        # Deployment's own spec.replicas should not be set by Helm (it will be set by HPA).
         # We verify via helm get manifest that the rendered spec has no replicas field.
+        # The live deployment's spec.replicas will be set by the KEDA HPA controller,
+        # but the Helm manifest itself must not hardcode it.
         manifest = subprocess.run(
             ["helm", "get", "manifest", "jupyter-k8s-aws-oidc", "-n", ROUTER_NAMESPACE],
             capture_output=True, text=True, check=True,
