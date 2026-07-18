@@ -1,7 +1,14 @@
 # EC2NodeClasses define the AWS-level node configuration for Karpenter.
-# One class per pool (routing + workspaces) — they differ only in root disk size.
-# IMDSv2 hop limit MUST be 2: containers are one network hop beyond the host,
-# so the default limit of 1 breaks pod IAM credential retrieval.
+# One class per pool (routing + workspaces) — they differ in root disk size and,
+# critically, in IMDS hop limit:
+#   - routing (hop 2): trusted infra pods; a hop of 2 lets containerized pods reach
+#     IMDS if they need node-role creds. Safe because only our own pods run here.
+#   - workspaces (hop 1): runs UNTRUSTED user notebook code. Hop 1 keeps IMDS
+#     reachable only from the host network namespace (VPC CNI / EBS CSI node plugin
+#     run hostNetwork and are unaffected) while blocking pod->IMDS, so notebook code
+#     cannot assume the node role. Workspace pods are injected with no AWS creds by
+#     the operator, so nothing in a workspace pod legitimately needs IMDS.
+# Both pin httpTokens: required (IMDSv2) — Karpenter defaults to this, but pin it.
 ---
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
@@ -20,8 +27,10 @@ spec:
   tags:
     karpenter.sh/cluster-name: {{ .Values.clusterName | quote }}
   metadataOptions:
+    # hop 2: routing runs trusted infra pods only.
     httpPutResponseHopLimit: 2
     httpEndpoint: enabled
+    httpTokens: required
     httpProtocolIPv6: disabled
   blockDeviceMappings:
     - deviceName: /dev/xvda
@@ -48,8 +57,12 @@ spec:
   tags:
     karpenter.sh/cluster-name: {{ .Values.clusterName | quote }}
   metadataOptions:
-    httpPutResponseHopLimit: 2
+    # hop 1: workspaces run untrusted user code — block pod->IMDS so notebook
+    # code cannot assume the node role. Node agents (CNI, EBS CSI) use hostNetwork
+    # and reach IMDS at hop 1, so they are unaffected.
+    httpPutResponseHopLimit: 1
     httpEndpoint: enabled
+    httpTokens: required
     httpProtocolIPv6: disabled
   blockDeviceMappings:
     - deviceName: /dev/xvda
