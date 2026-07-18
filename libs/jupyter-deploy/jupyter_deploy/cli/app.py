@@ -12,13 +12,13 @@ from rich.table import Table
 from jupyter_deploy import cmd_utils
 from jupyter_deploy.cli.cluster_app import cluster_app
 from jupyter_deploy.cli.component_app import component_app
-from jupyter_deploy.cli.pool_app import pool_app
 from jupyter_deploy.cli.error_decorator import handle_cli_errors
 from jupyter_deploy.cli.health_app import health_app
 from jupyter_deploy.cli.history_app import history_app
 from jupyter_deploy.cli.host_app import host_app
 from jupyter_deploy.cli.image_app import image_app
 from jupyter_deploy.cli.organization_app import organization_app
+from jupyter_deploy.cli.pool_app import pool_app
 from jupyter_deploy.cli.progress_display import ProgressDisplayManager
 from jupyter_deploy.cli.projects_app import projects_app
 from jupyter_deploy.cli.servers_app import servers_app
