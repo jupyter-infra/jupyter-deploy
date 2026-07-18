@@ -131,6 +131,27 @@ resource "helm_release" "workspace_router" {
         name  = "nodeSelector.jupyter-deploy/role"
         value = "routing"
       },
+      # The routing Karpenter NodePool carries a NoSchedule taint.
+      # Inject the matching toleration so routing pods schedule even when the
+      # published chart version predates the taint (the chart default also carries
+      # this toleration, but belt-and-suspenders ensures a fresh jd up never
+      # leaves routing pods Pending regardless of which chart version is pinned).
+      {
+        name  = "tolerations[0].key"
+        value = "jupyter-deploy/role"
+      },
+      {
+        name  = "tolerations[0].operator"
+        value = "Equal"
+      },
+      {
+        name  = "tolerations[0].value"
+        value = "routing"
+      },
+      {
+        name  = "tolerations[0].effect"
+        value = "NoSchedule"
+      },
     ],
     # Dex GitHub connector: controls which org/team members can authenticate via OIDC.
     # Separate from RBAC — see helm_release.github_rbac for K8s authorization.

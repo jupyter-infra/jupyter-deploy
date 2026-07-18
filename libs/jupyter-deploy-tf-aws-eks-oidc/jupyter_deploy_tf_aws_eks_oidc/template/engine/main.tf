@@ -248,6 +248,12 @@ resource "aws_eks_node_group" "platform" {
     desired_size = var.platform_min_size
   }
 
+  # Cluster Autoscaler manages desired_size within min/max — Terraform must not
+  # reset it on jd up or it will fight CA and terminate nodes CA scaled up.
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
+
   tags = local.combined_tags
 
   depends_on = [null_resource.core_node_addons]
