@@ -131,11 +131,9 @@ resource "helm_release" "workspace_router" {
         name  = "nodeSelector.jupyter-deploy/role"
         value = "routing"
       },
-      # The routing Karpenter NodePool carries a NoSchedule taint.
-      # Inject the matching toleration so routing pods schedule even when the
-      # published chart version predates the taint (the chart default also carries
-      # this toleration, but belt-and-suspenders ensures a fresh jd up never
-      # leaves routing pods Pending regardless of which chart version is pinned).
+      # The routing Karpenter NodePool carries a NoSchedule taint. The aws-oidc
+      # chart no longer ships a default toleration (it is topology-neutral), so
+      # inject the matching toleration here or routing pods stay Pending.
       {
         name  = "tolerations[0].key"
         value = "jupyter-deploy/role"
@@ -151,6 +149,21 @@ resource "helm_release" "workspace_router" {
       {
         name  = "tolerations[0].effect"
         value = "NoSchedule"
+      },
+      # KEDA autoscaling for the routing tier. The aws-oidc chart defaults these
+      # to false (it carries no hard dependency on the KEDA operator/CRDs or
+      # Prometheus); jupyter-deploy provisions KEDA + Prometheus, so enable here.
+      {
+        name  = "traefik.keda.enabled"
+        value = "true"
+      },
+      {
+        name  = "authmiddleware.keda.enabled"
+        value = "true"
+      },
+      {
+        name  = "webApp.keda.enabled"
+        value = "true"
       },
     ],
     # Dex GitHub connector: controls which org/team members can authenticate via OIDC.
