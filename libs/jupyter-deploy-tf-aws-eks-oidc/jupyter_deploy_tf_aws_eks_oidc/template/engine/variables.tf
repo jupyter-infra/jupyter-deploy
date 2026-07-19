@@ -138,7 +138,7 @@ variable "platform_instance_type" {
 
     Recommended: m5.large
   EOT
-  type = string
+  type        = string
 }
 
 variable "platform_disk_size_gb" {
@@ -147,7 +147,7 @@ variable "platform_disk_size_gb" {
 
     Recommended: 50
   EOT
-  type = number
+  type        = number
 
   validation {
     condition     = var.platform_disk_size_gb >= 20 && var.platform_disk_size_gb <= 16384
@@ -163,7 +163,7 @@ variable "platform_min_size" {
 
     Recommended: 2
   EOT
-  type = number
+  type        = number
 
   validation {
     condition     = var.platform_min_size >= 2
@@ -179,7 +179,7 @@ variable "platform_max_size" {
 
     Recommended: 3
   EOT
-  type = number
+  type        = number
 
   validation {
     condition     = var.platform_max_size >= 2
@@ -231,7 +231,7 @@ variable "routing_max_cpu" {
 
     Recommended: 32
   EOT
-  type = string
+  type        = string
 }
 
 variable "routing_max_memory" {
@@ -240,7 +240,7 @@ variable "routing_max_memory" {
 
     Recommended: 128Gi
   EOT
-  type = string
+  type        = string
 }
 
 variable "workspace_max_cpu" {
@@ -251,7 +251,7 @@ variable "workspace_max_cpu" {
 
     Recommended: 512
   EOT
-  type = string
+  type        = string
 }
 
 variable "workspace_max_memory" {
@@ -260,7 +260,7 @@ variable "workspace_max_memory" {
 
     Recommended: 2048Gi
   EOT
-  type = string
+  type        = string
 }
 
 variable "workspace_cpu_instance_families" {
@@ -273,7 +273,7 @@ variable "workspace_cpu_instance_families" {
 
     Recommended: ["c6i", "m6i", "r6i"]
   EOT
-  type    = list(string)
+  type        = list(string)
 }
 
 variable "workspace_rbac_namespaces" {

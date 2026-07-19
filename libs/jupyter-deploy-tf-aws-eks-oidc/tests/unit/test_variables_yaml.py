@@ -204,12 +204,17 @@ class TestVariablesYaml(unittest.TestCase):
         Karpenter replaces the old workspaces MNG — the NodePool CPU/memory limits
         are the equivalent safety cap that prevents unbounded scale-out.
         """
-        self.assertIn("workspace_max_cpu", self.DEFAULTS_ALL_TFVARS,
-                      "workspace_max_cpu must be set in defaults-all.tfvars")
-        self.assertIn("workspace_max_memory", self.DEFAULTS_ALL_TFVARS,
-                      "workspace_max_memory must be set in defaults-all.tfvars")
-        self.assertIn("workspace_cpu_instance_families", self.DEFAULTS_ALL_TFVARS,
-                      "workspace_cpu_instance_families must be set in defaults-all.tfvars")
+        self.assertIn(
+            "workspace_max_cpu", self.DEFAULTS_ALL_TFVARS, "workspace_max_cpu must be set in defaults-all.tfvars"
+        )
+        self.assertIn(
+            "workspace_max_memory", self.DEFAULTS_ALL_TFVARS, "workspace_max_memory must be set in defaults-all.tfvars"
+        )
+        self.assertIn(
+            "workspace_cpu_instance_families",
+            self.DEFAULTS_ALL_TFVARS,
+            "workspace_cpu_instance_families must be set in defaults-all.tfvars",
+        )
 
     @classmethod
     def _parse_commented_overrides(cls) -> dict:

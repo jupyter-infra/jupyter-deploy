@@ -305,8 +305,7 @@ class TestManifest(unittest.TestCase):
             self.assertIn(cmd_name, commands_by_name, f"Command '{cmd_name}' not found")
             result_names = {r["result-name"] for r in commands_by_name[cmd_name].get("results", [])}
             for result in required_results:
-                self.assertIn(result, result_names,
-                              f"Command '{cmd_name}' missing result '{result}'")
+                self.assertIn(result, result_names, f"Command '{cmd_name}' missing result '{result}'")
 
     def test_host_list_command_supports_role_param(self) -> None:
         """host.list command must wire a 'role' source-key for the --role filter."""
@@ -316,11 +315,7 @@ class TestManifest(unittest.TestCase):
         cmd = next((c for c in self.MANIFEST.get("commands", []) if c["cmd"] == "host.list"), None)
         self.assertIsNotNone(cmd, "host.list command must exist in manifest")
         # The role filter is passed as a CLI source-key in the sequence arguments.
-        source_keys = {
-            arg.get("source-key")
-            for step in cmd.get("sequence", [])
-            for arg in step.get("arguments", [])
-        }
+        source_keys = {arg.get("source-key") for step in cmd.get("sequence", []) for arg in step.get("arguments", [])}
         self.assertIn("role", source_keys, "host.list sequence must wire 'role' as a source-key")
 
     def test_daemonset_components_declared(self) -> None:
