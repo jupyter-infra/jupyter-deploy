@@ -89,4 +89,3 @@ def show(
             return
 
         console.print_json(json.dumps(asdict(details)))
-

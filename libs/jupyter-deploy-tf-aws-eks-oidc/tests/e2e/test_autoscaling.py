@@ -73,8 +73,13 @@ def test_keda_hpas_reference_correct_deployments(e2e_deployment: EndToEndDeploym
     }
     for hpa_name, deployment_name in expected.items():
         ref = _kubectl(
-            "get", "hpa", hpa_name, "-n", ROUTER_NAMESPACE,
-            "-o", "jsonpath={.spec.scaleTargetRef.name}",
+            "get",
+            "hpa",
+            hpa_name,
+            "-n",
+            ROUTER_NAMESPACE,
+            "-o",
+            "jsonpath={.spec.scaleTargetRef.name}",
         )
         assert ref == deployment_name, f"{hpa_name} targets '{ref}', expected '{deployment_name}'"
 
@@ -94,7 +99,9 @@ def test_routing_deployments_have_no_hardcoded_replicas(e2e_deployment: EndToEnd
         # but the Helm manifest itself must not hardcode it.
         manifest = subprocess.run(
             ["helm", "get", "manifest", "jupyter-k8s-aws-oidc", "-n", ROUTER_NAMESPACE],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout
         # The manifest should not contain `replicas:` for these deployments.
         # Find the deployment section and assert replicas is absent.
@@ -113,8 +120,12 @@ def test_routing_deployments_have_no_hardcoded_replicas(e2e_deployment: EndToEnd
 
 def _workspaces_node_count() -> int:
     output = _kubectl(
-        "get", "nodes", "-l", "jupyter-deploy/role=workspaces",
-        "--no-headers", "--ignore-not-found",
+        "get",
+        "nodes",
+        "-l",
+        "jupyter-deploy/role=workspaces",
+        "--no-headers",
+        "--ignore-not-found",
     )
     return len([line for line in output.splitlines() if line.strip()])
 
@@ -132,8 +143,11 @@ def test_karpenter_workspace_provisioning_and_scale_to_zero(e2e_deployment: EndT
     # Clean up any leftover workspace from a previous test run.
     try:
         kubectl_delete_workspace(_SCALE_WORKSPACE)
-        _poll(lambda: _workspaces_node_count() == 0, timeout_s=300,
-              msg="pre-test cleanup: workspaces node did not terminate")
+        _poll(
+            lambda: _workspaces_node_count() == 0,
+            timeout_s=300,
+            msg="pre-test cleanup: workspaces node did not terminate",
+        )
     except Exception:
         pass
 
@@ -146,23 +160,22 @@ def test_karpenter_workspace_provisioning_and_scale_to_zero(e2e_deployment: EndT
 
         # Verify the workspace pod landed on a Karpenter workspaces node.
         pod_node = _kubectl(
-            "get", "pods", "-n", WORKSPACE_NAMESPACE,
-            "-l", f"workspace.jupyter.org/workspace-name={_SCALE_WORKSPACE}",
-            "-o", "jsonpath={.items[0].spec.nodeName}",
+            "get",
+            "pods",
+            "-n",
+            WORKSPACE_NAMESPACE,
+            "-l",
+            f"workspace.jupyter.org/workspace-name={_SCALE_WORKSPACE}",
+            "-o",
+            "jsonpath={.items[0].spec.nodeName}",
         )
         assert pod_node, f"Could not find pod node for workspace {_SCALE_WORKSPACE}"
 
-        node_role = _kubectl("get", "node", pod_node,
-                             "-o", "jsonpath={.metadata.labels.jupyter-deploy/role}")
-        assert node_role == "workspaces", (
-            f"Workspace pod landed on node with role '{node_role}', expected 'workspaces'"
-        )
+        node_role = _kubectl("get", "node", pod_node, "-o", "jsonpath={.metadata.labels.jupyter-deploy/role}")
+        assert node_role == "workspaces", f"Workspace pod landed on node with role '{node_role}', expected 'workspaces'"
 
-        nodepool = _kubectl("get", "node", pod_node,
-                            "-o", r"jsonpath={.metadata.labels.karpenter\.sh/nodepool}")
-        assert nodepool == "workspaces", (
-            f"Workspace pod node has nodepool '{nodepool}', expected 'workspaces'"
-        )
+        nodepool = _kubectl("get", "node", pod_node, "-o", r"jsonpath={.metadata.labels.karpenter\.sh/nodepool}")
+        assert nodepool == "workspaces", f"Workspace pod node has nodepool '{nodepool}', expected 'workspaces'"
     finally:
         kubectl_delete_workspace(_SCALE_WORKSPACE)
 
@@ -223,9 +236,13 @@ def test_karpenter_routing_nodepool_scales_up_and_down(e2e_deployment: EndToEndD
 
         if not scaled_up:
             karpenter_logs = _kubectl(
-                "logs", "-n", KARPENTER_NAMESPACE,
-                "-l", "app.kubernetes.io/name=karpenter",
-                "--tail=40", "--prefix",
+                "logs",
+                "-n",
+                KARPENTER_NAMESPACE,
+                "-l",
+                "app.kubernetes.io/name=karpenter",
+                "--tail=40",
+                "--prefix",
             )
             raise AssertionError(
                 f"Routing node count did not grow past {start_count} within ~5m — "

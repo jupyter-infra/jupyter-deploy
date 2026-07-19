@@ -70,9 +70,7 @@ def test_pool_status_json_contains_name_and_spec(e2e_deployment: EndToEndDeploym
     """jd pool status --json must return a NodePool object with spec and status fields."""
     e2e_deployment.ensure_deployed()
 
-    result = e2e_deployment.cli.run_command(
-        ["jupyter-deploy", "pool", "status", "--name", nodepool_name, "--json"]
-    )
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "pool", "status", "--name", nodepool_name, "--json"])
     data = json.loads(result.stdout)
 
     # jd pool status returns {name, resource} where resource is the full NodePool object.

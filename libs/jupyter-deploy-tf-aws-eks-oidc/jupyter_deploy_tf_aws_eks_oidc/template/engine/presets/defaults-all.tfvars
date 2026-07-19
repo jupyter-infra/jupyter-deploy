@@ -48,9 +48,3 @@ workspace_max_cpu    = "512"
 workspace_max_memory = "2048Gi"
 
 workspace_cpu_instance_families = ["c6i", "m6i", "r6i"]
-
-cluster_autoscaler_chart_version = "9.58.0"
-
-enable_component_logging     = true
-component_log_retention_days = 7
-fluentbit_chart_version      = "0.2.0"

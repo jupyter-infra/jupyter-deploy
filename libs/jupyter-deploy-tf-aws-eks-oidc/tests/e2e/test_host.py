@@ -86,10 +86,13 @@ def test_host_list_query_filter(e2e_deployment: EndToEndDeployment) -> None:
     # Every returned node must actually carry the platform role label — verify
     # the filter isn't leaking nodes from other pools (routing, workspaces).
     import subprocess
+
     for node in filtered["hosts"]:
         role = subprocess.run(
             ["kubectl", "get", "node", node, "-o", "jsonpath={.metadata.labels.jupyter-deploy/role}"],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
         assert role == "platform", (
             f"Node '{node}' returned by --query platform filter has role '{role}', expected 'platform'"
@@ -107,17 +110,13 @@ def test_host_list_role_platform_returns_only_platform_nodes(e2e_deployment: End
     all_data = _list_hosts_json(e2e_deployment)
     all_count = len(all_data["hosts"])
 
-    result = e2e_deployment.cli.run_command(
-        ["jupyter-deploy", "host", "list", "--json", "--role", "platform"]
-    )
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "host", "list", "--json", "--role", "platform"])
     filtered = json.loads(result.stdout)
 
     assert len(filtered["hosts"]) >= 2, (
         f"Expected at least 2 platform nodes, got {len(filtered['hosts'])}: {filtered['hosts']}"
     )
-    assert len(filtered["hosts"]) < all_count, (
-        f"Expected --role platform to return fewer than all {all_count} nodes"
-    )
+    assert len(filtered["hosts"]) < all_count, f"Expected --role platform to return fewer than all {all_count} nodes"
 
 
 def test_host_list_role_routing_returns_only_routing_nodes(e2e_deployment: EndToEndDeployment) -> None:
@@ -131,37 +130,27 @@ def test_host_list_role_routing_returns_only_routing_nodes(e2e_deployment: EndTo
     all_data = _list_hosts_json(e2e_deployment)
     all_count = len(all_data["hosts"])
 
-    result = e2e_deployment.cli.run_command(
-        ["jupyter-deploy", "host", "list", "--json", "--role", "routing"]
-    )
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "host", "list", "--json", "--role", "routing"])
     filtered = json.loads(result.stdout)
 
     assert len(filtered["hosts"]) >= 2, (
         f"Expected at least 2 routing nodes, got {len(filtered['hosts'])}: {filtered['hosts']}"
     )
-    assert len(filtered["hosts"]) < all_count, (
-        f"Expected --role routing to return fewer than all {all_count} nodes"
-    )
+    assert len(filtered["hosts"]) < all_count, f"Expected --role routing to return fewer than all {all_count} nodes"
 
 
 def test_host_list_role_filters_are_mutually_exclusive(e2e_deployment: EndToEndDeployment) -> None:
     """Nodes returned by --role platform and --role routing must not overlap."""
     e2e_deployment.ensure_deployed()
 
-    platform_result = e2e_deployment.cli.run_command(
-        ["jupyter-deploy", "host", "list", "--json", "--role", "platform"]
-    )
-    routing_result = e2e_deployment.cli.run_command(
-        ["jupyter-deploy", "host", "list", "--json", "--role", "routing"]
-    )
+    platform_result = e2e_deployment.cli.run_command(["jupyter-deploy", "host", "list", "--json", "--role", "platform"])
+    routing_result = e2e_deployment.cli.run_command(["jupyter-deploy", "host", "list", "--json", "--role", "routing"])
 
     platform_hosts = set(json.loads(platform_result.stdout)["hosts"])
     routing_hosts = set(json.loads(routing_result.stdout)["hosts"])
 
     overlap = platform_hosts & routing_hosts
-    assert not overlap, (
-        f"Expected no overlap between platform and routing nodes, got: {overlap}"
-    )
+    assert not overlap, f"Expected no overlap between platform and routing nodes, got: {overlap}"
 
 
 def test_host_list_invalid_continuation_token(e2e_deployment: EndToEndDeployment) -> None:
