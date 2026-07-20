@@ -211,7 +211,9 @@ resource "aws_eks_access_policy_association" "admin_user" {
 # making ami_type "known after apply" and forcing a node-group replacement every
 # re-apply. At the root there is no depends_on, so the lookup is stable.
 data "aws_ec2_instance_type" "platform" {
-  instance_type = var.platform_instance_type
+  # Use the first type to determine the AMI family (GPU/Neuron/ARM/standard).
+  # All types in the list should be from the same family.
+  instance_type = var.platform_instance_types[0]
 }
 
 locals {
@@ -235,7 +237,7 @@ resource "aws_eks_node_group" "platform" {
   node_role_arn   = module.node_role.role_arn
   subnet_ids      = module.vpc.private_subnet_ids
   ami_type        = local.platform_ami_type
-  instance_types  = [var.platform_instance_type]
+  instance_types  = var.platform_instance_types
   disk_size       = var.platform_disk_size_gb
 
   labels = {

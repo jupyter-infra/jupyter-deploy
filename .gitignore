@@ -175,3 +175,4 @@ test-results/
 # E2E test temporary files
 docker-compose.e2e-override.yml
 results*.log
+my-project-fresh-3/**/*

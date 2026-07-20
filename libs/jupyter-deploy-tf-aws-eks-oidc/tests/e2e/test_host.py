@@ -99,8 +99,8 @@ def test_host_list_query_filter(e2e_deployment: EndToEndDeployment) -> None:
         )
 
 
-def test_host_list_role_platform_returns_only_platform_nodes(e2e_deployment: EndToEndDeployment) -> None:
-    """--role platform returns only platform (components) nodes.
+def test_host_list_query_platform_returns_only_platform_nodes(e2e_deployment: EndToEndDeployment) -> None:
+    """--query filters to platform (components) nodes using the node role label.
 
     The platform MNG always has at least 2 nodes (min_size=2). Result must be
     a strict subset of all nodes — routing/workspace nodes must be excluded.
@@ -110,17 +110,19 @@ def test_host_list_role_platform_returns_only_platform_nodes(e2e_deployment: End
     all_data = _list_hosts_json(e2e_deployment)
     all_count = len(all_data["hosts"])
 
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "host", "list", "--json", "--role", "platform"])
+    result = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "host", "list", "--json", "--query", "jupyter-deploy/role=platform"]
+    )
     filtered = json.loads(result.stdout)
 
     assert len(filtered["hosts"]) >= 2, (
         f"Expected at least 2 platform nodes, got {len(filtered['hosts'])}: {filtered['hosts']}"
     )
-    assert len(filtered["hosts"]) < all_count, f"Expected --role platform to return fewer than all {all_count} nodes"
+    assert len(filtered["hosts"]) < all_count, f"Expected query filter to return fewer than all {all_count} nodes"
 
 
-def test_host_list_role_routing_returns_only_routing_nodes(e2e_deployment: EndToEndDeployment) -> None:
-    """--role routing returns only Karpenter routing nodes.
+def test_host_list_query_routing_returns_only_routing_nodes(e2e_deployment: EndToEndDeployment) -> None:
+    """--query filters to Karpenter routing nodes using the node role label.
 
     The routing NodePool always has at least 2 nodes (minReplicas=2 via KEDA).
     Result must be a strict subset of all nodes.
@@ -130,21 +132,27 @@ def test_host_list_role_routing_returns_only_routing_nodes(e2e_deployment: EndTo
     all_data = _list_hosts_json(e2e_deployment)
     all_count = len(all_data["hosts"])
 
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "host", "list", "--json", "--role", "routing"])
+    result = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "host", "list", "--json", "--query", "jupyter-deploy/role=routing"]
+    )
     filtered = json.loads(result.stdout)
 
     assert len(filtered["hosts"]) >= 2, (
         f"Expected at least 2 routing nodes, got {len(filtered['hosts'])}: {filtered['hosts']}"
     )
-    assert len(filtered["hosts"]) < all_count, f"Expected --role routing to return fewer than all {all_count} nodes"
+    assert len(filtered["hosts"]) < all_count, f"Expected query filter to return fewer than all {all_count} nodes"
 
 
-def test_host_list_role_filters_are_mutually_exclusive(e2e_deployment: EndToEndDeployment) -> None:
-    """Nodes returned by --role platform and --role routing must not overlap."""
+def test_host_list_query_filters_are_mutually_exclusive(e2e_deployment: EndToEndDeployment) -> None:
+    """Nodes returned by platform and routing queries must not overlap."""
     e2e_deployment.ensure_deployed()
 
-    platform_result = e2e_deployment.cli.run_command(["jupyter-deploy", "host", "list", "--json", "--role", "platform"])
-    routing_result = e2e_deployment.cli.run_command(["jupyter-deploy", "host", "list", "--json", "--role", "routing"])
+    platform_result = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "host", "list", "--json", "--query", "jupyter-deploy/role=platform"]
+    )
+    routing_result = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "host", "list", "--json", "--query", "jupyter-deploy/role=routing"]
+    )
 
     platform_hosts = set(json.loads(platform_result.stdout)["hosts"])
     routing_hosts = set(json.loads(routing_result.stdout)["hosts"])

@@ -129,16 +129,17 @@ variable "oauth_allowed_teams" {
   }
 }
 
-variable "platform_instance_type" {
+variable "platform_instance_types" {
   description = <<-EOT
-    EC2 instance type for the platform managed node group.
+    EC2 instance types for the platform managed node group.
 
     Hosts control-plane-only pods: Karpenter, KEDA, operator, CoreDNS, cert-manager.
     Routing and workspace pods run on Karpenter-managed NodePools.
+    Providing multiple types improves availability when one type is unavailable.
 
-    Recommended: m5.large
+    Recommended: ["m5.large"]
   EOT
-  type        = string
+  type        = list(string)
 }
 
 variable "platform_disk_size_gb" {
@@ -185,6 +186,7 @@ variable "platform_max_size" {
     condition     = var.platform_max_size >= 2
     error_message = "platform_max_size must be >= 2 (>= platform_min_size)."
   }
+
 }
 
 variable "karpenter_version" {
@@ -263,17 +265,95 @@ variable "workspace_max_memory" {
   type        = string
 }
 
-variable "workspace_cpu_instance_families" {
+variable "workspace_cpu_instance_categories" {
   description = <<-EOT
-    EC2 instance families allowed for workspace nodes.
+    EC2 instance categories (karpenter.k8s.aws/instance-category) for workspace nodes.
 
-    Controls the instance types Karpenter can select for workspace pods.
-    Default covers general-purpose and memory-optimized families.
-    Add GPU families (e.g. "g4dn", "g5") for ML workloads.
+    Combined with workspace_cpu_instance_generation_min to select instances:
+    Karpenter picks any instance whose category is in this list AND whose generation
+    is strictly greater than workspace_cpu_instance_generation_min. This automatically
+    adopts newer generations without updating the list.
 
-    Recommended: ["c6i", "m6i", "r6i"]
+    Recommended: ["c", "m", "r"]
   EOT
   type        = list(string)
+}
+
+variable "workspace_cpu_instance_generation_min" {
+  description = <<-EOT
+    Minimum EC2 instance generation (exclusive) for workspace nodes.
+
+    Karpenter selects instances with generation strictly greater than this value.
+    Set to "5" to allow gen 6, 7, 8 etc. (c6i, c7i, m6i, m7i, ...).
+
+    Recommended: "5"
+  EOT
+  type        = string
+}
+
+variable "workspace_disk_size_gb" {
+  description = <<-EOT
+    Root disk size in GiB for workspace Karpenter-provisioned nodes.
+
+    This is the OS + container image cache volume. User data (notebooks, files)
+    lives on the EBS volume mounted by the workspace pod via the StorageClass.
+
+    Recommended: 100
+  EOT
+  type        = number
+
+  validation {
+    condition     = var.workspace_disk_size_gb >= 20 && var.workspace_disk_size_gb <= 16384
+    error_message = "workspace_disk_size_gb must be between 20 and 16384."
+  }
+}
+
+variable "routing_instance_categories" {
+  description = <<-EOT
+    EC2 instance categories (karpenter.k8s.aws/instance-category) for routing nodes.
+
+    Combined with routing_instance_generation_min to select instances automatically
+    across generations.
+
+    Recommended: ["c", "m"]
+  EOT
+  type        = list(string)
+}
+
+variable "routing_instance_generation_min" {
+  description = <<-EOT
+    Minimum EC2 instance generation (exclusive) for routing nodes.
+
+    Recommended: "5"
+  EOT
+  type        = string
+}
+
+variable "routing_disk_size_gb" {
+  description = <<-EOT
+    Root disk size in GiB for routing Karpenter-provisioned nodes.
+
+    Recommended: 50
+  EOT
+  type        = number
+
+  validation {
+    condition     = var.routing_disk_size_gb >= 20 && var.routing_disk_size_gb <= 16384
+    error_message = "routing_disk_size_gb must be between 20 and 16384."
+  }
+}
+
+variable "node_expire_after" {
+  description = <<-EOT
+    Duration after which Karpenter-provisioned nodes are force-rotated.
+
+    Periodic rotation prevents config drift on long-running nodes. Karpenter
+    respects pod disruption budgets during rotation — running workspaces are
+    not evicted until a replacement node is ready.
+
+    Recommended: "504h" (21 days)
+  EOT
+  type        = string
 }
 
 variable "workspace_rbac_namespaces" {

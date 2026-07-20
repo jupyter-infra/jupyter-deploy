@@ -1,10 +1,14 @@
 # NodePools define scheduling constraints and node lifecycle for Karpenter.
 # Routing pool: always-on, conservative consolidation, small instances.
-# Workspace pool: scale-to-zero, aggressive consolidation, diverse instances.
+# Workspace-cpu pool: scale-to-zero, aggressive consolidation, diverse instances.
 # Both carry taints so only pods with matching tolerations can land here.
-# The floor budget entry (nodes: "1") ensures the last node is always
-# disruptable — without it, 10%/20% rounds down to 0 on small clusters,
-# blocking consolidation and preventing true scale-to-zero.
+#
+# Disruption budget: nodes: "1" (absolute, not percentage).
+# Karpenter applies the MINIMUM of all active budgets. A percentage budget
+# (e.g. 10%) rounds down to 0 on small pools (floor(0.1×1)=0), and
+# min(0,1)=0 — the absolute floor cannot raise a zero from the percentage.
+# Using only the absolute entry guarantees at least 1 node is always
+# disruptable, enabling scale-to-zero on the workspace-cpu pool.
 ---
 apiVersion: karpenter.sh/v1
 kind: NodePool
@@ -24,10 +28,16 @@ spec:
         - key: jupyter-deploy/role
           value: routing
           effect: NoSchedule
+      expireAfter: {{ .Values.expireAfter }}
       requirements:
-        - key: karpenter.k8s.aws/instance-family
+        # instance-category + minimum generation: automatically adopts newer
+        # generations (e.g. c7i, m7i) without updating this list.
+        - key: karpenter.k8s.aws/instance-category
           operator: In
-          values: ["c6i", "m6i"]
+          values: {{ .Values.routing.instanceCategories | toJson }}
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["{{ .Values.routing.instanceGenerationMin }}"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
           values: ["large", "xlarge", "2xlarge"]
@@ -37,7 +47,6 @@ spec:
         - key: kubernetes.io/arch
           operator: In
           values: ["amd64"]
-      expireAfter: 504h
   limits:
     cpu: {{ .Values.routingLimitsCpu | quote }}
     memory: {{ .Values.routingLimitsMemory | quote }}
@@ -45,13 +54,12 @@ spec:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 120s
     budgets:
-      - nodes: "20%"
       - nodes: "1"
 ---
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
-  name: workspaces
+  name: workspace-cpu
 spec:
   template:
     metadata:
@@ -61,15 +69,21 @@ spec:
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
-        name: workspaces
+        name: workspace-cpu
       taints:
         - key: jupyter-deploy/role
           value: workspaces
           effect: NoSchedule
+      expireAfter: {{ .Values.expireAfter }}
       requirements:
-        - key: karpenter.k8s.aws/instance-family
+        # instance-category + minimum generation: automatically adopts newer
+        # generations (e.g. c7i, m7i, r7i) without updating this list.
+        - key: karpenter.k8s.aws/instance-category
           operator: In
-          values: {{ splitList "," .Values.workspaceCpuInstanceFamilies | toJson }}
+          values: {{ .Values.workspaceCpu.instanceCategories | toJson }}
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["{{ .Values.workspaceCpu.instanceGenerationMin }}"]
         - key: karpenter.k8s.aws/instance-cpu
           operator: In
           values: ["2", "4", "8", "16", "32"]
@@ -79,7 +93,6 @@ spec:
         - key: kubernetes.io/arch
           operator: In
           values: ["amd64"]
-      expireAfter: 504h
   limits:
     cpu: {{ .Values.workspaceLimitsCpu | quote }}
     memory: {{ .Values.workspaceLimitsMemory | quote }}
@@ -87,5 +100,4 @@ spec:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 60s
     budgets:
-      - nodes: "10%"
       - nodes: "1"

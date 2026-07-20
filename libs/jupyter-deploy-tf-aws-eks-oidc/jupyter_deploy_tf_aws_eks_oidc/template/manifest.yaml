@@ -194,7 +194,7 @@ commands:
   - result-name: pool.status.resource
     source: result
     source-key: '[0].Resource'
-- cmd: pool.scaling
+- cmd: pool.events
   sequence:
   - api-name: k8s.custom.list-cluster
     arguments:
@@ -208,7 +208,7 @@ commands:
       source: literal
       value: nodeclaims
   results:
-  - result-name: pool.scaling
+  - result-name: pool.events
     source: result
     source-key: '[0].Items'
 - cmd: host.list
@@ -217,7 +217,7 @@ commands:
     arguments:
     - api-attribute: query
       source: cli
-      source-key: role
+      source-key: query
     - api-attribute: page_size
       source: cli
       source-key: limit

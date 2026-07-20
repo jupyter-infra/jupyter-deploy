@@ -32,10 +32,10 @@ workspace_app_jupyterlab_app_type        = "jupyterlab"
 workspace_app_jupyterlab_image_name      = "jupyterlab-v0.1.0"
 workspace_app_jupyterlab_image_build     = "v1"
 
-platform_instance_type = "m5.large"
-platform_disk_size_gb  = 50
-platform_min_size      = 2
-platform_max_size      = 3
+platform_instance_types = ["m5.large"]
+platform_disk_size_gb   = 50
+platform_min_size       = 2
+platform_max_size       = 3
 
 karpenter_version  = "1.3.3"
 keda_version       = "2.16.1"
@@ -47,4 +47,12 @@ routing_max_memory = "128Gi"
 workspace_max_cpu    = "512"
 workspace_max_memory = "2048Gi"
 
-workspace_cpu_instance_families = ["c6i", "m6i", "r6i"]
+node_expire_after = "504h"
+
+routing_instance_categories     = ["c", "m"]
+routing_instance_generation_min = "5"
+routing_disk_size_gb            = 50
+
+workspace_cpu_instance_categories     = ["c", "m", "r"]
+workspace_cpu_instance_generation_min = "5"
+workspace_disk_size_gb                = 100

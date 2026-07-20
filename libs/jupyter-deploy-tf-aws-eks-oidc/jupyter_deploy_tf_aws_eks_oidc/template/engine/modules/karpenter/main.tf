@@ -20,6 +20,21 @@ data "aws_iam_policy_document" "karpenter_interruption_queue" {
       identifiers = ["events.amazonaws.com", "sqs.amazonaws.com"]
     }
     resources = [aws_sqs_queue.karpenter_interruption.arn]
+    # Scope to the specific EventBridge rules in this account to prevent a
+    # cross-account confused-deputy attack: without this condition, any
+    # EventBridge rule in any AWS account could target the queue (the name is
+    # deterministic) and inject forged interruption events, causing Karpenter
+    # to drain and terminate nodes with no account compromise required.
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [
+        aws_cloudwatch_event_rule.spot_interruption.arn,
+        aws_cloudwatch_event_rule.instance_rebalance.arn,
+        aws_cloudwatch_event_rule.instance_state_change.arn,
+        aws_cloudwatch_event_rule.scheduled_change.arn,
+      ]
+    }
   }
 }
 
@@ -94,118 +109,3 @@ resource "aws_cloudwatch_event_target" "scheduled_change" {
   arn       = aws_sqs_queue.karpenter_interruption.arn
 }
 
-# ── Node security group ───────────────────────────────────────────────────────
-# Karpenter-provisioned nodes need a security group that allows:
-# - inbound from the cluster security group (kubelet, metrics)
-# - outbound to the cluster API server
-# - inter-node communication for VPC CNI pod networking
-
-data "aws_eks_cluster" "this" {
-  name = var.cluster_name
-}
-
-resource "aws_security_group" "karpenter_nodes" {
-  name        = "${var.resource_name_prefix}-karpenter-nodes"
-  description = "Security group for Karpenter-provisioned nodes"
-  vpc_id      = var.vpc_id
-  tags = merge(var.combined_tags, {
-    "karpenter.sh/discovery" = var.cluster_name
-  })
-}
-
-resource "aws_security_group_rule" "karpenter_nodes_ingress_cluster" {
-  type                     = "ingress"
-  from_port                = 0
-  to_port                  = 65535
-  protocol                 = "-1"
-  source_security_group_id = data.aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
-  security_group_id        = aws_security_group.karpenter_nodes.id
-  description              = "Allow all traffic from cluster security group"
-}
-
-resource "aws_security_group_rule" "karpenter_nodes_ingress_self" {
-  type              = "ingress"
-  from_port         = 0
-  to_port           = 65535
-  protocol          = "-1"
-  self              = true
-  security_group_id = aws_security_group.karpenter_nodes.id
-  description       = "Allow inter-node traffic"
-}
-
-resource "aws_security_group_rule" "karpenter_nodes_egress" {
-  type              = "egress"
-  from_port         = 0
-  to_port           = 0
-  protocol          = "-1"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.karpenter_nodes.id
-  description       = "Allow all outbound"
-}
-
-# Allow cluster SG to reach Karpenter nodes (kubelet, metrics-server, etc.)
-resource "aws_security_group_rule" "cluster_to_karpenter_nodes" {
-  type                     = "ingress"
-  from_port                = 0
-  to_port                  = 65535
-  protocol                 = "-1"
-  source_security_group_id = aws_security_group.karpenter_nodes.id
-  security_group_id        = data.aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
-  description              = "Allow traffic from Karpenter nodes to cluster"
-}
-
-# ── Karpenter Helm release ────────────────────────────────────────────────────
-
-resource "helm_release" "karpenter" {
-  name             = "karpenter"
-  repository       = "oci://public.ecr.aws/karpenter"
-  chart            = "karpenter"
-  version          = var.karpenter_version
-  namespace        = "karpenter"
-  create_namespace = true
-
-  set = [
-    {
-      name  = "settings.clusterName"
-      value = var.cluster_name
-    },
-    {
-      name  = "settings.clusterEndpoint"
-      value = var.cluster_endpoint
-    },
-    {
-      name  = "settings.interruptionQueue"
-      value = aws_sqs_queue.karpenter_interruption.name
-    },
-    {
-      name  = "controller.resources.requests.cpu"
-      value = "200m"
-    },
-    {
-      name  = "controller.resources.requests.memory"
-      value = "256Mi"
-    },
-    {
-      name  = "controller.resources.limits.cpu"
-      value = "1000m"
-    },
-    {
-      name  = "controller.resources.limits.memory"
-      value = "1Gi"
-    },
-    {
-      name  = "replicas"
-      value = "2"
-    },
-    # Run Karpenter controller on platform nodes only
-    {
-      name  = "nodeSelector.jupyter-deploy/role"
-      value = "platform"
-    },
-  ]
-
-  depends_on = [
-    aws_sqs_queue.karpenter_interruption,
-    aws_iam_role_policy_attachment.karpenter_controller,
-  ]
-}

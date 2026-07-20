@@ -25,10 +25,14 @@ CR_NAMESPACE="${cr_namespace}"
 
 setup_kubeconfig() {
     echo "Configuring kubectl for cluster $CLUSTER_NAME..."
-    if ! aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$REGION" 2>&1; then
+    local tmp_kubeconfig
+    tmp_kubeconfig=$(mktemp)
+    if ! aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$REGION" --kubeconfig "$tmp_kubeconfig" 2>&1; then
         echo "WARNING: Failed to configure kubeconfig — skipping $CR_KIND/$CR_NAME repair."
+        rm -f "$tmp_kubeconfig"
         return 1
     fi
+    export KUBECONFIG="$tmp_kubeconfig"
 
     # Guard against ever acting on the wrong cluster.
     local current_context

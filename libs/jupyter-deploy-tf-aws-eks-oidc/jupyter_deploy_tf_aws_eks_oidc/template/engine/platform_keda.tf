@@ -1,3 +1,9 @@
+# === KEDA (Kubernetes Event-Driven Autoscaling) ===
+#
+# Deploys the KEDA operator Helm chart onto the cluster. KEDA ScaledObjects for
+# the routing tier (traefik, authmiddleware, web-app) are declared in the
+# aws-oidc chart and activated by the workspace_router helm_release in helm.tf.
+
 resource "helm_release" "keda" {
   name             = "keda"
   repository       = "https://kedacore.github.io/charts"
@@ -41,4 +47,6 @@ resource "helm_release" "keda" {
       value = "2"
     },
   ]
+
+  depends_on = [null_resource.cluster_addons, aws_eks_node_group.platform]
 }

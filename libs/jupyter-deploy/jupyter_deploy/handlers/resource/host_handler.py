@@ -38,15 +38,12 @@ class HostHandler(BaseProjectHandler):
             raise NotImplementedError(f"OutputsHandler implementation not found for engine: {self.engine}")
 
     def list_hosts(
-        self, query: str, limit: int | None = None, continue_from: str | None = None, role: str | None = None
+        self,
+        query: str,
+        limit: int | None = None,
+        continue_from: str | None = None,
     ) -> tuple[list[str], str | None]:
         """Returns a list of host names and an optional continuation token."""
-        # Merge --role and --query into a single label selector passed to the manifest.
-        # --role is a convenience shorthand that expands to jupyter-deploy/role=<value>.
-        # If both are supplied they are joined with a comma (K8s AND semantics).
-        role_selector = f"jupyter-deploy/role={role}" if role else ""
-        label_selector = ",".join(s for s in [role_selector, query] if s)
-
         command = self.project_manifest.get_command("host.list")
         runner = cmd_runner.ManifestCommandRunner(
             display_manager=self.display_manager,
@@ -54,7 +51,7 @@ class HostHandler(BaseProjectHandler):
             variable_handler=self._variable_handler,
         )
         cli_paramdefs: dict[str, ResolvedCliParameter[Any]] = {
-            "role": StrResolvedCliParameter(parameter_name="role", value=label_selector),
+            "query": StrResolvedCliParameter(parameter_name="query", value=query),
             "limit": StrResolvedCliParameter(parameter_name="limit", value=str(limit) if limit is not None else ""),
             "continue_from": StrResolvedCliParameter(parameter_name="continue_from", value=continue_from or ""),
         }

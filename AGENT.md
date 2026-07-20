@@ -87,6 +87,16 @@ changes (e.g. KEDA ScaledObjects, tolerations for Karpenter routing nodes). With
 routing pods will fail to schedule because the published chart lacks the `jupyter-deploy/role=routing`
 toleration required by the Karpenter NodePool taint.
 
+### Terraform file structure
+
+The engine directory has three tiers — keep them separate:
+
+1. **Core infra** (`modules/`, `main.tf`, `iam.tf`, `eks_addons.tf`, `platform.tf`): VPC, IAM roles, EKS cluster, MNG, security groups. Use `modules/` for reusable resources. These must exist before a kubeconfig is available.
+2. **Platform components** (`platform_*.tf`): Helm charts deployed onto the cluster once a working MNG is available — one file per component, named `platform_<component>.tf` (e.g. `platform_karpenter.tf`, `platform_keda.tf`, `platform_logging.tf`). Never put Helm releases in `modules/`.
+3. **App/charts** (`helm.tf`, `workspaces.tf`): consumer charts and workspace-specific resources (operator, router, workspace-defaults).
+
+All variables MUST be defined in `variables.tf`. Default values MUST be in `presets/defaults-all.tfvars`. No `variable` blocks elsewhere.
+
 All `local-exec` provisioners MUST set `interpreter = ["/bin/bash", "-c"]` — Terraform defaults to `/bin/sh`.
 With `bootstrap_cluster_creator_admin_permissions = false`, the caller's IAM role MUST be listed in `admin_role_names` to retain cluster access. A `check` block validates this at plan time.
 Destroy order is load-bearing and enforced via `depends_on` (see `eks_addons.tf`/`iam_role`/`vpc` comments): VPC+roles → DaemonSet addons (CNI/kube-proxy) → node groups → Deployment addons (coredns/ebs-csi/…) → Helm releases → workspaces, so the operator stays alive through Helm uninstalls.

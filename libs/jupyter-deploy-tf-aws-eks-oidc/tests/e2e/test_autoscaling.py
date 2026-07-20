@@ -175,7 +175,7 @@ def test_karpenter_workspace_provisioning_and_scale_to_zero(e2e_deployment: EndT
         assert node_role == "workspaces", f"Workspace pod landed on node with role '{node_role}', expected 'workspaces'"
 
         nodepool = _kubectl("get", "node", pod_node, "-o", r"jsonpath={.metadata.labels.karpenter\.sh/nodepool}")
-        assert nodepool == "workspaces", f"Workspace pod node has nodepool '{nodepool}', expected 'workspaces'"
+        assert nodepool == "workspace-cpu", f"Workspace pod node has nodepool '{nodepool}', expected 'workspace-cpu'"
     finally:
         kubectl_delete_workspace(_SCALE_WORKSPACE)
 

@@ -1,9 +1,9 @@
 # EC2NodeClasses define the AWS-level node configuration for Karpenter.
-# One class per pool (routing + workspaces) — they differ in root disk size and,
+# One class per pool (routing + workspace-cpu) — they differ in root disk size and,
 # critically, in IMDS hop limit:
 #   - routing (hop 2): trusted infra pods; a hop of 2 lets containerized pods reach
 #     IMDS if they need node-role creds. Safe because only our own pods run here.
-#   - workspaces (hop 1): runs UNTRUSTED user notebook code. Hop 1 keeps IMDS
+#   - workspace-cpu (hop 1): runs UNTRUSTED user notebook code. Hop 1 keeps IMDS
 #     reachable only from the host network namespace (VPC CNI / EBS CSI node plugin
 #     run hostNetwork and are unaffected) while blocking pod->IMDS, so notebook code
 #     cannot assume the node role. Workspace pods are injected with no AWS creds by
@@ -33,17 +33,17 @@ spec:
     httpTokens: required
     httpProtocolIPv6: disabled
   blockDeviceMappings:
-    - deviceName: /dev/xvda
+    - deviceName: {{ .Values.routing.blockDevice.deviceName }}
       ebs:
-        volumeSize: 50Gi
-        volumeType: gp3
+        volumeSize: {{ .Values.routing.blockDevice.volumeSizeGi }}Gi
+        volumeType: {{ .Values.routing.blockDevice.volumeType }}
         encrypted: true
         deleteOnTermination: true
 ---
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
-  name: workspaces
+  name: workspace-cpu
 spec:
   amiSelectorTerms:
     - alias: al2023@latest
@@ -57,7 +57,7 @@ spec:
   tags:
     karpenter.sh/cluster-name: {{ .Values.clusterName | quote }}
   metadataOptions:
-    # hop 1: workspaces run untrusted user code — block pod->IMDS so notebook
+    # hop 1: workspace-cpu runs untrusted user code — block pod->IMDS so notebook
     # code cannot assume the node role. Node agents (CNI, EBS CSI) use hostNetwork
     # and reach IMDS at hop 1, so they are unaffected.
     httpPutResponseHopLimit: 1
@@ -65,9 +65,12 @@ spec:
     httpTokens: required
     httpProtocolIPv6: disabled
   blockDeviceMappings:
-    - deviceName: /dev/xvda
+    - deviceName: {{ .Values.workspaceCpu.blockDevice.deviceName }}
       ebs:
-        volumeSize: 100Gi
-        volumeType: gp3
+        # Root volume for workspace nodes. This is the OS + container image cache
+        # (JupyterLab image + conda envs). User data (notebooks, files) lives on
+        # the EBS volume mounted by the workspace pod via the StorageClass — not here.
+        volumeSize: {{ .Values.workspaceCpu.blockDevice.volumeSizeGi }}Gi
+        volumeType: {{ .Values.workspaceCpu.blockDevice.volumeType }}
         encrypted: true
         deleteOnTermination: true

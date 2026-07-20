@@ -14,13 +14,14 @@ $ jd pool [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-* `list`: List node pools with node count,...
-* `status`: Show detailed status for a node pool.
-* `scaling`: Show recent node provisioning and...
+* `list`: List node pools in the project.
+* `show`: Display detailed information about a node...
+* `status`: Check the status of a node pool.
+* `events`: Show recent node provisioning and...
 
 ## `pool list`
 
-List node pools with node count, CPU/memory limits, and Ready status.
+List node pools in the project.
 
 Run either from a project directory that you created with <jd init>;
 or pass --path <project-dir>.
@@ -37,9 +38,29 @@ $ jd pool list [OPTIONS]
 * `--json`: Output as JSON.
 * `--help`: Show this message and exit.
 
+## `pool show`
+
+Display detailed information about a node pool.
+
+Run either from a project directory that you created with <jd init>;
+or pass --path <project-dir>.
+
+**Usage**:
+
+```console
+$ jd pool show [OPTIONS]
+```
+
+**Options**:
+
+* `--name <str>`: Name of the node pool.  [required]
+* `-p, --path <path>`: Directory of the project.
+* `--json`: Output as JSON.
+* `--help`: Show this message and exit.
+
 ## `pool status`
 
-Show detailed status for a node pool.
+Check the status of a node pool.
 
 Run either from a project directory that you created with <jd init>;
 or pass --path <project-dir>.
@@ -54,10 +75,9 @@ $ jd pool status [OPTIONS]
 
 * `--name <str>`: Name of the node pool.  [required]
 * `-p, --path <path>`: Directory of the project.
-* `--json`: Output as JSON.
 * `--help`: Show this message and exit.
 
-## `pool scaling`
+## `pool events`
 
 Show recent node provisioning and consolidation events.
 
@@ -67,7 +87,7 @@ or pass --path <project-dir>.
 **Usage**:
 
 ```console
-$ jd pool scaling [OPTIONS]
+$ jd pool events [OPTIONS]
 ```
 
 **Options**:

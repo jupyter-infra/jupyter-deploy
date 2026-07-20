@@ -1,6 +1,3 @@
-import json
-from typing import Any
-
 from jupyter_deploy.engine.engine_outputs import EngineOutputsHandler
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.supervised_execution import DisplayManager
@@ -10,7 +7,6 @@ from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
 from jupyter_deploy.handlers.payloads import ClusterDetail, HealthLayer, HealthLayerResult
 from jupyter_deploy.handlers.resource.resource_utils import collect_results
 from jupyter_deploy.provider import manifest_command_runner as cmd_runner
-from jupyter_deploy.provider.resolved_clidefs import ResolvedCliParameter, StrResolvedCliParameter
 
 
 class ClusterHandler(BaseProjectHandler):
@@ -151,43 +147,3 @@ class ClusterHandler(BaseProjectHandler):
             endpoint=results.get("endpoint", ""),
             version=results.get("version", ""),
         )
-
-    def list_nodepools(self) -> list[Any]:
-        """Returns list of Karpenter NodePool resources."""
-        command = self.project_manifest.get_command("pool.list")
-        runner = cmd_runner.ManifestCommandRunner(
-            display_manager=self.display_manager,
-            output_handler=self._output_handler,
-            variable_handler=self._variable_handler,
-        )
-        runner.run_command_sequence(command, cli_paramdefs={})
-        raw = runner.get_result_value(command, "pool.list", str)
-        result: list[Any] = json.loads(raw) if isinstance(raw, str) else raw
-        return result
-
-    def get_nodepool_status(self, name: str) -> dict[str, Any]:
-        """Returns detailed status for a specific NodePool."""
-        command = self.project_manifest.get_command("pool.status")
-        runner = cmd_runner.ManifestCommandRunner(
-            display_manager=self.display_manager,
-            output_handler=self._output_handler,
-            variable_handler=self._variable_handler,
-        )
-        cli_paramdefs: dict[str, ResolvedCliParameter[Any]] = {
-            "name": StrResolvedCliParameter(parameter_name="name", value=name),
-        }
-        runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
-        return collect_results(runner, command)
-
-    def list_scaling_events(self) -> list[Any]:
-        """Returns list of Karpenter NodeClaims (scaling events)."""
-        command = self.project_manifest.get_command("pool.scaling")
-        runner = cmd_runner.ManifestCommandRunner(
-            display_manager=self.display_manager,
-            output_handler=self._output_handler,
-            variable_handler=self._variable_handler,
-        )
-        runner.run_command_sequence(command, cli_paramdefs={})
-        raw = runner.get_result_value(command, "pool.scaling", str)
-        result: list[Any] = json.loads(raw) if isinstance(raw, str) else raw
-        return result

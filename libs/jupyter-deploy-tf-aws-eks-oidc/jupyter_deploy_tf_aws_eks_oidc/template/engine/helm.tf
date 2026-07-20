@@ -35,7 +35,7 @@ resource "kubernetes_namespace_v1" "shared" {
     }
   }
 
-  depends_on = [aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user, aws_eks_node_group.platform, module.karpenter]
+  depends_on = [aws_eks_access_policy_association.admin_role, aws_eks_access_policy_association.admin_user, aws_eks_node_group.platform, helm_release.karpenter]
 }
 
 resource "helm_release" "traefik_crds" {
@@ -238,5 +238,5 @@ resource "helm_release" "workspace_router" {
     },
   ]
 
-  depends_on = [aws_eks_node_group.platform, module.karpenter, helm_release.jupyter_k8s, null_resource.platform, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup, kubernetes_namespace_v1.shared]
+  depends_on = [null_resource.platform, helm_release.jupyter_k8s, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup, kubernetes_namespace_v1.shared]
 }

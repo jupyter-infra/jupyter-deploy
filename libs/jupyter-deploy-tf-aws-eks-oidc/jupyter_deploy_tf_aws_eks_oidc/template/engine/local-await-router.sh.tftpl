@@ -10,12 +10,18 @@ DEPLOYMENTS="traefik dex oauth2-proxy authmiddleware"
 
 setup_kubeconfig() {
     echo "Configuring kubectl for cluster $CLUSTER_NAME..."
+    # Write to a fresh temp file to avoid being blocked by a corrupt ~/.kube/config.
+    local tmp_kubeconfig
+    tmp_kubeconfig=$(mktemp)
     if ! aws eks update-kubeconfig \
         --name "$CLUSTER_NAME" \
-        --region "$REGION" 2>&1; then
+        --region "$REGION" \
+        --kubeconfig "$tmp_kubeconfig" 2>&1; then
         echo "ERROR: Failed to configure kubeconfig"
+        rm -f "$tmp_kubeconfig"
         return 1
     fi
+    export KUBECONFIG="$tmp_kubeconfig"
 
     # Verify kubectl is targeting the correct cluster and region
     local current_context

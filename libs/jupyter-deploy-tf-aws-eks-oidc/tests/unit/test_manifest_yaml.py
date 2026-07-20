@@ -282,12 +282,12 @@ class TestManifest(unittest.TestCase):
             )
 
     def test_cluster_autoscaling_commands_declared(self) -> None:
-        """pool.list, pool.status, pool.scaling must be in manifest."""
+        """pool.list, pool.status, pool.events must be in manifest."""
         if self.MANIFEST is None:
             self.fail("MANIFEST is None")
 
         command_names = {cmd["cmd"] for cmd in self.MANIFEST.get("commands", [])}
-        for expected in ("pool.list", "pool.status", "pool.scaling"):
+        for expected in ("pool.list", "pool.status", "pool.events"):
             self.assertIn(expected, command_names, f"Expected command '{expected}' in manifest")
 
     def test_cluster_autoscaling_commands_have_results(self) -> None:
@@ -298,7 +298,7 @@ class TestManifest(unittest.TestCase):
         expected_results = {
             "pool.list": {"pool.list"},
             "pool.status": {"pool.status.name", "pool.status.resource"},
-            "pool.scaling": {"pool.scaling"},
+            "pool.events": {"pool.events"},
         }
         commands_by_name = {cmd["cmd"]: cmd for cmd in self.MANIFEST.get("commands", [])}
         for cmd_name, required_results in expected_results.items():
@@ -307,16 +307,15 @@ class TestManifest(unittest.TestCase):
             for result in required_results:
                 self.assertIn(result, result_names, f"Command '{cmd_name}' missing result '{result}'")
 
-    def test_host_list_command_supports_role_param(self) -> None:
-        """host.list command must wire a 'role' source-key for the --role filter."""
+    def test_host_list_command_supports_query_param(self) -> None:
+        """host.list command must wire a 'query' source-key for the --query filter."""
         if self.MANIFEST is None:
             self.fail("MANIFEST is None")
 
         cmd = next((c for c in self.MANIFEST.get("commands", []) if c["cmd"] == "host.list"), None)
         self.assertIsNotNone(cmd, "host.list command must exist in manifest")
-        # The role filter is passed as a CLI source-key in the sequence arguments.
         source_keys = {arg.get("source-key") for step in cmd.get("sequence", []) for arg in step.get("arguments", [])}
-        self.assertIn("role", source_keys, "host.list sequence must wire 'role' as a source-key")
+        self.assertIn("query", source_keys, "host.list sequence must wire 'query' as a source-key")
 
     def test_daemonset_components_declared(self) -> None:
         # #298: DaemonSet components (aws-node, kube-proxy, fluent-bit) surface add-on /

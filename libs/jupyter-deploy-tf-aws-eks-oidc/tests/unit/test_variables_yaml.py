@@ -211,9 +211,24 @@ class TestVariablesYaml(unittest.TestCase):
             "workspace_max_memory", self.DEFAULTS_ALL_TFVARS, "workspace_max_memory must be set in defaults-all.tfvars"
         )
         self.assertIn(
-            "workspace_cpu_instance_families",
+            "workspace_cpu_instance_categories",
             self.DEFAULTS_ALL_TFVARS,
-            "workspace_cpu_instance_families must be set in defaults-all.tfvars",
+            "workspace_cpu_instance_categories must be set in defaults-all.tfvars",
+        )
+        self.assertIn(
+            "workspace_disk_size_gb",
+            self.DEFAULTS_ALL_TFVARS,
+            "workspace_disk_size_gb must be set in defaults-all.tfvars",
+        )
+        self.assertIn(
+            "routing_instance_categories",
+            self.DEFAULTS_ALL_TFVARS,
+            "routing_instance_categories must be set in defaults-all.tfvars",
+        )
+        self.assertIn(
+            "node_expire_after",
+            self.DEFAULTS_ALL_TFVARS,
+            "node_expire_after must be set in defaults-all.tfvars",
         )
 
     @classmethod

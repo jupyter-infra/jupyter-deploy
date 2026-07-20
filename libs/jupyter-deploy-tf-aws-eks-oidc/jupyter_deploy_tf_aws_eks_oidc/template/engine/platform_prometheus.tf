@@ -1,3 +1,10 @@
+# === Prometheus metrics server ===
+#
+# Deploys the Prometheus community Helm chart onto platform nodes. Scraped metrics
+# feed the KEDA ScaledObjects for the routing tier (traefik_open_connections).
+# Alertmanager and Pushgateway are disabled — this is a scaling-signal store, not
+# an alerting stack.
+
 resource "helm_release" "prometheus" {
   name             = "prometheus"
   repository       = "https://prometheus-community.github.io/helm-charts"
@@ -75,4 +82,6 @@ resource "helm_release" "prometheus" {
       value = "2Gi"
     },
   ]
+
+  depends_on = [null_resource.cluster_addons, aws_eks_node_group.platform]
 }
