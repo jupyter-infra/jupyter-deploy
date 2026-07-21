@@ -95,12 +95,45 @@ resource "time_sleep" "karpenter_tag_propagation" {
   depends_on      = [aws_ec2_tag.karpenter_sg_discovery, null_resource.karpenter_restart]
 }
 
+# Strip Karpenter finalizers before helm uninstall. NodePool, EC2NodeClass, and
+# NodeClaim resources carry a karpenter.k8s.aws/termination finalizer that only
+# the controller can clear (it terminates EC2 instances first). During destroy,
+# if helm tries to delete these CRs while the finalizer is present, the uninstall
+# blocks indefinitely. Stripping finalizers lets the CRs delete instantly; the
+# cluster (and its instances) is being destroyed anyway.
+resource "null_resource" "karpenter_nodepools_finalizer_cleanup" {
+  triggers = {
+    cluster_name = module.eks_cluster.cluster_name
+    region       = var.region
+  }
+
+  provisioner "local-exec" {
+    when        = destroy
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      tmp_kubeconfig=$(mktemp)
+      aws eks update-kubeconfig --name "${self.triggers.cluster_name}" --region "${self.triggers.region}" --kubeconfig "$tmp_kubeconfig" 2>/dev/null
+      export KUBECONFIG="$tmp_kubeconfig"
+      kubectl patch nodepools --all --type=merge -p '{"metadata":{"finalizers":null}}' 2>/dev/null || true
+      kubectl patch ec2nodeclasses --all --type=merge -p '{"metadata":{"finalizers":null}}' 2>/dev/null || true
+      kubectl patch nodeclaims --all --type=merge -p '{"metadata":{"finalizers":null}}' 2>/dev/null || true
+      rm -f "$tmp_kubeconfig"
+    EOT
+  }
+
+  depends_on = [
+    helm_release.karpenter,
+    aws_eks_access_policy_association.admin_role,
+    aws_eks_access_policy_association.admin_user,
+  ]
+}
+
 resource "helm_release" "karpenter_nodepools" {
   name             = "karpenter-nodepools"
   chart            = "${path.module}/../charts/karpenter-nodepools"
   namespace        = "karpenter"
   create_namespace = false
-  timeout          = 900
+  wait             = false
 
   set = [
     {
@@ -151,6 +184,7 @@ resource "helm_release" "karpenter_nodepools" {
   depends_on = [
     helm_release.karpenter,
     time_sleep.karpenter_tag_propagation,
+    null_resource.karpenter_nodepools_finalizer_cleanup,
     aws_eks_access_policy_association.admin_role,
     aws_eks_access_policy_association.admin_user,
   ]
