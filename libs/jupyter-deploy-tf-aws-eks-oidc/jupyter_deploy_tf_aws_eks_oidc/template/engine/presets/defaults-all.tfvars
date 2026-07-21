@@ -44,15 +44,18 @@ prometheus_version = "27.0.0"
 routing_max_cpu    = "32"
 routing_max_memory = "128Gi"
 
-workspace_max_cpu    = "512"
-workspace_max_memory = "2048Gi"
-
 node_expire_after = "504h"
 
 routing_instance_categories     = ["c", "m"]
 routing_instance_generation_min = "5"
 routing_disk_size_gb            = 50
 
-workspace_cpu_instance_categories     = ["c", "m", "r"]
-workspace_cpu_instance_generation_min = "5"
-workspace_disk_size_gb                = 100
+workspace_nodepools = [
+  {
+    name              = "workspace-cpu"
+    instance_families = "c6i,m6i,r6i,c7i,m7i,r7i"
+    disk_size_gb      = "50"
+    max_cpu           = "512"
+    max_memory        = "2048Gi"
+  }
+]

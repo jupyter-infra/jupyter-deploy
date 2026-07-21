@@ -1,11 +1,11 @@
 """E2E tests for jd pool commands on the EKS OIDC template.
 
-Covers the three jd pool subcommands added with the Karpenter autoscaling work:
-  - jd pool list       — lists all NodePools with node count and resource limits
-  - jd pool status     — detailed health for a named NodePool
-  - jd pool events     — recent Karpenter provision/consolidation events
+Covers the jd pool subcommands added with the Karpenter autoscaling work:
+  - jd pool list   — lists all NodePools by name
+  - jd pool show   — detailed info for a named NodePool
+  - jd pool status — ready state for a named NodePool
 
-These commands read Karpenter NodePool/NodeClaim CRDs via the manifest's
+These commands read Karpenter NodePool CRDs via the manifest's
 k8s.custom.list-cluster / k8s.custom.get-cluster API calls.
 """
 
@@ -93,28 +93,3 @@ def test_pool_status_not_found(e2e_deployment: EndToEndDeployment) -> None:
 
     with pytest.raises(JDCliError):
         e2e_deployment.cli.run_command(["jupyter-deploy", "pool", "status", "--name", "does-not-exist"])
-
-
-# ── pool events ───────────────────────────────────────────────────────────────
-
-
-@pytest.mark.usefixtures("kubernetes_cluster_login")
-def test_pool_events_succeeds_on_quiet_cluster(e2e_deployment: EndToEndDeployment) -> None:
-    """jd pool events must return output without error (events list may be empty on a quiet cluster)."""
-    e2e_deployment.ensure_deployed()
-
-    # No assertion on content — Karpenter event history may be empty on a fresh cluster.
-    # The goal is that the command completes without error and returns parseable output.
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "pool", "events"])
-    assert result.returncode == 0, f"Expected exit code 0, got {result.returncode}:\n{result.stdout}"
-
-
-@pytest.mark.usefixtures("kubernetes_cluster_login")
-def test_pool_events_json_returns_list(e2e_deployment: EndToEndDeployment) -> None:
-    """jd pool events --json must return a list (empty or populated with NodeClaim events)."""
-    e2e_deployment.ensure_deployed()
-
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "pool", "events", "--json"])
-    data = json.loads(result.stdout)
-
-    assert isinstance(data, list), f"Expected list from pool events --json, got {type(data)}: {data}"

@@ -5,15 +5,10 @@ clusterName: ""
 nodeInstanceProfile: ""
 
 # Node expiry — forces periodic node rotation to prevent config drift.
-# All NodePools share the same expiry; override per-pool if needed.
 expireAfter: "504h"
 
 # ── Routing NodePool ──────────────────────────────────────────────────────────
 routing:
-  # instance-category + minimum generation: Karpenter selects any instance whose
-  # category is in this list AND whose generation number is strictly greater than
-  # instanceGenerationMin. This automatically adopts newer generations (e.g. c7i
-  # when instanceGenerationMin=5) without updating the list.
   instanceCategories: ["c", "m"]
   instanceGenerationMin: "5"
   blockDevice:
@@ -24,20 +19,7 @@ routing:
 routingLimitsCpu: "32"
 routingLimitsMemory: "128Gi"
 
-# ── Workspace CPU NodePool ────────────────────────────────────────────────────
-workspaceCpu:
-  # instance-category + minimum generation: same auto-adoption approach as routing.
-  # c/m/r covers compute, general-purpose, and memory-optimized families.
-  instanceCategories: ["c", "m", "r"]
-  instanceGenerationMin: "5"
-  blockDevice:
-    deviceName: /dev/xvda
-    # Root volume for workspace nodes: OS + container image cache (JupyterLab,
-    # conda envs). This is a NodePool-level cap across all workspace nodes combined
-    # — not a per-node limit. User data (notebooks, files) lives on the EBS volume
-    # mounted by the workspace pod via the StorageClass, not here.
-    volumeSizeGi: 100
-    volumeType: gp3
-
-workspaceLimitsCpu: "512"
-workspaceLimitsMemory: "2048Gi"
+# ── Workspace NodePools ───────────────────────────────────────────────────────
+# Each entry creates one NodePool + EC2NodeClass pair.
+# Injected by platform_karpenter.tf from var.workspace_nodepools.
+workspaceNodepools: []

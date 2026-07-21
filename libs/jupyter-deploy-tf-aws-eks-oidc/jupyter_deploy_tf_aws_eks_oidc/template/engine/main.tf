@@ -225,6 +225,16 @@ locals {
   )
 }
 
+# Cross-variable validation: platform_max_size must be >= platform_min_size.
+# variable validation blocks can only reference their own variable, so this
+# cross-field check lives here as a plan-time assertion instead.
+check "platform_node_group_size" {
+  assert {
+    condition     = var.platform_max_size >= var.platform_min_size
+    error_message = "platform_max_size (${var.platform_max_size}) must be >= platform_min_size (${var.platform_min_size})."
+  }
+}
+
 # ── Platform managed node group ───────────────────────────────────────────────
 # Hosts control-plane-only pods: Karpenter controller, KEDA operator,
 # jupyter-k8s operator, CoreDNS, cert-manager, external-dns.

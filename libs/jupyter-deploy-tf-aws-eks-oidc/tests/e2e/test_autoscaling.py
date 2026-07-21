@@ -251,9 +251,9 @@ def test_karpenter_routing_nodepool_scales_up_and_down(e2e_deployment: EndToEndD
             )
 
     # After ballast deletion Karpenter consolidation should remove the extra node.
-    # Allow up to 5 minutes for consolidation.
+    # Allow up to 10 minutes: consolidateAfter=120s + node drain + termination.
     _poll(
         lambda: len(get_node_names(ROUTING_LABEL_SELECTOR)) <= start_count,
-        timeout_s=300,
+        timeout_s=600,
         msg=f"Routing node count did not return to {start_count} after ballast deletion",
     )

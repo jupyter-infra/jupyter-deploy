@@ -69,7 +69,7 @@ resource "helm_release" "karpenter" {
 # — and the EC2NodeClass gets stuck in ValidationSucceeded=False indefinitely.
 resource "null_resource" "karpenter_restart" {
   triggers = {
-    karpenter_release = helm_release.karpenter.metadata[0].revision
+    karpenter_release = helm_release.karpenter.metadata.revision
   }
 
   provisioner "local-exec" {
@@ -125,19 +125,6 @@ resource "helm_release" "karpenter_nodepools" {
       name  = "routing.blockDevice.volumeSizeGi"
       value = tostring(var.routing_disk_size_gb)
     },
-    # Workspace CPU NodePool
-    {
-      name  = "workspaceLimitsCpu"
-      value = var.workspace_max_cpu
-    },
-    {
-      name  = "workspaceLimitsMemory"
-      value = var.workspace_max_memory
-    },
-    {
-      name  = "workspaceCpu.blockDevice.volumeSizeGi"
-      value = tostring(var.workspace_disk_size_gb)
-    },
   ]
 
   values = [
@@ -146,10 +133,15 @@ resource "helm_release" "karpenter_nodepools" {
         instanceCategories    = var.routing_instance_categories
         instanceGenerationMin = var.routing_instance_generation_min
       }
-      workspaceCpu = {
-        instanceCategories    = var.workspace_cpu_instance_categories
-        instanceGenerationMin = var.workspace_cpu_instance_generation_min
-      }
+      workspaceNodepools = [
+        for p in var.workspace_nodepools : {
+          name             = p["name"]
+          instanceFamilies = split(",", p["instance_families"])
+          diskSizeGi       = tonumber(p["disk_size_gb"])
+          maxCpu           = p["max_cpu"]
+          maxMemory        = p["max_memory"]
+        }
+      ]
     })
   ]
 

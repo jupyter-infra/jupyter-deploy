@@ -1,6 +1,6 @@
 # NodePools define scheduling constraints and node lifecycle for Karpenter.
 # Routing pool: always-on, conservative consolidation, small instances.
-# Workspace-cpu pool: scale-to-zero, aggressive consolidation, diverse instances.
+# Workspace pools: scale-to-zero, aggressive consolidation, diverse instances.
 # Both carry taints so only pods with matching tolerations can land here.
 #
 # Disruption budget: nodes: "1" (absolute, not percentage).
@@ -8,7 +8,7 @@
 # (e.g. 10%) rounds down to 0 on small pools (floor(0.1×1)=0), and
 # min(0,1)=0 — the absolute floor cannot raise a zero from the percentage.
 # Using only the absolute entry guarantees at least 1 node is always
-# disruptable, enabling scale-to-zero on the workspace-cpu pool.
+# disruptable, enabling scale-to-zero on workspace pools.
 ---
 apiVersion: karpenter.sh/v1
 kind: NodePool
@@ -30,8 +30,6 @@ spec:
           effect: NoSchedule
       expireAfter: {{ .Values.expireAfter }}
       requirements:
-        # instance-category + minimum generation: automatically adopts newer
-        # generations (e.g. c7i, m7i) without updating this list.
         - key: karpenter.k8s.aws/instance-category
           operator: In
           values: {{ .Values.routing.instanceCategories | toJson }}
@@ -55,11 +53,12 @@ spec:
     consolidateAfter: 120s
     budgets:
       - nodes: "1"
+{{- range .Values.workspaceNodepools }}
 ---
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
-  name: workspace-cpu
+  name: {{ .name }}
 spec:
   template:
     metadata:
@@ -69,21 +68,16 @@ spec:
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
-        name: workspace-cpu
+        name: {{ .name }}
       taints:
         - key: jupyter-deploy/role
           value: workspaces
           effect: NoSchedule
-      expireAfter: {{ .Values.expireAfter }}
+      expireAfter: {{ $.Values.expireAfter }}
       requirements:
-        # instance-category + minimum generation: automatically adopts newer
-        # generations (e.g. c7i, m7i, r7i) without updating this list.
-        - key: karpenter.k8s.aws/instance-category
+        - key: karpenter.k8s.aws/instance-family
           operator: In
-          values: {{ .Values.workspaceCpu.instanceCategories | toJson }}
-        - key: karpenter.k8s.aws/instance-generation
-          operator: Gt
-          values: ["{{ .Values.workspaceCpu.instanceGenerationMin }}"]
+          values: {{ .instanceFamilies | toJson }}
         - key: karpenter.k8s.aws/instance-cpu
           operator: In
           values: ["2", "4", "8", "16", "32"]
@@ -94,10 +88,11 @@ spec:
           operator: In
           values: ["amd64"]
   limits:
-    cpu: {{ .Values.workspaceLimitsCpu | quote }}
-    memory: {{ .Values.workspaceLimitsMemory | quote }}
+    cpu: {{ .maxCpu | quote }}
+    memory: {{ .maxMemory | quote }}
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 60s
     budgets:
       - nodes: "1"
+{{- end }}

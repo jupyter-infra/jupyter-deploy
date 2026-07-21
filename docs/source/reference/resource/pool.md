@@ -17,7 +17,6 @@ $ jd pool [OPTIONS] COMMAND [ARGS]...
 * `list`: List node pools in the project.
 * `show`: Display detailed information about a node...
 * `status`: Check the status of a node pool.
-* `events`: Show recent node provisioning and...
 
 ## `pool list`
 
@@ -75,23 +74,4 @@ $ jd pool status [OPTIONS]
 
 * `--name <str>`: Name of the node pool.  [required]
 * `-p, --path <path>`: Directory of the project.
-* `--help`: Show this message and exit.
-
-## `pool events`
-
-Show recent node provisioning and consolidation events.
-
-Run either from a project directory that you created with <jd init>;
-or pass --path <project-dir>.
-
-**Usage**:
-
-```console
-$ jd pool events [OPTIONS]
-```
-
-**Options**:
-
-* `-p, --path <path>`: Directory of the project.
-* `--json`: Output as JSON.
 * `--help`: Show this message and exit.

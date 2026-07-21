@@ -194,23 +194,6 @@ commands:
   - result-name: pool.status.resource
     source: result
     source-key: '[0].Resource'
-- cmd: pool.events
-  sequence:
-  - api-name: k8s.custom.list-cluster
-    arguments:
-    - api-attribute: group
-      source: literal
-      value: karpenter.sh
-    - api-attribute: version
-      source: literal
-      value: v1
-    - api-attribute: plural
-      source: literal
-      value: nodeclaims
-  results:
-  - result-name: pool.events
-    source: result
-    source-key: '[0].Items'
 - cmd: host.list
   sequence:
   - api-name: k8s.core.list-nodes

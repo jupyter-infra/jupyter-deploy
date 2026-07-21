@@ -245,66 +245,39 @@ variable "routing_max_memory" {
   type        = string
 }
 
-variable "workspace_max_cpu" {
+variable "workspace_nodepools" {
   description = <<-EOT
-    Max vCPU the workspace node pool can provision across all workspace nodes (e.g. "512").
+    List of workspace Karpenter NodePool definitions. Each entry creates one
+    NodePool + EC2NodeClass pair. Supports multiple pools (e.g. CPU + GPU).
 
-    Set based on expected peak concurrent workspaces (each workspace: 500m-8 CPU).
+    Required keys per entry (all strings):
+      name              - NodePool and EC2NodeClass name (e.g. "workspace-cpu")
+      instance_families - comma-separated EC2 instance families (e.g. "c6i,m6i,r6i,c7i,m7i,r7i")
+      disk_size_gb      - root volume size in GiB as a string (e.g. "50")
+      max_cpu           - fleet CPU ceiling (e.g. "512")
+      max_memory        - fleet memory ceiling (e.g. "2048Gi")
 
-    Recommended: 512
+    Example (add a GPU pool by appending an entry):
+      workspace_nodepools = [
+        { name = "workspace-cpu", instance_families = "c6i,m6i,r6i", disk_size_gb = "50", max_cpu = "512", max_memory = "2048Gi" },
+        { name = "workspace-gpu", instance_families = "g4dn,g5", disk_size_gb = "100", max_cpu = "64", max_memory = "256Gi" },
+      ]
   EOT
-  type        = string
-}
-
-variable "workspace_max_memory" {
-  description = <<-EOT
-    Max memory the workspace node pool can provision across all workspace nodes (e.g. "2048Gi").
-
-    Recommended: 2048Gi
-  EOT
-  type        = string
-}
-
-variable "workspace_cpu_instance_categories" {
-  description = <<-EOT
-    EC2 instance categories (karpenter.k8s.aws/instance-category) for workspace nodes.
-
-    Combined with workspace_cpu_instance_generation_min to select instances:
-    Karpenter picks any instance whose category is in this list AND whose generation
-    is strictly greater than workspace_cpu_instance_generation_min. This automatically
-    adopts newer generations without updating the list.
-
-    Recommended: ["c", "m", "r"]
-  EOT
-  type        = list(string)
-}
-
-variable "workspace_cpu_instance_generation_min" {
-  description = <<-EOT
-    Minimum EC2 instance generation (exclusive) for workspace nodes.
-
-    Karpenter selects instances with generation strictly greater than this value.
-    Set to "5" to allow gen 6, 7, 8 etc. (c6i, c7i, m6i, m7i, ...).
-
-    Recommended: "5"
-  EOT
-  type        = string
-}
-
-variable "workspace_disk_size_gb" {
-  description = <<-EOT
-    Root disk size in GiB for workspace Karpenter-provisioned nodes.
-
-    This is the OS + container image cache volume. User data (notebooks, files)
-    lives on the EBS volume mounted by the workspace pod via the StorageClass.
-
-    Recommended: 100
-  EOT
-  type        = number
+  type        = list(map(string))
 
   validation {
-    condition     = var.workspace_disk_size_gb >= 20 && var.workspace_disk_size_gb <= 16384
-    error_message = "workspace_disk_size_gb must be between 20 and 16384."
+    condition     = length(var.workspace_nodepools) >= 1
+    error_message = "workspace_nodepools must contain at least one NodePool definition."
+  }
+
+  validation {
+    condition = alltrue([
+      for p in var.workspace_nodepools :
+      can(tonumber(p["disk_size_gb"])) &&
+      tonumber(p["disk_size_gb"]) >= 20 &&
+      tonumber(p["disk_size_gb"]) <= 16384
+    ])
+    error_message = "Each workspace NodePool disk_size_gb must be a numeric string between 20 and 16384."
   }
 }
 

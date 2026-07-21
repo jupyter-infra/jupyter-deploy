@@ -1,14 +1,11 @@
 # EC2NodeClasses define the AWS-level node configuration for Karpenter.
-# One class per pool (routing + workspace-cpu) — they differ in root disk size and,
-# critically, in IMDS hop limit:
-#   - routing (hop 2): trusted infra pods; a hop of 2 lets containerized pods reach
-#     IMDS if they need node-role creds. Safe because only our own pods run here.
-#   - workspace-cpu (hop 1): runs UNTRUSTED user notebook code. Hop 1 keeps IMDS
-#     reachable only from the host network namespace (VPC CNI / EBS CSI node plugin
-#     run hostNetwork and are unaffected) while blocking pod->IMDS, so notebook code
-#     cannot assume the node role. Workspace pods are injected with no AWS creds by
-#     the operator, so nothing in a workspace pod legitimately needs IMDS.
-# Both pin httpTokens: required (IMDSv2) — Karpenter defaults to this, but pin it.
+# One class per pool (routing + each workspace pool).
+# IMDS hop limits differ by trust level:
+#   - routing (hop 2): trusted infra pods — containerized pods can reach IMDS.
+#   - workspace pools (hop 1): untrusted user code — blocks pod->IMDS so
+#     notebook code cannot assume the node role. Node agents (CNI, EBS CSI)
+#     use hostNetwork and reach IMDS at hop 1, so they are unaffected.
+# Both pin httpTokens: required (IMDSv2).
 ---
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
@@ -27,7 +24,6 @@ spec:
   tags:
     karpenter.sh/cluster-name: {{ .Values.clusterName | quote }}
   metadataOptions:
-    # hop 2: routing runs trusted infra pods only.
     httpPutResponseHopLimit: 2
     httpEndpoint: enabled
     httpTokens: required
@@ -39,38 +35,37 @@ spec:
         volumeType: {{ .Values.routing.blockDevice.volumeType }}
         encrypted: true
         deleteOnTermination: true
+{{- range .Values.workspaceNodepools }}
 ---
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
-  name: workspace-cpu
+  name: {{ .name }}
 spec:
   amiSelectorTerms:
     - alias: al2023@latest
-  instanceProfile: {{ .Values.nodeInstanceProfile | quote }}
+  instanceProfile: {{ $.Values.nodeInstanceProfile | quote }}
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: {{ .Values.clusterName | quote }}
+        karpenter.sh/discovery: {{ $.Values.clusterName | quote }}
   securityGroupSelectorTerms:
     - tags:
-        karpenter.sh/discovery: {{ .Values.clusterName | quote }}
+        karpenter.sh/discovery: {{ $.Values.clusterName | quote }}
   tags:
-    karpenter.sh/cluster-name: {{ .Values.clusterName | quote }}
+    karpenter.sh/cluster-name: {{ $.Values.clusterName | quote }}
   metadataOptions:
-    # hop 1: workspace-cpu runs untrusted user code — block pod->IMDS so notebook
-    # code cannot assume the node role. Node agents (CNI, EBS CSI) use hostNetwork
-    # and reach IMDS at hop 1, so they are unaffected.
     httpPutResponseHopLimit: 1
     httpEndpoint: enabled
     httpTokens: required
     httpProtocolIPv6: disabled
   blockDeviceMappings:
-    - deviceName: {{ .Values.workspaceCpu.blockDevice.deviceName }}
+    - deviceName: /dev/xvda
       ebs:
-        # Root volume for workspace nodes. This is the OS + container image cache
-        # (JupyterLab image + conda envs). User data (notebooks, files) lives on
-        # the EBS volume mounted by the workspace pod via the StorageClass — not here.
-        volumeSize: {{ .Values.workspaceCpu.blockDevice.volumeSizeGi }}Gi
-        volumeType: {{ .Values.workspaceCpu.blockDevice.volumeType }}
+        # Root volume: OS + container image cache. User data (notebooks, files)
+        # lives on the EBS volume mounted by the workspace pod via StorageClass.
+        # Override disk_size_gb in workspace_nodepools for large custom images.
+        volumeSize: {{ .diskSizeGi }}Gi
+        volumeType: gp3
         encrypted: true
         deleteOnTermination: true
+{{- end }}

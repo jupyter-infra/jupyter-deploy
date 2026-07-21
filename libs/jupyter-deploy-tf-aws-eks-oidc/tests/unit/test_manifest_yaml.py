@@ -282,12 +282,12 @@ class TestManifest(unittest.TestCase):
             )
 
     def test_cluster_autoscaling_commands_declared(self) -> None:
-        """pool.list, pool.status, pool.events must be in manifest."""
+        """pool.list and pool.status must be in manifest."""
         if self.MANIFEST is None:
             self.fail("MANIFEST is None")
 
         command_names = {cmd["cmd"] for cmd in self.MANIFEST.get("commands", [])}
-        for expected in ("pool.list", "pool.status", "pool.events"):
+        for expected in ("pool.list", "pool.status"):
             self.assertIn(expected, command_names, f"Expected command '{expected}' in manifest")
 
     def test_cluster_autoscaling_commands_have_results(self) -> None:
@@ -298,7 +298,6 @@ class TestManifest(unittest.TestCase):
         expected_results = {
             "pool.list": {"pool.list"},
             "pool.status": {"pool.status.name", "pool.status.resource"},
-            "pool.events": {"pool.events"},
         }
         commands_by_name = {cmd["cmd"]: cmd for cmd in self.MANIFEST.get("commands", [])}
         for cmd_name, required_results in expected_results.items():
