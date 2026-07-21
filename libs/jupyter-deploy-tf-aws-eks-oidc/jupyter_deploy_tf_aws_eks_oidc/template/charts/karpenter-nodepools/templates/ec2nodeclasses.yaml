@@ -1,10 +1,10 @@
 # EC2NodeClasses define the AWS-level node configuration for Karpenter.
 # One class per pool (routing + each workspace pool).
-# IMDS hop limits differ by trust level:
-#   - routing (hop 2): trusted infra pods — containerized pods can reach IMDS.
-#   - workspace pools (hop 1): untrusted user code — blocks pod->IMDS so
-#     notebook code cannot assume the node role. Node agents (CNI, EBS CSI)
-#     use hostNetwork and reach IMDS at hop 1, so they are unaffected.
+# All pools pin httpPutResponseHopLimit: 1 — no routing or workspace pod needs
+# IMDS: cert-manager/external-dns use Pod Identity, and traefik/dex/oauth2-proxy/
+# authmiddleware/web-app make no AWS calls. Hop 1 blocks containerized pods from
+# reaching IMDS to assume the node role; node agents (CNI, EBS CSI) use
+# hostNetwork and reach IMDS at hop 1, so they are unaffected.
 # Both pin httpTokens: required (IMDSv2).
 ---
 apiVersion: karpenter.k8s.aws/v1
@@ -24,7 +24,7 @@ spec:
   tags:
     karpenter.sh/cluster-name: {{ .Values.clusterName | quote }}
   metadataOptions:
-    httpPutResponseHopLimit: 2
+    httpPutResponseHopLimit: 1
     httpEndpoint: enabled
     httpTokens: required
     httpProtocolIPv6: disabled

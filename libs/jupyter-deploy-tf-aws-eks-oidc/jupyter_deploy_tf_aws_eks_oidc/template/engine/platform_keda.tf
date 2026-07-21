@@ -48,5 +48,10 @@ resource "helm_release" "keda" {
     },
   ]
 
-  depends_on = [null_resource.cluster_addons, aws_eks_node_group.platform]
+  depends_on = [
+    null_resource.cluster_addons,
+    aws_eks_node_group.platform,
+    aws_eks_access_policy_association.admin_role,
+    aws_eks_access_policy_association.admin_user,
+  ]
 }

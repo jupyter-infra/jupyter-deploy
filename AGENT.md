@@ -80,13 +80,6 @@ Code: `./libs/jupyter-deploy-tf-aws-eks-oidc`
 - cloud provider: `aws`
 - identity provider: `github` (via Dex OIDC)
 
-**IMPORTANT: When testing local chart changes against a deployed cluster, run `make deploy-aws-oidc`
-in the `jupyter-k8s-aws` repo after `jd up` completes.** The `workspace_router_chart_version` in
-`defaults-all.tfvars` points to the published GHCR chart, which does not include uncommitted local
-changes (e.g. KEDA ScaledObjects, tolerations for Karpenter routing nodes). Without this step,
-routing pods will fail to schedule because the published chart lacks the `jupyter-deploy/role=routing`
-toleration required by the Karpenter NodePool taint.
-
 ### Terraform file structure
 
 The engine directory has three tiers — keep them separate:

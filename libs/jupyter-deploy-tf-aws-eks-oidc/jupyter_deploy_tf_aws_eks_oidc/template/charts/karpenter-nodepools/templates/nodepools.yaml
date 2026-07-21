@@ -91,7 +91,12 @@ spec:
     cpu: {{ .maxCpu | quote }}
     memory: {{ .maxMemory | quote }}
   disruption:
-    consolidationPolicy: WhenEmptyOrUnderutilized
+    # WhenEmpty (not WhenEmptyOrUnderutilized): workspace pods carry no PDB and
+    # no karpenter.sh/do-not-disrupt annotation, so underutilized-consolidation
+    # would be free to evict a running notebook to bin-pack. Restricting to
+    # WhenEmpty means a node is only reclaimed once idle-shutdown has drained its
+    # last workspace pod — scale-to-zero still works, running notebooks are safe.
+    consolidationPolicy: WhenEmpty
     consolidateAfter: 60s
     budgets:
       - nodes: "1"

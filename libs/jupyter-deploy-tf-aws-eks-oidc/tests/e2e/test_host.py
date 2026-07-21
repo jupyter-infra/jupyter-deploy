@@ -124,8 +124,10 @@ def test_host_list_query_platform_returns_only_platform_nodes(e2e_deployment: En
 def test_host_list_query_routing_returns_only_routing_nodes(e2e_deployment: EndToEndDeployment) -> None:
     """--query filters to Karpenter routing nodes using the node role label.
 
-    The routing NodePool always has at least 2 nodes (minReplicas=2 via KEDA).
-    Result must be a strict subset of all nodes.
+    minReplicas=2 guarantees 2 routing *pods*, not 2 nodes — preferred-only
+    anti-affinity lets consolidation bin-pack both pods onto a single node, so
+    the routing pool can legitimately run on 1 node. Assert >= 1 and that the
+    result is a strict subset of all nodes.
     """
     e2e_deployment.ensure_deployed()
 
@@ -137,8 +139,8 @@ def test_host_list_query_routing_returns_only_routing_nodes(e2e_deployment: EndT
     )
     filtered = json.loads(result.stdout)
 
-    assert len(filtered["hosts"]) >= 2, (
-        f"Expected at least 2 routing nodes, got {len(filtered['hosts'])}: {filtered['hosts']}"
+    assert len(filtered["hosts"]) >= 1, (
+        f"Expected at least 1 routing node, got {len(filtered['hosts'])}: {filtered['hosts']}"
     )
     assert len(filtered["hosts"]) < all_count, f"Expected query filter to return fewer than all {all_count} nodes"
 

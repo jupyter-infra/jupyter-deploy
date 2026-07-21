@@ -37,7 +37,7 @@ platform_disk_size_gb   = 50
 platform_min_size       = 2
 platform_max_size       = 3
 
-karpenter_version  = "1.3.3"
+karpenter_version  = "1.3.8"
 keda_version       = "2.16.1"
 prometheus_version = "27.0.0"
 

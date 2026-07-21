@@ -34,7 +34,12 @@ SLEEP_INTERVAL=10
 # causing "failed to delete release: karpenter" during terraform destroy.
 
 echo "Uninstalling Karpenter Helm release..."
-aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$REGION" > /dev/null 2>&1 || true
+# Write to a throwaway kubeconfig so we never clobber the user's ~/.kube/config
+# (matches the pattern in local-await-router.sh.tftpl et al.).
+tmp_kubeconfig=$(mktemp)
+trap 'rm -f "$tmp_kubeconfig"' EXIT
+aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$REGION" --kubeconfig "$tmp_kubeconfig" > /dev/null 2>&1 || true
+export KUBECONFIG="$tmp_kubeconfig"
 if helm status karpenter -n karpenter > /dev/null 2>&1; then
     helm uninstall karpenter -n karpenter --no-hooks --wait=false 2>&1 || true
     echo "  Karpenter Helm release uninstalled."

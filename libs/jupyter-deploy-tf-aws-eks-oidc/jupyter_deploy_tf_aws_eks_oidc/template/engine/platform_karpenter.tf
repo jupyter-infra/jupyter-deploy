@@ -59,6 +59,8 @@ resource "helm_release" "karpenter" {
     null_resource.core_node_addons,
     aws_eks_node_group.platform,
     module.karpenter,
+    aws_eks_access_policy_association.admin_role,
+    aws_eks_access_policy_association.admin_user,
   ]
 }
 
@@ -98,6 +100,7 @@ resource "helm_release" "karpenter_nodepools" {
   chart            = "${path.module}/../charts/karpenter-nodepools"
   namespace        = "karpenter"
   create_namespace = false
+  timeout          = 900
 
   set = [
     {
@@ -145,7 +148,12 @@ resource "helm_release" "karpenter_nodepools" {
     })
   ]
 
-  depends_on = [helm_release.karpenter, time_sleep.karpenter_tag_propagation]
+  depends_on = [
+    helm_release.karpenter,
+    time_sleep.karpenter_tag_propagation,
+    aws_eks_access_policy_association.admin_role,
+    aws_eks_access_policy_association.admin_user,
+  ]
 }
 
 # Tag the EKS cluster security group for Karpenter node discovery.

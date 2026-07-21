@@ -55,6 +55,13 @@ resource "helm_release" "prometheus" {
       name  = "server.retention"
       value = "15d"
     },
+    # Size-based retention cap — keep the TSDB comfortably under the 20Gi PVC
+    # (~90%) so a traffic spike in cardinality can't fill the volume and wedge
+    # Prometheus. Whichever of time/size retention triggers first wins.
+    {
+      name  = "server.retentionSize"
+      value = "18GB"
+    },
     # Use gp2 storage class (EBS CSI class is created later by workspace-defaults)
     {
       name  = "server.persistentVolume.storageClass"
@@ -83,5 +90,10 @@ resource "helm_release" "prometheus" {
     },
   ]
 
-  depends_on = [null_resource.cluster_addons, aws_eks_node_group.platform]
+  depends_on = [
+    null_resource.cluster_addons,
+    aws_eks_node_group.platform,
+    aws_eks_access_policy_association.admin_role,
+    aws_eks_access_policy_association.admin_user,
+  ]
 }
