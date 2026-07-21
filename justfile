@@ -10,6 +10,11 @@ lint:
     terraform fmt -recursive -write=true
     uv run yamllint .
 
+# Bump a release target's version (target: cli|plugin|base-template|eks-oidc-template; bump: patch|minor|major or an explicit version)
+update-version target bump="patch":
+    uv run python scripts/update_version.py {{target}} {{bump}}
+    uv lock
+
 # Generate CLI reference docs from Typer app
 docs-cli-ref:
     uv run python scripts/generate_cli_ref.py docs/source/reference

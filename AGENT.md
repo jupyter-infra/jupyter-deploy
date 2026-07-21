@@ -322,7 +322,7 @@ Essential commands for debugging a deploy project:
 - `jd history show up -n 100 -s 100` - Display lines [-200:-100] of the latest `up` run
 
 More specific commands are template-dependent.
-Read the `AGENT.md` in the project directory for detailed instructions.
+Read the `AGENT.md` in each project directory for detailed instructions.
 
 ## Writing documentation
 
@@ -335,6 +335,13 @@ Refer to `diagrams/AGENT.md`
 ## Making changes in the GitHub CI
 
 Refer to `.github/AGENT.md`.
+
+## Preparing versions PR
+
+Ask the user the package(s) they want to update version, and whether they want to bump the major, minor or patch.
+Then use the `just update-version` method.
+
+Whenever you're asked to update the CLI version, upgrade the root `uv.lock` with `uv sync --upgrade --all-packages`.
 
 ## Handling releases to PyPI
 

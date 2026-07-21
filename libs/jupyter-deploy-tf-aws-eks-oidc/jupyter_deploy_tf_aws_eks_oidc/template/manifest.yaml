@@ -2,7 +2,7 @@ schema_version: 1
 template:
   name: tf-aws-eks-oidc
   engine: terraform
-  version: 0.1.3
+  version: 0.1.4
 health:
   active: true
   expected-status-code: 302
