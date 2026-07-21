@@ -130,6 +130,7 @@ def _workspaces_node_count() -> int:
     return len([line for line in output.splitlines() if line.strip()])
 
 
+@pytest.mark.mutating
 @pytest.mark.usefixtures("kubernetes_cluster_login")
 def test_karpenter_workspace_provisioning_and_scale_to_zero(e2e_deployment: EndToEndDeployment) -> None:
     """Full Karpenter workspace lifecycle: provision on create, scale-to-zero on delete.
