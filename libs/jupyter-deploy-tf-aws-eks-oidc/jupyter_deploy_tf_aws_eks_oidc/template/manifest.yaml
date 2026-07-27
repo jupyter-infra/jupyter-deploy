@@ -69,11 +69,17 @@ server-status-rules:
   - path: .status.conditions[type=Available].status
     equals: "True"
 pool-status-rules:
+# Karpenter NodePool aggregates ValidationSucceeded + NodeClassReady into a
+# single Ready condition (True / Unknown while reconciling / False on failure).
 - display: Ready
   all:
   - path: .status.conditions[type=Ready].status
     equals: "True"
-- display: NotReady
+- display: Creating
+  all:
+  - path: .status.conditions[type=Ready].status
+    equals: Unknown
+- display: Degraded
   all:
   - path: .status.conditions[type=Ready].status
     equals: "False"

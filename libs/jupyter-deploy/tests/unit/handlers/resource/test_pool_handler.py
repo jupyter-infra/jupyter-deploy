@@ -25,7 +25,11 @@ def _ready_rules() -> list[JupyterDeployStatusRuleV1]:
             all=[JupyterDeployStatusRuleMatchV1(path=".status.conditions[type=Ready].status", equals="True")],
         ),
         JupyterDeployStatusRuleV1(
-            display="NotReady",
+            display="Creating",
+            all=[JupyterDeployStatusRuleMatchV1(path=".status.conditions[type=Ready].status", equals="Unknown")],
+        ),
+        JupyterDeployStatusRuleV1(
+            display="Degraded",
             all=[JupyterDeployStatusRuleMatchV1(path=".status.conditions[type=Ready].status", equals="False")],
         ),
     ]

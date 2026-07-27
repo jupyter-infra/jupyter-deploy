@@ -1,230 +1,12 @@
 # === Karpenter node provisioner ===
 #
-# All Karpenter infrastructure in one file: IAM policy, SQS interruption queue,
-# EventBridge rules, controller Helm chart, and the NodePool/EC2NodeClass chart.
-# Follows the platform_*.tf convention — singleton resources that deploy helm
-# charts and their supporting AWS infra onto the cluster.
-
-# ── Karpenter controller IAM policy ──────────────────────────────────────────
-# Transcribed from the upstream Karpenter v1 recommended controller policy
-# (github.com/aws/karpenter-provider-aws, cloudformation.yaml). Provisioning and
-# destructive actions are scoped to EC2 resources tagged for THIS cluster —
-# kubernetes.io/cluster/<name>=owned + karpenter.sh/nodepool — which Karpenter
-# injects on every RunInstances/CreateFleet. This closes the tag→terminate
-# escalation possible under a region-only guard: CreateTags can only apply tags
-# as part of a create (ec2:CreateAction), so an actor cannot retroactively tag an
-# unrelated instance into this cluster's boundary and then terminate it.
-
-locals {
-  karpenter_ec2_arn_prefix = "arn:${data.aws_partition.current.partition}:ec2:${data.aws_region.current.id}"
-}
-
-data "aws_iam_policy_document" "karpenter_controller" {
-  statement {
-    sid     = "AllowScopedEC2InstanceAccessActions"
-    actions = ["ec2:RunInstances", "ec2:CreateFleet"]
-    resources = [
-      "${local.karpenter_ec2_arn_prefix}::image/*",
-      "${local.karpenter_ec2_arn_prefix}::snapshot/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:security-group/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:subnet/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:capacity-reservation/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:placement-group/*",
-    ]
-  }
-
-  statement {
-    sid       = "AllowScopedEC2LaunchTemplateAccessActions"
-    actions   = ["ec2:RunInstances", "ec2:CreateFleet"]
-    resources = ["${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:launch-template/*"]
-    condition {
-      test     = "StringEquals"
-      variable = "aws:ResourceTag/kubernetes.io/cluster/${module.eks_cluster.cluster_name}"
-      values   = ["owned"]
-    }
-    condition {
-      test     = "StringLike"
-      variable = "aws:ResourceTag/karpenter.sh/nodepool"
-      values   = ["*"]
-    }
-  }
-
-  statement {
-    sid     = "AllowScopedEC2InstanceActionsWithTags"
-    actions = ["ec2:RunInstances", "ec2:CreateFleet", "ec2:CreateLaunchTemplate"]
-    resources = [
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:fleet/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:instance/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:volume/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:network-interface/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:launch-template/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:spot-instances-request/*",
-    ]
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestTag/kubernetes.io/cluster/${module.eks_cluster.cluster_name}"
-      values   = ["owned"]
-    }
-    condition {
-      test     = "StringLike"
-      variable = "aws:RequestTag/karpenter.sh/nodepool"
-      values   = ["*"]
-    }
-  }
-
-  statement {
-    sid     = "AllowScopedResourceCreationTagging"
-    actions = ["ec2:CreateTags"]
-    resources = [
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:fleet/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:instance/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:volume/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:network-interface/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:launch-template/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:spot-instances-request/*",
-    ]
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestTag/kubernetes.io/cluster/${module.eks_cluster.cluster_name}"
-      values   = ["owned"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "ec2:CreateAction"
-      values   = ["RunInstances", "CreateFleet", "CreateLaunchTemplate"]
-    }
-    condition {
-      test     = "StringLike"
-      variable = "aws:RequestTag/karpenter.sh/nodepool"
-      values   = ["*"]
-    }
-  }
-
-  statement {
-    sid       = "AllowScopedResourceTagging"
-    actions   = ["ec2:CreateTags"]
-    resources = ["${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:instance/*"]
-    condition {
-      test     = "StringEquals"
-      variable = "aws:ResourceTag/kubernetes.io/cluster/${module.eks_cluster.cluster_name}"
-      values   = ["owned"]
-    }
-    condition {
-      test     = "StringLike"
-      variable = "aws:ResourceTag/karpenter.sh/nodepool"
-      values   = ["*"]
-    }
-    condition {
-      test     = "ForAllValues:StringEquals"
-      variable = "aws:TagKeys"
-      values   = ["karpenter.sh/nodeclaim", "Name"]
-    }
-  }
-
-  statement {
-    sid     = "AllowScopedDeletion"
-    actions = ["ec2:TerminateInstances", "ec2:DeleteLaunchTemplate"]
-    resources = [
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:instance/*",
-      "${local.karpenter_ec2_arn_prefix}:${data.aws_caller_identity.current.account_id}:launch-template/*",
-    ]
-    condition {
-      test     = "StringEquals"
-      variable = "aws:ResourceTag/kubernetes.io/cluster/${module.eks_cluster.cluster_name}"
-      values   = ["owned"]
-    }
-    condition {
-      test     = "StringLike"
-      variable = "aws:ResourceTag/karpenter.sh/nodepool"
-      values   = ["*"]
-    }
-  }
-
-  statement {
-    sid = "AllowRegionalReadActions"
-    actions = [
-      "ec2:DescribeAvailabilityZones",
-      "ec2:DescribeCapacityReservations",
-      "ec2:DescribeImages",
-      "ec2:DescribeInstances",
-      "ec2:DescribeInstanceStatus",
-      "ec2:DescribeInstanceTypeOfferings",
-      "ec2:DescribeInstanceTypes",
-      "ec2:DescribeLaunchTemplates",
-      "ec2:DescribePlacementGroups",
-      "ec2:DescribeSecurityGroups",
-      "ec2:DescribeSpotPriceHistory",
-      "ec2:DescribeSubnets",
-    ]
-    resources = ["*"]
-    condition {
-      test     = "StringEquals"
-      variable = "aws:RequestedRegion"
-      values   = [data.aws_region.current.id]
-    }
-  }
-
-  statement {
-    sid       = "AllowSSMGetParameter"
-    actions   = ["ssm:GetParameter"]
-    resources = ["arn:${data.aws_partition.current.partition}:ssm:${data.aws_region.current.id}::parameter/aws/service/*"]
-  }
-
-  statement {
-    sid       = "AllowPricingGetProducts"
-    actions   = ["pricing:GetProducts"]
-    resources = ["*"]
-  }
-
-  statement {
-    sid       = "AllowPassNodeRole"
-    actions   = ["iam:PassRole"]
-    resources = [module.karpenter_node_role.role_arn]
-    condition {
-      test     = "StringEquals"
-      variable = "iam:PassedToService"
-      values   = ["ec2.amazonaws.com"]
-    }
-  }
-
-  statement {
-    sid       = "AllowInstanceProfileGet"
-    actions   = ["iam:GetInstanceProfile"]
-    resources = [aws_iam_instance_profile.karpenter_node.arn]
-  }
-
-  statement {
-    sid = "AllowInterruptionQueueActions"
-    actions = [
-      "sqs:DeleteMessage",
-      "sqs:GetQueueAttributes",
-      "sqs:GetQueueUrl",
-      "sqs:ReceiveMessage",
-    ]
-    resources = [aws_sqs_queue.karpenter_interruption.arn]
-  }
-
-  statement {
-    sid       = "AllowEKSClusterActions"
-    actions   = ["eks:DescribeCluster"]
-    resources = ["arn:${data.aws_partition.current.partition}:eks:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:cluster/${module.eks_cluster.cluster_name}"]
-  }
-}
-
-resource "aws_iam_policy" "karpenter_controller" {
-  name   = "${local.resource_name_prefix}-karpenter-controller"
-  policy = data.aws_iam_policy_document.karpenter_controller.json
-  tags   = local.combined_tags
-}
-
-locals {
-  karpenter_controller_role_name = reverse(split("/", module.karpenter_controller_role.role_arn))[0]
-}
-
-resource "aws_iam_role_policy_attachment" "karpenter_controller" {
-  role       = local.karpenter_controller_role_name
-  policy_arn = aws_iam_policy.karpenter_controller.arn
-}
+# Karpenter runtime infrastructure: SQS interruption queue, EventBridge rules,
+# the controller Helm chart, and the NodePool/EC2NodeClass chart. Follows the
+# platform_*.tf convention — singleton resources that deploy helm charts and
+# their supporting AWS infra onto the cluster.
+#
+# The controller IAM role and policy are core infra and live in iam.tf (tier 1),
+# alongside the node role and instance profile.
 
 # ── SQS interruption queue ────────────────────────────────────────────────────
 # Karpenter polls this queue for EC2 spot interruption notices, instance health
@@ -248,12 +30,15 @@ data "aws_iam_policy_document" "karpenter_interruption_queue" {
       identifiers = ["events.amazonaws.com", "sqs.amazonaws.com"]
     }
     resources = [aws_sqs_queue.karpenter_interruption.arn]
+    # Confused-deputy guard, NOT optional. The queue name is deterministic
+    # (${cluster}-karpenter), so without this SourceArn condition an EventBridge
+    # rule in ANY AWS account could target this queue and inject forged
+    # interruption events, and Karpenter would drain healthy nodes in response.
+    # Scoping to this cluster's own rule ARNs closes that cross-account vector.
     condition {
       test     = "ArnEquals"
       variable = "aws:SourceArn"
       values = [
-        aws_cloudwatch_event_rule.karpenter_spot_interruption.arn,
-        aws_cloudwatch_event_rule.karpenter_instance_rebalance.arn,
         aws_cloudwatch_event_rule.karpenter_instance_state_change.arn,
         aws_cloudwatch_event_rule.karpenter_scheduled_change.arn,
       ]
@@ -267,38 +52,11 @@ resource "aws_sqs_queue_policy" "karpenter_interruption" {
 }
 
 # ── EventBridge rules → SQS ──────────────────────────────────────────────────
-
-resource "aws_cloudwatch_event_rule" "karpenter_spot_interruption" {
-  name        = "${module.eks_cluster.cluster_name}-karpenter-spot-interruption"
-  description = "Karpenter: EC2 spot interruption notices for ${module.eks_cluster.cluster_name}"
-  event_pattern = jsonencode({
-    source      = ["aws.ec2"]
-    detail-type = ["EC2 Spot Instance Interruption Warning"]
-  })
-  tags = local.combined_tags
-}
-
-resource "aws_cloudwatch_event_target" "karpenter_spot_interruption" {
-  rule      = aws_cloudwatch_event_rule.karpenter_spot_interruption.name
-  target_id = "KarpenterInterruptionQueueTarget"
-  arn       = aws_sqs_queue.karpenter_interruption.arn
-}
-
-resource "aws_cloudwatch_event_rule" "karpenter_instance_rebalance" {
-  name        = "${module.eks_cluster.cluster_name}-karpenter-rebalance"
-  description = "Karpenter: EC2 instance rebalance recommendations for ${module.eks_cluster.cluster_name}"
-  event_pattern = jsonencode({
-    source      = ["aws.ec2"]
-    detail-type = ["EC2 Instance Rebalance Recommendation"]
-  })
-  tags = local.combined_tags
-}
-
-resource "aws_cloudwatch_event_target" "karpenter_instance_rebalance" {
-  rule      = aws_cloudwatch_event_rule.karpenter_instance_rebalance.name
-  target_id = "KarpenterInterruptionQueueTarget"
-  arn       = aws_sqs_queue.karpenter_interruption.arn
-}
+# Only on-demand-relevant interruption sources are wired up: instance
+# state-change (out-of-band termination) and AWS Health scheduled-change
+# (maintenance/retirement). Spot interruption + rebalance rules are intentionally
+# omitted — every NodePool runs capacity-type: on-demand, so those events can
+# never fire. Add them back alongside a spot NodePool if spot is ever enabled.
 
 resource "aws_cloudwatch_event_rule" "karpenter_instance_state_change" {
   name        = "${module.eks_cluster.cluster_name}-karpenter-state-change"

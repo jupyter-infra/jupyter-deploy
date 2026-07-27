@@ -1,5 +1,6 @@
 import json
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 from typer.testing import CliRunner
@@ -17,11 +18,11 @@ class TestPoolApp(unittest.TestCase):
         mock_show_pool = Mock(
             return_value=PoolDetail(
                 name="workspace-cpu",
-                status="True",
+                status="Ready",
                 resource={"status": {"conditions": [{"type": "Ready", "status": "True"}]}},
             )
         )
-        mock_get_status = Mock(return_value="True")
+        mock_get_status = Mock(return_value="Ready")
 
         mock_handler.list_pools = mock_list_pools
         mock_handler.show_pool = mock_show_pool
@@ -36,7 +37,7 @@ class TestPoolApp(unittest.TestCase):
     def test_pool_help(self) -> None:
         result = self.runner.invoke(pool_app, ["--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("node pools", result.output)
+        self.assertIn("host pools", result.output)
 
     @patch("jupyter_deploy.handlers.resource.pool_handler.PoolHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -97,7 +98,7 @@ class TestPoolApp(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         parsed = json.loads(result.output)
         self.assertEqual(parsed["name"], "workspace-cpu")
-        self.assertEqual(parsed["status"], "True")
+        self.assertEqual(parsed["status"], "Ready")
 
     @patch("jupyter_deploy.handlers.resource.pool_handler.PoolHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -108,7 +109,7 @@ class TestPoolApp(unittest.TestCase):
         result = self.runner.invoke(pool_app, ["status", "--name", "workspace-cpu"])
 
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("True", result.output)
+        self.assertIn("Ready", result.output)
         mock_fns["get_status"].assert_called_once_with(name="workspace-cpu")
 
     @patch("jupyter_deploy.handlers.resource.pool_handler.PoolHandler")
@@ -120,4 +121,4 @@ class TestPoolApp(unittest.TestCase):
         result = self.runner.invoke(pool_app, ["show", "--name", "routing", "--path", "/tmp/my-project"])
 
         self.assertEqual(result.exit_code, 0)
-        mock_project_dir.assert_called()
+        mock_project_dir.assert_called_once_with(Path("/tmp/my-project"))

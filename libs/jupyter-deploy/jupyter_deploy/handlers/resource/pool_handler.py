@@ -60,7 +60,9 @@ class PoolHandler(BaseProjectHandler):
         results = collect_results(runner, command)
         resource = results.get("resource", {})
         rules = self.project_manifest.pool_status_rules
-        status = evaluate_status_rules(json.dumps(resource), rules) if rules else ""
+        # No rules declared -> fall back to "Unknown" (evaluate_status_rules' own
+        # no-match sentinel) rather than an empty string that reads as a bug.
+        status = evaluate_status_rules(json.dumps(resource), rules) if rules else "Unknown"
         return PoolDetail(
             name=results.get("name", name),
             status=status,

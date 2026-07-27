@@ -12,7 +12,7 @@ from jupyter_deploy.cli.simple_display import SimpleDisplayManager
 from jupyter_deploy.handlers.resource import pool_handler
 
 pool_app = typer.Typer(
-    help="Interact with the node pools managing workspace and routing nodes.",
+    help="Interact with the host pools managing workspace and routing hosts.",
     no_args_is_help=True,
 )
 
@@ -25,7 +25,7 @@ def list_pools(
     ] = None,
     json_output: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
 ) -> None:
-    """List node pools in the project.
+    """List host pools in the project.
 
     Run either from a project directory that you created with <jd init>;
     or pass --path <project-dir>.
@@ -35,7 +35,7 @@ def list_pools(
         simple_display_manager = SimpleDisplayManager(console=console)
         handler = pool_handler.PoolHandler(display_manager=simple_display_manager)
 
-        with simple_display_manager.spinner("Listing node pools..."):
+        with simple_display_manager.spinner("Listing host pools..."):
             names = handler.list_pools()
 
         if json_output:
@@ -51,14 +51,14 @@ def list_pools(
 
 @pool_app.command()
 def show(
-    name: Annotated[str, typer.Option("--name", help="Name of the node pool.")],
+    name: Annotated[str, typer.Option("--name", help="Name of the host pool.")],
     project_dir: Annotated[
         Path | None,
         typer.Option("--path", "-p", help="Directory of the project."),
     ] = None,
     json_output: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
 ) -> None:
-    """Display detailed information about a node pool.
+    """Display detailed information about a host pool.
 
     Run either from a project directory that you created with <jd init>;
     or pass --path <project-dir>.
@@ -80,13 +80,13 @@ def show(
 
 @pool_app.command()
 def status(
-    name: Annotated[str, typer.Option("--name", help="Name of the node pool.")],
+    name: Annotated[str, typer.Option("--name", help="Name of the host pool.")],
     project_dir: Annotated[
         Path | None,
         typer.Option("--path", "-p", help="Directory of the project."),
     ] = None,
 ) -> None:
-    """Check the status of a node pool.
+    """Check the status of a host pool.
 
     Run either from a project directory that you created with <jd init>;
     or pass --path <project-dir>.
