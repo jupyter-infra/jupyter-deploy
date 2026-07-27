@@ -83,38 +83,6 @@ pool-status-rules:
   all:
   - path: .status.conditions[type=Ready].status
     equals: "False"
-# EKS Managed Node Group status is a flat enum at .status (ACTIVE/CREATING/...),
-# not a conditions array. Normalize it to the same display vocabulary as the
-# Karpenter rules above so `jd pool status` reads uniformly across pool kinds.
-pool-managed-status-rules:
-- display: Ready
-  all:
-  - path: .status
-    equals: ACTIVE
-- display: Creating
-  all:
-  - path: .status
-    equals: CREATING
-- display: Creating
-  all:
-  - path: .status
-    equals: UPDATING
-- display: Deleting
-  all:
-  - path: .status
-    equals: DELETING
-- display: Degraded
-  all:
-  - path: .status
-    equals: DEGRADED
-- display: Degraded
-  all:
-  - path: .status
-    equals: CREATE_FAILED
-- display: Degraded
-  all:
-  - path: .status
-    equals: DELETE_FAILED
 images:
   jupyterlab:
     description: JupyterLab workspace image
@@ -239,38 +207,6 @@ commands:
     source: result
     source-key: '[0].Name'
   - result-name: pool.status.resource
-    source: result
-    source-key: '[0].Resource'
-# EKS Managed Node Group pools. The PoolHandler queries both these and the
-# Karpenter commands above, tags each result with its kind, and presents them
-# through the same `jd pool list/show/status` interface.
-- cmd: pool.list-managed
-  sequence:
-  - api-name: aws.eks.list-nodegroups
-    arguments:
-    - api-attribute: cluster_name
-      source: output
-      source-key: cluster_name
-  results:
-  - result-name: pool.list-managed
-    source: result
-    source-key: '[0].Nodegroups'
-    transform: comma-separated-str-to-list-str
-- cmd: pool.status-managed
-  sequence:
-  - api-name: aws.eks.describe-nodegroup
-    arguments:
-    - api-attribute: cluster_name
-      source: output
-      source-key: cluster_name
-    - api-attribute: nodegroup_name
-      source: cli
-      source-key: name
-  results:
-  - result-name: pool.status-managed.name
-    source: result
-    source-key: '[0].NodegroupName'
-  - result-name: pool.status-managed.resource
     source: result
     source-key: '[0].Resource'
 - cmd: host.list

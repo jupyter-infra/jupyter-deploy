@@ -1,5 +1,3 @@
-import datetime
-import json
 import subprocess
 import unittest
 from unittest.mock import Mock, patch
@@ -103,15 +101,10 @@ class TestAwsEksRunner(unittest.TestCase):
     def test_describe_nodegroup_returns_results(self, mock_boto3: Mock) -> None:
         mock_client: Mock = Mock()
         mock_boto3.client.return_value = mock_client
-        # boto returns datetime objects for createdAt/modifiedAt — Resource must
-        # still serialize (json.dumps default=str), not raise.
-        created = datetime.datetime(2026, 7, 27, 12, 0, 0)
         mock_client.describe_nodegroup.return_value = {
             "nodegroup": {
                 "nodegroupName": "ng-1",
                 "status": "ACTIVE",
-                "createdAt": created,
-                "scalingConfig": {"minSize": 2, "maxSize": 3},
             }
         }
 
@@ -126,11 +119,6 @@ class TestAwsEksRunner(unittest.TestCase):
 
         self.assertEqual(result["NodegroupName"].value, "ng-1")
         self.assertEqual(result["Status"].value, "ACTIVE")
-        # Resource is the full nodegroup as JSON, with datetime coerced to str.
-        resource = json.loads(result["Resource"].value)
-        self.assertEqual(resource["nodegroupName"], "ng-1")
-        self.assertEqual(resource["scalingConfig"], {"minSize": 2, "maxSize": 3})
-        self.assertEqual(resource["createdAt"], str(created))
         mock_client.describe_nodegroup.assert_called_once_with(clusterName="my-cluster", nodegroupName="ng-1")
 
     @patch("jupyter_deploy.provider.aws.aws_eks_runner.run_cmd_and_capture_output")

@@ -1,4 +1,3 @@
-import json
 from enum import Enum
 
 import boto3
@@ -105,10 +104,6 @@ class AwsEksRunner(InstructionRunner):
                 result_name="NodegroupName", value=nodegroup.get("nodegroupName", "")
             ),
             "Status": StrResolvedInstructionResult(result_name="Status", value=nodegroup.get("status", "")),
-            # Full nodegroup object as JSON so `jd pool show` mirrors the rich detail
-            # view Karpenter NodePools get. default=str handles the datetime fields
-            # (createdAt/modifiedAt) boto returns.
-            "Resource": StrResolvedInstructionResult(result_name="Resource", value=json.dumps(nodegroup, default=str)),
         }
 
     def _update_kubeconfig(

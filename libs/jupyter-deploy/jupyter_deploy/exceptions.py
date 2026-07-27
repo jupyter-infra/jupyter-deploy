@@ -403,20 +403,6 @@ class ImageTagNotFoundError(JupyterDeployError, ValueError):
         super().__init__(f"Tag '{tag}' not found for image '{image_name}'.")
 
 
-class PoolNotFoundError(JupyterDeployError, ValueError):
-    """Raised when a pool name matches neither a Karpenter nor a managed pool.
-
-    Attributes:
-        pool_name: The name that was looked up
-        valid_pools: List of valid pool names
-    """
-
-    def __init__(self, pool_name: str, valid_pools: list[str]) -> None:
-        self.pool_name = pool_name
-        self.valid_pools = valid_pools
-        super().__init__(f"Pool '{pool_name}' not found.")
-
-
 class InvalidComponentVerbError(JupyterDeployError, ValueError):
     """Raised when a verb is not valid for the component's type.
 

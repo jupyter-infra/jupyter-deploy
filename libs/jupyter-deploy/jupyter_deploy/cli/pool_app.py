@@ -12,7 +12,7 @@ from jupyter_deploy.cli.simple_display import SimpleDisplayManager
 from jupyter_deploy.handlers.resource import pool_handler
 
 pool_app = typer.Typer(
-    help="Interact with the host pools managing workspace and routing hosts.",
+    help="Interact with pools of hosts where apps and components run.",
     no_args_is_help=True,
 )
 
@@ -25,7 +25,7 @@ def list_pools(
     ] = None,
     json_output: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
 ) -> None:
-    """List host pools in the project.
+    """List the pools in the project.
 
     Run either from a project directory that you created with <jd init>;
     or pass --path <project-dir>.
@@ -35,37 +35,30 @@ def list_pools(
         simple_display_manager = SimpleDisplayManager(console=console)
         handler = pool_handler.PoolHandler(display_manager=simple_display_manager)
 
-        with simple_display_manager.spinner("Listing host pools..."):
-            pools = handler.list_pools()
+        with simple_display_manager.spinner("Listing pools..."):
+            names = handler.list_pools()
 
         if json_output:
-            console.print(
-                json.dumps([{"name": p.name, "type": p.type} for p in pools]),
-                highlight=False,
-                markup=False,
-                soft_wrap=True,
-            )
+            console.print(json.dumps({"pools": names}), highlight=False, markup=False, soft_wrap=True)
             return
 
-        if pools:
-            name_width = max(len(p.name) for p in pools)
-            console.print(f"[bold]{'NAME':<{name_width}}  TYPE[/]")
-            for pool in pools:
-                console.print(f"[bold cyan]{pool.name:<{name_width}}[/]  {pool.type}")
+        if names:
+            for name in names:
+                console.print(f"  [bold cyan]{name}[/]")
         else:
             console.print("[bold cyan]None[/]")
 
 
 @pool_app.command()
 def show(
-    name: Annotated[str, typer.Option("--name", help="Name of the host pool.")],
+    name: Annotated[str, typer.Option("--name", help="Name of the pool.")],
     project_dir: Annotated[
         Path | None,
         typer.Option("--path", "-p", help="Directory of the project."),
     ] = None,
     json_output: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
 ) -> None:
-    """Display detailed information about a host pool.
+    """Display detailed information about a pool.
 
     Run either from a project directory that you created with <jd init>;
     or pass --path <project-dir>.
@@ -87,13 +80,13 @@ def show(
 
 @pool_app.command()
 def status(
-    name: Annotated[str, typer.Option("--name", help="Name of the host pool.")],
+    name: Annotated[str, typer.Option("--name", help="Name of the pool.")],
     project_dir: Annotated[
         Path | None,
         typer.Option("--path", "-p", help="Directory of the project."),
     ] = None,
 ) -> None:
-    """Check the status of a host pool.
+    """Check the status of a pool.
 
     Run either from a project directory that you created with <jd init>;
     or pass --path <project-dir>.
