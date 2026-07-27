@@ -36,15 +36,22 @@ def list_pools(
         handler = pool_handler.PoolHandler(display_manager=simple_display_manager)
 
         with simple_display_manager.spinner("Listing host pools..."):
-            names = handler.list_pools()
+            pools = handler.list_pools()
 
         if json_output:
-            console.print(json.dumps(names), highlight=False, markup=False, soft_wrap=True)
+            console.print(
+                json.dumps([{"name": p.name, "type": p.type} for p in pools]),
+                highlight=False,
+                markup=False,
+                soft_wrap=True,
+            )
             return
 
-        if names:
-            for name in names:
-                console.print(f"[bold cyan]{name}[/]")
+        if pools:
+            name_width = max(len(p.name) for p in pools)
+            console.print(f"[bold]{'NAME':<{name_width}}  TYPE[/]")
+            for pool in pools:
+                console.print(f"[bold cyan]{pool.name:<{name_width}}[/]  {pool.type}")
         else:
             console.print("[bold cyan]None[/]")
 

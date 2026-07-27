@@ -156,9 +156,15 @@ class HostDetail:
 
 @dataclass
 class PoolDetail:
-    """Result of jd pool show."""
+    """Result of jd pool show.
+
+    `type` distinguishes the underlying infrastructure — "karpenter" for a
+    Karpenter NodePool, "managed" for an EKS Managed Node Group — so the unified
+    `jd pool` commands can present both kinds while still labelling what each is.
+    """
 
     name: str = ""
+    type: str = ""
     status: str = ""
     resource: dict[str, Any] = field(default_factory=dict)
 

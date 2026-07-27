@@ -333,6 +333,9 @@ class JupyterDeployManifestV1(BaseModel):
     secrets: list[JupyterDeploySecretV1] | None = None
     server_status_rules: list[JupyterDeployStatusRuleV1] | None = Field(alias="server-status-rules", default=None)
     pool_status_rules: list[JupyterDeployStatusRuleV1] | None = Field(alias="pool-status-rules", default=None)
+    pool_managed_status_rules: list[JupyterDeployStatusRuleV1] | None = Field(
+        alias="pool-managed-status-rules", default=None
+    )
     supervised_execution: JupyterDeploySupervisedExecutionV1 | None = Field(alias="supervised-execution", default=None)
     project_store: JupyterDeployProjectStoreV1 | None = Field(alias="project-store", default=None)
     components: dict[str, JupyterDeployComponentDefinitionV1] | None = None
@@ -365,6 +368,14 @@ class JupyterDeployManifestV1(BaseModel):
         if not command:
             raise CommandNotImplementedError(cmd_name)
         return command
+
+    def get_command_or_none(self, cmd_name: str) -> JupyterDeployCommandV1 | None:
+        """Return the command details, or None when the manifest does not define it.
+
+        Use this for optional commands (e.g. a managed-pool query a template may
+        not declare) where absence is a valid state rather than an error.
+        """
+        return next((cmd for cmd in (self.commands or []) if cmd.cmd == cmd_name), None)
 
     def get_services(self) -> list[str]:
         """Return the services name."""

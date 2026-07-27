@@ -14,10 +14,17 @@ class TestPoolApp(unittest.TestCase):
 
     def get_mock_pool_handler(self) -> tuple[Mock, dict[str, Mock]]:
         mock_handler = Mock()
-        mock_list_pools = Mock(return_value=["routing", "workspace-cpu"])
+        mock_list_pools = Mock(
+            return_value=[
+                PoolDetail(name="routing", type="karpenter"),
+                PoolDetail(name="workspace-cpu", type="karpenter"),
+                PoolDetail(name="platform", type="managed"),
+            ]
+        )
         mock_show_pool = Mock(
             return_value=PoolDetail(
                 name="workspace-cpu",
+                type="karpenter",
                 status="Ready",
                 resource={"status": {"conditions": [{"type": "Ready", "status": "True"}]}},
             )
@@ -50,6 +57,11 @@ class TestPoolApp(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("routing", result.output)
         self.assertIn("workspace-cpu", result.output)
+        self.assertIn("platform", result.output)
+        # Option B: the type column is shown so users can tell what each pool is.
+        self.assertIn("TYPE", result.output)
+        self.assertIn("karpenter", result.output)
+        self.assertIn("managed", result.output)
         mock_fns["list_pools"].assert_called_once()
 
     @patch("jupyter_deploy.handlers.resource.pool_handler.PoolHandler")
@@ -62,7 +74,14 @@ class TestPoolApp(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         parsed = json.loads(result.output)
-        self.assertEqual(parsed, ["routing", "workspace-cpu"])
+        self.assertEqual(
+            parsed,
+            [
+                {"name": "routing", "type": "karpenter"},
+                {"name": "workspace-cpu", "type": "karpenter"},
+                {"name": "platform", "type": "managed"},
+            ],
+        )
 
     @patch("jupyter_deploy.handlers.resource.pool_handler.PoolHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -98,6 +117,7 @@ class TestPoolApp(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         parsed = json.loads(result.output)
         self.assertEqual(parsed["name"], "workspace-cpu")
+        self.assertEqual(parsed["type"], "karpenter")
         self.assertEqual(parsed["status"], "Ready")
 
     @patch("jupyter_deploy.handlers.resource.pool_handler.PoolHandler")
