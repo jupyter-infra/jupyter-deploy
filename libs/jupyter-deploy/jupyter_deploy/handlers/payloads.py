@@ -155,6 +155,15 @@ class HostDetail:
 
 
 @dataclass
+class PoolDetail:
+    """Result of jd pool show."""
+
+    name: str = ""
+    status: str = ""
+    resource: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class ServerDetail:
     """Result of jd server show."""
 

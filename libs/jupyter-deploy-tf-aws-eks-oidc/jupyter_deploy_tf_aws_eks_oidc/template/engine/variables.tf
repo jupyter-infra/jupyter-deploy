@@ -297,7 +297,7 @@ variable "routing_instance_generation_min" {
   description = <<-EOT
     Minimum EC2 instance generation (exclusive) for routing nodes.
 
-    Recommended: "5"
+    Recommended: "6"
   EOT
   type        = string
 }

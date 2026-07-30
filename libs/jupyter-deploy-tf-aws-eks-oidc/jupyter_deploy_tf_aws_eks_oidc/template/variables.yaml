@@ -60,7 +60,7 @@ overrides:
   # routing_instance_categories:
   #   - c
   #   - m
-  # routing_instance_generation_min: "5"
+  # routing_instance_generation_min: "6"
   # routing_disk_size_gb: 50
   # workspace_nodepools:
   #   - name: workspace-cpu

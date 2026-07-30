@@ -35,13 +35,14 @@ def test_pool_list_includes_routing_and_workspaces_nodepools(e2e_deployment: End
 
 @pytest.mark.usefixtures("kubernetes_cluster_login")
 def test_pool_list_json_contains_nodepool_objects(e2e_deployment: EndToEndDeployment) -> None:
-    """jd pool list --json must return a list of NodePool names."""
+    """jd pool list --json must return the pool names under a "pools" key."""
     e2e_deployment.ensure_deployed()
 
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "pool", "list", "--json"])
-    pools = json.loads(result.stdout)
+    data = json.loads(result.stdout)
 
-    assert isinstance(pools, list), f"Expected list, got {type(pools)}: {pools}"
+    assert "pools" in data, f"Expected 'pools' key, got: {data}"
+    pools = data["pools"]
     assert len(pools) >= 2, f"Expected at least 2 NodePools, got {len(pools)}"
 
     for name in EXPECTED_NODEPOOLS:
@@ -60,9 +61,9 @@ def test_pool_status_returns_named_nodepool_details(e2e_deployment: EndToEndDepl
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "pool", "status", "--name", nodepool_name])
     output = result.stdout
 
-    # status prints "Pool status: True/False" — check the NodePool is Ready
+    # status prints "Pool status: Ready/Creating/Degraded" via pool-status-rules
     assert "Pool status:" in output, f"Expected 'Pool status:' in status output:\n{output}"
-    assert "True" in output, f"Expected NodePool '{nodepool_name}' to be Ready:\n{output}"
+    assert "Ready" in output, f"Expected NodePool '{nodepool_name}' to be Ready:\n{output}"
 
 
 @pytest.mark.usefixtures("kubernetes_cluster_login")

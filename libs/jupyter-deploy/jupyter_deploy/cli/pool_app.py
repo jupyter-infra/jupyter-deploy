@@ -1,4 +1,5 @@
 import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated
 
@@ -11,7 +12,7 @@ from jupyter_deploy.cli.simple_display import SimpleDisplayManager
 from jupyter_deploy.handlers.resource import pool_handler
 
 pool_app = typer.Typer(
-    help="Interact with the node pools managing workspace and routing nodes.",
+    help="Interact with pools of hosts where apps and components run.",
     no_args_is_help=True,
 )
 
@@ -24,7 +25,7 @@ def list_pools(
     ] = None,
     json_output: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
 ) -> None:
-    """List node pools in the project.
+    """List the pools in the project.
 
     Run either from a project directory that you created with <jd init>;
     or pass --path <project-dir>.
@@ -34,30 +35,30 @@ def list_pools(
         simple_display_manager = SimpleDisplayManager(console=console)
         handler = pool_handler.PoolHandler(display_manager=simple_display_manager)
 
-        with simple_display_manager.spinner("Listing node pools..."):
+        with simple_display_manager.spinner("Listing pools..."):
             names = handler.list_pools()
 
         if json_output:
-            console.print(json.dumps(names), highlight=False, markup=False, soft_wrap=True)
+            console.print(json.dumps({"pools": names}), highlight=False, markup=False, soft_wrap=True)
             return
 
         if names:
             for name in names:
-                console.print(f"[bold cyan]{name}[/]")
+                console.print(f"  [bold cyan]{name}[/]")
         else:
             console.print("[bold cyan]None[/]")
 
 
 @pool_app.command()
 def show(
-    name: Annotated[str, typer.Option("--name", help="Name of the node pool.")],
+    name: Annotated[str, typer.Option("--name", help="Name of the pool.")],
     project_dir: Annotated[
         Path | None,
         typer.Option("--path", "-p", help="Directory of the project."),
     ] = None,
     json_output: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
 ) -> None:
-    """Display detailed information about a node pool.
+    """Display detailed information about a pool.
 
     Run either from a project directory that you created with <jd init>;
     or pass --path <project-dir>.
@@ -71,21 +72,21 @@ def show(
             details = handler.show_pool(name=name)
 
         if json_output:
-            console.print(json.dumps(details), highlight=False, markup=False, soft_wrap=True)
+            console.print(json.dumps(asdict(details)), highlight=False, markup=False, soft_wrap=True)
             return
 
-        console.print_json(json.dumps(details))
+        console.print_json(json.dumps(asdict(details)))
 
 
 @pool_app.command()
 def status(
-    name: Annotated[str, typer.Option("--name", help="Name of the node pool.")],
+    name: Annotated[str, typer.Option("--name", help="Name of the pool.")],
     project_dir: Annotated[
         Path | None,
         typer.Option("--path", "-p", help="Directory of the project."),
     ] = None,
 ) -> None:
-    """Check the status of a node pool.
+    """Check the status of a pool.
 
     Run either from a project directory that you created with <jd init>;
     or pass --path <project-dir>.
@@ -96,12 +97,6 @@ def status(
         handler = pool_handler.PoolHandler(display_manager=simple_display_manager)
 
         with simple_display_manager.spinner(f"Checking status for pool {name}..."):
-            details = handler.show_pool(name=name)
+            pool_status = handler.get_status(name=name)
 
-        resource = details.get("resource", {})
-        conditions = resource.get("status", {}).get("conditions", [])
-        ready = next(
-            (c.get("status", "Unknown") for c in conditions if c.get("type") == "Ready"),
-            "Unknown",
-        )
-        console.print(f"Pool status: [bold cyan]{ready}[/]")
+        console.print(f"Pool status: [bold cyan]{pool_status}[/]")

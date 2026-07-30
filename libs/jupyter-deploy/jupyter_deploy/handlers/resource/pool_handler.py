@@ -6,7 +6,8 @@ from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.engine.terraform import tf_outputs, tf_variables
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
-from jupyter_deploy.handlers.resource.resource_utils import collect_results
+from jupyter_deploy.handlers.payloads import PoolDetail
+from jupyter_deploy.handlers.resource.resource_utils import collect_results, evaluate_status_rules
 from jupyter_deploy.provider import manifest_command_runner as cmd_runner
 from jupyter_deploy.provider.resolved_clidefs import ResolvedCliParameter, StrResolvedCliParameter
 
@@ -39,7 +40,7 @@ class PoolHandler(BaseProjectHandler):
             variable_handler=self._variable_handler,
         )
 
-    def list_pools(self) -> list[Any]:
+    def list_pools(self) -> list[str]:
         """Returns list of node pool names."""
         command = self.project_manifest.get_command("pool.list")
         runner = self._runner()
@@ -48,7 +49,7 @@ class PoolHandler(BaseProjectHandler):
         items: list[Any] = json.loads(raw) if isinstance(raw, str) else raw
         return [item.get("metadata", {}).get("name", "") for item in items if isinstance(item, dict)]
 
-    def show_pool(self, name: str) -> dict[str, Any]:
+    def show_pool(self, name: str) -> PoolDetail:
         """Returns detailed info for a named node pool."""
         command = self.project_manifest.get_command("pool.status")
         runner = self._runner()
@@ -56,13 +57,19 @@ class PoolHandler(BaseProjectHandler):
             "name": StrResolvedCliParameter(parameter_name="name", value=name),
         }
         runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
-        return collect_results(runner, command)
+        results = collect_results(runner, command)
+        resource = results.get("resource", {})
+        rules = self.project_manifest.pool_status_rules
+        # No rules declared -> fall back to "Unknown" (evaluate_status_rules' own
+        # no-match sentinel) rather than an empty string that reads as a bug.
+        status = evaluate_status_rules(json.dumps(resource), rules) if rules else "Unknown"
+        return PoolDetail(
+            name=results.get("name", name),
+            status=status,
+            resource=resource,
+        )
 
-    def list_events(self) -> list[Any]:
-        """Returns list of recent node provisioning/consolidation events."""
-        command = self.project_manifest.get_command("pool.events")
-        runner = self._runner()
-        runner.run_command_sequence(command, cli_paramdefs={})
-        raw = runner.get_result_value(command, "pool.events", str)
-        result: list[Any] = json.loads(raw) if isinstance(raw, str) else raw
-        return result
+    def get_status(self, name: str) -> str:
+        """Returns the status of a named node pool, derived from manifest status rules."""
+        detail = self.show_pool(name=name)
+        return detail.status

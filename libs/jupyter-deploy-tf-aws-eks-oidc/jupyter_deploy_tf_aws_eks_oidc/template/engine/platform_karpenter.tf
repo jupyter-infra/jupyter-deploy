@@ -1,11 +1,96 @@
 # === Karpenter node provisioner ===
 #
-# Deploys the Karpenter controller Helm chart onto the cluster once the platform MNG
-# is available. IAM, SQS, and security-group resources (core infra) remain in
-# modules/karpenter/; this file owns only the Helm release that deploys the controller.
+# Karpenter runtime infrastructure: SQS interruption queue, EventBridge rules,
+# the controller Helm chart, and the NodePool/EC2NodeClass chart. Follows the
+# platform_*.tf convention — singleton resources that deploy helm charts and
+# their supporting AWS infra onto the cluster.
 #
-# The karpenter-nodepools local chart (EC2NodeClass + NodePool CRDs) is also here
-# because it depends on the Karpenter CRDs installed by the controller Helm release.
+# The controller IAM role and policy are core infra and live in iam.tf (tier 1),
+# alongside the node role and instance profile.
+
+# ── SQS interruption queue ────────────────────────────────────────────────────
+# Karpenter polls this queue for EC2 spot interruption notices, instance health
+# events, and scheduled maintenance events so it can cordon and drain nodes
+# gracefully before termination. Scoped per-cluster via the queue name.
+
+resource "aws_sqs_queue" "karpenter_interruption" {
+  name                      = "${module.eks_cluster.cluster_name}-karpenter"
+  message_retention_seconds = 300
+  sqs_managed_sse_enabled   = true
+  tags                      = local.combined_tags
+}
+
+data "aws_iam_policy_document" "karpenter_interruption_queue" {
+  statement {
+    sid     = "EC2InterruptionPolicy"
+    effect  = "Allow"
+    actions = ["sqs:SendMessage"]
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com", "sqs.amazonaws.com"]
+    }
+    resources = [aws_sqs_queue.karpenter_interruption.arn]
+    # Confused-deputy guard, NOT optional. The queue name is deterministic
+    # (${cluster}-karpenter), so without this SourceArn condition an EventBridge
+    # rule in ANY AWS account could target this queue and inject forged
+    # interruption events, and Karpenter would drain healthy nodes in response.
+    # Scoping to this cluster's own rule ARNs closes that cross-account vector.
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values = [
+        aws_cloudwatch_event_rule.karpenter_instance_state_change.arn,
+        aws_cloudwatch_event_rule.karpenter_scheduled_change.arn,
+      ]
+    }
+  }
+}
+
+resource "aws_sqs_queue_policy" "karpenter_interruption" {
+  queue_url = aws_sqs_queue.karpenter_interruption.url
+  policy    = data.aws_iam_policy_document.karpenter_interruption_queue.json
+}
+
+# ── EventBridge rules → SQS ──────────────────────────────────────────────────
+# Only on-demand-relevant interruption sources are wired up: instance
+# state-change (out-of-band termination) and AWS Health scheduled-change
+# (maintenance/retirement). Spot interruption + rebalance rules are intentionally
+# omitted — every NodePool runs capacity-type: on-demand, so those events can
+# never fire. Add them back alongside a spot NodePool if spot is ever enabled.
+
+resource "aws_cloudwatch_event_rule" "karpenter_instance_state_change" {
+  name        = "${module.eks_cluster.cluster_name}-karpenter-state-change"
+  description = "Karpenter: EC2 instance state change notifications for ${module.eks_cluster.cluster_name}"
+  event_pattern = jsonencode({
+    source      = ["aws.ec2"]
+    detail-type = ["EC2 Instance State-change Notification"]
+  })
+  tags = local.combined_tags
+}
+
+resource "aws_cloudwatch_event_target" "karpenter_instance_state_change" {
+  rule      = aws_cloudwatch_event_rule.karpenter_instance_state_change.name
+  target_id = "KarpenterInterruptionQueueTarget"
+  arn       = aws_sqs_queue.karpenter_interruption.arn
+}
+
+resource "aws_cloudwatch_event_rule" "karpenter_scheduled_change" {
+  name        = "${module.eks_cluster.cluster_name}-karpenter-scheduled-change"
+  description = "Karpenter: AWS health scheduled change events for ${module.eks_cluster.cluster_name}"
+  event_pattern = jsonencode({
+    source      = ["aws.health"]
+    detail-type = ["AWS Health Event"]
+  })
+  tags = local.combined_tags
+}
+
+resource "aws_cloudwatch_event_target" "karpenter_scheduled_change" {
+  rule      = aws_cloudwatch_event_rule.karpenter_scheduled_change.name
+  target_id = "KarpenterInterruptionQueueTarget"
+  arn       = aws_sqs_queue.karpenter_interruption.arn
+}
+
+# ── Karpenter controller Helm release ─────────────────────────────────────────
 
 resource "helm_release" "karpenter" {
   name             = "karpenter"
@@ -26,7 +111,7 @@ resource "helm_release" "karpenter" {
     },
     {
       name  = "settings.interruptionQueue"
-      value = module.karpenter.queue_name
+      value = aws_sqs_queue.karpenter_interruption.name
     },
     {
       name  = "controller.resources.requests.cpu"
@@ -58,7 +143,8 @@ resource "helm_release" "karpenter" {
   depends_on = [
     null_resource.core_node_addons,
     aws_eks_node_group.platform,
-    module.karpenter,
+    aws_iam_role_policy_attachment.karpenter_controller,
+    aws_sqs_queue_policy.karpenter_interruption,
     aws_eks_access_policy_association.admin_role,
     aws_eks_access_policy_association.admin_user,
   ]
@@ -94,6 +180,8 @@ resource "time_sleep" "karpenter_tag_propagation" {
   create_duration = "15s"
   depends_on      = [aws_ec2_tag.karpenter_sg_discovery, null_resource.karpenter_restart]
 }
+
+# ── NodePool + EC2NodeClass chart ─────────────────────────────────────────────
 
 # Strip Karpenter finalizers before helm uninstall. NodePool, EC2NodeClass, and
 # NodeClaim resources carry a karpenter.k8s.aws/termination finalizer that only

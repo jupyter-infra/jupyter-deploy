@@ -34,6 +34,7 @@ The plugin is automatically loaded by pytest when installed. Use the provided fi
 ```python
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 
+
 def test_host_running(e2e_deployment: EndToEndDeployment) -> None:
     """Test that the host is running."""
     e2e_deployment.ensure_deployed()
@@ -63,6 +64,7 @@ The plugin provides helper functions to use directly in your tests.
 ```python
 from pytest_jupyter_deploy.undeployed_project import undeployed_project
 
+
 def test_init_project(e2e_config: SuiteConfig) -> None:
     with undeployed_project(e2e_config) as (project_dir, cli):
         result = cli.run_command("show --variables --list")
@@ -74,9 +76,9 @@ def test_init_project(e2e_config: SuiteConfig) -> None:
 ```python
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 
+
 @skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG"])
-def test_requires_env_vars(e2e_deployment: EndToEndDeployment) -> None:
-    ...
+def test_requires_env_vars(e2e_deployment: EndToEndDeployment) -> None: ...
 ```
 
 ## E2E Test Container Image

@@ -47,7 +47,7 @@ routing_max_memory = "128Gi"
 node_expire_after = "504h"
 
 routing_instance_categories     = ["c", "m"]
-routing_instance_generation_min = "5"
+routing_instance_generation_min = "6"
 routing_disk_size_gb            = 50
 
 workspace_nodepools = [

@@ -1,6 +1,6 @@
 # `pool`
 
-Interact with the node pools managing workspace and routing nodes.
+Interact with pools of hosts where apps and components run.
 
 **Usage**:
 
@@ -14,13 +14,13 @@ $ jd pool [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-* `list`: List node pools in the project.
-* `show`: Display detailed information about a node...
-* `status`: Check the status of a node pool.
+* `list`: List the pools in the project.
+* `show`: Display detailed information about a pool.
+* `status`: Check the status of a pool.
 
 ## `pool list`
 
-List node pools in the project.
+List the pools in the project.
 
 Run either from a project directory that you created with <jd init>;
 or pass --path <project-dir>.
@@ -39,7 +39,7 @@ $ jd pool list [OPTIONS]
 
 ## `pool show`
 
-Display detailed information about a node pool.
+Display detailed information about a pool.
 
 Run either from a project directory that you created with <jd init>;
 or pass --path <project-dir>.
@@ -52,14 +52,14 @@ $ jd pool show [OPTIONS]
 
 **Options**:
 
-* `--name <str>`: Name of the node pool.  [required]
+* `--name <str>`: Name of the pool.  [required]
 * `-p, --path <path>`: Directory of the project.
 * `--json`: Output as JSON.
 * `--help`: Show this message and exit.
 
 ## `pool status`
 
-Check the status of a node pool.
+Check the status of a pool.
 
 Run either from a project directory that you created with <jd init>;
 or pass --path <project-dir>.
@@ -72,6 +72,6 @@ $ jd pool status [OPTIONS]
 
 **Options**:
 
-* `--name <str>`: Name of the node pool.  [required]
+* `--name <str>`: Name of the pool.  [required]
 * `-p, --path <path>`: Directory of the project.
 * `--help`: Show this message and exit.

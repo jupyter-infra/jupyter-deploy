@@ -10,7 +10,7 @@ expireAfter: "504h"
 # ── Routing NodePool ──────────────────────────────────────────────────────────
 routing:
   instanceCategories: ["c", "m"]
-  instanceGenerationMin: "5"
+  instanceGenerationMin: "6"
   blockDevice:
     deviceName: /dev/xvda
     volumeSizeGi: 50

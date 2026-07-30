@@ -332,6 +332,7 @@ class JupyterDeployManifestV1(BaseModel):
     commands: list[JupyterDeployCommandV1] | None = None
     secrets: list[JupyterDeploySecretV1] | None = None
     server_status_rules: list[JupyterDeployStatusRuleV1] | None = Field(alias="server-status-rules", default=None)
+    pool_status_rules: list[JupyterDeployStatusRuleV1] | None = Field(alias="pool-status-rules", default=None)
     supervised_execution: JupyterDeploySupervisedExecutionV1 | None = Field(alias="supervised-execution", default=None)
     project_store: JupyterDeployProjectStoreV1 | None = Field(alias="project-store", default=None)
     components: dict[str, JupyterDeployComponentDefinitionV1] | None = None
