@@ -226,7 +226,7 @@ class TestK8sCoreRunner(unittest.TestCase):
 
         self.assertEqual(result["Logs"].value, "log output")
         mock_cmd_utils.run_cmd_and_capture_output.assert_called_once_with(
-            ["kubectl", "logs", "web-pod-abc", "--namespace", "default"]
+            ["kubectl", "logs", "web-pod-abc", "--namespace", "default", "--tail", "1000"]
         )
 
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.cmd_utils")
@@ -267,6 +267,92 @@ class TestK8sCoreRunner(unittest.TestCase):
                 "--tail=50",
                 "--since=1h",
             ]
+        )
+
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.cmd_utils")
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
+    def test_deployment_logs_user_tail_overrides_default(self, mock_k8s_core: Mock, mock_cmd_utils: Mock) -> None:
+        runner = self._make_runner()
+        mock_deployment: Mock = Mock()
+        mock_deployment.spec.selector.match_labels = {"app": "web"}
+        mock_apps_api: Mock = runner.apps_api  # type: ignore[assignment]
+        mock_apps_api.read_namespaced_deployment.return_value = mock_deployment
+        mock_k8s_core.list_pods.return_value = (
+            [PodInfo(name="web-pod-abc", phase=PodPhase.RUNNING)],
+            None,
+        )
+        mock_cmd_utils.run_cmd_and_capture_output.return_value = "log"
+
+        runner.execute_instruction(
+            instruction_name="deployment-logs",
+            resolved_arguments={
+                "name": StrResolvedInstructionArgument(argument_name="name", value="my-deploy"),
+                "scope": StrResolvedInstructionArgument(argument_name="scope", value="default"),
+                "extra": StrResolvedInstructionArgument(argument_name="extra", value="--tail=5"),
+            },
+        )
+
+        # A user-supplied --tail suppresses the default; no duplicate --tail is added.
+        mock_cmd_utils.run_cmd_and_capture_output.assert_called_once_with(
+            ["kubectl", "logs", "web-pod-abc", "--namespace", "default", "--tail=5"]
+        )
+
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.cmd_utils")
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
+    def test_deployment_logs_since_overrides_default(self, mock_k8s_core: Mock, mock_cmd_utils: Mock) -> None:
+        runner = self._make_runner()
+        mock_deployment: Mock = Mock()
+        mock_deployment.spec.selector.match_labels = {"app": "web"}
+        mock_apps_api: Mock = runner.apps_api  # type: ignore[assignment]
+        mock_apps_api.read_namespaced_deployment.return_value = mock_deployment
+        mock_k8s_core.list_pods.return_value = (
+            [PodInfo(name="web-pod-abc", phase=PodPhase.RUNNING)],
+            None,
+        )
+        mock_cmd_utils.run_cmd_and_capture_output.return_value = "log"
+
+        runner.execute_instruction(
+            instruction_name="deployment-logs",
+            resolved_arguments={
+                "name": StrResolvedInstructionArgument(argument_name="name", value="my-deploy"),
+                "scope": StrResolvedInstructionArgument(argument_name="scope", value="default"),
+                "extra": StrResolvedInstructionArgument(argument_name="extra", value="--since 1h"),
+            },
+        )
+
+        # A --since bound also suppresses the default --tail.
+        mock_cmd_utils.run_cmd_and_capture_output.assert_called_once_with(
+            ["kubectl", "logs", "web-pod-abc", "--namespace", "default", "--since", "1h"]
+        )
+
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.cmd_utils")
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
+    def test_deployment_logs_default_tail_added_with_unrelated_extra(
+        self, mock_k8s_core: Mock, mock_cmd_utils: Mock
+    ) -> None:
+        runner = self._make_runner()
+        mock_deployment: Mock = Mock()
+        mock_deployment.spec.selector.match_labels = {"app": "web"}
+        mock_apps_api: Mock = runner.apps_api  # type: ignore[assignment]
+        mock_apps_api.read_namespaced_deployment.return_value = mock_deployment
+        mock_k8s_core.list_pods.return_value = (
+            [PodInfo(name="web-pod-abc", phase=PodPhase.RUNNING)],
+            None,
+        )
+        mock_cmd_utils.run_cmd_and_capture_output.return_value = "log"
+
+        runner.execute_instruction(
+            instruction_name="deployment-logs",
+            resolved_arguments={
+                "name": StrResolvedInstructionArgument(argument_name="name", value="my-deploy"),
+                "scope": StrResolvedInstructionArgument(argument_name="scope", value="default"),
+                "extra": StrResolvedInstructionArgument(argument_name="extra", value="--timestamps"),
+            },
+        )
+
+        # An extra flag that does not bound volume still gets the default --tail prepended.
+        mock_cmd_utils.run_cmd_and_capture_output.assert_called_once_with(
+            ["kubectl", "logs", "web-pod-abc", "--namespace", "default", "--tail", "1000", "--timestamps"]
         )
 
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")

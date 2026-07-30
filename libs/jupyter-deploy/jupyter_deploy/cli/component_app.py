@@ -157,7 +157,9 @@ def logs(
             log_output = handler.get_component_logs(name=name, extra=extra)
 
         if log_output:
-            console.print(log_output)
+            # Log content is arbitrary text: disable markup/highlight so it is never
+            # interpreted as Rich markup, which keeps rendering linear on large blobs.
+            console.print(log_output, markup=False, highlight=False, soft_wrap=True)
         else:
             console.print(":warning: no logs were retrieved.", style="yellow")
 

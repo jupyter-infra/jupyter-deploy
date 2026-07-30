@@ -770,7 +770,6 @@ def open(
         handler = OpenHandler()
         url = None
         browser_failed = False
-        url_unavailable = False
 
         try:
             url = handler.open(name=server_name, scope=scope or None)
@@ -782,15 +781,17 @@ def open(
             console.print("Make sure you have configured and deployed your project.")
             console.print(":bulb: To configure the project, run: [bold cyan]jd config[/]")
             console.print(":bulb: To deploy it, run: [bold cyan]jd up[/]")
-            url_unavailable = True
         except OpenWebBrowserError as e:
             # Browser failed to open, but we still want to show URL and help
             url = e.url
             browser_failed = True
             console.print(f":x: {e}", style="bold red")
         finally:
-            # Show troubleshooting help based on available commands in manifest (only if URL was available)
-            if not url_unavailable:
+            # Show troubleshooting help only when a URL was resolved (successful open or
+            # browser-launch failure). Skip it when there is no URL to open — the project
+            # is not deployed, or the command is not implemented for this template — so the
+            # not-implemented error is not preceded by misleading "Having trouble?" hints.
+            if url is not None:
                 _print_open_troubleshooting(console, handler.project_manifest, server_name, scope)
 
         # Exit with error code if browser failed

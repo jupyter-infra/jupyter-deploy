@@ -5,7 +5,12 @@ from unittest.mock import Mock, patch
 from typer.testing import CliRunner
 
 from jupyter_deploy.cli.app import runner as app_runner
-from jupyter_deploy.exceptions import OpenWebBrowserError, UrlNotAvailableError, UrlNotSecureError
+from jupyter_deploy.exceptions import (
+    CommandNotImplementedError,
+    OpenWebBrowserError,
+    UrlNotAvailableError,
+    UrlNotSecureError,
+)
 
 
 class TestOpenCommand(unittest.TestCase):
@@ -302,6 +307,23 @@ class TestOpenCommand(unittest.TestCase):
         self.assertIn("jd config", result.output)
         self.assertIn("jd up", result.output)
         # Should NOT display "Having trouble?" hint
+        self.assertNotIn("Having trouble?", result.output)
+
+    @patch("jupyter_deploy.cli.app.OpenHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_open_command_not_implemented_skips_troubleshooting(
+        self, mock_project_ctx_manager: Mock, mock_open_handler_cls: Mock
+    ) -> None:
+        """When open is not implemented, print only the error, not the 'Having trouble?' hint."""
+        mock_open_handler_instance, mock_open_fns = self.get_mock_open_handler()
+        mock_open_fns["open"].side_effect = CommandNotImplementedError("open")
+        mock_open_handler_cls.return_value = mock_open_handler_instance
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["open"])
+
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn("not implemented", result.output)
         self.assertNotIn("Having trouble?", result.output)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")

@@ -28,6 +28,14 @@ from jupyter_deploy.provider.resolved_resultdefs import (
     StrResolvedInstructionResult,
 )
 
+# Default number of trailing log lines when the caller supplies no bound. Keeps the
+# captured output small enough to render quickly for long-lived pods.
+_DEFAULT_LOG_TAIL = 1000
+
+# kubectl flags that already bound the log volume; presence of any of these means the
+# caller opted out of the default --tail.
+_LOG_BOUND_FLAGS = ("--tail", "--since", "--since-time")
+
 
 class K8sCoreInstruction(str, Enum):
     """K8s Core API instructions accessible from manifest api-name."""
@@ -150,8 +158,15 @@ class K8sCoreRunner(InstructionRunner):
             kubectl_cmd.extend(["--kubeconfig", self._kubeconfig_path])
         if container:
             kubectl_cmd.extend(["-c", container])
-        if extra_arg.value:
-            kubectl_cmd.extend(extra_arg.value.split())
+
+        extra_parts = extra_arg.value.split() if extra_arg.value else []
+        # Bound the output by default: without a --tail/--since limit, kubectl captures the
+        # entire container history into one string, which can be multi-MB for long-lived pods
+        # and stalls the downstream rendering. A user-supplied bound (including --tail=-1 for
+        # "all") overrides this default, so power users keep full control.
+        if not any(p == bound or p.startswith(f"{bound}=") for p in extra_parts for bound in _LOG_BOUND_FLAGS):
+            kubectl_cmd.extend(["--tail", str(_DEFAULT_LOG_TAIL)])
+        kubectl_cmd.extend(extra_parts)
 
         try:
             logs = cmd_utils.run_cmd_and_capture_output(kubectl_cmd)
