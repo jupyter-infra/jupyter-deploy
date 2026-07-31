@@ -78,11 +78,34 @@ def test_web_app_accessible_after_deployment(
     dex_oauth_app: DexGitHubOAuth2ProxyApplication,
     getting_started_url: str,
 ) -> None:
-    """Web UI is accessible via OAuth after deploy."""
-    dex_oauth_app.ensure_authenticated()
-    dex_oauth_app.page.goto(getting_started_url, wait_until="load", timeout=60000)
-    content = dex_oauth_app.page.content()
-    assert "workspaces" in content.lower(), f"Expected web UI content, got:\n{content[:500]}"
+    """Web UI is accessible via OAuth after deploy.
+
+    Retries the full auth + load + assert to tolerate the post-deploy warmup
+    window: routing pods (oauth2-proxy/authmiddleware) can briefly CrashLoop on
+    first start, which makes the OAuth redirect inside ensure_authenticated()
+    (or the page load) transiently time out even though the deploy is healthy.
+    ensure_authenticated() re-navigates and re-evaluates cookies on each call,
+    so retrying is idempotent and self-correcting.
+    """
+    max_attempts = 5
+    backoff_s = 30
+    last_error: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            dex_oauth_app.ensure_authenticated()
+            dex_oauth_app.page.goto(getting_started_url, wait_until="load", timeout=60000)
+            content = dex_oauth_app.page.content()
+            assert "workspaces" in content.lower(), f"Expected web UI content, got:\n{content[:500]}"
+            return
+        except Exception as e:
+            last_error = e
+            if attempt < max_attempts:
+                dex_oauth_app.page.wait_for_timeout(backoff_s * 1000)
+
+    raise AssertionError(
+        f"Web UI not accessible after {max_attempts} attempts "
+        f"(~{(max_attempts - 1) * backoff_s}s warmup window): {last_error}"
+    )
 
 
 @pytest.mark.order(ORDER_DEPLOYMENT + 4)
