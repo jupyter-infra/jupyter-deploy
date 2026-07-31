@@ -2,6 +2,7 @@
 
 import json
 import re
+import time
 
 import pytest
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
@@ -112,42 +113,59 @@ def test_health_components_layer(e2e_deployment: EndToEndDeployment) -> None:
         f"Expected aws-node + kube-proxy DaemonSet components, got {sorted(daemonset_names)}"
     )
 
-    for entry in layers:
-        assert entry["layer"] == "components"
-        name = entry["name"]
-        if name in EXPECTED_CRONJOBS:
-            assert entry["status_category"] in ("healthy", "in-progress"), (
-                f"CronJob '{name}' unexpected status_category: {entry['status_category']}"
-            )
-        else:
-            assert entry["status_category"] == "healthy", (
-                f"Component '{name}' not healthy: status_category={entry['status_category']}"
-            )
-        assert entry["status"] != ""
+    def _validate_entries(entries: list) -> None:
+        for entry in entries:
+            assert entry["layer"] == "components"
+            name = entry["name"]
+            if name in EXPECTED_CRONJOBS:
+                assert entry["status_category"] in ("healthy", "in-progress"), (
+                    f"CronJob '{name}' unexpected status_category: {entry['status_category']}"
+                )
+            else:
+                assert entry["status_category"] == "healthy", (
+                    f"Component '{name}' not healthy: status_category={entry['status_category']}"
+                )
+            assert entry["status"] != ""
 
-        if name in crd_names:
-            # CRD rows surface the served API version (e.g. v1alpha1) in details.
-            assert entry["status"] == "Present", f"CRD '{name}' status: {entry['status']}"
-            assert entry["detail"] == "v1alpha1", f"CRD '{name}' detail: {entry['detail']}"
+            if name in crd_names:
+                # CRD rows surface the served API version (e.g. v1alpha1) in details.
+                assert entry["status"] == "Present", f"CRD '{name}' status: {entry['status']}"
+                assert entry["detail"] == "v1alpha1", f"CRD '{name}' detail: {entry['detail']}"
 
-        if name in cr_names:
-            # Access-strategy / template rows surface their namespace in details and a labeled
-            # value (access-resources count / access-strategy ref) in the sub-component cell.
-            assert entry["status"] == "Present", f"CR '{name}' status: {entry['status']}"
-            assert entry["detail"] != "", f"CR '{name}' should surface its namespace in detail"
-            assert _LABELED_VALUE_RE.match(entry["sub_component"]), (
-                f"CR '{name}' sub-component should be a 'label: value' pair, got: {entry['sub_component']!r}"
-            )
+            if name in cr_names:
+                # Access-strategy / template rows surface their namespace in details and a labeled
+                # value (access-resources count / access-strategy ref) in the sub-component cell.
+                assert entry["status"] == "Present", f"CR '{name}' status: {entry['status']}"
+                assert entry["detail"] != "", f"CR '{name}' should surface its namespace in detail"
+                assert _LABELED_VALUE_RE.match(entry["sub_component"]), (
+                    f"CR '{name}' sub-component should be a 'label: value' pair, got: {entry['sub_component']!r}"
+                )
 
-        if name in helm_names:
-            # HelmRelease rows report the release status, the target namespace in details,
-            # and a "resources: <count>" sub-component with a positive object count. In JSON
-            # output sub_component is the raw payload; the table renders it as "resources: N".
-            assert entry["status"] == "deployed", f"HelmRelease '{name}' status: {entry['status']}"
-            assert entry["detail"] != "", f"HelmRelease '{name}' should surface its namespace in detail"
-            sub = json.loads(entry["sub_component"])
-            assert sub["name"] == "resources", f"HelmRelease '{name}' sub-component label: {sub['name']!r}"
-            assert int(sub["status"]) > 0, f"HelmRelease '{name}' should track at least one resource: {sub!r}"
+            if name in helm_names:
+                # HelmRelease rows report the release status, the target namespace in details,
+                # and a "resources: <count>" sub-component with a positive object count. In JSON
+                # output sub_component is the raw payload; the table renders it as "resources: N".
+                assert entry["status"] == "deployed", f"HelmRelease '{name}' status: {entry['status']}"
+                assert entry["detail"] != "", f"HelmRelease '{name}' should surface its namespace in detail"
+                sub = json.loads(entry["sub_component"])
+                assert sub["name"] == "resources", f"HelmRelease '{name}' sub-component label: {sub['name']!r}"
+                assert int(sub["status"]) > 0, f"HelmRelease '{name}' should track at least one resource: {sub!r}"
+
+    # Core add-on DaemonSets (aws-node, kube-proxy) can transiently report 'degraded' while
+    # Karpenter scales nodes and their pods start on a newly-joined node — not a deploy failure.
+    # Retry the per-component validation (re-fetching health) to let them settle; the final
+    # attempt re-raises, so a component that stays unhealthy still fails the test.
+    max_attempts = 5
+    for attempt in range(1, max_attempts + 1):
+        try:
+            _validate_entries(layers)
+            break
+        except AssertionError:
+            if attempt == max_attempts:
+                raise
+            time.sleep(15)
+            result = e2e_deployment.cli.run_command(["jupyter-deploy", "health", "--components", "--json"])
+            layers = json.loads(result.stdout)["layers"]
 
 
 def test_health_load_balancer_layer(e2e_deployment: EndToEndDeployment) -> None:
