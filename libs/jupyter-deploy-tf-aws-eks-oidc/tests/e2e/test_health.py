@@ -155,7 +155,10 @@ def test_health_components_layer(e2e_deployment: EndToEndDeployment) -> None:
     # Karpenter scales nodes and their pods start on a newly-joined node — not a deploy failure.
     # Retry the per-component validation (re-fetching health) to let them settle; the final
     # attempt re-raises, so a component that stays unhealthy still fails the test.
+    # 5 attempts x 45s = ~3 min window, enough to cover a Karpenter node provision +
+    # CNI (aws-node) pod init cycle, which can take 1-2 min.
     max_attempts = 5
+    retry_interval_s = 45
     for attempt in range(1, max_attempts + 1):
         try:
             _validate_entries(layers)
@@ -163,7 +166,7 @@ def test_health_components_layer(e2e_deployment: EndToEndDeployment) -> None:
         except AssertionError:
             if attempt == max_attempts:
                 raise
-            time.sleep(15)
+            time.sleep(retry_interval_s)
             result = e2e_deployment.cli.run_command(["jupyter-deploy", "health", "--components", "--json"])
             layers = json.loads(result.stdout)["layers"]
 
