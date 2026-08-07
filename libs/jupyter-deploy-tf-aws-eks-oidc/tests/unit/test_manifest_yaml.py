@@ -379,3 +379,24 @@ class TestManifest(unittest.TestCase):
         daemonset_names = {name for name, comp in components.items() if comp["type"] == "DaemonSet"}
         self.assertIn("aws-node", daemonset_names)
         self.assertIn("kube-proxy", daemonset_names)
+        self.assertIn("nvidia-device-plugin", daemonset_names)
+
+    def test_nvidia_device_plugin_components_declared(self) -> None:
+        """The GPU device plugin surfaces in jd health as its DaemonSet and its chart."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        components = self.MANIFEST.get("components", {})
+
+        daemonset = components["nvidia-device-plugin"]
+        self.assertEqual(daemonset["type"], "DaemonSet")
+        self.assertEqual(daemonset["resource-name"], "nvidia-device-plugin")
+        self.assertEqual(daemonset["scope"], "kube_system_namespace")
+        self.assertIn("status", daemonset["verbs"])
+        self.assertIn("show", daemonset["verbs"])
+
+        chart = components["nvidia-device-plugin-chart"]
+        self.assertEqual(chart["type"], "HelmRelease")
+        self.assertEqual(chart["resource-name"], "nvidia-device-plugin")
+        self.assertEqual(chart["scope"], "kube_system_namespace")
+        self.assertIn("reconcile", chart["verbs"])
