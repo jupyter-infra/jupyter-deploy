@@ -68,3 +68,4 @@ overrides:
   #     disk_size_gb: "50"
   #     max_cpu: "512"
   #     max_memory: 2048Gi
+  # enable_gpu_pool: false

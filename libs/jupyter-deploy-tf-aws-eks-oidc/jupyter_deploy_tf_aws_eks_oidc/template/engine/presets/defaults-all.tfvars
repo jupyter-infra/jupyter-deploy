@@ -59,3 +59,5 @@ workspace_nodepools = [
     max_memory        = "2048Gi"
   }
 ]
+
+enable_gpu_pool = false

@@ -257,10 +257,18 @@ variable "workspace_nodepools" {
       max_cpu           - fleet CPU ceiling (e.g. "512")
       max_memory        - fleet memory ceiling (e.g. "2048Gi")
 
-    Example (add a GPU pool by appending an entry):
+    Optional keys per entry (all strings):
+      role     - node label/taint value; only workspace templates tolerating this
+                 role schedule onto the pool (defaults to "workspaces")
+      max_gpus - fleet GPU ceiling, the NodePool limit for nvidia.com/gpu (e.g. "4")
+      gpu      - "true" to add the nvidia.com/gpu.present node label the NVIDIA
+                 device plugin selects on
+
+    Example (a customized GPU pool; enable_gpu_pool = true with no workspace-gpu
+    entry provides this shape built in):
       workspace_nodepools = [
         { name = "workspace-cpu", instance_families = "c6i,m6i,r6i", disk_size_gb = "50", max_cpu = "512", max_memory = "2048Gi" },
-        { name = "workspace-gpu", instance_families = "g4dn,g5", disk_size_gb = "100", max_cpu = "64", max_memory = "256Gi" },
+        { name = "workspace-gpu", instance_families = "g4dn,g5", disk_size_gb = "100", max_cpu = "64", max_memory = "256Gi", max_gpus = "4", role = "workspaces-gpu", gpu = "true" },
       ]
   EOT
   type        = list(map(string))
@@ -279,6 +287,50 @@ variable "workspace_nodepools" {
     ])
     error_message = "Each workspace NodePool disk_size_gb must be a numeric string between 20 and 16384."
   }
+
+  validation {
+    condition = alltrue([
+      for p in var.workspace_nodepools :
+      !contains(keys(p), "max_gpus") || can(tonumber(p["max_gpus"]))
+    ])
+    error_message = "Each workspace NodePool max_gpus, when set, must be a numeric string."
+  }
+
+  validation {
+    # "true" only: any non-empty string is truthy in the chart's {{ if .gpu }}.
+    condition = alltrue([
+      for p in var.workspace_nodepools :
+      !contains(keys(p), "gpu") || p["gpu"] == "true"
+    ])
+    error_message = "Each workspace NodePool gpu key, when set, must be the string \"true\" (omit the key otherwise)."
+  }
+
+  validation {
+    # Rendered as a node label value and taint value, which Kubernetes bounds.
+    condition = alltrue([
+      for p in var.workspace_nodepools :
+      !contains(keys(p), "role") || can(regex("^[a-zA-Z0-9]([-a-zA-Z0-9_.]{0,61}[a-zA-Z0-9])?$", p["role"]))
+    ])
+    error_message = "Each workspace NodePool role, when set, must be a valid Kubernetes label value (alphanumeric plus -_., max 63 chars)."
+  }
+}
+
+variable "enable_gpu_pool" {
+  description = <<-EOT
+    Whether to provision GPU workspace capacity.
+
+    When true, the template adds a built-in workspace-gpu Karpenter pool
+    (define your own workspace-gpu entry in workspace_nodepools to customize
+    it), installs the NVIDIA device plugin, and ships the jupyterlab-gpu
+    workspace template. Delete GPU workspaces before turning this off:
+    disabling removes the pool and the template they depend on.
+
+    First GPU use on an AWS account without prior GPU usage requires raising
+    the "Running On-Demand G and VT instances" service quota (defaults to 0).
+
+    Recommended: false
+  EOT
+  type        = bool
 }
 
 variable "routing_instance_categories" {

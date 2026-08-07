@@ -216,6 +216,34 @@ resource "null_resource" "karpenter_nodepools_finalizer_cleanup" {
   ]
 }
 
+# ── GPU pool synthesis ────────────────────────────────────────────────────────
+# enable_gpu_pool alone yields working GPU capacity: when on and no entry named
+# workspace-gpu exists, the built-in entry below is appended. A user-defined
+# workspace-gpu entry takes precedence as the customization path (issue #336).
+locals {
+  gpu_pool_name = "workspace-gpu"
+  gpu_pool_builtin = {
+    name              = local.gpu_pool_name
+    instance_families = "g4dn,g5"
+    disk_size_gb      = "100"
+    max_cpu           = "64"
+    max_memory        = "256Gi"
+    max_gpus          = "4"
+    role              = "workspaces-gpu"
+    gpu               = "true"
+  }
+  workspace_nodepools_effective = concat(
+    var.workspace_nodepools,
+    var.enable_gpu_pool && !contains([for p in var.workspace_nodepools : p["name"]], local.gpu_pool_name)
+    ? [local.gpu_pool_builtin] : [],
+  )
+  # Role label of the GPU pool; the device plugin and the GPU template select on it.
+  gpu_pool_role = try(
+    [for p in local.workspace_nodepools_effective : lookup(p, "role", "workspaces") if p["name"] == local.gpu_pool_name][0],
+    "workspaces-gpu",
+  )
+}
+
 resource "helm_release" "karpenter_nodepools" {
   name             = "karpenter-nodepools"
   chart            = "${path.module}/../charts/karpenter-nodepools"
@@ -257,14 +285,23 @@ resource "helm_release" "karpenter_nodepools" {
         instanceCategories    = var.routing_instance_categories
         instanceGenerationMin = var.routing_instance_generation_min
       }
+      # Optional keys are emitted only when present: an absent key makes the
+      # chart render the pre-GPU bytes for that pool, keeping existing
+      # NodePools byte-identical (a changed rendered pool drift-replaces its
+      # nodes and restarts the workspaces on them).
       workspaceNodepools = [
-        for p in var.workspace_nodepools : {
-          name             = p["name"]
-          instanceFamilies = split(",", p["instance_families"])
-          diskSizeGi       = tonumber(p["disk_size_gb"])
-          maxCpu           = p["max_cpu"]
-          maxMemory        = p["max_memory"]
-        }
+        for p in local.workspace_nodepools_effective : merge(
+          {
+            name             = p["name"]
+            instanceFamilies = split(",", p["instance_families"])
+            diskSizeGi       = tonumber(p["disk_size_gb"])
+            maxCpu           = p["max_cpu"]
+            maxMemory        = p["max_memory"]
+          },
+          contains(keys(p), "role") ? { role = p["role"] } : {},
+          contains(keys(p), "max_gpus") ? { maxGpus = p["max_gpus"] } : {},
+          contains(keys(p), "gpu") ? { gpu = p["gpu"] } : {},
+        )
       ]
     })
   ]

@@ -2,6 +2,9 @@
 # Routing pool: always-on, conservative consolidation, small instances.
 # Workspace pools: scale-to-zero, aggressive consolidation, diverse instances.
 # Both carry taints so only pods with matching tolerations can land here.
+# A workspace pool may set a per-pool role (label + taint value) so that only
+# workspace templates tolerating that role reach it — this is what keeps CPU
+# workspaces off GPU nodes and GPU workspaces on nodes that advertise a device.
 #
 # Disruption budget: nodes: "1" (absolute, not percentage).
 # Karpenter applies the MINIMUM of all active budgets. A percentage budget
@@ -63,7 +66,14 @@ spec:
   template:
     metadata:
       labels:
-        jupyter-deploy/role: workspaces
+        # Default preserves the exact pre-GPU bytes: Karpenter hashes
+        # spec.template, so any change here drift-replaces the pool's nodes
+        # and restarts every workspace on them.
+        jupyter-deploy/role: {{ .role | default "workspaces" }}
+        {{- if .gpu }}
+        # Satisfies the NVIDIA device plugin's default nodeAffinity without NFD.
+        nvidia.com/gpu.present: "true"
+        {{- end }}
     spec:
       nodeClassRef:
         group: karpenter.k8s.aws
@@ -71,7 +81,7 @@ spec:
         name: {{ .name }}
       taints:
         - key: jupyter-deploy/role
-          value: workspaces
+          value: {{ .role | default "workspaces" }}
           effect: NoSchedule
       expireAfter: {{ $.Values.expireAfter }}
       requirements:
@@ -90,6 +100,9 @@ spec:
   limits:
     cpu: {{ .maxCpu | quote }}
     memory: {{ .maxMemory | quote }}
+    {{- if .maxGpus }}
+    nvidia.com/gpu: {{ .maxGpus | quote }}
+    {{- end }}
   disruption:
     # WhenEmpty (not WhenEmptyOrUnderutilized): workspace pods carry no PDB and
     # no karpenter.sh/do-not-disrupt annotation, so underutilized-consolidation

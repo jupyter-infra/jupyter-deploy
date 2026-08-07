@@ -22,4 +22,7 @@ routingLimitsMemory: "128Gi"
 # ── Workspace NodePools ───────────────────────────────────────────────────────
 # Each entry creates one NodePool + EC2NodeClass pair.
 # Injected by platform_karpenter.tf from var.workspace_nodepools.
+# Optional per-entry keys: role (label/taint value, defaults to "workspaces"),
+# maxGpus (renders a nvidia.com/gpu NodePool limit), gpu ("true" adds the
+# nvidia.com/gpu.present node label the NVIDIA device plugin selects on).
 workspaceNodepools: []

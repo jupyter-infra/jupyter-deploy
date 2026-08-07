@@ -14,6 +14,9 @@
 # Routing pool: always-on, conservative consolidation, small instances.
 # Workspace pools: scale-to-zero, aggressive consolidation, diverse instances.
 # Both carry taints so only pods with matching tolerations can land here.
+# A workspace pool may set a per-pool role (label + taint value) so that only
+# workspace templates tolerating that role reach it — this is what keeps CPU
+# workspaces off GPU nodes and GPU workspaces on nodes that advertise a device.
 #
 # Disruption budget: nodes: "1" (absolute, not percentage).
 # Karpenter applies the MINIMUM of all active budgets. A percentage budget
@@ -139,6 +142,9 @@ spec:
   template:
     metadata:
       labels:
+        # Default preserves the exact pre-GPU bytes: Karpenter hashes
+        # spec.template, so any change here drift-replaces the pool's nodes
+        # and restarts every workspace on them.
         jupyter-deploy/role: workspaces
     spec:
       nodeClassRef:
