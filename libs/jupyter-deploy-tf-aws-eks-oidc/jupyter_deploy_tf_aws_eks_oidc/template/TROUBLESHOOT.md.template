@@ -183,8 +183,10 @@ jd server show --name <workspace-name> --scope <namespace>
 jd server logs --name <workspace-name> --scope <namespace>
 ```
 
-A workspace stuck in `Starting` is often waiting on a node. GPU workspaces require a
-`workspaces` node group with GPU capacity and sufficient vCPU quota (see above). If the
-node group `desired_size` is `0`, scale it up in `node_groups` and run `jd up`.
+A workspace stuck in `Starting` is often waiting on a node. GPU workspaces require
+`enable_gpu_pool: true` (the `workspace-gpu` Karpenter pool plus the NVIDIA device
+plugin) and sufficient G/VT vCPU quota (see above). The `nvidia-device-plugin`
+component reads `Degraded` in `jd health` while the GPU pool is scaled to zero:
+a DaemonSet with desired count 0 is idle, not failing.
 
 {{ generated-by-footer }}

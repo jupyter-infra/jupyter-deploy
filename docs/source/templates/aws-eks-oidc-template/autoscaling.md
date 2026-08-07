@@ -72,10 +72,23 @@ You control node pools through admin variables:
 | `routing_instance_categories` | `["c", "m"]` | Instance categories Karpenter may pick for routing nodes. |
 | `routing_max_cpu` / `routing_max_memory` | `32` / `128Gi` | Ceiling on total routing-pool capacity. |
 | `workspace_nodepools` | one `workspace-cpu` pool | List of workspace pools, each with its own instance families and CPU/memory ceilings. |
+| `enable_gpu_pool` | `false` | Adds the built-in GPU pool, the NVIDIA device plugin, and the `jupyterlab-gpu` template. |
 | `node_expire_after` | `504h` | Maximum node lifetime before Karpenter recycles it. |
 
-Add a workspace pool (for example, a GPU pool) by appending an entry to
-`workspace_nodepools`: no new variables required. Inspect pools at runtime with
+Add a CPU workspace pool by appending an entry to `workspace_nodepools`: no new
+variables required. For GPU capacity, set `enable_gpu_pool: true` instead: the
+template adds a built-in `workspace-gpu` pool (`g4dn,g5` on-demand instances,
+fleet ceiling `max_gpus: "4"`), installs the NVIDIA device plugin, and ships the
+`jupyterlab-gpu` workspace template, a fixed shape (one GPU with pinned
+cpu/memory) fenced to the pool by its role taint. To customize the GPU pool,
+define your own `workspace-gpu` entry in `workspace_nodepools`, which takes
+precedence over the built-in; the optional per-entry keys are `role` (the
+label/taint value), `max_gpus` (fleet GPU ceiling), and `gpu` (`"true"` adds the
+`nvidia.com/gpu.present` label the device plugin selects on). Delete GPU
+workspaces before turning the flag off: disabling removes the pool and the
+template they depend on. First GPU use on an account without prior GPU usage
+requires raising the `Running On-Demand G and VT instances` service quota (see
+the troubleshooting guide). Inspect pools at runtime with
 `jd pool list`, `jd pool show --name <pool>`, and `jd pool status --name <pool>`.
 
 ```{note}

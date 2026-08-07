@@ -245,6 +245,7 @@ The template creates several IAM roles:
 | cluster-autoscaler | `kube-system` | Autoscaler for the platform managed node group |
 | prometheus | `monitoring` | Metrics server (scaling source for KEDA) |
 | aws-for-fluent-bit | `kube-system` | Pod log shipping to CloudWatch (optional, `enable_component_logging`) |
+| nvidia-device-plugin | `kube-system` | Registers GPU capacity on GPU pool nodes (optional, `enable_gpu_pool`) |
 | github-rbac (local) | Shared namespace | Namespace-scoped RBAC for the `oauth_allowed_teams` GitHub teams |
 | workspace-defaults (local) | Shared namespace | Default `WorkspaceTemplate` and workspace-ingress NetworkPolicies |
 
@@ -295,6 +296,8 @@ The template provides two variable presets:
 | workspace_app_jupyterlab_app_type | `string` | `jupyterlab` | Application type identifier for the workspace template |
 | workspace_app_jupyterlab_image_name | `string` | See preset | ECR repository name for the JupyterLab image |
 | workspace_app_jupyterlab_image_build | `string` | `v1` | Build tag (increment to trigger rebuild) |
+| enable_gpu_pool | `bool` | `false` | Provision GPU workspace capacity: built-in `workspace-gpu` pool, NVIDIA device plugin, and the `jupyterlab-gpu` template |
+| nvidia_device_plugin_version | `string` | `0.19.3` | Version of the NVIDIA device plugin chart (used when `enable_gpu_pool` is true) |
 
 ## Outputs
 
