@@ -68,3 +68,19 @@ def get_node_allocatable_cpu_millicores(node_name: str) -> int:
         check=True,
     )
     return parse_cpu_to_millicores(result.stdout.strip())
+
+
+def get_node_allocatable_gpu_count(node_name: str) -> int:
+    """Allocatable nvidia.com/gpu count of a node.
+
+    Empty output means the key is absent — a GPU node before the device plugin
+    registers, or a non-GPU node — and reads as 0, never an error.
+    """
+    result = subprocess.run(
+        ["kubectl", "get", "node", node_name, "-o", r"jsonpath={.status.allocatable.nvidia\.com/gpu}"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    out = result.stdout.strip()
+    return int(out) if out else 0
