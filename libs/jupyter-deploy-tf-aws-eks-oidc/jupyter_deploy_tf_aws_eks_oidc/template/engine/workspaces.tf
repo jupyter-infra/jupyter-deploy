@@ -85,16 +85,104 @@ resource "helm_release" "github_rbac" {
   depends_on = [kubernetes_namespace_v1.shared, helm_release.workspace_router]
 }
 
+# ── Workspace templates ───────────────────────────────────────────────────────
+# One entry per UI card, rendered by charts/workspace-defaults. The GPU template
+# is fenced to the GPU pool by its nodeSelector/toleration on the pool's role;
+# without that pairing, CPU workspaces could bind GPU nodes or GPU pods could
+# land where no device is advertised.
+locals {
+  jupyterlab_template_values = {
+    name             = "jupyterlab"
+    isDefault        = "true"
+    displayName      = "JupyterLab"
+    description      = "JupyterLab workspace with persistent EBS storage"
+    imageUri         = module.app_jupyterlab[0].image_uri
+    appType          = var.workspace_app_jupyterlab_app_type
+    accessType       = var.workspaces_default_access_type
+    ownershipType    = var.workspaces_default_ownership_type
+    storageClassName = local.workspace_storage_class
+    defaultResources = {
+      requests = { cpu = "500m", memory = "1Gi" }
+      limits   = { cpu = "2", memory = "4Gi" }
+    }
+    resourceBounds = {
+      cpu    = { min = "100m", max = "8" }
+      memory = { min = "256Mi", max = "32Gi" }
+    }
+    nodeSelector = { "jupyter-deploy/role" = "workspaces" }
+    tolerations = [
+      { key = "jupyter-deploy/role", operator = "Equal", value = "workspaces", effect = "NoSchedule" }
+    ]
+    readinessProbe = { port = 8888, initialDelaySeconds = 2, periodSeconds = 3, failureThreshold = 30 }
+    idleShutdown = {
+      enabled           = var.workspaces_idle_shutdown_enabled
+      timeoutMinutes    = var.workspaces_idle_shutdown_timeout_default
+      minTimeoutMinutes = var.workspaces_idle_shutdown_timeout_min
+      maxTimeoutMinutes = var.workspaces_idle_shutdown_timeout_max
+    }
+  }
+
+  jupyterlab_gpu_template_values = {
+    name             = "jupyterlab-gpu"
+    isDefault        = "false"
+    displayName      = "JupyterLab GPU"
+    description      = "JupyterLab workspace with one NVIDIA GPU and persistent EBS storage"
+    imageUri         = module.app_jupyterlab[0].image_uri
+    appType          = var.workspace_app_jupyterlab_app_type
+    accessType       = var.workspaces_default_access_type
+    ownershipType    = var.workspaces_default_ownership_type
+    storageClassName = local.workspace_storage_class
+    # The card is one fixed shape: every size the GPU pool admits carries
+    # exactly one GPU and the workspace owns its node, so cpu/memory choice
+    # would only change which instance Karpenter buys. min == max pins all
+    # axes; cpu/memory target the g4dn.xlarge allocatable (an over-pin is
+    # permanently unschedulable — finalize against a live node, issue #336).
+    defaultResources = {
+      requests = { cpu = "3500m", memory = "13Gi", "nvidia.com/gpu" = "1" }
+      limits   = { cpu = "3500m", memory = "13Gi", "nvidia.com/gpu" = "1" }
+    }
+    resourceBounds = {
+      cpu              = { min = "3500m", max = "3500m" }
+      memory           = { min = "13Gi", max = "13Gi" }
+      "nvidia.com/gpu" = { min = "1", max = "1" }
+    }
+    nodeSelector = { "jupyter-deploy/role" = local.gpu_pool_role }
+    tolerations = [
+      { key = "jupyter-deploy/role", operator = "Equal", value = local.gpu_pool_role, effect = "NoSchedule" }
+    ]
+    readinessProbe = { port = 8888, initialDelaySeconds = 2, periodSeconds = 3, failureThreshold = 30 }
+    idleShutdown = {
+      enabled = var.workspaces_idle_shutdown_enabled
+      # Half the jupyterlab default: an idle hour on the cheapest GPU node
+      # costs $0.53. Users can still adjust within the min/max window.
+      timeoutMinutes    = 30
+      minTimeoutMinutes = var.workspaces_idle_shutdown_timeout_min
+      maxTimeoutMinutes = var.workspaces_idle_shutdown_timeout_max
+    }
+  }
+
+  workspace_templates_values = concat(
+    [local.jupyterlab_template_values],
+    var.enable_gpu_pool ? [local.jupyterlab_gpu_template_values] : [],
+  )
+}
+
 resource "helm_release" "workspace_defaults" {
   name             = "workspace-defaults"
   chart            = "${path.module}/../charts/workspace-defaults"
   namespace        = var.workspace_shared_namespace
   create_namespace = false
-  # Ships the jupyterlab WorkspaceTemplate (operator-finalized). Install waits on
-  # the operator reconciling it. Uninstall is ~seconds now that destroy_workspaces
+  # Ships the WorkspaceTemplates (operator-finalized). Install waits on
+  # the operator reconciling them. Uninstall is ~seconds now that destroy_workspaces
   # clears the CRs first and the addon/node ordering keeps the operator alive, so
   # this 600s (vs 5-min default) is no longer strictly necessary.
   timeout = 600
+
+  values = [
+    yamlencode({
+      workspaceTemplates = local.workspace_templates_values
+    })
+  ]
 
   set = concat([
     {
@@ -104,58 +192,6 @@ resource "helm_release" "workspace_defaults" {
     {
       name  = "accessStrategy.name"
       value = local.access_strategy_name
-    },
-    {
-      name  = "workspaceTemplate.name"
-      value = "jupyterlab"
-    },
-    {
-      name  = "workspaceTemplate.isDefault"
-      value = "true"
-    },
-    {
-      name  = "workspaceTemplate.displayName"
-      value = "JupyterLab"
-    },
-    {
-      name  = "workspaceTemplate.description"
-      value = "JupyterLab workspace with persistent EBS storage"
-    },
-    {
-      name  = "workspaceTemplate.imageUri"
-      value = module.app_jupyterlab[0].image_uri
-    },
-    {
-      name  = "workspaceTemplate.appType"
-      value = var.workspace_app_jupyterlab_app_type
-    },
-    {
-      name  = "workspaceTemplate.accessType"
-      value = var.workspaces_default_access_type
-    },
-    {
-      name  = "workspaceTemplate.ownershipType"
-      value = var.workspaces_default_ownership_type
-    },
-    {
-      name  = "workspaceTemplate.storageClassName"
-      value = local.workspace_storage_class
-    },
-    {
-      name  = "workspaceTemplate.idleShutdown.enabled"
-      value = tostring(var.workspaces_idle_shutdown_enabled)
-    },
-    {
-      name  = "workspaceTemplate.idleShutdown.timeoutMinutes"
-      value = tostring(var.workspaces_idle_shutdown_timeout_default)
-    },
-    {
-      name  = "workspaceTemplate.idleShutdown.minTimeoutMinutes"
-      value = tostring(var.workspaces_idle_shutdown_timeout_min)
-    },
-    {
-      name  = "workspaceTemplate.idleShutdown.maxTimeoutMinutes"
-      value = tostring(var.workspaces_idle_shutdown_timeout_max)
     },
     {
       name  = "networkPolicy.routerNamespace"
@@ -246,6 +282,43 @@ resource "null_resource" "repair_workspace_template" {
       release_namespace = var.workspace_shared_namespace
       cr_kind           = "WorkspaceTemplate"
       cr_name           = "jupyterlab"
+      cr_namespace      = var.workspace_shared_namespace
+    })
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = self.triggers.script
+  }
+
+  depends_on = [helm_release.workspace_defaults, kubernetes_namespace_v1.shared]
+}
+
+data "kubernetes_resource" "jupyterlab_gpu_template" {
+  count = var.enable_gpu_pool ? 1 : 0
+
+  api_version = "workspace.jupyter.org/v1alpha1"
+  kind        = "WorkspaceTemplate"
+  metadata {
+    name      = "jupyterlab-gpu"
+    namespace = var.workspace_shared_namespace
+  }
+
+  depends_on = [helm_release.workspace_defaults, kubernetes_namespace_v1.shared]
+}
+
+resource "null_resource" "repair_workspace_gpu_template" {
+  count = var.enable_gpu_pool ? 1 : 0
+
+  triggers = {
+    present = data.kubernetes_resource.jupyterlab_gpu_template[0].object == null ? "missing" : "present"
+    script = templatefile("${path.module}/local-repair-cr.sh.tftpl", {
+      cluster_name      = local.cluster_name
+      region            = var.region
+      release_name      = "workspace-defaults"
+      release_namespace = var.workspace_shared_namespace
+      cr_kind           = "WorkspaceTemplate"
+      cr_name           = "jupyterlab-gpu"
       cr_namespace      = var.workspace_shared_namespace
     })
   }

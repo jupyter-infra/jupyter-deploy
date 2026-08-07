@@ -6,49 +6,58 @@ sharedNamespace: jupyter-k8s-shared
 accessStrategy:
   name: oauth-access-strategy
 
-# -- Default WorkspaceTemplate definition. Configures the workspace image, storage,
-# access controls, and idle shutdown behavior for new workspaces.
-workspaceTemplate:
-  # -- Kubernetes resource name for the WorkspaceTemplate.
-  name: jupyterlab
-  # -- Whether this is the default template for new workspaces.
-  isDefault: "true"
-  # -- Human-readable name shown in the workspace UI.
-  displayName: JupyterLab
-  # -- Human-readable description shown in the workspace UI.
-  description: "JupyterLab workspace with persistent EBS storage"
-  # -- Container image URI for workspace pods.
-  imageUri: ""
-  # -- Application type identifier (e.g. jupyterlab, code-server).
-  appType: jupyterlab
-  # -- Who can access the workspace: OwnerOnly or TeamShared.
-  accessType: OwnerOnly
-  # -- Who owns the workspace: OwnerOnly or TeamShared.
-  ownershipType: OwnerOnly
-  # -- StorageClass for the workspace persistent volume.
-  storageClassName: ebs-sc
-  # -- TCP readiness probe applied to workspace pods. The operator waits for this
-  # probe to pass before marking the workspace Available, so the app is reachable
-  # by the time users are redirected to it.
-  readinessProbe:
-    # -- Container port the probe connects to (the workspace app port).
-    port: 8888
-    # -- Seconds to wait after container start before the first probe.
-    initialDelaySeconds: 2
-    # -- Seconds between probe attempts.
-    periodSeconds: 3
-    # -- Consecutive failures tolerated before the probe is considered failed
-    # (with the values above, ~90s of startup grace).
-    failureThreshold: 30
-  idleShutdown:
-    # -- Whether to automatically stop idle workspaces.
-    enabled: true
-    # -- Default idle timeout in minutes before a workspace is stopped.
-    timeoutMinutes: 60
-    # -- Minimum idle timeout users can configure, in minutes.
-    minTimeoutMinutes: 15
-    # -- Maximum idle timeout users can configure, in minutes.
-    maxTimeoutMinutes: 480
+# -- WorkspaceTemplate definitions, one card in the workspace UI per entry.
+# A values-file list replaces this default wholesale (helm list semantics), so
+# terraform always injects the full list; the entry here serves standalone
+# renders and unit tests. Per-entry fields:
+#   name/isDefault/displayName/description/imageUri/appType - identity + card copy
+#   accessType/ownershipType/storageClassName               - workspace defaults
+#   defaultResources/resourceBounds                          - per-resource-key
+#     requests/limits and min/max (extended keys like nvidia.com/gpu included)
+#   nodeSelector/tolerations                                 - placement; must match
+#     the role of the Karpenter pool the template targets
+#   readinessProbe/idleShutdown                              - probe + idle policy
+workspaceTemplates:
+  - name: jupyterlab
+    isDefault: "true"
+    displayName: JupyterLab
+    description: "JupyterLab workspace with persistent EBS storage"
+    imageUri: ""
+    appType: jupyterlab
+    accessType: OwnerOnly
+    ownershipType: OwnerOnly
+    storageClassName: ebs-sc
+    defaultResources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+    resourceBounds:
+      cpu:
+        min: "100m"
+        max: "8"
+      memory:
+        min: "256Mi"
+        max: "32Gi"
+    nodeSelector:
+      jupyter-deploy/role: workspaces
+    tolerations:
+      - key: jupyter-deploy/role
+        operator: Equal
+        value: workspaces
+        effect: NoSchedule
+    readinessProbe:
+      port: 8888
+      initialDelaySeconds: 2
+      periodSeconds: 3
+      failureThreshold: 30
+    idleShutdown:
+      enabled: true
+      timeoutMinutes: 60
+      minTimeoutMinutes: 15
+      maxTimeoutMinutes: 480
 
 # -- Namespace-scoped NetworkPolicy governing ingress to workspace pods. One
 # policy is created per workspace namespace, replacing the per-workspace policy

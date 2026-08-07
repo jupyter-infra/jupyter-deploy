@@ -1193,6 +1193,25 @@ components:
         method: k8s.custom.get
       show:
         method: k8s.custom.get
+  jupyterlab-gpu-template:
+    type: CustomResourceWithoutStatus
+    type-display: WorkspaceTemplate
+    description: GPU workspace template (enable_gpu_pool)
+    scope: workspace_shared_namespace
+    resource-name: jupyterlab-gpu
+    crd-group: workspace.jupyter.org
+    crd-version: v1alpha1
+    crd-plural: workspacetemplates
+    details:
+      path: .metadata.namespace
+    sub-component:
+      label: access-strategy
+      path: .spec.defaultAccessStrategy.name
+    verbs:
+      status:
+        method: k8s.custom.get
+      show:
+        method: k8s.custom.get
   traefik:
     type: Deployment
     description: Ingress controller and reverse proxy

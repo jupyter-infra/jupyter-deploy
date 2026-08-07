@@ -1,62 +1,51 @@
+{{- range .Values.workspaceTemplates }}
+---
 apiVersion: workspace.jupyter.org/v1alpha1
 kind: WorkspaceTemplate
 metadata:
-  name: {{ .Values.workspaceTemplate.name }}
-  namespace: {{ .Values.sharedNamespace }}
+  name: {{ .name }}
+  namespace: {{ $.Values.sharedNamespace }}
   labels:
-    workspace.jupyter.org/default-template: {{ .Values.workspaceTemplate.isDefault | quote }}
+    workspace.jupyter.org/default-template: {{ .isDefault | quote }}
 spec:
-  displayName: {{ .Values.workspaceTemplate.displayName }}
-  description: {{ .Values.workspaceTemplate.description }}
-  defaultImage: {{ .Values.workspaceTemplate.imageUri }}
-  appType: {{ .Values.workspaceTemplate.appType }}
-  defaultAccessType: {{ .Values.workspaceTemplate.accessType }}
-  defaultOwnershipType: {{ .Values.workspaceTemplate.ownershipType }}
+  displayName: {{ .displayName }}
+  description: {{ .description }}
+  defaultImage: {{ .imageUri }}
+  appType: {{ .appType }}
+  defaultAccessType: {{ .accessType }}
+  defaultOwnershipType: {{ .ownershipType }}
   defaultAccessStrategy:
-    name: {{ .Values.accessStrategy.name }}
-    namespace: {{ .Values.sharedNamespace }}
+    name: {{ $.Values.accessStrategy.name }}
+    namespace: {{ $.Values.sharedNamespace }}
   defaultResources:
-    requests:
-      cpu: "500m"
-      memory: "1Gi"
-    limits:
-      cpu: "2"
-      memory: "4Gi"
+    {{- .defaultResources | toYaml | nindent 4 }}
   resourceBounds:
     resources:
-      cpu:
-        min: "100m"
-        max: "8"
-      memory:
-        min: "256Mi"
-        max: "32Gi"
+      {{- .resourceBounds | toYaml | nindent 6 }}
   primaryStorage:
     defaultSize: "10Gi"
     minSize: "1Gi"
     maxSize: "100Gi"
-    defaultStorageClassName: {{ .Values.workspaceTemplate.storageClassName }}
+    defaultStorageClassName: {{ .storageClassName }}
     defaultMountPath: "/home/jovyan"
   # Gate workspace readiness on the app actually accepting connections, so the
   # operator does not flip status.condition[Available]=True before the server is
   # up. Complements the access-strategy startupProbe.
   defaultReadinessProbe:
     tcpSocket:
-      port: {{ .Values.workspaceTemplate.readinessProbe.port }}
-    initialDelaySeconds: {{ .Values.workspaceTemplate.readinessProbe.initialDelaySeconds }}
-    periodSeconds: {{ .Values.workspaceTemplate.readinessProbe.periodSeconds }}
-    failureThreshold: {{ .Values.workspaceTemplate.readinessProbe.failureThreshold }}
+      port: {{ .readinessProbe.port }}
+    initialDelaySeconds: {{ .readinessProbe.initialDelaySeconds }}
+    periodSeconds: {{ .readinessProbe.periodSeconds }}
+    failureThreshold: {{ .readinessProbe.failureThreshold }}
   defaultPodSecurityContext:
     fsGroup: 1000
   defaultNodeSelector:
-    jupyter-deploy/role: workspaces
+    {{- .nodeSelector | toYaml | nindent 4 }}
   defaultTolerations:
-    - key: jupyter-deploy/role
-      operator: Equal
-      value: workspaces
-      effect: NoSchedule
+    {{- .tolerations | toYaml | nindent 4 }}
   defaultIdleShutdown:
-    enabled: {{ .Values.workspaceTemplate.idleShutdown.enabled }}
-    idleTimeoutInMinutes: {{ .Values.workspaceTemplate.idleShutdown.timeoutMinutes }}
+    enabled: {{ .idleShutdown.enabled }}
+    idleTimeoutInMinutes: {{ .idleShutdown.timeoutMinutes }}
     detection:
       httpGet:
         path: /api/status
@@ -67,5 +56,6 @@ spec:
           format: RFC3339
   idleShutdownOverrides:
     allow: true
-    minIdleTimeoutInMinutes: {{ .Values.workspaceTemplate.idleShutdown.minTimeoutMinutes }}
-    maxIdleTimeoutInMinutes: {{ .Values.workspaceTemplate.idleShutdown.maxTimeoutMinutes }}
+    minIdleTimeoutInMinutes: {{ .idleShutdown.minTimeoutMinutes }}
+    maxIdleTimeoutInMinutes: {{ .idleShutdown.maxTimeoutMinutes }}
+{{- end }}

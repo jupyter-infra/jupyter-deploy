@@ -1,5 +1,45 @@
 # Chart defaults plus a dummy image (terraform always injects one; an empty
 # imageUri renders `defaultImage: ` with a trailing space, which yamllint
-# rejects in the committed golden).
-workspaceTemplate:
-  imageUri: docker.io/test/jupyterlab:latest
+# rejects in the committed golden). A values-file list replaces the chart
+# default wholesale, so the full single-entry list is restated here.
+workspaceTemplates:
+  - name: jupyterlab
+    isDefault: "true"
+    displayName: JupyterLab
+    description: "JupyterLab workspace with persistent EBS storage"
+    imageUri: docker.io/test/jupyterlab:latest
+    appType: jupyterlab
+    accessType: OwnerOnly
+    ownershipType: OwnerOnly
+    storageClassName: ebs-sc
+    defaultResources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+    resourceBounds:
+      cpu:
+        min: "100m"
+        max: "8"
+      memory:
+        min: "256Mi"
+        max: "32Gi"
+    nodeSelector:
+      jupyter-deploy/role: workspaces
+    tolerations:
+      - key: jupyter-deploy/role
+        operator: Equal
+        value: workspaces
+        effect: NoSchedule
+    readinessProbe:
+      port: 8888
+      initialDelaySeconds: 2
+      periodSeconds: 3
+      failureThreshold: 30
+    idleShutdown:
+      enabled: true
+      timeoutMinutes: 60
+      minTimeoutMinutes: 15
+      maxTimeoutMinutes: 480

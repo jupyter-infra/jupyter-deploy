@@ -51,20 +51,20 @@ spec:
     name: oauth-access-strategy
     namespace: jupyter-k8s-shared
   defaultResources:
-    requests:
-      cpu: "500m"
-      memory: "1Gi"
     limits:
       cpu: "2"
-      memory: "4Gi"
+      memory: 4Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
   resourceBounds:
     resources:
       cpu:
-        min: "100m"
         max: "8"
+        min: 100m
       memory:
-        min: "256Mi"
-        max: "32Gi"
+        max: 32Gi
+        min: 256Mi
   primaryStorage:
     defaultSize: "10Gi"
     minSize: "1Gi"
@@ -85,10 +85,10 @@ spec:
   defaultNodeSelector:
     jupyter-deploy/role: workspaces
   defaultTolerations:
-    - key: jupyter-deploy/role
+    - effect: NoSchedule
+      key: jupyter-deploy/role
       operator: Equal
       value: workspaces
-      effect: NoSchedule
   defaultIdleShutdown:
     enabled: true
     idleTimeoutInMinutes: 60
