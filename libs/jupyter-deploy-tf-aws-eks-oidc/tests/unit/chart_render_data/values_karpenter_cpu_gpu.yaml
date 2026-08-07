@@ -1,0 +1,28 @@
+# The CPU fixture plus the GPU entry exactly as the enable_gpu_pool synthesis
+# emits it (gpu_pool_builtin in platform_karpenter.tf) — keep the two in sync.
+clusterName: test-cluster
+nodeInstanceProfile: test-karpenter-node-profile
+expireAfter: 504h
+routingLimitsCpu: "32"
+routingLimitsMemory: 128Gi
+routing:
+  instanceCategories: ["c", "m"]
+  instanceGenerationMin: "6"
+  blockDevice:
+    deviceName: /dev/xvda
+    volumeSizeGi: 50
+    volumeType: gp3
+workspaceNodepools:
+  - name: workspace-cpu
+    instanceFamilies: ["c6i", "m6i", "r6i", "c7i", "m7i", "r7i"]
+    diskSizeGi: 50
+    maxCpu: "512"
+    maxMemory: 2048Gi
+  - name: workspace-gpu
+    instanceFamilies: ["g4dn", "g5"]
+    diskSizeGi: 100
+    maxCpu: "64"
+    maxMemory: 256Gi
+    maxGpus: "4"
+    role: workspaces-gpu
+    gpu: "true"

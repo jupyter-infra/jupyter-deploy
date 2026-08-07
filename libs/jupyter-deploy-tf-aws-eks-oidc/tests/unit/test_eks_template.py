@@ -22,6 +22,9 @@ MANDATORY_TEMPLATE_STRPATHS: list[str] = [
     "engine/local-destroy-workspaces.sh.tftpl",
     "charts/workspace-defaults/Chart.yaml",
     "charts/github-rbac/Chart.yaml",
+    # Existence only — its version is deliberately decoupled from the template
+    # version (see CHART_DIRS), so it does not belong there.
+    "charts/karpenter-nodepools/Chart.yaml",
 ]
 
 CHART_DIRS: list[str] = [

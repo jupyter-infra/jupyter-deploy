@@ -232,6 +232,29 @@ class TestVariablesYaml(unittest.TestCase):
             "node_expire_after must be set in defaults-all.tfvars",
         )
 
+    def test_gpu_pool_flag_off_in_preset(self) -> None:
+        """enable_gpu_pool must default to false so existing deployments see zero deltas."""
+        self.assertIn("enable_gpu_pool", self.DEFAULTS_ALL_TFVARS, "enable_gpu_pool must be set in defaults-all.tfvars")
+        self.assertIs(self.DEFAULTS_ALL_TFVARS["enable_gpu_pool"], False, "enable_gpu_pool must default to false")
+
+    def test_preset_nodepools_carry_only_base_keys(self) -> None:
+        """Preset pool entries must not carry the optional GPU keys.
+
+        An optional key (role, max_gpus, gpu) on a preset pool would change its
+        rendered NodePool, and Karpenter drift-replaces the nodes of a changed
+        pool — restarting every workspace on them on upgrade. The built-in GPU
+        entry is synthesized in terraform, never written into the preset.
+        """
+        base_keys = {"name", "instance_families", "disk_size_gb", "max_cpu", "max_memory"}
+        for pool in self.DEFAULTS_ALL_TFVARS["workspace_nodepools"]:
+            extra = set(pool.keys()) - base_keys
+            self.assertEqual(
+                len(extra),
+                0,
+                f"preset pool '{pool['name']}' carries non-base keys {extra} — move GPU pool "
+                "settings to the enable_gpu_pool synthesis or a deployment override, not the preset",
+            )
+
     @classmethod
     def _parse_commented_overrides(cls) -> dict:
         """Parse commented-out key-value pairs from the overrides section of variables.yaml."""
