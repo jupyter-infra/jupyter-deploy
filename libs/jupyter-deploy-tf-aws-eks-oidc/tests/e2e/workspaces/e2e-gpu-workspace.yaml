@@ -1,0 +1,15 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-gpu-workspace
+  namespace: default
+spec:
+  displayName: "E2E GPU Workspace"
+  desiredStatus: Running
+  ownershipType: Public
+  accessType: Public
+  # Templates live in the shared namespace; without the explicit namespace the
+  # ref resolves in the workspace's own namespace and the template is not found.
+  templateRef:
+    name: jupyterlab-gpu
+    namespace: jupyter-k8s-shared

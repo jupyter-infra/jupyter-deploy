@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from pytest_jupyter_deploy.cli import JDCliError
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
+from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 
 
 def _get_manifest_components(e2e_deployment: EndToEndDeployment) -> dict:
@@ -240,6 +241,28 @@ def test_daemonset_component_status_ready(e2e_deployment: EndToEndDeployment) ->
     # Core add-on DaemonSets are always present; fluent-bit only when logging is enabled.
     for name in ("aws-node", "kube-proxy"):
         _poll_component_status(e2e_deployment, name, "Ready")
+
+
+@skip_if_testvars_not_set(["JD_E2E_GPU_ENABLED"])
+@pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_nvidia_device_plugin_components_when_gpu_enabled(e2e_deployment: EndToEndDeployment) -> None:
+    """The device-plugin DaemonSet and chart components resolve when the GPU pool is enabled."""
+    e2e_deployment.ensure_deployed()
+
+    daemonset_names = _get_daemonset_names(e2e_deployment)
+    assert "nvidia-device-plugin" in daemonset_names, (
+        f"Expected nvidia-device-plugin DaemonSet component, got: {daemonset_names}"
+    )
+
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "component", "show", "--name", "nvidia-device-plugin"])
+    assert result.stdout.strip(), "Expected non-empty output for nvidia-device-plugin show"
+
+    # No Ready assertion on the DaemonSet: with the GPU pool scaled to zero it has
+    # desiredNumberScheduled == 0, which jd health currently reads as Degraded (#337).
+    result = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "component", "status", "--name", "nvidia-device-plugin-chart"]
+    )
+    assert "deployed" in result.stdout.lower(), f"Expected deployed chart status, got:\n{result.stdout}"
 
 
 @pytest.mark.usefixtures("kubernetes_cluster_login")
