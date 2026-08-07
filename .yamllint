@@ -78,5 +78,7 @@ ignore: |
   build/
   *.egg-info/
   **/charts/*/templates/
+  # helm-rendered goldens, byte-compared in tests — must match helm output exactly
+  **/tests/unit/chart_render_data/golden_*.yaml
   # string.Template manifests (templated blocks, not valid YAML until rendered)
   **/kubernetes/ballast-pod.yaml

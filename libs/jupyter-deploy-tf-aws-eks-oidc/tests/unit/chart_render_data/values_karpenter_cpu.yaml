@@ -1,0 +1,21 @@
+# Mirrors what platform_karpenter.tf injects for the defaults-all.tfvars preset
+# (dummy cluster/profile names). Keep in sync with the tf `set` entries and the
+# workspaceNodepools transform, or the goldens stop representing a real deploy.
+clusterName: test-cluster
+nodeInstanceProfile: test-karpenter-node-profile
+expireAfter: 504h
+routingLimitsCpu: "32"
+routingLimitsMemory: 128Gi
+routing:
+  instanceCategories: ["c", "m"]
+  instanceGenerationMin: "6"
+  blockDevice:
+    deviceName: /dev/xvda
+    volumeSizeGi: 50
+    volumeType: gp3
+workspaceNodepools:
+  - name: workspace-cpu
+    instanceFamilies: ["c6i", "m6i", "r6i", "c7i", "m7i", "r7i"]
+    diskSizeGi: 50
+    maxCpu: "512"
+    maxMemory: 2048Gi

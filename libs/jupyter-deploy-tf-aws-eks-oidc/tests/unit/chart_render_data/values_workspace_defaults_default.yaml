@@ -1,0 +1,5 @@
+# Chart defaults plus a dummy image (terraform always injects one; an empty
+# imageUri renders `defaultImage: ` with a trailing space, which yamllint
+# rejects in the committed golden).
+workspaceTemplate:
+  imageUri: docker.io/test/jupyterlab:latest

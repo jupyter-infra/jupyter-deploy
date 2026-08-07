@@ -1,0 +1,178 @@
+---
+# Source: karpenter-nodepools/templates/ec2nodeclasses.yaml
+# EC2NodeClasses define the AWS-level node configuration for Karpenter.
+# One class per pool (routing + each workspace pool).
+# All pools pin httpPutResponseHopLimit: 1 — no routing or workspace pod needs
+# IMDS: cert-manager/external-dns use Pod Identity, and traefik/dex/oauth2-proxy/
+# authmiddleware/web-app make no AWS calls. Hop 1 blocks containerized pods from
+# reaching IMDS to assume the node role; node agents (CNI, EBS CSI) use
+# hostNetwork and reach IMDS at hop 1, so they are unaffected.
+# Both pin httpTokens: required (IMDSv2).
+---
+# Source: karpenter-nodepools/templates/nodepools.yaml
+# NodePools define scheduling constraints and node lifecycle for Karpenter.
+# Routing pool: always-on, conservative consolidation, small instances.
+# Workspace pools: scale-to-zero, aggressive consolidation, diverse instances.
+# Both carry taints so only pods with matching tolerations can land here.
+#
+# Disruption budget: nodes: "1" (absolute, not percentage).
+# Karpenter applies the MINIMUM of all active budgets. A percentage budget
+# (e.g. 10%) rounds down to 0 on small pools (floor(0.1×1)=0), and
+# min(0,1)=0 — the absolute floor cannot raise a zero from the percentage.
+# Using only the absolute entry guarantees at least 1 node is always
+# disruptable, enabling scale-to-zero on workspace pools.
+---
+# Source: karpenter-nodepools/templates/ec2nodeclasses.yaml
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: routing
+spec:
+  amiSelectorTerms:
+    - alias: al2023@latest
+  instanceProfile: "test-karpenter-node-profile"
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "test-cluster"
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "test-cluster"
+  tags:
+    karpenter.sh/cluster-name: "test-cluster"
+  metadataOptions:
+    httpPutResponseHopLimit: 1
+    httpEndpoint: enabled
+    httpTokens: required
+    httpProtocolIPv6: disabled
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 50Gi
+        volumeType: gp3
+        encrypted: true
+        deleteOnTermination: true
+---
+# Source: karpenter-nodepools/templates/ec2nodeclasses.yaml
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: workspace-cpu
+spec:
+  amiSelectorTerms:
+    - alias: al2023@latest
+  instanceProfile: "test-karpenter-node-profile"
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "test-cluster"
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "test-cluster"
+  tags:
+    karpenter.sh/cluster-name: "test-cluster"
+  metadataOptions:
+    httpPutResponseHopLimit: 1
+    httpEndpoint: enabled
+    httpTokens: required
+    httpProtocolIPv6: disabled
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        # Root volume: OS + container image cache. User data (notebooks, files)
+        # lives on the EBS volume mounted by the workspace pod via StorageClass.
+        # Override disk_size_gb in workspace_nodepools for large custom images.
+        volumeSize: 50Gi
+        volumeType: gp3
+        encrypted: true
+        deleteOnTermination: true
+---
+# Source: karpenter-nodepools/templates/nodepools.yaml
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: routing
+spec:
+  template:
+    metadata:
+      labels:
+        jupyter-deploy/role: routing
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: routing
+      taints:
+        - key: jupyter-deploy/role
+          value: routing
+          effect: NoSchedule
+      expireAfter: 504h
+      requirements:
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["c","m"]
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["6"]
+        - key: karpenter.k8s.aws/instance-size
+          operator: In
+          values: ["large", "xlarge", "2xlarge"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+  limits:
+    cpu: "32"
+    memory: "128Gi"
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 120s
+    budgets:
+      - nodes: "1"
+---
+# Source: karpenter-nodepools/templates/nodepools.yaml
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: workspace-cpu
+spec:
+  template:
+    metadata:
+      labels:
+        jupyter-deploy/role: workspaces
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: workspace-cpu
+      taints:
+        - key: jupyter-deploy/role
+          value: workspaces
+          effect: NoSchedule
+      expireAfter: 504h
+      requirements:
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: ["c6i","m6i","r6i","c7i","m7i","r7i"]
+        - key: karpenter.k8s.aws/instance-cpu
+          operator: In
+          values: ["2", "4", "8", "16", "32"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+  limits:
+    cpu: "512"
+    memory: "2048Gi"
+  disruption:
+    # WhenEmpty (not WhenEmptyOrUnderutilized): workspace pods carry no PDB and
+    # no karpenter.sh/do-not-disrupt annotation, so underutilized-consolidation
+    # would be free to evict a running notebook to bin-pack. Restricting to
+    # WhenEmpty means a node is only reclaimed once idle-shutdown has drained its
+    # last workspace pod — scale-to-zero still works, running notebooks are safe.
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 60s
+    budgets:
+      - nodes: "1"

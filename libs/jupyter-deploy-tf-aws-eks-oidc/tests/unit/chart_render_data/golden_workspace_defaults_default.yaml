@@ -1,0 +1,106 @@
+---
+# Source: workspace-defaults/templates/network-policy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: workspace-ingress
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: jupyter-deploy
+spec:
+  # Selects every workspace pod in the namespace (label set by the operator).
+  podSelector:
+    matchLabels:
+      workspace.jupyter.org/component: workspace
+  policyTypes:
+    - Ingress
+  ingress:
+    # Traefik router proxying authenticated workspace traffic.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: jupyter-k8s-router
+      ports:
+        - port: 8888
+          protocol: TCP
+    # Operator idle-detection probes (transport: network).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: jupyter-k8s-system
+      ports:
+        - port: 8888
+          protocol: TCP
+---
+# Source: workspace-defaults/templates/workspace-template.yaml
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: WorkspaceTemplate
+metadata:
+  name: jupyterlab
+  namespace: jupyter-k8s-shared
+  labels:
+    workspace.jupyter.org/default-template: "true"
+spec:
+  displayName: JupyterLab
+  description: JupyterLab workspace with persistent EBS storage
+  defaultImage: docker.io/test/jupyterlab:latest
+  appType: jupyterlab
+  defaultAccessType: OwnerOnly
+  defaultOwnershipType: OwnerOnly
+  defaultAccessStrategy:
+    name: oauth-access-strategy
+    namespace: jupyter-k8s-shared
+  defaultResources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+  resourceBounds:
+    resources:
+      cpu:
+        min: "100m"
+        max: "8"
+      memory:
+        min: "256Mi"
+        max: "32Gi"
+  primaryStorage:
+    defaultSize: "10Gi"
+    minSize: "1Gi"
+    maxSize: "100Gi"
+    defaultStorageClassName: ebs-sc
+    defaultMountPath: "/home/jovyan"
+  # Gate workspace readiness on the app actually accepting connections, so the
+  # operator does not flip status.condition[Available]=True before the server is
+  # up. Complements the access-strategy startupProbe.
+  defaultReadinessProbe:
+    tcpSocket:
+      port: 8888
+    initialDelaySeconds: 2
+    periodSeconds: 3
+    failureThreshold: 30
+  defaultPodSecurityContext:
+    fsGroup: 1000
+  defaultNodeSelector:
+    jupyter-deploy/role: workspaces
+  defaultTolerations:
+    - key: jupyter-deploy/role
+      operator: Equal
+      value: workspaces
+      effect: NoSchedule
+  defaultIdleShutdown:
+    enabled: true
+    idleTimeoutInMinutes: 60
+    detection:
+      httpGet:
+        path: /api/status
+        port: 8888
+        transport: network
+        lastActivityTimestamp:
+          responseBodyPath: last_activity
+          format: RFC3339
+  idleShutdownOverrides:
+    allow: true
+    minIdleTimeoutInMinutes: 15
+    maxIdleTimeoutInMinutes: 480
