@@ -173,3 +173,57 @@ class TestWorkspaceDefaultsDefaultRender(GoldenComparisonTestCase):
         golden = _workspace_template_docs((DATA_DIR / "golden_workspace_defaults_default.yaml").read_text())
         self.assertEqual(len(golden), 1)
         self.assertEqual(golden[0], self.templates[0])
+
+
+@_SKIP_WITHOUT_HELM
+class TestWorkspaceDefaultsTwoTemplateRender(unittest.TestCase):
+    """The jupyterlab-gpu entry renders a fenced fixed-shape template beside jupyterlab."""
+
+    templates: ClassVar[list[dict[str, Any]]]
+    gpu: ClassVar[dict[str, Any]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        rendered = _helm_template(
+            "charts/workspace-defaults", "workspace-defaults", "values_workspace_defaults_two_templates.yaml"
+        )
+        cls.templates = _workspace_template_docs(rendered)
+        cls.gpu = next(doc for doc in cls.templates if doc["metadata"]["name"] == "jupyterlab-gpu")
+
+    def test_renders_both_templates(self) -> None:
+        names = [doc["metadata"]["name"] for doc in self.templates]
+        self.assertEqual(names, ["jupyterlab", "jupyterlab-gpu"])
+
+    def test_jupyterlab_unchanged_beside_gpu_template(self) -> None:
+        golden = _workspace_template_docs((DATA_DIR / "golden_workspace_defaults_default.yaml").read_text())
+        jupyterlab = next(doc for doc in self.templates if doc["metadata"]["name"] == "jupyterlab")
+        self.assertEqual(golden[0], jupyterlab)
+
+    def test_gpu_template_bounds_pinned(self) -> None:
+        bounds = self.gpu["spec"]["resourceBounds"]["resources"]
+        self.assertEqual(bounds["cpu"], {"min": "3500m", "max": "3500m"})
+        self.assertEqual(bounds["memory"], {"min": "13Gi", "max": "13Gi"})
+        self.assertEqual(bounds["nvidia.com/gpu"], {"min": "1", "max": "1"})
+
+    def test_gpu_template_default_resources_match_bounds(self) -> None:
+        pinned = {"cpu": "3500m", "memory": "13Gi", "nvidia.com/gpu": "1"}
+        resources = self.gpu["spec"]["defaultResources"]
+        self.assertEqual(resources["requests"], pinned)
+        self.assertEqual(resources["limits"], pinned)
+
+    def test_gpu_template_placement(self) -> None:
+        spec = self.gpu["spec"]
+        self.assertEqual(spec["defaultNodeSelector"], {"jupyter-deploy/role": "workspaces-gpu"})
+        self.assertEqual(
+            spec["defaultTolerations"],
+            [{"key": "jupyter-deploy/role", "operator": "Equal", "value": "workspaces-gpu", "effect": "NoSchedule"}],
+        )
+
+    def test_gpu_template_idle_timeout(self) -> None:
+        self.assertEqual(self.gpu["spec"]["defaultIdleShutdown"]["idleTimeoutInMinutes"], 30)
+        overrides = self.gpu["spec"]["idleShutdownOverrides"]
+        self.assertEqual(overrides["minIdleTimeoutInMinutes"], 15)
+        self.assertEqual(overrides["maxIdleTimeoutInMinutes"], 480)
+
+    def test_gpu_template_not_default(self) -> None:
+        self.assertEqual(self.gpu["metadata"]["labels"]["workspace.jupyter.org/default-template"], "false")

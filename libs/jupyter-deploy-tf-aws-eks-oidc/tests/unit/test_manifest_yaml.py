@@ -400,3 +400,14 @@ class TestManifest(unittest.TestCase):
         self.assertEqual(chart["resource-name"], "nvidia-device-plugin")
         self.assertEqual(chart["scope"], "kube_system_namespace")
         self.assertIn("reconcile", chart["verbs"])
+
+    def test_gpu_workspace_template_component_declared(self) -> None:
+        """The jupyterlab-gpu template surfaces in jd health beside jupyterlab."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        component = self.MANIFEST.get("components", {})["jupyterlab-gpu-template"]
+        self.assertEqual(component["type"], "CustomResourceWithoutStatus")
+        self.assertEqual(component["resource-name"], "jupyterlab-gpu")
+        self.assertEqual(component["scope"], "workspace_shared_namespace")
+        self.assertEqual(component["crd-plural"], "workspacetemplates")

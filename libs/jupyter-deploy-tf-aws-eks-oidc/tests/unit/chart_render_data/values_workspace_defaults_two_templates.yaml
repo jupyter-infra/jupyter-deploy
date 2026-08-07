@@ -1,0 +1,89 @@
+# Two-template list mirroring the workspaces.tf locals (jupyterlab plus the
+# enable_gpu_pool jupyterlab-gpu entry), dummy images — keep in sync with
+# jupyterlab_template_values / jupyterlab_gpu_template_values.
+workspaceTemplates:
+  - name: jupyterlab
+    isDefault: "true"
+    displayName: JupyterLab
+    description: "JupyterLab workspace with persistent EBS storage"
+    imageUri: docker.io/test/jupyterlab:latest
+    appType: jupyterlab
+    accessType: OwnerOnly
+    ownershipType: OwnerOnly
+    storageClassName: ebs-sc
+    defaultResources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+    resourceBounds:
+      cpu:
+        min: "100m"
+        max: "8"
+      memory:
+        min: "256Mi"
+        max: "32Gi"
+    nodeSelector:
+      jupyter-deploy/role: workspaces
+    tolerations:
+      - key: jupyter-deploy/role
+        operator: Equal
+        value: workspaces
+        effect: NoSchedule
+    readinessProbe:
+      port: 8888
+      initialDelaySeconds: 2
+      periodSeconds: 3
+      failureThreshold: 30
+    idleShutdown:
+      enabled: true
+      timeoutMinutes: 60
+      minTimeoutMinutes: 15
+      maxTimeoutMinutes: 480
+  - name: jupyterlab-gpu
+    isDefault: "false"
+    displayName: JupyterLab GPU
+    description: "JupyterLab workspace with one NVIDIA GPU and persistent EBS storage"
+    imageUri: docker.io/test/jupyterlab:latest
+    appType: jupyterlab
+    accessType: OwnerOnly
+    ownershipType: OwnerOnly
+    storageClassName: ebs-sc
+    defaultResources:
+      requests:
+        cpu: "3500m"
+        memory: "13Gi"
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "3500m"
+        memory: "13Gi"
+        nvidia.com/gpu: "1"
+    resourceBounds:
+      cpu:
+        min: "3500m"
+        max: "3500m"
+      memory:
+        min: "13Gi"
+        max: "13Gi"
+      nvidia.com/gpu:
+        min: "1"
+        max: "1"
+    nodeSelector:
+      jupyter-deploy/role: workspaces-gpu
+    tolerations:
+      - key: jupyter-deploy/role
+        operator: Equal
+        value: workspaces-gpu
+        effect: NoSchedule
+    readinessProbe:
+      port: 8888
+      initialDelaySeconds: 2
+      periodSeconds: 3
+      failureThreshold: 30
+    idleShutdown:
+      enabled: true
+      timeoutMinutes: 30
+      minTimeoutMinutes: 15
+      maxTimeoutMinutes: 480

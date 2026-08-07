@@ -36,3 +36,24 @@ def test_parameters_sanity() -> None:
     assert timeout_min <= timeout_default <= timeout_max, (
         f"default ({timeout_default}) must be within [min, max] = [{timeout_min}, {timeout_max}]"
     )
+
+
+def test_gpu_template_idle_timeout_within_window() -> None:
+    """The GPU template's idle default must sit inside the shared override window.
+
+    The GPU template pins its own idle default as a literal in workspaces.tf
+    while reusing the preset min/max window; a literal outside the window would
+    be rejected by the operator's override validation on every GPU workspace.
+    """
+    workspaces_tf = (TEMPLATE_PATH / "engine" / "workspaces.tf").read_text()
+    match = re.search(r"^\s*timeoutMinutes\s*=\s*(\d+)\s*$", workspaces_tf, re.MULTILINE)
+    assert match is not None, "GPU idle timeout literal not found in workspaces.tf"
+    gpu_timeout = int(match.group(1))
+
+    tfvars = (TEMPLATE_PATH / "engine" / "presets" / "defaults-all.tfvars").read_text()
+    timeout_min = _read_number_tfvar(tfvars, "workspaces_idle_shutdown_timeout_min")
+    timeout_max = _read_number_tfvar(tfvars, "workspaces_idle_shutdown_timeout_max")
+
+    assert timeout_min <= gpu_timeout <= timeout_max, (
+        f"GPU idle default ({gpu_timeout}) must be within [min, max] = [{timeout_min}, {timeout_max}]"
+    )
