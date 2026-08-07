@@ -333,6 +333,18 @@ variable "enable_gpu_pool" {
   type        = bool
 }
 
+variable "nvidia_device_plugin_version" {
+  description = <<-EOT
+    Helm chart version of the NVIDIA device plugin, installed only when
+    enable_gpu_pool is true.
+
+    Refer to: https://github.com/NVIDIA/k8s-device-plugin/releases
+
+    Recommended: 0.19.3
+  EOT
+  type        = string
+}
+
 variable "routing_instance_categories" {
   description = <<-EOT
     EC2 instance categories (karpenter.k8s.aws/instance-category) for routing nodes.

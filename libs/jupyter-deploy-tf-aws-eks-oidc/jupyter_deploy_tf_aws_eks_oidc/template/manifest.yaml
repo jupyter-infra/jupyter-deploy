@@ -1098,6 +1098,16 @@ components:
         method: k8s.apps.get-daemonset-status
       show:
         method: k8s.apps.get-daemonset
+  nvidia-device-plugin:
+    type: DaemonSet
+    description: Registers nvidia.com/gpu capacity on GPU pool nodes
+    resource-name: nvidia-device-plugin
+    scope: kube_system_namespace
+    verbs:
+      status:
+        method: k8s.apps.get-daemonset-status
+      show:
+        method: k8s.apps.get-daemonset
   cluster-autoscaler:
     type: Deployment
     description: Scales managed node groups on pending pods
@@ -1306,6 +1316,18 @@ components:
     type: HelmRelease
     description: Fluent Bit log-shipping chart (component logging)
     resource-name: fluent-bit
+    scope: kube_system_namespace
+    verbs:
+      status:
+        method: helm.status
+      show:
+        method: helm.show
+      reconcile:
+        method: helm.reconcile
+  nvidia-device-plugin-chart:
+    type: HelmRelease
+    description: NVIDIA device plugin chart (GPU workspaces)
+    resource-name: nvidia-device-plugin
     scope: kube_system_namespace
     verbs:
       status:

@@ -251,12 +251,12 @@ class TestManifest(unittest.TestCase):
         components = self.MANIFEST.get("components", {})
         helm_components = {name: c for name, c in components.items() if c["type"] == "HelmRelease"}
 
-        # All seven chart releases are surfaced as components (five platform charts plus
-        # the cluster-autoscaler and fluent-bit charts added for autoscaling / logging).
+        # Every helm_release in the template is surfaced as a component, so
+        # adding a release means adding a component entry (and bumping this).
         self.assertEqual(
             len(helm_components),
-            10,
-            f"Expected 10 HelmRelease components, got {len(helm_components)}: {list(helm_components)}",
+            11,
+            f"Expected 11 HelmRelease components, got {len(helm_components)}: {list(helm_components)}",
         )
         for name, comp in helm_components.items():
             self.assertIn("reconcile", comp["verbs"], f"HelmRelease component '{name}' must declare a reconcile verb")

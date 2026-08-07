@@ -24,6 +24,7 @@ resource "null_resource" "platform" {
     null_resource.cluster_addons,
     helm_release.cluster_autoscaler,
     helm_release.fluent_bit,
+    helm_release.nvidia_device_plugin,
     # Karpenter + KEDA + Prometheus must be ready before any workspace service starts:
     # NodePools must exist so workspace pods can be scheduled on Karpenter nodes,
     # and KEDA/Prometheus must be up so ScaledObjects can activate immediately.

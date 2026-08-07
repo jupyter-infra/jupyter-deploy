@@ -69,3 +69,4 @@ overrides:
   #     max_cpu: "512"
   #     max_memory: 2048Gi
   # enable_gpu_pool: false
+  # nvidia_device_plugin_version: "0.19.3"

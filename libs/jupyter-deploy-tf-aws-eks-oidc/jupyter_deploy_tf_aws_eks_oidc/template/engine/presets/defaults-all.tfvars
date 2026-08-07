@@ -60,4 +60,5 @@ workspace_nodepools = [
   }
 ]
 
-enable_gpu_pool = false
+enable_gpu_pool              = false
+nvidia_device_plugin_version = "0.19.3"
