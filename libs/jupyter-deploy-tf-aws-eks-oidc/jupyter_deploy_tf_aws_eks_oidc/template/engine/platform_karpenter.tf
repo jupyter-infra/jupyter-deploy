@@ -249,11 +249,6 @@ locals {
     var.enable_gpu_pool && !contains([for p in var.workspace_nodepools : p["name"]], local.gpu_pool_name)
     ? [local.gpu_pool_builtin] : [],
   )
-  # Role label of the GPU pool; the device plugin selects on it.
-  gpu_pool_role = try(
-    [for p in local.workspace_nodepools_effective : lookup(p, "role", "workspaces") if p["name"] == local.gpu_pool_name][0],
-    "workspaces-gpu",
-  )
 }
 
 resource "helm_release" "karpenter_nodepools" {
