@@ -72,24 +72,28 @@ You control node pools through admin variables:
 | `routing_instance_categories` | `["c", "m"]` | Instance categories Karpenter may pick for routing nodes. |
 | `routing_max_cpu` / `routing_max_memory` | `32` / `128Gi` | Ceiling on total routing-pool capacity. |
 | `workspace_nodepools` | one `workspace-cpu` pool | List of workspace pools, each with its own instance families and CPU/memory ceilings. |
-| `enable_gpu_pool` | `false` | Adds the built-in GPU pool, the NVIDIA device plugin, and the `jupyterlab-gpu` template. |
+| `enable_gpu_pool` | `false` | Appends the built-in `workspace-gpu` entry to `workspace_nodepools`; the pool, the NVIDIA device plugin, and the `jupyterlab-gpu` template all derive from it. |
 | `node_expire_after` | `504h` | Maximum node lifetime before Karpenter recycles it. |
 
 Add a CPU workspace pool by appending an entry to `workspace_nodepools`: no new
-variables required. For GPU capacity, set `enable_gpu_pool: true` instead: the
-template adds a built-in `workspace-gpu` pool (`g4dn,g5` on-demand instances,
-fleet ceiling `max_gpus: "4"`), installs the NVIDIA device plugin, and ships the
-`jupyterlab-gpu` workspace template, a fixed shape (one GPU with pinned
-cpu/memory) fenced to the pool by its role taint. To customize the GPU pool,
-define your own `workspace-gpu` entry in `workspace_nodepools`, which takes
-precedence over the built-in; the optional per-entry keys are `role` (the
-label/taint value), `max_gpus` (fleet GPU ceiling), and `gpu` (`"true"` adds the
-`nvidia.com/gpu.present` label the device plugin selects on). Delete GPU
-workspaces before turning the flag off: disabling removes the pool and the
-template they depend on. First GPU use on an account without prior GPU usage
-requires raising the `Running On-Demand G and VT instances` service quota (see
-the troubleshooting guide). Inspect pools at runtime with
-`jd pool list`, `jd pool show --name <pool>`, and `jd pool status --name <pool>`.
+variables required. GPU capacity works the same way, and `enable_gpu_pool: true`
+is the shortcut: it appends a built-in `workspace-gpu` entry (`g4dn,g5`
+on-demand instances, fleet ceiling `max_gpus: "4"`) unless you define your own
+entry by that name, which then takes precedence. Everything GPU derives from
+the entries: any entry with `gpu: "true"` installs the NVIDIA device plugin and
+gets the `nvidia.com/gpu.present` label the plugin selects on, `role` sets the
+label/taint value that fences the pool, `max_gpus` caps the fleet, and the
+`template_*` keys (`template_gpus`, `template_cpu`, `template_memory`,
+`template_idle_minutes`, `template_name`) yield a workspace template pinned to
+the pool: a fixed shape (one GPU with pinned cpu/memory) fenced by the pool's
+role taint. The built-in entry carries the `jupyterlab-gpu` template this way,
+and a second GPU pool with its own template and idle rule is just one more
+entry. Delete GPU workspaces before removing their entry or turning the flag
+off: doing so removes the pool and the template they depend on. First GPU use
+on an account without prior GPU usage requires raising the
+`Running On-Demand G and VT instances` service quota (see the troubleshooting
+guide). Inspect pools at runtime with `jd pool list`,
+`jd pool show --name <pool>`, and `jd pool status --name <pool>`.
 
 ```{note}
 The Cluster Autoscaler's image version tracks the cluster's Kubernetes minor version.

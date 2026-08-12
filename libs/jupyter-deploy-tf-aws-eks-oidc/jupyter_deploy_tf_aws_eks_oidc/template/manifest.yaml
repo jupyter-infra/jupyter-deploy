@@ -1196,7 +1196,7 @@ components:
   jupyterlab-gpu-template:
     type: CustomResourceWithoutStatus
     type-display: WorkspaceTemplate
-    description: GPU workspace template (enable_gpu_pool)
+    description: GPU workspace template (built-in GPU pool entry)
     scope: workspace_shared_namespace
     resource-name: jupyterlab-gpu
     crd-group: workspace.jupyter.org
