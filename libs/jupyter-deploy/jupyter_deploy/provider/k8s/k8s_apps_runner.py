@@ -93,7 +93,13 @@ class K8sAppsRunner(InstructionRunner):
         self.display_manager.info(f"Getting daemonset status: {name_arg.value}")
         status = k8s_apps.get_daemonset_status(self.apps_api, name=name_arg.value, namespace=scope_arg.value)
 
-        if status.ready:
+        if status.desired_pods == 0:
+            # A DaemonSet can legitimately target zero nodes — e.g. a GPU-only DaemonSet
+            # (dcgm-exporter, nvidia-device-plugin) on a cluster with no GPU nodes up. It
+            # is idle, not failing, so surface it as healthy rather than Degraded (#337).
+            status_display = "Idle"
+            status_category = StatusCategory.HEALTHY
+        elif status.ready:
             status_display = "Ready"
             status_category = StatusCategory.HEALTHY
         elif status.ready_pods < status.desired_pods:

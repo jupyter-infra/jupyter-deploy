@@ -10,6 +10,7 @@ from jupyter_deploy.api.k8s.apps import (
     ResourceInfo,
     StatefulSetStatus,
 )
+from jupyter_deploy.enum import StatusCategory
 from jupyter_deploy.exceptions import InstructionNotFoundError
 from jupyter_deploy.provider.k8s.k8s_apps_runner import K8sAppsRunner
 from jupyter_deploy.provider.resolved_argdefs import StrResolvedInstructionArgument
@@ -118,6 +119,22 @@ class TestK8sAppsRunnerGetDaemonsetStatus(unittest.TestCase):
         result = runner.execute_instruction("get-daemonset-status", _build_args(name="aws-node"))
 
         self.assertEqual(result["Status"].value, "Degraded")
+
+    @patch("jupyter_deploy.provider.k8s.k8s_apps_runner.k8s_apps.get_daemonset_status")
+    def test_returns_idle_status_when_zero_desired(self, mock_get_status: Mock) -> None:
+        # A DaemonSet that legitimately targets zero nodes (e.g. a GPU-only DaemonSet on a
+        # cluster with no GPU nodes up) is idle, not failing — it must read healthy, not
+        # Degraded (#337).
+        mock_get_status.return_value = DaemonSetStatus(
+            name="nvidia-device-plugin", ready=False, ready_pods=0, desired_pods=0, updated_pods=0
+        )
+        runner = K8sAppsRunner(display_manager=Mock(), api_client=Mock())
+
+        result = runner.execute_instruction("get-daemonset-status", _build_args(name="nvidia-device-plugin"))
+
+        self.assertEqual(result["Status"].value, "Idle")
+        self.assertEqual(result["StatusCategory"].value, StatusCategory.HEALTHY)
+        self.assertEqual(result["Details"].value, "0/0 nodes")
 
     @patch("jupyter_deploy.provider.k8s.k8s_apps_runner.k8s_apps.get_daemonset_status")
     def test_api_exception_bubbles_up(self, mock_get_status: Mock) -> None:
