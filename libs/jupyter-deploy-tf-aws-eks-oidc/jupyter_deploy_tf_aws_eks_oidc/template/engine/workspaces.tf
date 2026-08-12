@@ -86,10 +86,12 @@ resource "helm_release" "github_rbac" {
 }
 
 # ── Workspace templates ───────────────────────────────────────────────────────
-# One entry per UI card, rendered by charts/workspace-defaults. The GPU template
-# is fenced to the GPU pool by its nodeSelector/toleration on the pool's role;
-# without that pairing, CPU workspaces could bind GPU nodes or GPU pods could
-# land where no device is advertised.
+# One entry per UI card, rendered by charts/workspace-defaults. The jupyterlab
+# template is the built-in default; one more template derives from each
+# workspace_nodepools entry carrying template keys, fenced to that pool by its
+# nodeSelector/toleration on the pool's role — without that pairing, CPU
+# workspaces could bind GPU nodes or GPU pods could land where no device is
+# advertised.
 locals {
   jupyterlab_template_values = {
     name             = "jupyterlab"
@@ -122,48 +124,47 @@ locals {
     }
   }
 
-  jupyterlab_gpu_template_values = {
-    name             = "jupyterlab-gpu"
-    isDefault        = "false"
-    displayName      = "JupyterLab GPU"
-    description      = "JupyterLab workspace with one NVIDIA GPU and persistent EBS storage"
-    imageUri         = module.app_jupyterlab[0].image_uri
-    appType          = var.workspace_app_jupyterlab_app_type
-    accessType       = var.workspaces_default_access_type
-    ownershipType    = var.workspaces_default_ownership_type
-    storageClassName = local.workspace_storage_class
-    # The card is one fixed shape: every size the GPU pool admits carries
-    # exactly one GPU and the workspace owns its node, so cpu/memory choice
-    # would only change which instance Karpenter buys. min == max pins all
-    # axes; cpu/memory target the g4dn.xlarge allocatable (an over-pin is
-    # permanently unschedulable — finalize against a live node, issue #336).
-    defaultResources = {
-      requests = { cpu = "3500m", memory = "13Gi", "nvidia.com/gpu" = "1" }
-      limits   = { cpu = "3500m", memory = "13Gi", "nvidia.com/gpu" = "1" }
-    }
-    resourceBounds = {
-      cpu              = { min = "3500m", max = "3500m" }
-      memory           = { min = "13Gi", max = "13Gi" }
-      "nvidia.com/gpu" = { min = "1", max = "1" }
-    }
-    nodeSelector = { "jupyter-deploy/role" = local.gpu_pool_role }
-    tolerations = [
-      { key = "jupyter-deploy/role", operator = "Equal", value = local.gpu_pool_role, effect = "NoSchedule" }
-    ]
-    readinessProbe = { port = 8888, initialDelaySeconds = 2, periodSeconds = 3, failureThreshold = 30 }
-    idleShutdown = {
-      enabled = var.workspaces_idle_shutdown_enabled
-      # Half the jupyterlab default: an idle hour on the cheapest GPU node
-      # costs $0.53. Users can still adjust within the min/max window.
-      timeoutMinutes    = 30
-      minTimeoutMinutes = var.workspaces_idle_shutdown_timeout_min
-      maxTimeoutMinutes = var.workspaces_idle_shutdown_timeout_max
-    }
-  }
+  # One derived template per pool entry with template keys. The card is one
+  # fixed shape (min == max on every axis, values from the entry): every size
+  # a GPU pool admits carries exactly one GPU and the workspace owns its node,
+  # so cpu/memory choice would only change which instance Karpenter buys.
+  workspace_pool_templates = [
+    for p in local.workspace_nodepools_effective : {
+      name             = lookup(p, "template_name", p["name"])
+      isDefault        = "false"
+      displayName      = lookup(p, "template_display_name", lookup(p, "template_name", p["name"]))
+      description      = lookup(p, "template_description", "JupyterLab workspace on the ${p["name"]} pool")
+      imageUri         = module.app_jupyterlab[0].image_uri
+      appType          = var.workspace_app_jupyterlab_app_type
+      accessType       = var.workspaces_default_access_type
+      ownershipType    = var.workspaces_default_ownership_type
+      storageClassName = local.workspace_storage_class
+      defaultResources = {
+        requests = { cpu = p["template_cpu"], memory = p["template_memory"], "nvidia.com/gpu" = p["template_gpus"] }
+        limits   = { cpu = p["template_cpu"], memory = p["template_memory"], "nvidia.com/gpu" = p["template_gpus"] }
+      }
+      resourceBounds = {
+        cpu              = { min = p["template_cpu"], max = p["template_cpu"] }
+        memory           = { min = p["template_memory"], max = p["template_memory"] }
+        "nvidia.com/gpu" = { min = p["template_gpus"], max = p["template_gpus"] }
+      }
+      nodeSelector = { "jupyter-deploy/role" = lookup(p, "role", "workspaces") }
+      tolerations = [
+        { key = "jupyter-deploy/role", operator = "Equal", value = lookup(p, "role", "workspaces"), effect = "NoSchedule" }
+      ]
+      readinessProbe = { port = 8888, initialDelaySeconds = 2, periodSeconds = 3, failureThreshold = 30 }
+      idleShutdown = {
+        enabled           = var.workspaces_idle_shutdown_enabled
+        timeoutMinutes    = tonumber(lookup(p, "template_idle_minutes", var.workspaces_idle_shutdown_timeout_default))
+        minTimeoutMinutes = var.workspaces_idle_shutdown_timeout_min
+        maxTimeoutMinutes = var.workspaces_idle_shutdown_timeout_max
+      }
+    } if contains(keys(p), "template_gpus")
+  ]
 
   workspace_templates_values = concat(
     [local.jupyterlab_template_values],
-    var.enable_gpu_pool ? [local.jupyterlab_gpu_template_values] : [],
+    local.workspace_pool_templates,
   )
 }
 
@@ -294,31 +295,31 @@ resource "null_resource" "repair_workspace_template" {
   depends_on = [helm_release.workspace_defaults, kubernetes_namespace_v1.shared]
 }
 
-data "kubernetes_resource" "jupyterlab_gpu_template" {
-  count = var.enable_gpu_pool ? 1 : 0
+data "kubernetes_resource" "pool_workspace_template" {
+  for_each = toset([for t in local.workspace_pool_templates : t.name])
 
   api_version = "workspace.jupyter.org/v1alpha1"
   kind        = "WorkspaceTemplate"
   metadata {
-    name      = "jupyterlab-gpu"
+    name      = each.key
     namespace = var.workspace_shared_namespace
   }
 
   depends_on = [helm_release.workspace_defaults, kubernetes_namespace_v1.shared]
 }
 
-resource "null_resource" "repair_workspace_gpu_template" {
-  count = var.enable_gpu_pool ? 1 : 0
+resource "null_resource" "repair_pool_workspace_template" {
+  for_each = toset([for t in local.workspace_pool_templates : t.name])
 
   triggers = {
-    present = data.kubernetes_resource.jupyterlab_gpu_template[0].object == null ? "missing" : "present"
+    present = data.kubernetes_resource.pool_workspace_template[each.key].object == null ? "missing" : "present"
     script = templatefile("${path.module}/local-repair-cr.sh.tftpl", {
       cluster_name      = local.cluster_name
       region            = var.region
       release_name      = "workspace-defaults"
       release_namespace = var.workspace_shared_namespace
       cr_kind           = "WorkspaceTemplate"
-      cr_name           = "jupyterlab-gpu"
+      cr_name           = each.key
       cr_namespace      = var.workspace_shared_namespace
     })
   }
@@ -329,4 +330,11 @@ resource "null_resource" "repair_workspace_gpu_template" {
   }
 
   depends_on = [helm_release.workspace_defaults, kubernetes_namespace_v1.shared]
+}
+
+# Deployments created while the GPU repair pair was count-gated hold the old
+# address; without this, the replacement runs the repair provisioner once.
+moved {
+  from = null_resource.repair_workspace_gpu_template[0]
+  to   = null_resource.repair_pool_workspace_template["jupyterlab-gpu"]
 }

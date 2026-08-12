@@ -231,13 +231,25 @@ locals {
     max_gpus          = "4"
     role              = "workspaces-gpu"
     gpu               = "true"
+    # Template keys: workspaces.tf derives the jupyterlab-gpu WorkspaceTemplate
+    # from this entry. cpu/memory target the g4dn.xlarge allocatable (an
+    # over-pin is permanently unschedulable — finalize against a live node,
+    # issue #336). Idle 30 is half the jupyterlab default: an idle hour on the
+    # cheapest GPU node costs $0.53.
+    template_name         = "jupyterlab-gpu"
+    template_display_name = "JupyterLab GPU"
+    template_description  = "JupyterLab workspace with one NVIDIA GPU and persistent EBS storage"
+    template_gpus         = "1"
+    template_cpu          = "3500m"
+    template_memory       = "13Gi"
+    template_idle_minutes = "30"
   }
   workspace_nodepools_effective = concat(
     var.workspace_nodepools,
     var.enable_gpu_pool && !contains([for p in var.workspace_nodepools : p["name"]], local.gpu_pool_name)
     ? [local.gpu_pool_builtin] : [],
   )
-  # Role label of the GPU pool; the device plugin and the GPU template select on it.
+  # Role label of the GPU pool; the device plugin selects on it.
   gpu_pool_role = try(
     [for p in local.workspace_nodepools_effective : lookup(p, "role", "workspaces") if p["name"] == local.gpu_pool_name][0],
     "workspaces-gpu",
