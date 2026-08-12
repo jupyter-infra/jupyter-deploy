@@ -123,6 +123,14 @@ resource "helm_release" "workspace_router" {
         name  = "storageClass.ebs.create"
         value = "true"
       },
+      # Mark ebs-sc the cluster default StorageClass so PVCs with no explicit
+      # storageClassName bind; e.g. a no-template Workspace, which sends storage
+      # without a class (#321). Template-backed workspaces set the class
+      # explicitly and are unaffected.
+      {
+        name  = "storageClass.ebs.isDefault"
+        value = "true"
+      },
       {
         name  = "storageClass.efs.create"
         value = "false"

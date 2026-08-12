@@ -1,0 +1,13 @@
+# A PVC with no storageClassName — what a no-template Workspace produces.
+# With ebs-sc marked the cluster default StorageClass, the default-class admission
+# plugin stamps spec.storageClassName=ebs-sc on it at creation (#321).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: e2e-classless-pvc
+  namespace: default
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi

@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
+from pytest_jupyter_deploy.kubernetes.kubectl import run_kubectl
 from pytest_jupyter_deploy.kubernetes.nodes import assert_pods_on_node_pool
 from pytest_jupyter_deploy.oauth2_proxy.dex import DexGitHubOAuth2ProxyApplication
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
@@ -32,6 +33,10 @@ pytestmark = pytest.mark.usefixtures("kubernetes_cluster_login")
 
 NAMESPACE = "default"
 WORKSPACES_DIR = Path(__file__).parent / "workspaces"
+RESOURCES_DIR = Path(__file__).parent / "resources"
+
+# The template provisions ebs-sc and marks it the cluster default StorageClass.
+DEFAULT_STORAGE_CLASS = "ebs-sc"
 
 USER_B = "github:e2e-other-user"
 
@@ -54,6 +59,53 @@ def _get_impersonation_group() -> str:
     if not org or not team:
         raise RuntimeError("JD_E2E_ORG and JD_E2E_RBAC_TEAM must be set")
     return f"github:{org}:{team}"
+
+
+def test_no_template_workspace_pvc_binds_to_default_storage_class(e2e_deployment: EndToEndDeployment) -> None:
+    """A PVC with no storageClassName inherits the cluster default (ebs-sc).
+
+    A no-template ("bare") Workspace sends storage without a storageClassName; with
+    no default StorageClass its PVC stays unbound and the pod hangs Pending forever
+    (GitHub issue #321). The template marks ebs-sc the default so such claims bind.
+
+    Asserts both halves of the fix: ebs-sc carries the default-class annotation, and
+    a classless PVC gets ebs-sc stamped on it by the default-class admission plugin at
+    creation. (A template-backed Workspace is unaffected — the operator injects the
+    template's storageClassName, so this classless case is the one the default guards.)
+    """
+    e2e_deployment.ensure_deployed()
+
+    # ebs-sc must be marked the cluster default StorageClass.
+    result = run_kubectl(
+        "get",
+        "storageclass",
+        DEFAULT_STORAGE_CLASS,
+        "-o",
+        r"jsonpath={.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}",
+    )
+    assert result.returncode == 0, f"StorageClass '{DEFAULT_STORAGE_CLASS}' not found:\n{result.stderr}"
+    assert result.stdout.strip() == "true", (
+        f"'{DEFAULT_STORAGE_CLASS}' must be the default StorageClass, got is-default-class={result.stdout.strip()!r}"
+    )
+
+    # A classless PVC - what a no-template Workspace produces — must inherit ebs-sc.
+    pvc_name = "e2e-classless-pvc"
+    pvc_manifest = RESOURCES_DIR / "classless-pvc.yaml"
+    try:
+        result = run_kubectl("apply", "-f", str(pvc_manifest))
+        assert result.returncode == 0, f"Failed to create classless PVC:\n{result.stderr}"
+
+        # The default-class admission plugin stamps spec.storageClassName at creation.
+        # No consumer pod is needed — ebs-sc is WaitForFirstConsumer, so the PVC stays
+        # Pending, but the stamped class is what proves classless claims now bind.
+        result = run_kubectl("get", "pvc", pvc_name, "-n", NAMESPACE, "-o", "jsonpath={.spec.storageClassName}")
+        assert result.returncode == 0, f"Failed to read PVC '{pvc_name}':\n{result.stderr}"
+        assert result.stdout.strip() == DEFAULT_STORAGE_CLASS, (
+            f"classless PVC did not inherit the default StorageClass; "
+            f"expected '{DEFAULT_STORAGE_CLASS}', got {result.stdout.strip()!r}"
+        )
+    finally:
+        run_kubectl("delete", "pvc", pvc_name, "-n", NAMESPACE, "--wait=false", "--ignore-not-found")
 
 
 # ── Self-contained workspace tests (User A owns) ─────────────────────────────
