@@ -1,0 +1,94 @@
+# Custom GPU pool scenario: jupyterlab plus the template the workspaces.tf
+# workspace_pool_templates derivation emits for a hand-written entry
+# { name = "workspace-gpu-p", role = "workspaces-gpu-p",
+#   template_name = "jupyterlab-gpu-p", template_gpus = "1",
+#   template_cpu = "7500m", template_memory = "55Gi",
+#   template_idle_minutes = "20" }
+# displayName and description take the derivation defaults; dummy image as in
+# the other fixtures.
+workspaceTemplates:
+  - name: jupyterlab
+    isDefault: "true"
+    displayName: JupyterLab
+    description: "JupyterLab workspace with persistent EBS storage"
+    imageUri: docker.io/test/jupyterlab:latest
+    appType: jupyterlab
+    accessType: OwnerOnly
+    ownershipType: OwnerOnly
+    storageClassName: ebs-sc
+    defaultResources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+    resourceBounds:
+      cpu:
+        min: "100m"
+        max: "8"
+      memory:
+        min: "256Mi"
+        max: "32Gi"
+    nodeSelector:
+      jupyter-deploy/role: workspaces
+    tolerations:
+      - key: jupyter-deploy/role
+        operator: Equal
+        value: workspaces
+        effect: NoSchedule
+    readinessProbe:
+      port: 8888
+      initialDelaySeconds: 2
+      periodSeconds: 3
+      failureThreshold: 30
+    idleShutdown:
+      enabled: true
+      timeoutMinutes: 60
+      minTimeoutMinutes: 15
+      maxTimeoutMinutes: 480
+  - name: jupyterlab-gpu-p
+    isDefault: "false"
+    displayName: jupyterlab-gpu-p
+    description: "JupyterLab workspace on the workspace-gpu-p pool"
+    imageUri: docker.io/test/jupyterlab:latest
+    appType: jupyterlab
+    accessType: OwnerOnly
+    ownershipType: OwnerOnly
+    storageClassName: ebs-sc
+    defaultResources:
+      requests:
+        cpu: "7500m"
+        memory: "55Gi"
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "7500m"
+        memory: "55Gi"
+        nvidia.com/gpu: "1"
+    resourceBounds:
+      cpu:
+        min: "7500m"
+        max: "7500m"
+      memory:
+        min: "55Gi"
+        max: "55Gi"
+      nvidia.com/gpu:
+        min: "1"
+        max: "1"
+    nodeSelector:
+      jupyter-deploy/role: workspaces-gpu-p
+    tolerations:
+      - key: jupyter-deploy/role
+        operator: Equal
+        value: workspaces-gpu-p
+        effect: NoSchedule
+    readinessProbe:
+      port: 8888
+      initialDelaySeconds: 2
+      periodSeconds: 3
+      failureThreshold: 30
+    idleShutdown:
+      enabled: true
+      timeoutMinutes: 20
+      minTimeoutMinutes: 15
+      maxTimeoutMinutes: 480

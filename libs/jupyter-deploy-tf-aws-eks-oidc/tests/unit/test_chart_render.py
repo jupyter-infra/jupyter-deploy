@@ -227,3 +227,47 @@ class TestWorkspaceDefaultsTwoTemplateRender(unittest.TestCase):
 
     def test_gpu_template_not_default(self) -> None:
         self.assertEqual(self.gpu["metadata"]["labels"]["workspace.jupyter.org/default-template"], "false")
+
+
+@_SKIP_WITHOUT_HELM
+class TestWorkspaceDefaultsCustomPoolRender(unittest.TestCase):
+    """A hand-written GPU pool entry renders its own template fenced to its role."""
+
+    templates: ClassVar[list[dict[str, Any]]]
+    custom: ClassVar[dict[str, Any]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        rendered = _helm_template(
+            "charts/workspace-defaults", "workspace-defaults", "values_workspace_defaults_custom_pool.yaml"
+        )
+        cls.templates = _workspace_template_docs(rendered)
+        cls.custom = next(doc for doc in cls.templates if doc["metadata"]["name"] == "jupyterlab-gpu-p")
+
+    def test_renders_both_templates(self) -> None:
+        names = [doc["metadata"]["name"] for doc in self.templates]
+        self.assertEqual(names, ["jupyterlab", "jupyterlab-gpu-p"])
+
+    def test_placement_follows_entry_role(self) -> None:
+        spec = self.custom["spec"]
+        self.assertEqual(spec["defaultNodeSelector"], {"jupyter-deploy/role": "workspaces-gpu-p"})
+        self.assertEqual(
+            spec["defaultTolerations"],
+            [
+                {
+                    "key": "jupyter-deploy/role",
+                    "operator": "Equal",
+                    "value": "workspaces-gpu-p",
+                    "effect": "NoSchedule",
+                }
+            ],
+        )
+
+    def test_bounds_pinned_from_entry(self) -> None:
+        bounds = self.custom["spec"]["resourceBounds"]["resources"]
+        self.assertEqual(bounds["cpu"], {"min": "7500m", "max": "7500m"})
+        self.assertEqual(bounds["memory"], {"min": "55Gi", "max": "55Gi"})
+        self.assertEqual(bounds["nvidia.com/gpu"], {"min": "1", "max": "1"})
+
+    def test_idle_timeout_from_entry(self) -> None:
+        self.assertEqual(self.custom["spec"]["defaultIdleShutdown"]["idleTimeoutInMinutes"], 20)
