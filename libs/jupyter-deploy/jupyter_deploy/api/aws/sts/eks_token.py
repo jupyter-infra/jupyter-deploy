@@ -6,6 +6,9 @@ from botocore.auth import SigV4QueryAuth
 from botocore.awsrequest import AWSRequest
 from botocore.session import Session as BotocoreSession
 
+from jupyter_deploy.enum import ProviderType
+from jupyter_deploy.exceptions import InvalidProviderCredentialsError
+
 _TOKEN_PREFIX = "k8s-aws-v1."
 _TOKEN_EXPIRY_SECONDS = 60
 _CLUSTER_ID_HEADER = "x-k8s-aws-id"
@@ -18,12 +21,17 @@ def get_eks_bearer_token(cluster_name: str, region: str) -> str:
     Uses the default credential chain (env vars, profile, IMDS, etc.).
     """
     session = BotocoreSession()
-    credentials = session.get_credentials().get_frozen_credentials()
+    credentials = session.get_credentials()
+    if credentials is None:
+        raise InvalidProviderCredentialsError(
+            ProviderType.AWS, "no AWS credentials found in the default credential chain"
+        )
+    frozen_credentials = credentials.get_frozen_credentials()
 
     endpoint = f"https://sts.{region}.amazonaws.com/?{_STS_ACTION}"
     request = AWSRequest(method="GET", url=endpoint, headers={_CLUSTER_ID_HEADER: cluster_name})
 
-    signer = SigV4QueryAuth(credentials, "sts", region, expires=_TOKEN_EXPIRY_SECONDS)
+    signer = SigV4QueryAuth(frozen_credentials, "sts", region, expires=_TOKEN_EXPIRY_SECONDS)
     signer.add_auth(request)
 
     signed_url: str = request.url  # type: ignore[assignment]

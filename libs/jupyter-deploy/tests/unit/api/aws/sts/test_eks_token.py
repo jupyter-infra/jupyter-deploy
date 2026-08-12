@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from jupyter_deploy.api.aws.sts.eks_token import get_eks_bearer_token
+from jupyter_deploy.exceptions import InvalidProviderCredentialsError
 
 
 class TestGetEksBearerToken(unittest.TestCase):
@@ -33,3 +34,12 @@ class TestGetEksBearerToken(unittest.TestCase):
         request_arg = mock_signer_cls.return_value.add_auth.call_args[0][0]
         self.assertIn("sts.eu-west-1.amazonaws.com", request_arg.url)
         self.assertEqual(request_arg.headers["x-k8s-aws-id"], "my-cluster")
+
+    @patch("jupyter_deploy.api.aws.sts.eks_token.BotocoreSession")
+    def test_raises_when_no_credentials_in_chain(self, mock_session_cls: Mock) -> None:
+        mock_session: Mock = Mock()
+        mock_session_cls.return_value = mock_session
+        mock_session.get_credentials.return_value = None
+
+        with self.assertRaises(InvalidProviderCredentialsError):
+            get_eks_bearer_token("my-cluster", "us-west-2")
