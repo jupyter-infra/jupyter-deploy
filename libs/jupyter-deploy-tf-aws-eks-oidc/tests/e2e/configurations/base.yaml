@@ -9,7 +9,7 @@ required_sensitive:
   oauth_app_client_secret: "${JD_E2E_VAR_OAUTH_APP_CLIENT_SECRET}"
 overrides:
   admin_role_names: ${JD_E2E_VAR_ADMIN_ROLE_NAMES}
-  enable_gpu_pool: ${JD_E2E_VAR_ENABLE_GPU_POOL}
+  enable_default_gpu_pool: ${JD_E2E_VAR_ENABLE_DEFAULT_GPU_POOL}
   # NOTE: the idle-timeout floor is intentionally left at its production default
   # (15). test_workspace_idleshutdown needs a 1-minute timeout, but it lowers the
   # floor at runtime via the relaxed_idle_floor fixture (which reverts on teardown)

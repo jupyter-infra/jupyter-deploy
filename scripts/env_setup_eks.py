@@ -53,7 +53,7 @@ OPTION_MAP = {
     "org": "JD_E2E_ORG",
     "team": "JD_E2E_TEAM",
     "rbac-team": "JD_E2E_RBAC_TEAM",
-    "enable-gpu-pool": "JD_E2E_VAR_ENABLE_GPU_POOL",
+    "enable-default-gpu-pool": "JD_E2E_VAR_ENABLE_DEFAULT_GPU_POOL",
 }
 
 
@@ -254,16 +254,18 @@ def main() -> None:
 
     # 1e. Default the GPU pool flag to false when absent: envsubst renders an
     # unset var as empty, which YAML-parses to null and fails bool validation.
-    if "JD_E2E_VAR_ENABLE_GPU_POOL" not in option_env_vars and not os.environ.get("JD_E2E_VAR_ENABLE_GPU_POOL"):
+    if "JD_E2E_VAR_ENABLE_DEFAULT_GPU_POOL" not in option_env_vars and not os.environ.get(
+        "JD_E2E_VAR_ENABLE_DEFAULT_GPU_POOL"
+    ):
         env_has_gpu_flag = False
         if ENV_FILE.exists():
             for line in ENV_FILE.read_text().splitlines():
-                if line.startswith("JD_E2E_VAR_ENABLE_GPU_POOL=") and line.split("=", 1)[1].strip():
+                if line.startswith("JD_E2E_VAR_ENABLE_DEFAULT_GPU_POOL=") and line.split("=", 1)[1].strip():
                     env_has_gpu_flag = True
                     break
         if not env_has_gpu_flag:
-            set_env_var("JD_E2E_VAR_ENABLE_GPU_POOL", "false")
-            print("  JD_E2E_VAR_ENABLE_GPU_POOL=false (default)")
+            set_env_var("JD_E2E_VAR_ENABLE_DEFAULT_GPU_POOL", "false")
+            print("  JD_E2E_VAR_ENABLE_DEFAULT_GPU_POOL=false (default)")
 
     # 2. Fetch OAuth credentials from CI infrastructure
     print(f"\nFetching OAuth app #{oauth_app_num} credentials from CI ({ci_dir})...")

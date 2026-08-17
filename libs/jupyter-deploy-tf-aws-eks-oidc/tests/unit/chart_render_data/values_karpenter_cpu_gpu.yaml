@@ -1,4 +1,4 @@
-# The CPU fixture plus the GPU entry exactly as the enable_gpu_pool synthesis
+# The CPU fixture plus the GPU entry exactly as the enable_default_gpu_pool synthesis
 # emits it (gpu_pool_builtin in platform_karpenter.tf) — keep the two in sync.
 clusterName: test-cluster
 nodeInstanceProfile: test-karpenter-node-profile

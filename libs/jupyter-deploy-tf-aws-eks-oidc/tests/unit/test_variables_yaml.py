@@ -233,9 +233,15 @@ class TestVariablesYaml(unittest.TestCase):
         )
 
     def test_gpu_pool_flag_off_in_preset(self) -> None:
-        """enable_gpu_pool must default to false so existing deployments see zero deltas."""
-        self.assertIn("enable_gpu_pool", self.DEFAULTS_ALL_TFVARS, "enable_gpu_pool must be set in defaults-all.tfvars")
-        self.assertIs(self.DEFAULTS_ALL_TFVARS["enable_gpu_pool"], False, "enable_gpu_pool must default to false")
+        """enable_default_gpu_pool must default to false so existing deployments see zero deltas."""
+        self.assertIn(
+            "enable_default_gpu_pool",
+            self.DEFAULTS_ALL_TFVARS,
+            "enable_default_gpu_pool must be set in defaults-all.tfvars",
+        )
+        self.assertIs(
+            self.DEFAULTS_ALL_TFVARS["enable_default_gpu_pool"], False, "enable_default_gpu_pool must default to false"
+        )
 
     def test_preset_nodepools_carry_only_base_keys(self) -> None:
         """Preset pool entries must not carry the optional GPU keys.
@@ -252,7 +258,7 @@ class TestVariablesYaml(unittest.TestCase):
                 len(extra),
                 0,
                 f"preset pool '{pool['name']}' carries non-base keys {extra} — move GPU pool "
-                "settings to the enable_gpu_pool synthesis or a deployment override, not the preset",
+                "settings to the enable_default_gpu_pool synthesis or a deployment override, not the preset",
             )
 
     @classmethod

@@ -72,11 +72,11 @@ You control node pools through admin variables:
 | `routing_instance_categories` | `["c", "m"]` | Instance categories Karpenter may pick for routing nodes. |
 | `routing_max_cpu` / `routing_max_memory` | `32` / `128Gi` | Ceiling on total routing-pool capacity. |
 | `workspace_nodepools` | one `workspace-cpu` pool | List of workspace pools, each with its own instance families and CPU/memory ceilings. |
-| `enable_gpu_pool` | `false` | Appends the built-in `workspace-gpu` entry to `workspace_nodepools`; the pool, the NVIDIA device plugin, and the `jupyterlab-gpu` template all derive from it. |
+| `enable_default_gpu_pool` | `false` | Appends the built-in `workspace-gpu` entry to `workspace_nodepools`; the pool, the NVIDIA device plugin, and the `jupyterlab-gpu` template all derive from it. |
 | `node_expire_after` | `504h` | Maximum node lifetime before Karpenter recycles it. |
 
 Add a CPU workspace pool by appending an entry to `workspace_nodepools`: no new
-variables required. GPU capacity works the same way, and `enable_gpu_pool: true`
+variables required. GPU capacity works the same way, and `enable_default_gpu_pool: true`
 is the shortcut: it appends a built-in `workspace-gpu` entry (`g4dn,g5`
 on-demand instances, fleet ceiling `max_gpus: "4"`) unless you define your own
 entry by that name, which then takes precedence. Everything GPU derives from

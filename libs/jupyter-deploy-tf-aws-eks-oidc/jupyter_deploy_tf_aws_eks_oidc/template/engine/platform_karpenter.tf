@@ -217,7 +217,7 @@ resource "null_resource" "karpenter_nodepools_finalizer_cleanup" {
 }
 
 # ── GPU pool synthesis ────────────────────────────────────────────────────────
-# enable_gpu_pool alone yields working GPU capacity: when on and no entry named
+# enable_default_gpu_pool alone yields working GPU capacity: when on and no entry named
 # workspace-gpu exists, the built-in entry below is appended. A user-defined
 # workspace-gpu entry takes precedence as the customization path (issue #336).
 locals {
@@ -246,7 +246,7 @@ locals {
   }
   workspace_nodepools_effective = concat(
     var.workspace_nodepools,
-    var.enable_gpu_pool && !contains([for p in var.workspace_nodepools : p["name"]], local.gpu_pool_name)
+    var.enable_default_gpu_pool && !contains([for p in var.workspace_nodepools : p["name"]], local.gpu_pool_name)
     ? [local.gpu_pool_builtin] : [],
   )
 }

@@ -275,7 +275,7 @@ variable "workspace_nodepools" {
       template_display_name - UI card title (defaults to the template name)
       template_description  - UI card description (defaults to a generic line)
 
-    Example (a customized GPU pool; enable_gpu_pool = true with no workspace-gpu
+    Example (a customized GPU pool; enable_default_gpu_pool = true with no workspace-gpu
     entry provides this shape built in):
       workspace_nodepools = [
         { name = "workspace-cpu", instance_families = "c6i,m6i,r6i", disk_size_gb = "50", max_cpu = "512", max_memory = "2048Gi" },
@@ -362,7 +362,7 @@ variable "workspace_nodepools" {
   }
 }
 
-variable "enable_gpu_pool" {
+variable "enable_default_gpu_pool" {
   description = <<-EOT
     Whether to provision GPU workspace capacity.
 

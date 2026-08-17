@@ -1,6 +1,6 @@
 """E2E test for the GPU workspace journey on the EKS OIDC template.
 
-Requires a deployment with enable_gpu_pool: true (and G/VT on-demand quota in
+Requires a deployment with enable_default_gpu_pool: true (and G/VT on-demand quota in
 the account); gated on JD_E2E_GPU_ENABLED so every other run skips.
 """
 
