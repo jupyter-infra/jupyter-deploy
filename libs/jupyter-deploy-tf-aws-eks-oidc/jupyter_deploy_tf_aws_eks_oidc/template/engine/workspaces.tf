@@ -87,11 +87,11 @@ resource "helm_release" "github_rbac" {
 
 # ── Workspace templates ───────────────────────────────────────────────────────
 # One entry per UI card, rendered by charts/workspace-defaults. The jupyterlab
-# template is the built-in default; one more template derives from each
-# workspace_nodepools entry carrying template keys, fenced to that pool by its
-# nodeSelector/toleration on the pool's role — without that pairing, CPU
-# workspaces could bind GPU nodes or GPU pods could land where no device is
-# advertised.
+# template is the built-in default; the rest come from workspace_templates
+# configs bound to pools through each entry's `templates` key. The entry
+# supplies placement (nodeSelector/toleration on its role), the config supplies
+# shape, idle policy, and card copy; without that pairing, CPU workspaces could
+# bind GPU nodes or GPU pods could land where no device is advertised.
 locals {
   jupyterlab_template_values = {
     name             = "jupyterlab"
@@ -124,47 +124,90 @@ locals {
     }
   }
 
-  # One derived template per pool entry with template keys. The card is one
-  # fixed shape (min == max on every axis, values from the entry): every size
-  # a GPU pool admits carries exactly one GPU and the workspace owns its node,
-  # so cpu/memory choice would only change which instance Karpenter buys.
-  workspace_pool_templates = [
-    for p in local.workspace_nodepools_normalized : {
-      name             = lookup(p, "template_name", p["name"])
+  workspace_template_configs = { for t in local.workspace_templates_effective : t["name"] => t }
+
+  workspace_template_refs = flatten([
+    for p in local.workspace_nodepools_normalized : [
+      for raw in split(",", lookup(p, "templates", "")) : {
+        pool_name   = p["name"]
+        pool_role   = lookup(p, "role", "workspaces")
+        config_name = trimspace(raw)
+      } if trimspace(raw) != ""
+    ]
+  ])
+
+  workspace_template_dangling = [
+    for r in local.workspace_template_refs : r.config_name
+    if !contains(keys(local.workspace_template_configs), r.config_name)
+  ]
+
+  # One rendered WorkspaceTemplate per referenced config, named by the config.
+  # Multi-reference collapses to one template when every referencing pool
+  # shares a role; differing roles hard-error via the precondition below, and
+  # dangling names are filtered here so evaluation reaches that precondition
+  # instead of crashing on a bad map index.
+  workspace_template_bindings = {
+    for name, refs in { for r in local.workspace_template_refs : r.config_name => r... } :
+    name => {
+      config = local.workspace_template_configs[name]
+      role   = refs[0].pool_role
+      roles  = distinct([for r in refs : r.pool_role])
+      pools  = distinct([for r in refs : r.pool_name])
+    } if contains(keys(local.workspace_template_configs), name)
+  }
+
+  # A config with a cpu pin renders a fixed shape (min == max on every axis:
+  # a GPU workspace owns its node, so cpu/memory choice would only change
+  # which instance Karpenter buys). A config without one inherits the base
+  # jupyterlab shape through the shared local, so the two cannot drift.
+  workspace_pool_templates = {
+    for name, b in local.workspace_template_bindings : name => {
+      name             = name
       isDefault        = "false"
-      displayName      = lookup(p, "template_display_name", lookup(p, "template_name", p["name"]))
-      description      = lookup(p, "template_description", "JupyterLab workspace on the ${p["name"]} pool")
+      displayName      = lookup(b.config, "display_name", name)
+      description      = lookup(b.config, "description", "JupyterLab workspace on the ${b.pools[0]} pool")
       imageUri         = module.app_jupyterlab[0].image_uri
       appType          = var.workspace_app_jupyterlab_app_type
       accessType       = var.workspaces_default_access_type
       ownershipType    = var.workspaces_default_ownership_type
       storageClassName = local.workspace_storage_class
-      defaultResources = {
-        requests = { cpu = p["template_cpu"], memory = p["template_memory"], "nvidia.com/gpu" = p["template_gpus"] }
-        limits   = { cpu = p["template_cpu"], memory = p["template_memory"], "nvidia.com/gpu" = p["template_gpus"] }
-      }
-      resourceBounds = {
-        cpu              = { min = p["template_cpu"], max = p["template_cpu"] }
-        memory           = { min = p["template_memory"], max = p["template_memory"] }
-        "nvidia.com/gpu" = { min = p["template_gpus"], max = p["template_gpus"] }
-      }
-      nodeSelector = { "jupyter-deploy/role" = lookup(p, "role", "workspaces") }
+      defaultResources = contains(keys(b.config), "cpu") ? {
+        requests = merge(
+          { cpu = b.config["cpu"], memory = b.config["memory"] },
+          contains(keys(b.config), "gpus") ? { "nvidia.com/gpu" = b.config["gpus"] } : {},
+        )
+        limits = merge(
+          { cpu = b.config["cpu"], memory = b.config["memory"] },
+          contains(keys(b.config), "gpus") ? { "nvidia.com/gpu" = b.config["gpus"] } : {},
+        )
+      } : local.jupyterlab_template_values.defaultResources
+      resourceBounds = contains(keys(b.config), "cpu") ? merge(
+        {
+          cpu    = { min = b.config["cpu"], max = b.config["cpu"] }
+          memory = { min = b.config["memory"], max = b.config["memory"] }
+        },
+        contains(keys(b.config), "gpus") ? { "nvidia.com/gpu" = { min = b.config["gpus"], max = b.config["gpus"] } } : {},
+      ) : local.jupyterlab_template_values.resourceBounds
+      nodeSelector = { "jupyter-deploy/role" = b.role }
       tolerations = [
-        { key = "jupyter-deploy/role", operator = "Equal", value = lookup(p, "role", "workspaces"), effect = "NoSchedule" }
+        { key = "jupyter-deploy/role", operator = "Equal", value = b.role, effect = "NoSchedule" }
       ]
       readinessProbe = { port = 8888, initialDelaySeconds = 2, periodSeconds = 3, failureThreshold = 30 }
       idleShutdown = {
         enabled           = var.workspaces_idle_shutdown_enabled
-        timeoutMinutes    = tonumber(lookup(p, "template_idle_minutes", var.workspaces_idle_shutdown_timeout_default))
+        timeoutMinutes    = tonumber(lookup(b.config, "idle_minutes", var.workspaces_idle_shutdown_timeout_default))
         minTimeoutMinutes = var.workspaces_idle_shutdown_timeout_min
         maxTimeoutMinutes = var.workspaces_idle_shutdown_timeout_max
       }
-    } if contains(keys(p), "template_gpus")
-  ]
+    }
+  }
 
+  # Deterministic order; flag-on renders [jupyterlab, jupyterlab-gpu] exactly
+  # as before, keeping the injected helm values identical for existing GPU
+  # deployments.
   workspace_templates_values = concat(
     [local.jupyterlab_template_values],
-    local.workspace_pool_templates,
+    [for name in sort(keys(local.workspace_pool_templates)) : local.workspace_pool_templates[name]],
   )
 }
 
@@ -211,6 +254,21 @@ resource "helm_release" "workspace_defaults" {
       }
     ],
   )
+
+  lifecycle {
+    precondition {
+      condition     = length(local.workspace_template_dangling) == 0
+      error_message = "workspace_nodepools templates reference configs missing from workspace_templates: ${join(", ", distinct(local.workspace_template_dangling))}."
+    }
+    precondition {
+      condition     = length(distinct([for t in local.workspace_templates_effective : t["name"]])) == length(local.workspace_templates_effective)
+      error_message = "workspace_templates names must be unique, including the built-in \"jupyterlab-gpu\" config injected by enable_default_gpu_pool."
+    }
+    precondition {
+      condition     = alltrue([for name, b in local.workspace_template_bindings : length(b.roles) == 1])
+      error_message = "a workspace_templates config referenced from pools with different roles cannot render one WorkspaceTemplate (a template pins one nodeSelector); define one config per role: ${join("; ", [for name, b in local.workspace_template_bindings : format("%s referenced with roles %s", name, join(",", b.roles)) if length(b.roles) > 1])}."
+    }
+  }
 
   depends_on = [kubernetes_namespace_v1.shared, helm_release.workspace_router, helm_release.jupyter_k8s]
 }
@@ -296,7 +354,7 @@ resource "null_resource" "repair_workspace_template" {
 }
 
 data "kubernetes_resource" "pool_workspace_template" {
-  for_each = toset([for t in local.workspace_pool_templates : t.name])
+  for_each = toset(keys(local.workspace_pool_templates))
 
   api_version = "workspace.jupyter.org/v1alpha1"
   kind        = "WorkspaceTemplate"
@@ -309,7 +367,7 @@ data "kubernetes_resource" "pool_workspace_template" {
 }
 
 resource "null_resource" "repair_pool_workspace_template" {
-  for_each = toset([for t in local.workspace_pool_templates : t.name])
+  for_each = toset(keys(local.workspace_pool_templates))
 
   triggers = {
     present = data.kubernetes_resource.pool_workspace_template[each.key].object == null ? "missing" : "present"

@@ -42,13 +42,13 @@ def test_gpu_template_idle_timeout_within_window() -> None:
     """The built-in GPU pool's idle default must sit inside the shared override window.
 
     The built-in GPU entry pins its template's idle default as a literal
-    (template_idle_minutes in platform_karpenter.tf) while the derived template
+    (idle_minutes in platform_karpenter.tf) while the derived template
     reuses the preset min/max window; a literal outside the window would be
     rejected by the operator's override validation on every GPU workspace.
     """
     karpenter_tf = (TEMPLATE_PATH / "engine" / "platform_karpenter.tf").read_text()
-    match = re.search(r'^\s*template_idle_minutes\s*=\s*"(\d+)"\s*$', karpenter_tf, re.MULTILINE)
-    assert match is not None, "template_idle_minutes literal not found in platform_karpenter.tf"
+    match = re.search(r'^\s*idle_minutes\s*=\s*"(\d+)"\s*$', karpenter_tf, re.MULTILINE)
+    assert match is not None, "idle_minutes literal not found in platform_karpenter.tf"
     gpu_timeout = int(match.group(1))
 
     tfvars = (TEMPLATE_PATH / "engine" / "presets" / "defaults-all.tfvars").read_text()

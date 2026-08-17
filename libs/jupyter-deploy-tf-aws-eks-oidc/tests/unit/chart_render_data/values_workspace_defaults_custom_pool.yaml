@@ -1,9 +1,10 @@
-# Custom GPU pool scenario: jupyterlab plus the template the workspaces.tf
-# workspace_pool_templates derivation emits for a hand-written entry
-# { name = "workspace-gpu-p", role = "workspaces-gpu-p",
-#   template_name = "jupyterlab-gpu-p", template_gpus = "1",
-#   template_cpu = "7500m", template_memory = "55Gi",
-#   template_idle_minutes = "20" }
+# Custom GPU pool scenario: jupyterlab plus the binding the workspaces.tf
+# workspace_pool_templates derivation emits for a hand-written config
+#   workspace_templates = [{ name = "jupyterlab-gpu-p", gpus = "1",
+#     cpu = "7500m", memory = "55Gi", idle_minutes = "20" }]
+# referenced by the entry
+#   { name = "workspace-gpu-p", accelerator = "nvidia",
+#     role = "workspaces-gpu-p", templates = "jupyterlab-gpu-p" }
 # displayName and description take the derivation defaults; dummy image as in
 # the other fixtures.
 workspaceTemplates:

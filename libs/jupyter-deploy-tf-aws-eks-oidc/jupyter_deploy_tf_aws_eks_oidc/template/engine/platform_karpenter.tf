@@ -217,9 +217,11 @@ resource "null_resource" "karpenter_nodepools_finalizer_cleanup" {
 }
 
 # ── GPU pool synthesis ────────────────────────────────────────────────────────
-# enable_default_gpu_pool alone yields working GPU capacity: when on and no entry named
-# workspace-gpu exists, the built-in entry below is appended. A user-defined
-# workspace-gpu entry takes precedence as the customization path (issue #336).
+# enable_default_gpu_pool alone yields working GPU capacity: the built-in pool
+# entry and its template config below are appended. Admins with their own
+# accelerator entries configure GPU support through workspace_nodepools plus
+# workspace_templates instead; combining that with the flag is a plan-time
+# error (precondition on helm_release.karpenter_nodepools), per issue #336.
 locals {
   gpu_pool_name = "workspace-gpu"
   gpu_pool_builtin = {
@@ -233,23 +235,35 @@ locals {
     # pool name), and tests, fixtures, and docs pin "workspaces-gpu".
     role        = "workspaces-gpu"
     accelerator = "nvidia"
-    # Template keys: workspaces.tf derives the jupyterlab-gpu WorkspaceTemplate
-    # from this entry. cpu/memory target the g4dn.xlarge allocatable (an
-    # over-pin is permanently unschedulable — finalize against a live node,
-    # issue #336). Idle 30 is half the jupyterlab default: an idle hour on the
-    # cheapest GPU node costs $0.53.
-    template_name         = "jupyterlab-gpu"
-    template_display_name = "JupyterLab GPU"
-    template_description  = "JupyterLab workspace with one NVIDIA GPU and persistent EBS storage"
-    template_gpus         = "1"
-    template_cpu          = "3500m"
-    template_memory       = "13Gi"
-    template_idle_minutes = "30"
+    templates   = "jupyterlab-gpu"
   }
+  # cpu/memory target the g4dn.xlarge allocatable (an over-pin is permanently
+  # unschedulable; finalize against a live node, issue #336). Idle 30 is half
+  # the jupyterlab default: an idle hour on the cheapest GPU node costs $0.53.
+  gpu_template_builtin = {
+    name         = "jupyterlab-gpu"
+    display_name = "JupyterLab GPU"
+    description  = "JupyterLab workspace with one NVIDIA GPU and persistent EBS storage"
+    gpus         = "1"
+    cpu          = "3500m"
+    memory       = "13Gi"
+    idle_minutes = "30"
+  }
+
+  workspace_nodepools_accelerated = [
+    for p in var.workspace_nodepools : p if lookup(p, "accelerator", "") != ""
+  ]
+
+  # Injection is unconditional on the flag; the precondition on
+  # helm_release.karpenter_nodepools hard-errors the flag + hand-written
+  # accelerator overlap at plan time.
   workspace_nodepools_effective = concat(
     var.workspace_nodepools,
-    var.enable_default_gpu_pool && !contains([for p in var.workspace_nodepools : p["name"]], local.gpu_pool_name)
-    ? [local.gpu_pool_builtin] : [],
+    var.enable_default_gpu_pool ? [local.gpu_pool_builtin] : [],
+  )
+  workspace_templates_effective = concat(
+    var.workspace_templates,
+    var.enable_default_gpu_pool ? [local.gpu_template_builtin] : [],
   )
   # Accelerator entries default role to the pool name, fencing each accelerator
   # pool by construction. Non-accelerator entries keep the key absent so the
@@ -324,6 +338,17 @@ resource "helm_release" "karpenter_nodepools" {
       ]
     })
   ]
+
+  lifecycle {
+    precondition {
+      condition     = !(var.enable_default_gpu_pool && length(local.workspace_nodepools_accelerated) > 0)
+      error_message = "enable_default_gpu_pool conflicts with accelerator entries in workspace_nodepools (${join(", ", [for p in local.workspace_nodepools_accelerated : p["name"]])}): the entries already provision GPU capacity, disable the flag."
+    }
+    precondition {
+      condition     = length(distinct([for p in local.workspace_nodepools_effective : p["name"]])) == length(local.workspace_nodepools_effective)
+      error_message = "workspace_nodepools names must be unique, including the built-in \"workspace-gpu\" entry injected by enable_default_gpu_pool."
+    }
+  }
 
   depends_on = [
     helm_release.karpenter,

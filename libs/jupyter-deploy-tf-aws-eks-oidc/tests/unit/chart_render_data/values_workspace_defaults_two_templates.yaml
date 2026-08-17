@@ -1,7 +1,7 @@
 # Two-template list mirroring the workspaces.tf locals (jupyterlab plus the
-# template derived from the built-in GPU entry), dummy images — keep in sync
-# with jupyterlab_template_values / workspace_pool_templates and the
-# gpu_pool_builtin template keys in platform_karpenter.tf.
+# binding of the built-in jupyterlab-gpu config to the built-in GPU pool),
+# dummy images. Keep in sync with jupyterlab_template_values /
+# workspace_pool_templates and gpu_template_builtin in platform_karpenter.tf.
 workspaceTemplates:
   - name: jupyterlab
     isDefault: "true"
