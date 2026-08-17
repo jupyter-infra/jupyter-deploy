@@ -296,7 +296,8 @@ The template provides two variable presets:
 | workspace_app_jupyterlab_app_type | `string` | `jupyterlab` | Application type identifier for the workspace template |
 | workspace_app_jupyterlab_image_name | `string` | See preset | ECR repository name for the JupyterLab image |
 | workspace_app_jupyterlab_image_build | `string` | `v1` | Build tag (increment to trigger rebuild) |
-| enable_default_gpu_pool | `bool` | `false` | Append the built-in `workspace-gpu` entry to `workspace_nodepools`; the pool, NVIDIA device plugin, and `jupyterlab-gpu` template derive from it |
+| workspace_templates | `list(map(string))` | `[]` | Named workspace template configs offered as cards by pool entries via their `templates` key |
+| enable_default_gpu_pool | `bool` | `false` | Append the built-in `workspace-gpu` entry and its `jupyterlab-gpu` template config; a plan-time error when combined with your own accelerator entries |
 | nvidia_device_plugin_version | `string` | `0.19.3` | Version of the NVIDIA device plugin chart (installed when any pool entry sets `accelerator = "nvidia"`) |
 
 ## Outputs
