@@ -245,24 +245,25 @@ def test_daemonset_component_status_ready(e2e_deployment: EndToEndDeployment) ->
 
 @skip_if_testvars_not_set(["JD_E2E_GPU_ENABLED"])
 @pytest.mark.usefixtures("kubernetes_cluster_login")
-def test_nvidia_device_plugin_components_when_gpu_enabled(e2e_deployment: EndToEndDeployment) -> None:
-    """The device-plugin DaemonSet and chart components resolve when the GPU pool is enabled."""
+def test_nvidia_device_plugin_daemonset_when_gpu_enabled(e2e_deployment: EndToEndDeployment) -> None:
+    """The device-plugin DaemonSet exists when a GPU pool is configured.
+
+    Checked via kubectl rather than jd component: the GPU pieces are
+    deliberately absent from the manifest (components have no conditional
+    mechanism, and a declared-but-absent component reads as degraded on
+    non-GPU deployments).
+    """
     e2e_deployment.ensure_deployed()
 
-    daemonset_names = _get_daemonset_names(e2e_deployment)
-    assert "nvidia-device-plugin" in daemonset_names, (
-        f"Expected nvidia-device-plugin DaemonSet component, got: {daemonset_names}"
+    result = subprocess.run(
+        ["kubectl", "get", "daemonset", "nvidia-device-plugin", "-n", "kube-system", "-o", "jsonpath={.metadata.name}"],
+        capture_output=True,
+        text=True,
+        check=True,
     )
-
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "component", "show", "--name", "nvidia-device-plugin"])
-    assert result.stdout.strip(), "Expected non-empty output for nvidia-device-plugin show"
-
-    # No Ready assertion on the DaemonSet: with the GPU pool scaled to zero it has
-    # desiredNumberScheduled == 0, which jd health currently reads as Degraded (#337).
-    result = e2e_deployment.cli.run_command(
-        ["jupyter-deploy", "component", "status", "--name", "nvidia-device-plugin-chart"]
+    assert result.stdout.strip() == "nvidia-device-plugin", (
+        f"device plugin daemonset missing: {result.stdout} {result.stderr}"
     )
-    assert "deployed" in result.stdout.lower(), f"Expected deployed chart status, got:\n{result.stdout}"
 
 
 @pytest.mark.usefixtures("kubernetes_cluster_login")

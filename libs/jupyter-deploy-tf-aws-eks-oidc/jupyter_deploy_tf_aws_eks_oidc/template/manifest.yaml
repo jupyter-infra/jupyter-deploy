@@ -1098,16 +1098,6 @@ components:
         method: k8s.apps.get-daemonset-status
       show:
         method: k8s.apps.get-daemonset
-  nvidia-device-plugin:
-    type: DaemonSet
-    description: Registers nvidia.com/gpu capacity on GPU pool nodes
-    resource-name: nvidia-device-plugin
-    scope: kube_system_namespace
-    verbs:
-      status:
-        method: k8s.apps.get-daemonset-status
-      show:
-        method: k8s.apps.get-daemonset
   cluster-autoscaler:
     type: Deployment
     description: Scales managed node groups on pending pods
@@ -1180,25 +1170,6 @@ components:
     description: Default workspace template
     scope: workspace_shared_namespace
     resource-name: jupyterlab
-    crd-group: workspace.jupyter.org
-    crd-version: v1alpha1
-    crd-plural: workspacetemplates
-    details:
-      path: .metadata.namespace
-    sub-component:
-      label: access-strategy
-      path: .spec.defaultAccessStrategy.name
-    verbs:
-      status:
-        method: k8s.custom.get
-      show:
-        method: k8s.custom.get
-  jupyterlab-gpu-template:
-    type: CustomResourceWithoutStatus
-    type-display: WorkspaceTemplate
-    description: GPU workspace template (built-in GPU pool entry)
-    scope: workspace_shared_namespace
-    resource-name: jupyterlab-gpu
     crd-group: workspace.jupyter.org
     crd-version: v1alpha1
     crd-plural: workspacetemplates
@@ -1335,18 +1306,6 @@ components:
     type: HelmRelease
     description: Fluent Bit log-shipping chart (component logging)
     resource-name: fluent-bit
-    scope: kube_system_namespace
-    verbs:
-      status:
-        method: helm.status
-      show:
-        method: helm.show
-      reconcile:
-        method: helm.reconcile
-  nvidia-device-plugin-chart:
-    type: HelmRelease
-    description: NVIDIA device plugin chart (GPU workspaces)
-    resource-name: nvidia-device-plugin
     scope: kube_system_namespace
     verbs:
       status:

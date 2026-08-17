@@ -255,8 +255,8 @@ class TestManifest(unittest.TestCase):
         # adding a release means adding a component entry (and bumping this).
         self.assertEqual(
             len(helm_components),
-            11,
-            f"Expected 11 HelmRelease components, got {len(helm_components)}: {list(helm_components)}",
+            10,
+            f"Expected 10 HelmRelease components, got {len(helm_components)}: {list(helm_components)}",
         )
         for name, comp in helm_components.items():
             self.assertIn("reconcile", comp["verbs"], f"HelmRelease component '{name}' must declare a reconcile verb")
@@ -379,35 +379,15 @@ class TestManifest(unittest.TestCase):
         daemonset_names = {name for name, comp in components.items() if comp["type"] == "DaemonSet"}
         self.assertIn("aws-node", daemonset_names)
         self.assertIn("kube-proxy", daemonset_names)
-        self.assertIn("nvidia-device-plugin", daemonset_names)
 
-    def test_nvidia_device_plugin_components_declared(self) -> None:
-        """The GPU device plugin surfaces in jd health as its DaemonSet and its chart."""
+    def test_no_gpu_components_declared(self) -> None:
+        # Manifest components have no conditional mechanism and jd health reads a
+        # missing resource as degraded, so the GPU pieces (present only when a
+        # pool entry sets accelerator) must stay out until optional components exist.
         if self.MANIFEST is None:
             self.fail("MANIFEST is None")
 
         components = self.MANIFEST.get("components", {})
-
-        daemonset = components["nvidia-device-plugin"]
-        self.assertEqual(daemonset["type"], "DaemonSet")
-        self.assertEqual(daemonset["resource-name"], "nvidia-device-plugin")
-        self.assertEqual(daemonset["scope"], "kube_system_namespace")
-        self.assertIn("status", daemonset["verbs"])
-        self.assertIn("show", daemonset["verbs"])
-
-        chart = components["nvidia-device-plugin-chart"]
-        self.assertEqual(chart["type"], "HelmRelease")
-        self.assertEqual(chart["resource-name"], "nvidia-device-plugin")
-        self.assertEqual(chart["scope"], "kube_system_namespace")
-        self.assertIn("reconcile", chart["verbs"])
-
-    def test_gpu_workspace_template_component_declared(self) -> None:
-        """The jupyterlab-gpu template surfaces in jd health beside jupyterlab."""
-        if self.MANIFEST is None:
-            self.fail("MANIFEST is None")
-
-        component = self.MANIFEST.get("components", {})["jupyterlab-gpu-template"]
-        self.assertEqual(component["type"], "CustomResourceWithoutStatus")
-        self.assertEqual(component["resource-name"], "jupyterlab-gpu")
-        self.assertEqual(component["scope"], "workspace_shared_namespace")
-        self.assertEqual(component["crd-plural"], "workspacetemplates")
+        self.assertNotIn("nvidia-device-plugin", components)
+        self.assertNotIn("nvidia-device-plugin-chart", components)
+        self.assertNotIn("jupyterlab-gpu-template", components)
