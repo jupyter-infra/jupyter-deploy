@@ -258,11 +258,16 @@ variable "workspace_nodepools" {
       max_memory        - fleet memory ceiling (e.g. "2048Gi")
 
     Optional keys per entry (all strings):
-      role     - node label/taint value; only workspace templates tolerating this
-                 role schedule onto the pool (defaults to "workspaces")
-      max_gpus - fleet GPU ceiling, the NodePool limit for nvidia.com/gpu (e.g. "4")
-      gpu      - "true" to add the nvidia.com/gpu.present node label the NVIDIA
-                 device plugin selects on; any entry with this key installs the plugin
+      accelerator - device stack the pool provides; "nvidia" is the only supported
+                    value. Installs the NVIDIA device plugin, adds the
+                    nvidia.com/gpu.present node label, and defaults role to the
+                    pool name so accelerator pools are fenced by construction
+      role        - node label/taint value; only workspace templates tolerating this
+                    role schedule onto the pool (defaults to "workspaces", or to the
+                    pool name when accelerator is set)
+      max_gpus    - fleet GPU ceiling, the NodePool limit for nvidia.com/gpu
+                    (e.g. "4"); optional, absent means unbounded (the account's
+                    G/VT service quota is the backstop); requires accelerator
 
     Template keys per entry (all strings; an entry with template_gpus yields one
     WorkspaceTemplate pinned to this pool via its role):
@@ -279,7 +284,7 @@ variable "workspace_nodepools" {
     entry provides this shape built in):
       workspace_nodepools = [
         { name = "workspace-cpu", instance_families = "c6i,m6i,r6i", disk_size_gb = "50", max_cpu = "512", max_memory = "2048Gi" },
-        { name = "workspace-gpu", instance_families = "g4dn,g5", disk_size_gb = "100", max_cpu = "64", max_memory = "256Gi", max_gpus = "4", role = "workspaces-gpu", gpu = "true",
+        { name = "workspace-gpu", instance_families = "g4dn,g5", disk_size_gb = "100", max_cpu = "64", max_memory = "256Gi", max_gpus = "4", accelerator = "nvidia",
           template_name = "jupyterlab-gpu", template_gpus = "1", template_cpu = "3500m", template_memory = "13Gi", template_idle_minutes = "30" },
       ]
   EOT
@@ -309,12 +314,20 @@ variable "workspace_nodepools" {
   }
 
   validation {
-    # "true" only: any non-empty string is truthy in the chart's {{ if .gpu }}.
     condition = alltrue([
       for p in var.workspace_nodepools :
-      !contains(keys(p), "gpu") || p["gpu"] == "true"
+      !contains(keys(p), "accelerator") || p["accelerator"] == "nvidia"
     ])
-    error_message = "Each workspace NodePool gpu key, when set, must be the string \"true\" (omit the key otherwise)."
+    error_message = "Each workspace NodePool accelerator, when set, must be \"nvidia\" (the only supported device stack)."
+  }
+
+  validation {
+    # A GPU cap on a pool that provisions no GPUs would never bind.
+    condition = alltrue([
+      for p in var.workspace_nodepools :
+      !contains(keys(p), "max_gpus") || contains(keys(p), "accelerator")
+    ])
+    error_message = "max_gpus is only valid on an entry that also sets accelerator."
   }
 
   validation {
@@ -386,7 +399,8 @@ variable "enable_default_gpu_pool" {
 variable "nvidia_device_plugin_version" {
   description = <<-EOT
     Helm chart version of the NVIDIA device plugin, installed when any
-    workspace_nodepools entry sets gpu = "true" (the built-in GPU pool does).
+    workspace_nodepools entry sets accelerator = "nvidia" (the built-in GPU
+    pool does).
 
     Refer to: https://github.com/NVIDIA/k8s-device-plugin/releases
 

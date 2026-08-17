@@ -2,13 +2,13 @@
 #
 # Deploys the NVIDIA device plugin DaemonSet, which registers nvidia.com/gpu
 # capacity with the kubelet on GPU pool nodes. Installed when any workspace
-# pool entry sets gpu = "true", so non-GPU clusters run no extra workload.
+# pool entry sets accelerator = "nvidia", so non-GPU clusters run no extra workload.
 # The AL2023 NVIDIA AMI already ships the driver and container toolkit; this
 # plugin is the one GPU piece EKS does not install.
 
 locals {
   gpu_nodepools = [
-    for p in local.workspace_nodepools_effective : p if lookup(p, "gpu", "") == "true"
+    for p in local.workspace_nodepools_normalized : p if lookup(p, "accelerator", "") == "nvidia"
   ]
   # Sorted for a stable rendered order across plans.
   gpu_nodepool_roles = distinct(sort([
@@ -29,7 +29,7 @@ resource "helm_release" "nvidia_device_plugin" {
     yamlencode({
       # Pin the daemonset to GPU pool nodes. Scheduling needs all three of this
       # nodeSelector, a toleration below, and the pool's nvidia.com/gpu.present
-      # node label (which every gpu = "true" pool sets, and which the chart's
+      # node label (which every accelerator pool sets, and which the chart's
       # default nodeAffinity requires when NFD is absent); missing any one
       # leaves the daemonset unscheduled, nvidia.com/gpu never advertised, and
       # every GPU workspace Pending with no error.

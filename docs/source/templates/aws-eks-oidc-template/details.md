@@ -67,7 +67,7 @@ The template installs the following Helm releases:
 | cluster-autoscaler | `kube-system` | Autoscaler for the platform managed node group |
 | prometheus | `monitoring` | Metrics server (scaling source for KEDA) |
 | aws-for-fluent-bit | `kube-system` | Pod log shipping to CloudWatch (optional, `enable_component_logging`) |
-| nvidia-device-plugin | `kube-system` | Registers GPU capacity on GPU pool nodes (optional, installed when a pool entry sets `gpu = "true"`) |
+| nvidia-device-plugin | `kube-system` | Registers GPU capacity on GPU pool nodes (optional, installed when a pool entry sets `accelerator = "nvidia"`) |
 | github-rbac (local) | Shared namespace | Namespace-scoped RBAC for the `oauth_allowed_teams` GitHub teams |
 | workspace-defaults (local) | Shared namespace | Default `WorkspaceTemplate` and workspace-ingress NetworkPolicies |
 
@@ -159,7 +159,7 @@ The template provides two variable presets:
 | workspace_app_jupyterlab_image_name | `string` | See preset | ECR repository name for the JupyterLab image |
 | workspace_app_jupyterlab_image_build | `string` | `v1` | Build tag (increment to trigger rebuild) |
 | enable_default_gpu_pool | `bool` | `false` | Append the built-in `workspace-gpu` entry to `workspace_nodepools`; the pool, NVIDIA device plugin, and `jupyterlab-gpu` template derive from it |
-| nvidia_device_plugin_version | `string` | `0.19.3` | Version of the NVIDIA device plugin chart (installed when any pool entry sets `gpu = "true"`) |
+| nvidia_device_plugin_version | `string` | `0.19.3` | Version of the NVIDIA device plugin chart (installed when any pool entry sets `accelerator = "nvidia"`) |
 
 ## Outputs
 

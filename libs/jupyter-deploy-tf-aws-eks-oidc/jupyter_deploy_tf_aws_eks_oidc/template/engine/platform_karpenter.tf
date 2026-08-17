@@ -229,8 +229,10 @@ locals {
     max_cpu           = "64"
     max_memory        = "256Gi"
     max_gpus          = "4"
-    role              = "workspaces-gpu"
-    gpu               = "true"
+    # Explicit: the accelerator role default would yield "workspace-gpu" (the
+    # pool name), and tests, fixtures, and docs pin "workspaces-gpu".
+    role        = "workspaces-gpu"
+    accelerator = "nvidia"
     # Template keys: workspaces.tf derives the jupyterlab-gpu WorkspaceTemplate
     # from this entry. cpu/memory target the g4dn.xlarge allocatable (an
     # over-pin is permanently unschedulable — finalize against a live node,
@@ -249,6 +251,13 @@ locals {
     var.enable_default_gpu_pool && !contains([for p in var.workspace_nodepools : p["name"]], local.gpu_pool_name)
     ? [local.gpu_pool_builtin] : [],
   )
+  # Accelerator entries default role to the pool name, fencing each accelerator
+  # pool by construction. Non-accelerator entries keep the key absent so the
+  # chart's `default "workspaces"` path renders the exact pre-GPU bytes.
+  workspace_nodepools_normalized = [
+    for p in local.workspace_nodepools_effective :
+    (lookup(p, "accelerator", "") != "" && !contains(keys(p), "role")) ? merge(p, { role = p["name"] }) : p
+  ]
 }
 
 resource "helm_release" "karpenter_nodepools" {
@@ -297,17 +306,20 @@ resource "helm_release" "karpenter_nodepools" {
       # NodePools byte-identical (a changed rendered pool drift-replaces its
       # nodes and restarts the workspaces on them).
       workspaceNodepools = [
-        for p in local.workspace_nodepools_effective : merge(
+        for p in local.workspace_nodepools_normalized : merge(
           {
             name             = p["name"]
-            instanceFamilies = split(",", p["instance_families"])
+            instanceFamilies = [for f in split(",", p["instance_families"]) : trimspace(f)]
             diskSizeGi       = tonumber(p["disk_size_gb"])
             maxCpu           = p["max_cpu"]
             maxMemory        = p["max_memory"]
           },
           contains(keys(p), "role") ? { role = p["role"] } : {},
           contains(keys(p), "max_gpus") ? { maxGpus = p["max_gpus"] } : {},
-          contains(keys(p), "gpu") ? { gpu = p["gpu"] } : {},
+          # The chart's gpu value adds the nvidia.com/gpu.present node label;
+          # the key stays at the chart boundary so rendered pool bytes are
+          # untouched by the accelerator rename.
+          lookup(p, "accelerator", "") == "nvidia" ? { gpu = "true" } : {},
         )
       ]
     })

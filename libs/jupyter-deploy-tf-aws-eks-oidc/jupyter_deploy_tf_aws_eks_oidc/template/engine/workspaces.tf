@@ -129,7 +129,7 @@ locals {
   # a GPU pool admits carries exactly one GPU and the workspace owns its node,
   # so cpu/memory choice would only change which instance Karpenter buys.
   workspace_pool_templates = [
-    for p in local.workspace_nodepools_effective : {
+    for p in local.workspace_nodepools_normalized : {
       name             = lookup(p, "template_name", p["name"])
       isDefault        = "false"
       displayName      = lookup(p, "template_display_name", lookup(p, "template_name", p["name"]))
