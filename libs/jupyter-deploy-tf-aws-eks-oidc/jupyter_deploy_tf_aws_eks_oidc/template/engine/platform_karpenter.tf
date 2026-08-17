@@ -224,7 +224,7 @@ locals {
   gpu_pool_name = "workspace-gpu"
   gpu_pool_builtin = {
     name              = local.gpu_pool_name
-    instance_families = "g4dn,g5"
+    instance_families = "g4dn,g5,g6,g6e"
     disk_size_gb      = "100"
     max_cpu           = "64"
     max_memory        = "256Gi"

@@ -19,7 +19,7 @@ workspaceNodepools:
     maxCpu: "512"
     maxMemory: 2048Gi
   - name: workspace-gpu
-    instanceFamilies: ["g4dn", "g5"]
+    instanceFamilies: ["g4dn", "g5", "g6", "g6e"]
     diskSizeGi: 100
     maxCpu: "64"
     maxMemory: 256Gi

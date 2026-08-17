@@ -77,7 +77,7 @@ You control node pools through admin variables:
 
 Add a CPU workspace pool by appending an entry to `workspace_nodepools`: no new
 variables required. GPU capacity works the same way, and `enable_default_gpu_pool: true`
-is the shortcut: it appends a built-in `workspace-gpu` entry (`g4dn,g5`
+is the shortcut: it appends a built-in `workspace-gpu` entry (`g4dn,g5,g6,g6e`
 on-demand instances, fleet ceiling `max_gpus: "4"`) unless you define your own
 entry by that name, which then takes precedence. Everything GPU derives from
 the entries: any entry with `gpu: "true"` installs the NVIDIA device plugin and
