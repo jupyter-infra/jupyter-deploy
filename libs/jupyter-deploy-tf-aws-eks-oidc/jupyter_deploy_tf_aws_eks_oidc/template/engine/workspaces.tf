@@ -268,6 +268,16 @@ resource "helm_release" "workspace_defaults" {
       condition     = alltrue([for name, b in local.workspace_template_bindings : length(b.roles) == 1])
       error_message = "a workspace_templates config referenced from pools with different roles cannot render one WorkspaceTemplate (a template pins one nodeSelector); define one config per role: ${join("; ", [for name, b in local.workspace_template_bindings : format("%s referenced with roles %s", name, join(",", b.roles)) if length(b.roles) > 1])}."
     }
+    precondition {
+      # A default outside the template's own override window would reject
+      # every workspace from that card at creation time.
+      condition = alltrue([
+        for t in local.workspace_templates_effective :
+        tonumber(lookup(t, "idle_minutes", var.workspaces_idle_shutdown_timeout_default)) >= var.workspaces_idle_shutdown_timeout_min &&
+        tonumber(lookup(t, "idle_minutes", var.workspaces_idle_shutdown_timeout_default)) <= var.workspaces_idle_shutdown_timeout_max
+      ])
+      error_message = "workspace_templates idle_minutes must lie within the idle-shutdown window [${var.workspaces_idle_shutdown_timeout_min}, ${var.workspaces_idle_shutdown_timeout_max}]."
+    }
   }
 
   depends_on = [kubernetes_namespace_v1.shared, helm_release.workspace_router, helm_release.jupyter_k8s]
