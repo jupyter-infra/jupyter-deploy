@@ -41,8 +41,8 @@ metadata:
   labels:
     workspace.jupyter.org/default-template: "true"
 spec:
-  displayName: JupyterLab
-  description: JupyterLab workspace with persistent EBS storage
+  displayName: "JupyterLab"
+  description: "JupyterLab workspace with persistent EBS storage"
   defaultImage: docker.io/test/jupyterlab:latest
   appType: jupyterlab
   defaultAccessType: OwnerOnly

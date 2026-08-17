@@ -8,8 +8,8 @@ metadata:
   labels:
     workspace.jupyter.org/default-template: {{ .isDefault | quote }}
 spec:
-  displayName: {{ .displayName }}
-  description: {{ .description }}
+  displayName: {{ .displayName | quote }}
+  description: {{ .description | quote }}
   defaultImage: {{ .imageUri }}
   appType: {{ .appType }}
   defaultAccessType: {{ .accessType }}
