@@ -340,6 +340,15 @@ variable "workspace_nodepools" {
     ])
     error_message = "Each workspace NodePool templates key, when set, must be a comma-separated list of non-empty workspace_templates config names."
   }
+
+  validation {
+    # A shared role would let plain CPU workspaces schedule onto GPU nodes.
+    condition = length(setintersection(
+      toset([for p in var.workspace_nodepools : lookup(p, "role", p["name"]) if lookup(p, "accelerator", "") != ""]),
+      toset([for p in var.workspace_nodepools : lookup(p, "role", "workspaces") if lookup(p, "accelerator", "") == ""]),
+    )) == 0
+    error_message = "An accelerator entry must not share a role with a non-accelerator entry (\"workspaces\" is the non-accelerator default)."
+  }
 }
 
 variable "workspace_templates" {
