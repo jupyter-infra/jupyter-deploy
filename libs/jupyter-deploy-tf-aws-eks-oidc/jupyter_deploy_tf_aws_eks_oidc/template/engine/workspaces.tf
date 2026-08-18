@@ -410,10 +410,3 @@ resource "null_resource" "repair_pool_workspace_template" {
 
   depends_on = [helm_release.workspace_defaults, kubernetes_namespace_v1.shared]
 }
-
-# Deployments created while the GPU repair pair was count-gated hold the old
-# address; without this, the replacement runs the repair provisioner once.
-moved {
-  from = null_resource.repair_workspace_gpu_template[0]
-  to   = null_resource.repair_pool_workspace_template["jupyterlab-gpu"]
-}
