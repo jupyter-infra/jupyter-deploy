@@ -302,9 +302,9 @@ variable "workspace_nodepools" {
   validation {
     condition = alltrue([
       for p in var.workspace_nodepools :
-      !contains(keys(p), "max_gpus") || can(tonumber(p["max_gpus"]))
+      !contains(keys(p), "max_gpus") || can(regex("^[1-9][0-9]*$", p["max_gpus"]))
     ])
-    error_message = "Each workspace NodePool max_gpus, when set, must be a numeric string."
+    error_message = "Each workspace NodePool max_gpus, when set, must be a positive integer string."
   }
 
   validation {
@@ -413,17 +413,17 @@ variable "workspace_templates" {
   validation {
     condition = alltrue([
       for t in var.workspace_templates :
-      !contains(keys(t), "gpus") || can(tonumber(t["gpus"]))
+      !contains(keys(t), "gpus") || can(regex("^[1-9][0-9]*$", t["gpus"]))
     ])
-    error_message = "Each workspace_templates gpus, when set, must be a numeric string."
+    error_message = "Each workspace_templates gpus, when set, must be a positive integer string."
   }
 
   validation {
     condition = alltrue([
       for t in var.workspace_templates :
-      !contains(keys(t), "idle_minutes") || can(tonumber(t["idle_minutes"]))
+      !contains(keys(t), "idle_minutes") || can(regex("^[1-9][0-9]*$", t["idle_minutes"]))
     ])
-    error_message = "Each workspace_templates idle_minutes, when set, must be a numeric string."
+    error_message = "Each workspace_templates idle_minutes, when set, must be a positive integer string."
   }
 
   validation {
