@@ -175,3 +175,7 @@ test-results/
 # E2E test temporary files
 docker-compose.e2e-override.yml
 results*.log
+
+# terraform working dirs and lock files (deployment dirs and template engines initialize locally)
+**/.terraform/
+**/.terraform.lock.hcl
