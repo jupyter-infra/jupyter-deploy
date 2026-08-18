@@ -251,7 +251,8 @@ class TestManifest(unittest.TestCase):
         components = self.MANIFEST.get("components", {})
         helm_components = {name: c for name, c in components.items() if c["type"] == "HelmRelease"}
 
-        # Every helm_release in the template is surfaced as a component, so
+        # Every helm_release in the template is surfaced as a component, except
+        # deliberately optional ones (see test_no_gpu_components_declared), so
         # adding a release means adding a component entry (and bumping this).
         self.assertEqual(
             len(helm_components),
