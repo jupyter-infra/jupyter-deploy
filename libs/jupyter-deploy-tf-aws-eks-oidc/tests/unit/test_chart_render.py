@@ -141,7 +141,9 @@ class TestKarpenterNodepoolsGpuRender(unittest.TestCase):
 
     def test_gpu_nodepool_instance_families(self) -> None:
         requirements = {req["key"]: req for req in self.gpu_pool["spec"]["template"]["spec"]["requirements"]}
-        self.assertEqual(requirements["karpenter.k8s.aws/instance-family"]["values"], ["g4dn", "g5", "g6", "g6e"])
+        self.assertEqual(
+            requirements["karpenter.k8s.aws/instance-family"]["values"], ["g4dn", "g5", "g6", "g6e", "g7", "g7e"]
+        )
 
     def test_gpu_ec2nodeclass_root_volume(self) -> None:
         nodeclass = yaml.safe_load(self.chunks[("EC2NodeClass", "workspace-gpu")])

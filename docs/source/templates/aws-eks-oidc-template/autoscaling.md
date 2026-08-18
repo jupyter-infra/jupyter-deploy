@@ -78,7 +78,7 @@ You control node pools through admin variables:
 
 Add a CPU workspace pool by appending an entry to `workspace_nodepools`: no new
 variables required. For GPU capacity, `enable_default_gpu_pool: true` is the
-one-line path: it appends a built-in `workspace-gpu` entry (`g4dn,g5,g6,g6e`
+one-line path: it appends a built-in `workspace-gpu` entry (`g4dn,g5,g6,g6e,g7,g7e`
 on-demand instances, fleet ceiling `max_gpus: "4"`) plus its `jupyterlab-gpu`
 template config. To configure GPU support yourself, leave the flag off and
 write the entries directly (combining both is a plan-time error): an entry with

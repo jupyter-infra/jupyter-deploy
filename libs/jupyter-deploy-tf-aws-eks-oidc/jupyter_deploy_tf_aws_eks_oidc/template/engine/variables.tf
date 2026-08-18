@@ -278,7 +278,7 @@ variable "workspace_nodepools" {
     equivalent built in):
       workspace_nodepools = [
         { name = "workspace-cpu", instance_families = "c6i,m6i,r6i", disk_size_gb = "50", max_cpu = "512", max_memory = "2048Gi" },
-        { name = "workspace-gpu", instance_families = "g4dn,g5,g6,g6e", disk_size_gb = "100", max_cpu = "64", max_memory = "256Gi",
+        { name = "workspace-gpu", instance_families = "g4dn,g5,g6,g6e,g7,g7e", disk_size_gb = "100", max_cpu = "64", max_memory = "256Gi",
           max_gpus = "4", accelerator = "nvidia", templates = "jupyterlab-gpu" },
       ]
   EOT
