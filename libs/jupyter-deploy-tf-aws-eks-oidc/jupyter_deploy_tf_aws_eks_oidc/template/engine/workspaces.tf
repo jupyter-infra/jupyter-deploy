@@ -129,9 +129,10 @@ locals {
   workspace_template_refs = flatten([
     for p in local.workspace_nodepools_normalized : [
       for raw in split(",", lookup(p, "templates", "")) : {
-        pool_name   = p["name"]
-        pool_role   = lookup(p, "role", "workspaces")
-        config_name = trimspace(raw)
+        pool_name        = p["name"]
+        pool_role        = lookup(p, "role", "workspaces")
+        pool_accelerated = lookup(p, "accelerator", "") != ""
+        config_name      = trimspace(raw)
       } if trimspace(raw) != ""
     ]
   ])
@@ -149,10 +150,11 @@ locals {
   workspace_template_bindings = {
     for name, refs in { for r in local.workspace_template_refs : r.config_name => r... } :
     name => {
-      config = local.workspace_template_configs[name]
-      role   = refs[0].pool_role
-      roles  = distinct([for r in refs : r.pool_role])
-      pools  = distinct([for r in refs : r.pool_name])
+      config      = local.workspace_template_configs[name]
+      role        = refs[0].pool_role
+      roles       = distinct([for r in refs : r.pool_role])
+      pools       = distinct([for r in refs : r.pool_name])
+      accelerated = alltrue([for r in refs : r.pool_accelerated])
     } if contains(keys(local.workspace_template_configs), name)
   }
 
@@ -267,6 +269,15 @@ resource "helm_release" "workspace_defaults" {
     precondition {
       condition     = alltrue([for name, b in local.workspace_template_bindings : length(b.roles) == 1])
       error_message = "a workspace_templates config referenced from pools with different roles cannot render one WorkspaceTemplate (a template pins one nodeSelector); define one config per role: ${join("; ", [for name, b in local.workspace_template_bindings : format("%s referenced with roles %s", name, join(",", b.roles)) if length(b.roles) > 1])}."
+    }
+    precondition {
+      # A gpus config only schedules where a device is advertised; offered by
+      # a plain pool, every workspace from that card stays Pending forever.
+      condition = alltrue([
+        for name, b in local.workspace_template_bindings :
+        !contains(keys(b.config), "gpus") || b.accelerated
+      ])
+      error_message = "workspace_templates configs with gpus must be offered only by accelerator pools: ${join(", ", [for name, b in local.workspace_template_bindings : name if contains(keys(b.config), "gpus") && !b.accelerated])}."
     }
     precondition {
       # A default outside the template's own override window would reject

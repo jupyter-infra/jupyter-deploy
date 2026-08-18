@@ -353,9 +353,9 @@ resource "helm_release" "karpenter_nodepools" {
       # list: the validation cannot see the entry enable_default_gpu_pool injects.
       condition = length(setintersection(
         toset([for p in local.workspace_nodepools_normalized : p["role"] if lookup(p, "accelerator", "") != ""]),
-        toset([for p in local.workspace_nodepools_normalized : lookup(p, "role", "workspaces") if lookup(p, "accelerator", "") == ""]),
+        toset(concat([for p in local.workspace_nodepools_normalized : lookup(p, "role", "workspaces") if lookup(p, "accelerator", "") == ""], ["workspaces"])),
       )) == 0
-      error_message = "An accelerator pool must not share a role with a non-accelerator pool, including the built-in \"workspaces-gpu\" role injected by enable_default_gpu_pool: a shared role would let CPU workspaces onto GPU nodes."
+      error_message = "An accelerator pool must not share a role with a non-accelerator pool or use \"workspaces\" (the base jupyterlab template's role), including the built-in \"workspaces-gpu\" role injected by enable_default_gpu_pool: a shared role would let CPU workspaces onto GPU nodes."
     }
   }
 

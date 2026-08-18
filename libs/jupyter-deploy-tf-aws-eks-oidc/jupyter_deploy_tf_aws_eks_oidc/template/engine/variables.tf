@@ -264,7 +264,8 @@ variable "workspace_nodepools" {
                     pool name so accelerator pools are fenced by construction
       role        - node label/taint value; only workspace templates tolerating this
                     role schedule onto the pool (defaults to "workspaces", or to the
-                    pool name when accelerator is set)
+                    pool name when accelerator is set; an accelerator entry must not
+                    use "workspaces", the base jupyterlab template's role)
       max_gpus    - fleet GPU ceiling, the NodePool limit for nvidia.com/gpu
                     (e.g. "4"); optional, absent means unbounded (the account's
                     G/VT service quota is the backstop); requires accelerator
@@ -287,6 +288,11 @@ variable "workspace_nodepools" {
   validation {
     condition     = length(var.workspace_nodepools) >= 1
     error_message = "workspace_nodepools must contain at least one NodePool definition."
+  }
+
+  validation {
+    condition     = alltrue([for p in var.workspace_nodepools : trimspace(lookup(p, "name", "")) != ""])
+    error_message = "Each workspace NodePool entry must set name."
   }
 
   validation {
@@ -342,12 +348,13 @@ variable "workspace_nodepools" {
   }
 
   validation {
-    # A shared role would let plain CPU workspaces schedule onto GPU nodes.
+    # A shared role would let plain CPU workspaces schedule onto GPU nodes;
+    # "workspaces" is always taken, the base jupyterlab template pins it.
     condition = length(setintersection(
-      toset([for p in var.workspace_nodepools : lookup(p, "role", p["name"]) if lookup(p, "accelerator", "") != ""]),
-      toset([for p in var.workspace_nodepools : lookup(p, "role", "workspaces") if lookup(p, "accelerator", "") == ""]),
+      toset([for p in var.workspace_nodepools : lookup(p, "role", lookup(p, "name", "")) if lookup(p, "accelerator", "") != ""]),
+      toset(concat([for p in var.workspace_nodepools : lookup(p, "role", "workspaces") if lookup(p, "accelerator", "") == ""], ["workspaces"])),
     )) == 0
-    error_message = "An accelerator entry must not share a role with a non-accelerator entry (\"workspaces\" is the non-accelerator default)."
+    error_message = "An accelerator entry must not share a role with a non-accelerator entry or use \"workspaces\" (the non-accelerator default and the base jupyterlab template's role)."
   }
 }
 
@@ -366,7 +373,8 @@ variable "workspace_templates" {
                      "jupyterlab" is reserved for the built-in default template
     Optional keys per entry (all strings):
       gpus         - nvidia.com/gpu count the template pins (e.g. "1");
-                     requires cpu and memory
+                     requires cpu and memory, and only accelerator pools may
+                     offer the config
       cpu          - pinned cpu request/limit/bounds (e.g. "22"); set with memory
       memory       - pinned memory request/limit/bounds (e.g. "200Gi"); set with cpu
       idle_minutes - idle-shutdown default in minutes (defaults to
