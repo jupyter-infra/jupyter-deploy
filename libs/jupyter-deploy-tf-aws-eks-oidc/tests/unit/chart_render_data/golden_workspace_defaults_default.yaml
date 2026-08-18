@@ -36,7 +36,7 @@ spec:
 apiVersion: workspace.jupyter.org/v1alpha1
 kind: WorkspaceTemplate
 metadata:
-  name: jupyterlab
+  name: "jupyterlab"
   namespace: jupyter-k8s-shared
   labels:
     workspace.jupyter.org/default-template: "true"

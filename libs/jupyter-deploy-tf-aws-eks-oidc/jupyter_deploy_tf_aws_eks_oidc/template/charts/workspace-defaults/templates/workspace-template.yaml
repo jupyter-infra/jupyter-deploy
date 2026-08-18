@@ -3,7 +3,7 @@
 apiVersion: workspace.jupyter.org/v1alpha1
 kind: WorkspaceTemplate
 metadata:
-  name: {{ .name }}
+  name: {{ .name | quote }}
   namespace: {{ $.Values.sharedNamespace }}
   labels:
     workspace.jupyter.org/default-template: {{ .isDefault | quote }}

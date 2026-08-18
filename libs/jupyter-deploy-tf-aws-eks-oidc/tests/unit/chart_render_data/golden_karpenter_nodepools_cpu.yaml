@@ -144,7 +144,8 @@ spec:
       labels:
         # Default preserves the exact pre-GPU bytes: Karpenter hashes
         # spec.template, so any change here drift-replaces the pool's nodes
-        # and restarts every workspace on them.
+        # and restarts every workspace on them. Set values render quoted: an
+        # unquoted role like "on" would parse as a YAML boolean and fail apply.
         jupyter-deploy/role: workspaces
     spec:
       nodeClassRef:
