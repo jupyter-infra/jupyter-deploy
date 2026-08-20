@@ -255,11 +255,13 @@ def test_nvidia_device_plugin_daemonset_when_gpu_enabled(e2e_deployment: EndToEn
     """
     e2e_deployment.ensure_deployed()
 
+    # check=False: with check=True an absent daemonset dies as CalledProcessError
+    # before the assertion below can surface stdout/stderr in the test report.
     result = subprocess.run(
         ["kubectl", "get", "daemonset", "nvidia-device-plugin", "-n", "kube-system", "-o", "jsonpath={.metadata.name}"],
         capture_output=True,
         text=True,
-        check=True,
+        check=False,
     )
     assert result.stdout.strip() == "nvidia-device-plugin", (
         f"device plugin daemonset missing: {result.stdout} {result.stderr}"
