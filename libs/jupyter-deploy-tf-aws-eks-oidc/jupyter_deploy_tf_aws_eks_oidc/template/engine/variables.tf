@@ -316,7 +316,9 @@ variable "workspace_nodepools" {
   validation {
     condition = alltrue([
       for p in var.workspace_nodepools :
-      !contains(keys(p), "accelerator") || p["accelerator"] == "nvidia"
+      # lookup, not p["accelerator"]: || is eager pre-TF-1.10 and the index
+      # would error on entries without the key.
+      !contains(keys(p), "accelerator") || lookup(p, "accelerator", "") == "nvidia"
     ])
     error_message = "Each workspace NodePool accelerator, when set, must be \"nvidia\" (the only supported device stack)."
   }
@@ -342,7 +344,7 @@ variable "workspace_nodepools" {
   validation {
     condition = alltrue([
       for p in var.workspace_nodepools :
-      !contains(keys(p), "templates") || alltrue([for raw in split(",", p["templates"]) : trimspace(raw) != ""])
+      !contains(keys(p), "templates") || alltrue([for raw in split(",", lookup(p, "templates", "")) : trimspace(raw) != ""])
     ])
     error_message = "Each workspace NodePool templates key, when set, must be a comma-separated list of non-empty workspace_templates config names."
   }
