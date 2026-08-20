@@ -10,9 +10,10 @@ locals {
   gpu_nodepools = [
     for p in local.workspace_nodepools_normalized : p if lookup(p, "accelerator", "") == "nvidia"
   ]
-  # Sorted for a stable rendered order across plans.
+  # Sorted for a stable rendered order across plans. Direct index: accelerator
+  # entries always carry role after normalization.
   gpu_nodepool_roles = distinct(sort([
-    for p in local.gpu_nodepools : lookup(p, "role", "workspaces")
+    for p in local.gpu_nodepools : p["role"]
   ]))
 }
 
