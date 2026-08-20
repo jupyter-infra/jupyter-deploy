@@ -11,7 +11,7 @@ from pytest_jupyter_deploy.kubernetes.kubectl import run_kubectl
 
 
 def get_node_names(label_selector: str) -> list[str]:
-    """Names of Ready nodes matching a label selector (e.g. 'jupyter-deploy/role=platform')."""
+    """Names of nodes matching a label selector (e.g. 'jupyter-deploy/role=platform'), regardless of readiness."""
     result = subprocess.run(
         ["kubectl", "get", "nodes", "-l", label_selector, "-o", "jsonpath={.items[*].metadata.name}"],
         capture_output=True,
