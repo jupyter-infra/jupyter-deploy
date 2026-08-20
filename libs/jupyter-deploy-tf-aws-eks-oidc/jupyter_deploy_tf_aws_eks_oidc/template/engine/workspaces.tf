@@ -283,6 +283,16 @@ resource "helm_release" "workspace_defaults" {
       error_message = "workspace_templates configs with gpus must be offered only by accelerator pools: ${join(", ", [for name, b in local.workspace_template_bindings : name if contains(keys(b.config), "gpus") && !b.accelerated])}."
     }
     precondition {
+      # The always-rendered jupyterlab template pins the "workspaces" role;
+      # with no pool carrying it, every workspace from the default card stays
+      # Pending forever.
+      condition = anytrue([
+        for p in local.workspace_nodepools_normalized :
+        lookup(p, "accelerator", "") == "" && lookup(p, "role", "workspaces") == "workspaces"
+      ])
+      error_message = "no workspace pool serves the built-in jupyterlab template: one non-accelerator workspace_nodepools entry must keep the default \"workspaces\" role."
+    }
+    precondition {
       # A default outside the template's own override window would reject
       # every workspace from that card at creation time.
       condition = alltrue([
