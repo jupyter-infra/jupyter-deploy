@@ -265,7 +265,8 @@ variable "workspace_nodepools" {
       role        - node label/taint value; only workspace templates tolerating this
                     role schedule onto the pool (defaults to "workspaces", or to the
                     pool name when accelerator is set; an accelerator entry must not
-                    use "workspaces", the base jupyterlab template's role)
+                    use "workspaces", the base jupyterlab template's role, and no
+                    entry may use "routing", the routing pool's role)
       max_gpus    - fleet GPU ceiling, the NodePool limit for nvidia.com/gpu
                     (e.g. "4"); optional, absent means unbounded (the account's
                     G/VT service quota is the backstop); requires accelerator
@@ -347,6 +348,18 @@ variable "workspace_nodepools" {
       !contains(keys(p), "templates") || alltrue([for raw in split(",", lookup(p, "templates", "")) : trimspace(raw) != ""])
     ])
     error_message = "Each workspace NodePool templates key, when set, must be a comma-separated list of non-empty workspace_templates config names."
+  }
+
+  validation {
+    # The routing pool's nodes carry this label/taint value; a workspace pool
+    # sharing it would let workspace pods onto the always-on routing nodes.
+    # Resolved role, not the raw key: an accelerator entry without an explicit
+    # role takes its pool name as the role.
+    condition = alltrue([
+      for p in var.workspace_nodepools :
+      (contains(keys(p), "role") ? p["role"] : (lookup(p, "accelerator", "") != "" ? lookup(p, "name", "") : "workspaces")) != "routing"
+    ])
+    error_message = "\"routing\" is reserved for the routing pool: no workspace pool may use it as its role, and an accelerator entry named \"routing\" must set an explicit role."
   }
 
   validation {
