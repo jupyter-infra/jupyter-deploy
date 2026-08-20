@@ -124,7 +124,10 @@ locals {
     }
   }
 
-  workspace_template_configs = { for t in local.workspace_templates_effective : t["name"] => t }
+  # Grouped (t...) so a name collision between a user config and the built-in
+  # one reaches the uniqueness precondition below instead of crashing this
+  # comprehension with a raw "Duplicate object key" error.
+  workspace_template_configs = { for t in local.workspace_templates_effective : t["name"] => t... }
 
   workspace_template_refs = flatten([
     for p in local.workspace_nodepools_normalized : [
@@ -150,7 +153,7 @@ locals {
   workspace_template_bindings = {
     for name, refs in { for r in local.workspace_template_refs : r.config_name => r... } :
     name => {
-      config      = local.workspace_template_configs[name]
+      config      = local.workspace_template_configs[name][0]
       role        = refs[0].pool_role
       roles       = distinct([for r in refs : r.pool_role])
       pools       = distinct([for r in refs : r.pool_name])
