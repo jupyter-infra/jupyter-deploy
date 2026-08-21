@@ -19,8 +19,9 @@ this template:
 
 - **EC2 vCPUs** — node group scaling fails with `VcpuLimitExceeded`. New accounts
   start with a low On-Demand vCPU limit per region, and `0` for accelerated
-  families (GPU/Neuron), which blocks `workspaces` node groups that use GPU
-  instance types. Quotas are measured in vCPUs, not instance counts.
+  families (GPU/Neuron), which blocks the workspace pools' GPU nodes
+  (Karpenter provisions one per GPU workspace). Quotas are measured in vCPUs,
+  not instance counts.
 - **Elastic IPs** — `AllocateAddress` fails with `AddressLimitExceeded`. The VPC
   provisions one NAT gateway (and therefore one EIP) per availability zone — two by
   default. The per-region limit defaults to 5.
@@ -40,9 +41,9 @@ Relevant quota codes:
 
 To resolve:
 
-- Pick smaller `instance_type` values in `node_groups`, reduce `desired_size`, or
-  free resources by destroying stale deployments (`jd down --path <project-dir>`),
-  then re-run `jd config` and `jd up`.
+- Pick smaller instance families or lower `max_cpu`/`max_gpus` in
+  `workspace_nodepools`, or free resources by destroying stale deployments
+  (`jd down --path <project-dir>`), then re-run `jd config` and `jd up`.
 - Or request a higher limit.
 
 {{ request-quota-increase-instructions }}
