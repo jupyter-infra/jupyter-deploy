@@ -2,7 +2,7 @@
 
 Renders each chart with `helm template` against fixture values in
 chart_render_data/ that mirror what the terraform layer injects, and compares
-the output to committed goldens. The karpenter golden is compared byte for
+the output to committed goldens. The karpenter goldens are compared byte for
 byte: Karpenter hashes a NodePool's spec.template, so any byte change to a
 rendered pool drift-replaces its nodes and restarts the workspaces on them.
 Regenerate goldens deliberately with:
@@ -90,7 +90,7 @@ class TestKarpenterNodepoolsCpuRender(GoldenComparisonTestCase):
 
 
 @_SKIP_WITHOUT_HELM
-class TestKarpenterNodepoolsGpuRender(unittest.TestCase):
+class TestKarpenterNodepoolsGpuRender(GoldenComparisonTestCase):
     """The synthesized GPU entry adds a fenced pool without touching existing pools."""
 
     rendered: ClassVar[str]
@@ -108,6 +108,9 @@ class TestKarpenterNodepoolsGpuRender(unittest.TestCase):
         cls.golden_chunks = _doc_chunks((DATA_DIR / "golden_karpenter_nodepools_cpu.yaml").read_text())
         cls.gpu_pool = yaml.safe_load(cls.chunks[("NodePool", "workspace-gpu")])
         cls.cpu_pool = yaml.safe_load(cls.chunks[("NodePool", "workspace-cpu")])
+
+    def test_render_matches_golden(self) -> None:
+        self.compare_to_golden(self.rendered, "golden_karpenter_nodepools_cpu_gpu.yaml")
 
     def test_existing_docs_byte_identical(self) -> None:
         for key in [
