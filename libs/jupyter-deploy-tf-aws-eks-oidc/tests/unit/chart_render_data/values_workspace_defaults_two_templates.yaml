@@ -85,6 +85,6 @@ workspaceTemplates:
       failureThreshold: 30
     idleShutdown:
       enabled: true
-      timeoutMinutes: 30
+      timeoutMinutes: 60
       minTimeoutMinutes: 15
       maxTimeoutMinutes: 480

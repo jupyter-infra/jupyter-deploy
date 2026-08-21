@@ -38,23 +38,13 @@ def test_parameters_sanity() -> None:
     )
 
 
-def test_gpu_template_idle_timeout_within_window() -> None:
-    """The built-in GPU pool's idle default must sit inside the shared override window.
+def test_gpu_template_idle_follows_deployment_default() -> None:
+    """The built-in GPU config must not hardcode an idle literal.
 
-    The built-in GPU entry pins its template's idle default as a literal
-    (idle_minutes in platform_karpenter.tf) while the derived template
-    reuses the preset min/max window; a literal outside the window would be
-    rejected by the operator's override validation on every GPU workspace.
+    A literal can fall outside the deployment's idle-shutdown window, failing
+    every plan with an error naming a config the admin never wrote.
     """
     karpenter_tf = (TEMPLATE_PATH / "engine" / "platform_karpenter.tf").read_text()
-    match = re.search(r'^\s*idle_minutes\s*=\s*"(\d+)"\s*$', karpenter_tf, re.MULTILINE)
-    assert match is not None, "idle_minutes literal not found in platform_karpenter.tf"
-    gpu_timeout = int(match.group(1))
-
-    tfvars = (TEMPLATE_PATH / "engine" / "presets" / "defaults-all.tfvars").read_text()
-    timeout_min = _read_number_tfvar(tfvars, "workspaces_idle_shutdown_timeout_min")
-    timeout_max = _read_number_tfvar(tfvars, "workspaces_idle_shutdown_timeout_max")
-
-    assert timeout_min <= gpu_timeout <= timeout_max, (
-        f"GPU idle default ({gpu_timeout}) must be within [min, max] = [{timeout_min}, {timeout_max}]"
+    assert re.search(r"idle_minutes\s*=\s*tostring\(var\.workspaces_idle_shutdown_timeout_default\)", karpenter_tf), (
+        "the built-in gpu template must inherit workspaces_idle_shutdown_timeout_default"
     )

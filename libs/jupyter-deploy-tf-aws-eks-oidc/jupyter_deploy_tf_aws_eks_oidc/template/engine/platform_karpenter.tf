@@ -238,8 +238,9 @@ locals {
     templates   = "jupyterlab-gpu"
   }
   # cpu/memory target the g4dn.xlarge allocatable (an over-pin is permanently
-  # unschedulable; finalize against a live node, issue #336). Idle 30 is half
-  # the jupyterlab default: an idle hour on the cheapest GPU node costs $0.53.
+  # unschedulable; finalize against a live node, issue #336). Idle follows the
+  # deployment default: a literal here could fall outside the admin's idle
+  # window and fail every plan mentioning a config the admin never wrote.
   gpu_template_builtin = {
     name         = "jupyterlab-gpu"
     display_name = "JupyterLab GPU"
@@ -247,7 +248,7 @@ locals {
     gpus         = "1"
     cpu          = "3500m"
     memory       = "13Gi"
-    idle_minutes = "30"
+    idle_minutes = tostring(var.workspaces_idle_shutdown_timeout_default)
   }
 
   workspace_nodepools_accelerated = [

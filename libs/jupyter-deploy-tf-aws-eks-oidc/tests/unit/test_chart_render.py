@@ -225,7 +225,7 @@ class TestWorkspaceDefaultsTwoTemplateRender(unittest.TestCase):
         )
 
     def test_gpu_template_idle_timeout(self) -> None:
-        self.assertEqual(self.gpu["spec"]["defaultIdleShutdown"]["idleTimeoutInMinutes"], 30)
+        self.assertEqual(self.gpu["spec"]["defaultIdleShutdown"]["idleTimeoutInMinutes"], 60)
         overrides = self.gpu["spec"]["idleShutdownOverrides"]
         self.assertEqual(overrides["minIdleTimeoutInMinutes"], 15)
         self.assertEqual(overrides["maxIdleTimeoutInMinutes"], 480)
