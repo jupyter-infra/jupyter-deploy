@@ -237,8 +237,9 @@ locals {
     accelerator = "nvidia"
     templates   = "jupyterlab-gpu"
   }
-  # cpu/memory target the g4dn.xlarge allocatable (an over-pin is permanently
-  # unschedulable; finalize against a live node, issue #336). Idle follows the
+  # cpu/memory sit under the g4dn.xlarge allocatable with headroom, so kubelet
+  # reservation or DaemonSet growth cannot leave the pod permanently
+  # unschedulable on the smallest family. Idle follows the
   # deployment default: a literal here could fall outside the admin's idle
   # window and fail every plan mentioning a config the admin never wrote.
   gpu_template_builtin = {
@@ -246,8 +247,8 @@ locals {
     display_name = "JupyterLab GPU"
     description  = "JupyterLab workspace with one NVIDIA GPU and persistent EBS storage"
     gpus         = "1"
-    cpu          = "3500m"
-    memory       = "13Gi"
+    cpu          = "3"
+    memory       = "12Gi"
     idle_minutes = tostring(var.workspaces_idle_shutdown_timeout_default)
   }
 

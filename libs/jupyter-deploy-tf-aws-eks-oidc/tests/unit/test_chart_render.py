@@ -206,12 +206,12 @@ class TestWorkspaceDefaultsTwoTemplateRender(unittest.TestCase):
 
     def test_gpu_template_bounds_pinned(self) -> None:
         bounds = self.gpu["spec"]["resourceBounds"]["resources"]
-        self.assertEqual(bounds["cpu"], {"min": "3500m", "max": "3500m"})
-        self.assertEqual(bounds["memory"], {"min": "13Gi", "max": "13Gi"})
+        self.assertEqual(bounds["cpu"], {"min": "3", "max": "3"})
+        self.assertEqual(bounds["memory"], {"min": "12Gi", "max": "12Gi"})
         self.assertEqual(bounds["nvidia.com/gpu"], {"min": "1", "max": "1"})
 
     def test_gpu_template_default_resources_match_bounds(self) -> None:
-        pinned = {"cpu": "3500m", "memory": "13Gi", "nvidia.com/gpu": "1"}
+        pinned = {"cpu": "3", "memory": "12Gi", "nvidia.com/gpu": "1"}
         resources = self.gpu["spec"]["defaultResources"]
         self.assertEqual(resources["requests"], pinned)
         self.assertEqual(resources["limits"], pinned)
