@@ -293,6 +293,12 @@ resource "helm_release" "workspace_defaults" {
       error_message = "no workspace pool serves the built-in jupyterlab template: one non-accelerator workspace_nodepools entry must keep the default \"workspaces\" role."
     }
     precondition {
+      # The default flows into every built-in template; variable validations
+      # cannot reference other variables, so the window check sits here.
+      condition     = var.workspaces_idle_shutdown_timeout_default >= var.workspaces_idle_shutdown_timeout_min && var.workspaces_idle_shutdown_timeout_default <= var.workspaces_idle_shutdown_timeout_max
+      error_message = "workspaces_idle_shutdown_timeout_default (${var.workspaces_idle_shutdown_timeout_default}) must lie within the idle-shutdown window [${var.workspaces_idle_shutdown_timeout_min}, ${var.workspaces_idle_shutdown_timeout_max}]."
+    }
+    precondition {
       # A default outside the template's own override window would reject
       # every workspace from that card at creation time.
       condition = alltrue([
