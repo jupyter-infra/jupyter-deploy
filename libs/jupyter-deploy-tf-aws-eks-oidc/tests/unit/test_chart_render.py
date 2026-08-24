@@ -142,6 +142,15 @@ class TestKarpenterNodepoolsGpuRender(GoldenComparisonTestCase):
         self.assertEqual(self.gpu_pool["spec"]["limits"].get("nvidia.com/gpu"), "4")
         self.assertNotIn("nvidia.com/gpu", self.cpu_pool["spec"]["limits"])
 
+    def test_gpu_nodepool_no_instance_cpu_allowlist(self) -> None:
+        """Accelerator families ship sizes above the CPU allowlist (p4d.24xlarge
+        = 96 vCPUs); a GPU pool carrying it could never provision those families.
+        """
+        gpu_keys = {req["key"] for req in self.gpu_pool["spec"]["template"]["spec"]["requirements"]}
+        self.assertNotIn("karpenter.k8s.aws/instance-cpu", gpu_keys)
+        cpu_keys = {req["key"] for req in self.cpu_pool["spec"]["template"]["spec"]["requirements"]}
+        self.assertIn("karpenter.k8s.aws/instance-cpu", cpu_keys)
+
     def test_gpu_nodepool_instance_families(self) -> None:
         requirements = {req["key"]: req for req in self.gpu_pool["spec"]["template"]["spec"]["requirements"]}
         self.assertEqual(
