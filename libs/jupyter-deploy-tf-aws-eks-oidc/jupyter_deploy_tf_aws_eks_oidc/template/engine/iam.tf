@@ -353,10 +353,17 @@ data "aws_iam_policy_document" "karpenter_controller" {
     }
   }
 
+  # Must also cover the <cluster>_<hash> profile names Karpenter auto-generates:
+  # the EC2NodeClass termination reconciler probes them on every delete even in
+  # pre-created-profile mode, and a 403 there (vs the expected 404) blocks the
+  # finalizer, wedging the NodeClass in Terminating forever.
   statement {
-    sid       = "AllowInstanceProfileGet"
-    actions   = ["iam:GetInstanceProfile"]
-    resources = [aws_iam_instance_profile.karpenter_node.arn]
+    sid     = "AllowInstanceProfileGet"
+    actions = ["iam:GetInstanceProfile"]
+    resources = [
+      aws_iam_instance_profile.karpenter_node.arn,
+      "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:instance-profile/${module.eks_cluster.cluster_name}_*",
+    ]
   }
 
   # Karpenter >=1.7 runs an instance-profile garbage-collection reconciler that calls
