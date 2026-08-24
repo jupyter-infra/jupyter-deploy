@@ -114,6 +114,21 @@ def test_all_eks_addons_gated_by_cluster_addons() -> None:
     )
 
 
+def test_karpenter_can_read_generated_instance_profiles() -> None:
+    """The AllowInstanceProfileGet statement MUST cover the <cluster>_* instance
+    profile names Karpenter generates: its EC2NodeClass termination reconciler
+    probes them with GetInstanceProfile, and a 403 there (vs the expected 404)
+    blocks the finalizer, wedging the NodeClass in Terminating forever.
+    """
+    iam_tf = (TEMPLATE_PATH / "engine" / "iam.tf").read_text()
+    statement = re.search(r'sid\s*=\s*"AllowInstanceProfileGet"(.*?)(?=\n  statement)', iam_tf, re.DOTALL)
+    assert statement is not None, "AllowInstanceProfileGet statement not found in iam.tf"
+    assert "instance-profile/${module.eks_cluster.cluster_name}_*" in statement.group(1), (
+        "iam:GetInstanceProfile no longer covers Karpenter's generated <cluster>_* "
+        "instance profiles — deleting an EC2NodeClass will wedge on a 403 probe."
+    )
+
+
 def _iter_resource_blocks(content: str) -> list[tuple[str, str, str]]:
     """Yield (resource_type, resource_name, body) for every resource block in content."""
     blocks: list[tuple[str, str, str]] = []
