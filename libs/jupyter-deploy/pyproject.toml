@@ -50,10 +50,16 @@ aws = [
 k8s = [
     "kubernetes>=31.0.0",
 ]
+# Local proxy for the aws:ec2:jupyterlab template. `jd` shells out to the
+# `jupyter-deploy-client-proxy` console script; it is never imported.
+proxy = [
+    "jupyter-deploy-client-proxy>=0.1.0",
+]
 
 [tool.uv.sources]
 jupyter-deploy-tf-aws-ec2-base = { workspace = true }
 jupyter-infra-tf-aws-iam-ci = { workspace = true }
+jupyter-deploy-client-proxy = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

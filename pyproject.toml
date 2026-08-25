@@ -11,6 +11,7 @@ dependencies = [
 [tool.uv.sources]
 jupyter-deploy = { workspace = true }
 pytest-jupyter-deploy = { workspace = true }
+jupyter-deploy-client-proxy = { workspace = true }
 # Template packages: dev-only, so a fresh `uv sync` registers their
 # `jupyter_deploy.terraform_templates` entry points and `jd init` finds them. They are
 # NOT core deps of the CLI (which stays template-agnostic) — only of this dev monorepo.
@@ -21,6 +22,7 @@ jupyter-infra-tf-aws-iam-ci = { workspace = true }
 [tool.uv.workspace]
 members = [
     "libs/jupyter-deploy",
+    "libs/jupyter-deploy-client-proxy",
     "libs/jupyter-deploy-tf-aws-ec2-base",
     "libs/jupyter-deploy-tf-aws-eks-oidc",
     "libs/jupyter-infra-tf-aws-iam-ci",
@@ -38,6 +40,7 @@ dev-dependencies = [
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
     "pytest-jupyter-deploy",
+    "jupyter-deploy-client-proxy",
     "jupyter-deploy-tf-aws-ec2-base",
     "jupyter-deploy-tf-aws-eks-oidc",
     "jupyter-infra-tf-aws-iam-ci",
@@ -48,6 +51,7 @@ dev-dependencies = [
     "parameterized>=0.9.0",
     "tomli-w>=1.2.0",
     "yamllint>=1.35.0",
+    "types-aiofiles>=24.1.0",
     "types-pexpect>=4.9.0",
     "types-requests>=2.32.0",
     "myst-parser>=4.0.0",
@@ -90,6 +94,8 @@ check_untyped_defs = true
 explicit_package_bases = true
 mypy_path = [
     "libs/jupyter-deploy",
+    "libs/jupyter-deploy-client-proxy",
+    "libs/jupyter-deploy-client-proxy/tests/functional",
     "libs/jupyter-deploy-tf-aws-ec2-base",
     "libs/jupyter-deploy-tf-aws-eks-oidc",
     "libs/jupyter-infra-tf-aws-iam-ci",
@@ -99,6 +105,7 @@ mypy_path = [
 plugins = ["pydantic.mypy"]
 files = [
     "libs/jupyter-deploy",
+    "libs/jupyter-deploy-client-proxy",
     "libs/jupyter-deploy-tf-aws-ec2-base",
     "libs/jupyter-deploy-tf-aws-eks-oidc",
     "libs/jupyter-infra-tf-aws-iam-ci",
@@ -121,9 +128,16 @@ module = "kubernetes.*"
 ignore_missing_imports = true
 follow_untyped_imports = true
 
+# aiologger (client-proxy dep) has no py.typed / stubs. (aiofiles is imported directly by the
+# client proxy and typed via the types-aiofiles dev stub, so it needs no override here.)
+[[tool.mypy.overrides]]
+module = ["aiologger.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 pythonpath = [
   "libs/jupyter-deploy",
+  "libs/jupyter-deploy-client-proxy",
   "libs/jupyter-deploy-tf-aws-ec2-base",
   "libs/jupyter-deploy-tf-aws-eks-oidc",
   "libs/jupyter-infra-tf-aws-iam-ci",
@@ -135,4 +149,9 @@ markers = [
   "bare: Tests requiring the bare install track with no AWS deps (select with '-m bare')",
 ]
 addopts = "-m 'not e2e' --import-mode=importlib"
-norecursedirs = ["**/tests/e2e"]
+# tests/functional run via `just functional-test` (prepend import-mode, per-package rootdir) — not here.
+norecursedirs = ["**/tests/e2e", "**/tests/functional"]
+filterwarnings = [
+    # aiologger's internal JSON formatter uses the deprecated datetime.utcnow() — third-party, not ours.
+    "ignore:datetime.datetime.utcnow:DeprecationWarning",
+]

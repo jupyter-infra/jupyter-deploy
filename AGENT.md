@@ -124,6 +124,19 @@ Always run from the root of the repository:
 2. Run unit tests: `just unit-test`
    - Runs `uv run pytest`
 
+## Running the client-proxy functional tests
+
+`libs/jupyter-deploy-client-proxy/tests/functional/` exercises the real proxy in-process
+against a `trustme` self-signed origin (no cloud). It's a **separate track** from
+`unit-test` - the root pytest run excludes `tests/functional` via `norecursedirs`.
+Run them with:
+
+```
+just functional-test
+```
+
+When you touch the proxy package, run both `just unit-test` and `just functional-test`.
+
 ## Automated code review
 
 Open PRs are reviewed automatically in CI by [roborev](https://roborev.io) (policy in [`.roborev.toml`](.roborev.toml)). Run the same review locally with `just review`; see [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -64,9 +64,15 @@ docs-diagrams:
     done
     echo "Done."
 
-# Run unit tests
+# Run unit tests (all packages; excludes e2e + functional)
 unit-test:
     uv run pytest
+
+# Run the client-proxy functional tests (no cloud resources).
+# prepend import-mode puts tests/functional on sys.path so sibling `from harness import ...`
+# resolves without a package or a sys.path shim.
+functional-test:
+    uv run pytest -c pyproject.toml --import-mode=prepend libs/jupyter-deploy-client-proxy/tests/functional
 
 # Detect container tool (finch or docker)
 container-tool := `command -v finch >/dev/null 2>&1 && echo "finch" || echo "docker"`
