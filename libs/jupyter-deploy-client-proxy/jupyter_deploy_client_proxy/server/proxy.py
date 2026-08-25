@@ -72,7 +72,7 @@ class JupyterDeployClientProxy:
 
         Returns the actual port (useful when ``config.listen_port`` is 0 → ephemeral).
         """
-        await self.write_status()  # STARTING
+        await self.write_status_best_effort()  # STARTING
         try:
             await self._apply_bundle(await self._fetch_bundle())
 
@@ -91,10 +91,10 @@ class JupyterDeployClientProxy:
             self._refresh_task = asyncio.create_task(self._refresh_loop())
         except Exception:
             self._state = ProxyState.FAILED
-            await self.write_status()
+            await self.write_status_best_effort()
             raise
         self._state = ProxyState.RUNNING
-        await self.write_status()
+        await self.write_status_best_effort()
         return self._port
 
     async def stop(self) -> None:
@@ -114,19 +114,26 @@ class JupyterDeployClientProxy:
         # proxy already errored out. `jd proxy status` also checks the process is alive.
         if self._state is not ProxyState.FAILED:
             self._state = ProxyState.STOPPED
-        await self.write_status()
+        await self.write_status_best_effort()
         self._logger.info("proxy stopped")
         await self._logger.close()
 
-    async def write_status(self) -> None:
+    async def write_status_best_effort(self) -> None:
         """Log the current state, then publish it to ``<log_dir>/status.json``.
 
         The state is always logged so a transition stays observable even without a
-        ``log_dir`` (stderr mode); :func:`write_proxy_status` owns the file schema + the
-        atomic write, and is a no-op when there is no ``log_dir``.
+        ``log_dir`` (stderr mode); :func:`write_proxy_status` owns the file schema and is a
+        no-op when there is no ``log_dir``.
+
+        The status file is best-effort observability: a failed write (disk full, bad perms)
+        is logged and swallowed so it never crashes ``start()``/``stop()``/the refresh loop.
         """
         self._logger.info(f"state: {self._state.value}")
-        await write_proxy_status(self._state, self._config, self._bundle, self._port)
+        try:
+            await write_proxy_status(self._state, self._config, self._bundle, self._port)
+        except OSError as e:
+            # Logged at error (there is no recovery — the status file is simply not updated).
+            self._logger.error(f"failed to write status file: {e}")
 
     async def _fetch_bundle(self) -> ConnectBundle:
         return await fetch_bundle(
@@ -173,7 +180,7 @@ class JupyterDeployClientProxy:
             except TokenCommandError:
                 # Already logged at error; keep serving on the current credential and cool down.
                 self._state = ProxyState.DEGRADED
-                await self.write_status()
+                await self.write_status_best_effort()
                 await asyncio.sleep(self._config.backoff_max_delay_seconds)
                 continue
             except Exception as e:
@@ -182,11 +189,11 @@ class JupyterDeployClientProxy:
                 # BaseException, so a stop()-driven cancel is not caught here.)
                 self._logger.error(f"refresh loop crashed, stopping refresh: {e}")
                 self._state = ProxyState.FAILED
-                await self.write_status()
+                await self.write_status_best_effort()
                 break
             await self._apply_bundle(bundle)
             self._state = ProxyState.RUNNING
-            await self.write_status()
+            await self.write_status_best_effort()
             self._logger.info(f"credential refreshed: {get_bundle_summary(bundle)}")
 
     async def _handle(self, request: web.Request) -> web.StreamResponse:

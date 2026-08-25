@@ -1,7 +1,9 @@
 import json
 import os
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
+import aiohttp
 from harness import OriginTestCase
 
 
@@ -24,3 +26,14 @@ class TestStatusReporting(OriginTestCase):
         self.proxy = None  # already stopped; keep asyncTearDown from double-stopping
         status = json.loads(self._status_path().read_text())
         self.assertEqual(status["state"], "stopped")
+
+    async def test_proxy_starts_and_serves_despite_status_write_failure(self) -> None:
+        # A failing status write is best-effort: the proxy must still start and forward.
+        with patch(
+            "jupyter_deploy_client_proxy.server.proxy.write_proxy_status",
+            new_callable=AsyncMock,
+            side_effect=OSError("disk full"),
+        ):
+            port = await self._start_proxy({"Authorization": "Bearer token"})
+            async with aiohttp.ClientSession() as session, session.get(f"http://127.0.0.1:{port}/lab") as resp:
+                self.assertEqual(resp.status, 200)

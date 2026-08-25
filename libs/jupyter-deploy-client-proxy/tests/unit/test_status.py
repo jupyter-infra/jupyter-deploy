@@ -14,7 +14,7 @@ from jupyter_deploy_client_proxy.server.config import JupyterDeployClientProxyCo
 from jupyter_deploy_client_proxy.server.proxy import JupyterDeployClientProxy
 
 
-class TestWriteStatus(unittest.IsolatedAsyncioTestCase):
+class TestWriteStatusBestEffort(unittest.IsolatedAsyncioTestCase):
     def _proxy(self, token_argv: list[str] | None = None, **overrides: object) -> JupyterDeployClientProxy:
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
@@ -33,7 +33,7 @@ class TestWriteStatus(unittest.IsolatedAsyncioTestCase):
 
     async def test_writes_starting_before_bundle(self) -> None:
         proxy = self._proxy()
-        await proxy.write_status()
+        await proxy.write_status_best_effort()
         status = json.loads((Path(self._tmp.name) / "logs" / "status.json").read_text())
         self.assertEqual(status["state"], "starting")
         self.assertIsNone(status["port"])
@@ -46,7 +46,7 @@ class TestWriteStatus(unittest.IsolatedAsyncioTestCase):
         proxy._state = ProxyState.RUNNING
         proxy._port = 51234
         proxy._bundle = ConnectBundle(host="203.0.113.7", port=443, expires_at=expires)
-        await proxy.write_status()
+        await proxy.write_status_best_effort()
         status = json.loads((Path(self._tmp.name) / "logs" / "status.json").read_text())
         self.assertEqual(status["state"], "running")
         self.assertEqual(status["port"], 51234)
@@ -54,7 +54,7 @@ class TestWriteStatus(unittest.IsolatedAsyncioTestCase):
 
     async def test_write_is_atomic_leaves_no_tmp(self) -> None:
         proxy = self._proxy()
-        await proxy.write_status()
+        await proxy.write_status_best_effort()
         log_dir = Path(self._tmp.name) / "logs"
         self.assertTrue((log_dir / "status.json").exists())
         self.assertEqual(list(log_dir.glob("*.tmp")), [])
@@ -66,7 +66,7 @@ class TestWriteStatus(unittest.IsolatedAsyncioTestCase):
         config = JupyterDeployClientProxyConfig(token_argv=["true"], log_dir=None)
         proxy = JupyterDeployClientProxy(config)
         proxy._logger = Mock()
-        await proxy.write_status()
+        await proxy.write_status_best_effort()
         proxy._logger.info.assert_called_once()
         self.assertIn("starting", proxy._logger.info.call_args.args[0])
 
@@ -93,6 +93,20 @@ class TestWriteStatus(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(proxy.state, ProxyState.FAILED)
         self.assertEqual(self._status()["state"], "failed")
         await proxy._logger.close()
+
+    async def test_write_status_best_effort_swallows_filesystem_errors_and_warns(self) -> None:
+        # The status file is best-effort: a failed write must be logged and swallowed,
+        # never propagated (else it would crash start()/stop()/the refresh loop).
+        proxy = self._proxy()
+        proxy._logger = Mock()  # capture the warning without a real logger
+        with patch(
+            "jupyter_deploy_client_proxy.server.proxy.write_proxy_status",
+            new_callable=AsyncMock,
+            side_effect=OSError("disk full"),
+        ):
+            await proxy.write_status_best_effort()  # must not raise
+        proxy._logger.error.assert_called_once()
+        self.assertIn("failed to write status file", proxy._logger.error.call_args.args[0])
 
 
 class TestRefreshLoopStateTransitions(unittest.IsolatedAsyncioTestCase):
