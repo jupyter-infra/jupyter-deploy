@@ -1,0 +1,145 @@
+import asyncio
+import contextlib
+import json
+import tempfile
+import unittest
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
+
+from jupyter_deploy_client_proxy.credentials.bundle import ConnectBundle
+from jupyter_deploy_client_proxy.enums import ProxyState
+from jupyter_deploy_client_proxy.exceptions import NotRetryableTokenCommandError
+from jupyter_deploy_client_proxy.server.config import JupyterDeployClientProxyConfig
+from jupyter_deploy_client_proxy.server.proxy import JupyterDeployClientProxy
+
+
+class TestWriteStatus(unittest.IsolatedAsyncioTestCase):
+    def _proxy(self, token_argv: list[str] | None = None, **overrides: object) -> JupyterDeployClientProxy:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        config = JupyterDeployClientProxyConfig(
+            token_argv=token_argv or ["true"], log_dir=Path(self._tmp.name) / "logs", **overrides
+        )
+        return JupyterDeployClientProxy(config)
+
+    def _status(self) -> dict[str, object]:
+        data: dict[str, object] = json.loads((Path(self._tmp.name) / "logs" / "status.json").read_text())
+        return data
+
+    async def test_initial_state_is_starting(self) -> None:
+        proxy = self._proxy()
+        self.assertEqual(proxy.state, ProxyState.STARTING)
+
+    async def test_writes_starting_before_bundle(self) -> None:
+        proxy = self._proxy()
+        await proxy.write_status()
+        status = json.loads((Path(self._tmp.name) / "logs" / "status.json").read_text())
+        self.assertEqual(status["state"], "starting")
+        self.assertIsNone(status["port"])
+        self.assertIsNone(status["expires_at"])
+        self.assertIsInstance(status["pid"], int)
+
+    async def test_writes_running_with_port_and_expiry(self) -> None:
+        proxy = self._proxy()
+        expires = datetime.now(UTC) + timedelta(hours=1)
+        proxy._state = ProxyState.RUNNING
+        proxy._port = 51234
+        proxy._bundle = ConnectBundle(host="203.0.113.7", port=443, expires_at=expires)
+        await proxy.write_status()
+        status = json.loads((Path(self._tmp.name) / "logs" / "status.json").read_text())
+        self.assertEqual(status["state"], "running")
+        self.assertEqual(status["port"], 51234)
+        self.assertEqual(status["expires_at"], expires.isoformat())
+
+    async def test_write_is_atomic_leaves_no_tmp(self) -> None:
+        proxy = self._proxy()
+        await proxy.write_status()
+        log_dir = Path(self._tmp.name) / "logs"
+        self.assertTrue((log_dir / "status.json").exists())
+        self.assertEqual(list(log_dir.glob("*.tmp")), [])
+
+    async def test_no_log_dir_logs_state_but_writes_no_file(self) -> None:
+        # No log_dir → the state is still logged, only the status file is skipped.
+        # (Swap the real logger for a mock: aiologger's stderr handler can't attach to
+        # pytest's captured stderr, and we want to assert the log call directly.)
+        config = JupyterDeployClientProxyConfig(token_argv=["true"], log_dir=None)
+        proxy = JupyterDeployClientProxy(config)
+        proxy._logger = Mock()
+        await proxy.write_status()
+        proxy._logger.info.assert_called_once()
+        self.assertIn("starting", proxy._logger.info.call_args.args[0])
+
+    async def test_stop_marks_stopped(self) -> None:
+        proxy = self._proxy()
+        proxy._state = ProxyState.RUNNING
+        await proxy.stop()
+        self.assertEqual(proxy.state, ProxyState.STOPPED)
+        self.assertEqual(self._status()["state"], "stopped")
+
+    async def test_stop_preserves_failed(self) -> None:
+        proxy = self._proxy()
+        proxy._state = ProxyState.FAILED
+        await proxy.stop()
+        # A clean teardown must not overwrite an already-failed state.
+        self.assertEqual(proxy.state, ProxyState.FAILED)
+        self.assertEqual(self._status()["state"], "failed")
+
+    async def test_start_failure_marks_failed(self) -> None:
+        # `false` exits non-zero (not EX_TEMPFAIL) → non-retryable → start() raises.
+        proxy = self._proxy(token_argv=["false"])
+        with self.assertRaises(NotRetryableTokenCommandError):
+            await proxy.start()
+        self.assertEqual(proxy.state, ProxyState.FAILED)
+        self.assertEqual(self._status()["state"], "failed")
+        await proxy._logger.close()
+
+
+class TestRefreshLoopStateTransitions(unittest.IsolatedAsyncioTestCase):
+    async def test_refresh_failure_marks_degraded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = JupyterDeployClientProxyConfig(
+                token_argv=["true"],
+                log_dir=Path(tmp) / "logs",
+                refresh_margin_seconds=0,
+                backoff_max_delay_seconds=0.01,
+                backoff_base_delay_seconds=0.01,
+            )
+            proxy = JupyterDeployClientProxy(config)
+            # A due (already-expired) bundle → the loop refreshes immediately on entry.
+            proxy._bundle = ConnectBundle(host="203.0.113.7", port=443, expires_at=datetime.now(UTC))
+            proxy._state = ProxyState.RUNNING
+
+            failing: Mock = AsyncMock(side_effect=NotRetryableTokenCommandError("boom"))
+            with patch("jupyter_deploy_client_proxy.server.proxy.fetch_bundle_with_retries", failing):
+                task = asyncio.create_task(proxy._refresh_loop())
+                for _ in range(200):  # poll up to ~2s for the transition
+                    if proxy.state == ProxyState.DEGRADED:
+                        break
+                    await asyncio.sleep(0.01)
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+
+            self.assertEqual(proxy.state, ProxyState.DEGRADED)
+            status = json.loads((Path(tmp) / "logs" / "status.json").read_text())
+            self.assertEqual(status["state"], "degraded")
+            await proxy._logger.close()
+
+    async def test_unexpected_error_marks_failed_and_stops(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = JupyterDeployClientProxyConfig(
+                token_argv=["true"], log_dir=Path(tmp) / "logs", refresh_margin_seconds=0
+            )
+            proxy = JupyterDeployClientProxy(config)
+            proxy._bundle = ConnectBundle(host="203.0.113.7", port=443, expires_at=datetime.now(UTC))
+            proxy._state = ProxyState.RUNNING
+
+            crashing: Mock = AsyncMock(side_effect=RuntimeError("boom"))
+            with patch("jupyter_deploy_client_proxy.server.proxy.fetch_bundle_with_retries", crashing):
+                # The loop should catch, mark FAILED, and break — so the task completes on its own.
+                await asyncio.wait_for(proxy._refresh_loop(), timeout=2)
+
+            self.assertEqual(proxy.state, ProxyState.FAILED)
+            self.assertEqual(json.loads((Path(tmp) / "logs" / "status.json").read_text())["state"], "failed")
+            await proxy._logger.close()
