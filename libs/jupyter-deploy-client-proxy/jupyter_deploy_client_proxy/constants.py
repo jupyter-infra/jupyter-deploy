@@ -29,6 +29,11 @@ DEFAULT_LOG_BACKUP_COUNT = 5
 # Status: the proxy publishes its in-memory state here (under its log dir) for `jd proxy status`.
 STATUS_FILE_NAME = "status.json"
 
+# Schema version stamped into every status.json. Consumers (e.g. `jd proxy status`) read
+# files that persist across proxy upgrades, so bump this whenever the payload shape changes
+# incompatibly — never reuse a version for a different shape.
+STATUS_SCHEMA_VERSION = 1
+
 # Headers not forwarded verbatim: connection-scoped, or part of the WebSocket
 # handshake that aiohttp regenerates on the upstream leg.
 HOP_BY_HOP_HEADERS = {

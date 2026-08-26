@@ -22,6 +22,7 @@ dependencies = [
     "aiofiles>=25.1.0",
     "aiohttp>=3.10.0",
     "aiologger>=0.7.0",
+    "psutil>=5.9.0",
     "pydantic>=2.11.5",
     "typer>=0.15.4",
 ]
@@ -84,6 +85,12 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = ["aiologger.*"]
 ignore_missing_imports = true
+
+# psutil ships without py.typed; used to record the proxy's own process creation time.
+[[tool.mypy.overrides]]
+module = ["psutil", "psutil.*"]
+ignore_missing_imports = true
+follow_untyped_imports = true
 
 [tool.pytest.ini_options]
 addopts = "--cov=jupyter_deploy_client_proxy --cov-report=term-missing --cov-report=xml --cov-report=html"

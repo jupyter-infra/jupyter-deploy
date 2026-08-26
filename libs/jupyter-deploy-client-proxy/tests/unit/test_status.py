@@ -70,20 +70,32 @@ class TestWriteStatusBestEffort(unittest.IsolatedAsyncioTestCase):
         proxy._logger.info.assert_called_once()
         self.assertIn("starting", proxy._logger.info.call_args.args[0])
 
-    async def test_stop_marks_stopped(self) -> None:
+    async def test_stop_deletes_status_file(self) -> None:
+        # Teardown removes status.json: its absence is the "stopped" signal to readers.
         proxy = self._proxy()
         proxy._state = ProxyState.RUNNING
+        await proxy.write_status_best_effort()
+        status_path = Path(self._tmp.name) / "logs" / "status.json"
+        self.assertTrue(status_path.exists())
         await proxy.stop()
-        self.assertEqual(proxy.state, ProxyState.STOPPED)
-        self.assertEqual(self._status()["state"], "stopped")
+        self.assertFalse(status_path.exists())
 
-    async def test_stop_preserves_failed(self) -> None:
+    async def test_stop_without_status_file_is_noop(self) -> None:
+        # A proxy that never published a status file (or was already cleaned) stops cleanly.
+        proxy = self._proxy()
+        await proxy.stop()  # must not raise
+        self.assertFalse((Path(self._tmp.name) / "logs" / "status.json").exists())
+
+    async def test_stop_deletes_status_file_even_when_failed(self) -> None:
+        # An exiting process cleans up regardless of state; a live-but-FAILED proxy keeps its
+        # file only because stop() has not run yet.
         proxy = self._proxy()
         proxy._state = ProxyState.FAILED
+        await proxy.write_status_best_effort()
+        status_path = Path(self._tmp.name) / "logs" / "status.json"
+        self.assertTrue(status_path.exists())
         await proxy.stop()
-        # A clean teardown must not overwrite an already-failed state.
-        self.assertEqual(proxy.state, ProxyState.FAILED)
-        self.assertEqual(self._status()["state"], "failed")
+        self.assertFalse(status_path.exists())
 
     async def test_start_failure_marks_failed(self) -> None:
         # `false` exits non-zero (not EX_TEMPFAIL) → non-retryable → start() raises.

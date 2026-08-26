@@ -1,3 +1,4 @@
+import signal
 import unittest
 from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock, patch
@@ -10,6 +11,7 @@ from jupyter_deploy_client_proxy.utils import (
     get_forwarded_request_headers,
     get_forwarded_response_headers,
     get_seconds_until_refresh,
+    get_shutdown_signals,
 )
 
 
@@ -89,6 +91,24 @@ class TestGetSecondsUntilRefresh(unittest.TestCase):
         mock_datetime.now.return_value = fixed
         self.assertEqual(get_seconds_until_refresh(fixed + timedelta(seconds=120), margin_seconds=15), 105.0)
         mock_datetime.now.assert_called_once_with(UTC)
+
+
+class TestGetShutdownSignals(unittest.TestCase):
+    def test_includes_sigterm(self) -> None:
+        self.assertIn(signal.SIGTERM, get_shutdown_signals())
+
+    def test_includes_sighup_when_available(self) -> None:
+        sighup = getattr(signal, "SIGHUP", None)
+        if sighup is not None:
+            self.assertIn(sighup, get_shutdown_signals())
+
+    def test_omits_signals_absent_on_platform(self) -> None:
+        # Simulate a platform (e.g. Windows) without SIGHUP.
+        class _FakeSignal:
+            SIGTERM = signal.SIGTERM
+
+        with patch("jupyter_deploy_client_proxy.utils.signal", _FakeSignal):
+            self.assertEqual(get_shutdown_signals(), [signal.SIGTERM])
 
 
 class TestDropFromRequestHeaders(unittest.TestCase):

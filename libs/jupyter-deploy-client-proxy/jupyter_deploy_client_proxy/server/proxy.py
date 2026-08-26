@@ -20,7 +20,7 @@ from jupyter_deploy_client_proxy.enums import ProxyState
 from jupyter_deploy_client_proxy.exceptions import ProxyError, TokenCommandError
 from jupyter_deploy_client_proxy.logger.factory import create_logger
 from jupyter_deploy_client_proxy.server.config import JupyterDeployClientProxyConfig
-from jupyter_deploy_client_proxy.server.state import write_proxy_status
+from jupyter_deploy_client_proxy.server.state import delete_proxy_status, write_proxy_status
 from jupyter_deploy_client_proxy.server.tls import build_pinned_ssl_context
 from jupyter_deploy_client_proxy.utils import (
     get_bundle_summary,
@@ -110,11 +110,14 @@ class JupyterDeployClientProxy:
         if self._session is not None:
             await self._session.close()
             self._session = None
-        # Publish a terminal state: STOPPED for a clean teardown, but keep FAILED if the
-        # proxy already errored out. `jd proxy status` also checks the process is alive.
-        if self._state is not ProxyState.FAILED:
-            self._state = ProxyState.STOPPED
-        await self.write_status_best_effort()
+        # Teardown removes the status file rather than publishing a terminal state: its
+        # absence is the "stopped" signal to `jd proxy status` (a cheap existence check
+        # across a run history) and closes the recycled-PID window. Best-effort — a failed
+        # delete is logged and swallowed so it never masks the real shutdown.
+        try:
+            await delete_proxy_status(self._config)
+        except OSError as e:
+            self._logger.error(f"failed to delete status file: {e}")
         self._logger.info("proxy stopped")
         await self._logger.close()
 

@@ -5,10 +5,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from jupyter_deploy_client_proxy.constants import STATUS_SCHEMA_VERSION
 from jupyter_deploy_client_proxy.credentials.bundle import ConnectBundle
 from jupyter_deploy_client_proxy.enums import ProxyState
 from jupyter_deploy_client_proxy.server.config import JupyterDeployClientProxyConfig
-from jupyter_deploy_client_proxy.server.state import write_proxy_status
+from jupyter_deploy_client_proxy.server.state import delete_proxy_status, write_proxy_status
 
 
 class _FakeAsyncFile:
@@ -50,10 +51,13 @@ class TestWriteProxyStatus(unittest.IsolatedAsyncioTestCase):
             bundle = ConnectBundle(host="203.0.113.7", port=443, expires_at=expires)
             await write_proxy_status(ProxyState.RUNNING, self._config(log_dir), bundle, port=51234)
             payload = json.loads((log_dir / "status.json").read_text())
+            self.assertEqual(payload["schema_version"], STATUS_SCHEMA_VERSION)
             self.assertEqual(payload["state"], "running")
             self.assertEqual(payload["port"], 51234)
             self.assertEqual(payload["expires_at"], expires.isoformat())
             self.assertIsInstance(payload["pid"], int)
+            # Recorded so a reader can rule out a recycled PID before signaling.
+            self.assertIsInstance(payload["process_created_at"], float)
 
     async def test_no_bundle_and_no_port(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -99,3 +103,25 @@ class TestWriteProxyStatus(unittest.IsolatedAsyncioTestCase):
             self.assertRaises(OSError),
         ):
             await write_proxy_status(ProxyState.RUNNING, self._config(Path(tmp) / "logs"), None)
+
+
+class TestDeleteProxyStatus(unittest.IsolatedAsyncioTestCase):
+    def _config(self, log_dir: Path | None) -> JupyterDeployClientProxyConfig:
+        return JupyterDeployClientProxyConfig(token_argv=["true"], log_dir=log_dir)
+
+    async def test_removes_existing_status_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            log_dir = Path(tmp) / "logs"
+            await write_proxy_status(ProxyState.RUNNING, self._config(log_dir), None, port=1)
+            self.assertTrue((log_dir / "status.json").exists())
+            await delete_proxy_status(self._config(log_dir))
+            self.assertFalse((log_dir / "status.json").exists())
+
+    async def test_absent_status_file_is_noop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            log_dir = Path(tmp) / "logs"
+            log_dir.mkdir()
+            await delete_proxy_status(self._config(log_dir))  # must not raise
+
+    async def test_no_log_dir_is_noop(self) -> None:
+        await delete_proxy_status(self._config(None))  # must not raise

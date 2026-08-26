@@ -7,6 +7,7 @@ All behavior lives in ``server/`` — this module is only the argv-to-Proxy glue
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import shlex
 from pathlib import Path
 from typing import Annotated
@@ -16,6 +17,7 @@ import typer
 from jupyter_deploy_client_proxy.constants import DEFAULT_REFRESH_MARGIN_SECONDS
 from jupyter_deploy_client_proxy.server.config import JupyterDeployClientProxyConfig, LogLevel
 from jupyter_deploy_client_proxy.server.proxy import JupyterDeployClientProxy
+from jupyter_deploy_client_proxy.utils import get_shutdown_signals
 
 app = typer.Typer(
     add_completion=False,
@@ -24,12 +26,20 @@ app = typer.Typer(
 
 
 async def _serve(proxy: JupyterDeployClientProxy) -> None:
-    # proxy.stop() flushes + closes the logger; the finally covers cancellation (Ctrl-C)
-    # at any point, including during start(), and runs inside the loop before it closes.
+    # proxy.stop() flushes + closes the logger and deletes the status file; the finally
+    # covers every exit path — SIGINT (KeyboardInterrupt), SIGTERM/SIGHUP (below), and an
+    # error during start() — so a stopped proxy always cleans up after itself.
+    loop = asyncio.get_running_loop()
+    stop_event = asyncio.Event()
+    for sig in get_shutdown_signals():
+        # add_signal_handler is unavailable off the main thread / on some platforms; the
+        # process still terminates on those signals, just without the graceful cleanup.
+        with contextlib.suppress(NotImplementedError, RuntimeError):
+            loop.add_signal_handler(sig, stop_event.set)
     try:
         port = await proxy.start()
         print(f"listening on http://127.0.0.1:{port}", flush=True)
-        await asyncio.Event().wait()  # run until cancelled / Ctrl-C
+        await stop_event.wait()  # run until a shutdown signal or Ctrl-C
     finally:
         await proxy.stop()
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import signal
 from collections.abc import Mapping
 from datetime import UTC, datetime
 
@@ -49,3 +50,12 @@ def get_seconds_until_refresh(expires_at: datetime, margin_seconds: float = DEFA
     """
     delta = (expires_at - datetime.now(UTC)).total_seconds() - margin_seconds
     return max(0.0, delta)
+
+
+def get_shutdown_signals() -> list[signal.Signals]:
+    """Termination signals that should trigger a graceful shutdown, like Ctrl-C (SIGINT) does via
+    KeyboardInterrupt: SIGTERM (jd proxy stop) and SIGHUP (controlling terminal closed).
+
+    Filters out signals absent on the current platform (e.g. SIGHUP on Windows).
+    """
+    return [s for s in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGHUP", None)) if s is not None]
