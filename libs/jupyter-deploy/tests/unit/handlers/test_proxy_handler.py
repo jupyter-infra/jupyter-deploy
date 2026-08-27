@@ -155,7 +155,7 @@ class TestLifecycleDelegation(unittest.TestCase):
         # The manager's token command drives `jd proxy connect-info` for this project.
         handler = _make_handler()
         token_command = handler._manager._token_command
-        self.assertIn("jupyter_deploy.cli.app", token_command)
+        self.assertIn("jupyter-deploy", token_command)
         self.assertIn("proxy", token_command)
         self.assertIn("connect-info", token_command)
         self.assertIn("--path", token_command)

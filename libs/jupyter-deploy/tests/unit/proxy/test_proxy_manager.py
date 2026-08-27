@@ -1,4 +1,5 @@
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -18,18 +19,47 @@ from jupyter_deploy.handlers.payloads import ProxyStatus
 from jupyter_deploy.proxy.proxy_manager import (
     ProxyManager,
     build_connect_info_token_command,
+    resolve_console_script,
 )
 
-_TOKEN_COMMAND = "/usr/bin/python -m jupyter_deploy.cli.app proxy connect-info --path /proj"
+_TOKEN_COMMAND = "jupyter-deploy proxy connect-info --path /proj"
+
+
+class TestResolveConsoleScript(unittest.TestCase):
+    def test_prefers_script_co_located_with_interpreter(self) -> None:
+        # Both console scripts live in the interpreter's bin dir; resolve against it so the
+        # re-exec is PATH-independent (the whole point of the fix).
+        bindir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, bindir, ignore_errors=True)
+        (bindir / "python").touch()
+        (bindir / "jupyter-deploy").touch()
+        with patch("jupyter_deploy.proxy.proxy_manager.sys.executable", str(bindir / "python")):
+            self.assertEqual(resolve_console_script("jupyter-deploy"), str(bindir / "jupyter-deploy"))
+
+    def test_falls_back_to_path_lookup(self) -> None:
+        # Not co-located (e.g. Windows .exe suffix) → PATH lookup.
+        with (
+            patch("jupyter_deploy.proxy.proxy_manager.sys.executable", "/nonexistent/bin/python"),
+            patch("jupyter_deploy.proxy.proxy_manager.shutil.which", return_value="/usr/bin/jupyter-deploy"),
+        ):
+            self.assertEqual(resolve_console_script("jupyter-deploy"), "/usr/bin/jupyter-deploy")
+
+    def test_falls_back_to_bare_name(self) -> None:
+        # Neither co-located nor on PATH → bare name (best effort; child does its own lookup).
+        with (
+            patch("jupyter_deploy.proxy.proxy_manager.sys.executable", "/nonexistent/bin/python"),
+            patch("jupyter_deploy.proxy.proxy_manager.shutil.which", return_value=None),
+        ):
+            self.assertEqual(resolve_console_script("jupyter-deploy"), "jupyter-deploy")
 
 
 class TestForProject(unittest.TestCase):
     def test_builds_token_command_from_project_path(self) -> None:
         token = build_connect_info_token_command(Path("/some/project"))
-        self.assertIn("jupyter_deploy.cli.app", token)
-        self.assertIn("proxy", token)
-        self.assertIn("connect-info", token)
-        self.assertIn("/some/project", token)
+        # Invokes the jupyter-deploy console script (absolute path), not a `python -m` module run.
+        self.assertIn("jupyter-deploy", token)
+        self.assertNotIn("-m jupyter_deploy", token)
+        self.assertIn("proxy connect-info --path /some/project", token)
         # SG-door mode is a deploy-time template setting, not a runtime flag on the proxy.
         self.assertNotIn("--any-ip", token)
         self.assertNotIn("--cidr", token)
@@ -143,7 +173,8 @@ class TestStart(_ManagerTestCase):
                 manager.start(detached=True)
 
             argv = mock_popen.call_args[0][0]
-            self.assertEqual(argv[0], "jupyter-deploy-client-proxy")
+            # argv[0] is the proxy console script resolved to an absolute path (or bare name fallback).
+            self.assertTrue(argv[0].endswith("jupyter-deploy-client-proxy"))
             self.assertEqual(argv[argv.index("--token-command") + 1], _TOKEN_COMMAND)
             # OS-assigned free port; log dir is the fresh instance dir.
             self.assertEqual(argv[argv.index("--listen-port") + 1], "0")

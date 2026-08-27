@@ -21,6 +21,7 @@ from jupyter_deploy.cli.organization_app import organization_app
 from jupyter_deploy.cli.pool_app import pool_app
 from jupyter_deploy.cli.progress_display import ProgressDisplayManager
 from jupyter_deploy.cli.projects_app import projects_app
+from jupyter_deploy.cli.proxy_app import proxy_app
 from jupyter_deploy.cli.servers_app import servers_app
 from jupyter_deploy.cli.simple_display import SimpleDisplayManager
 from jupyter_deploy.cli.teams_app import teams_app
@@ -78,6 +79,7 @@ class JupyterDeployCliRunner:
         self.app.add_typer(pool_app, name="pool")
         self.app.add_typer(history_app, name="history")
         self.app.add_typer(projects_app, name="projects")
+        self.app.add_typer(proxy_app, name="proxy")
 
     def _setup_basic_commands(self) -> None:
         """Register the basic commands."""
@@ -754,6 +756,10 @@ def open(
     server_name: Annotated[str | None, typer.Option("--server-name", help="Name of the server to open.")] = None,
     scope: Annotated[str, typer.Option("--scope", help="Scope or group the server belongs to.")] = "",
     project_dir: Annotated[Path | None, typer.Option("--path", "-p", help="Directory of the project to open.")] = None,
+    detached: Annotated[
+        bool,
+        typer.Option("--detached", "-d", help="Run the local proxy in the background."),
+    ] = False,
 ) -> None:
     """Open the app in your web browser.
 
@@ -764,15 +770,19 @@ def open(
 
     For a multi-apps template, open a specific app with: <jd open --server-name SERVER_NAME>.
     Pass --scope <scope>.
+
+    For templates that route traffic through the local proxy, <jd open> starts a local process
+    in the foreground; pass --detached or -d to run the proxy process in the background, and
+    use <jd proxy> commands to manage it afterwards.
     """
     console = Console()
     with handle_cli_errors(console), cmd_utils.project_dir(project_dir):
-        handler = OpenHandler()
+        handler = OpenHandler(display_manager=SimpleDisplayManager(console=console))
         url = None
         browser_failed = False
 
         try:
-            url = handler.open(name=server_name, scope=scope or None)
+            url = handler.open(name=server_name, scope=scope or None, detached=detached)
             console.print(f"\nOpening app at: {url}", style="green", soft_wrap=True)
         except UrlNotAvailableError as e:
             # URL not available - show helpful message but don't fail (project not deployed)
@@ -797,6 +807,10 @@ def open(
         # Exit with error code if browser failed
         if browser_failed:
             raise typer.Exit(code=1)
+
+        # Proxy-mode templates run the local proxy in the foreground unless -d was passed;
+        # block here until the user stops it (Ctrl-C). No-op for public-URL templates.
+        handler.wait()
 
 
 @runner.app.command()

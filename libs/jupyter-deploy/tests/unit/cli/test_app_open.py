@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 from jupyter_deploy.cli.app import runner as app_runner
 from jupyter_deploy.exceptions import (
     CommandNotImplementedError,
+    DetachedNotSupportedError,
     OpenWebBrowserError,
     UrlNotAvailableError,
     UrlNotSecureError,
@@ -55,7 +56,7 @@ class TestOpenCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with(None)
-        mock_open_fns["open"].assert_called_once_with(name=None, scope=None)
+        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=False)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -69,7 +70,7 @@ class TestOpenCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with(Path("/custom/path"))
-        mock_open_fns["open"].assert_called_once_with(name=None, scope=None)
+        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=False)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -87,7 +88,7 @@ class TestOpenCommand(unittest.TestCase):
         result = runner.invoke(app_runner.app, ["open"])
 
         self.assertEqual(result.exit_code, 1)
-        mock_open_fns["open"].assert_called_once_with(name=None, scope=None)
+        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=False)
         self.assertIn("Failed to open URL in browser", result.output)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
@@ -282,7 +283,7 @@ class TestOpenCommand(unittest.TestCase):
         result = runner.invoke(app_runner.app, ["open"])
 
         self.assertNotEqual(result.exit_code, 0)
-        mock_open_fns["open"].assert_called_once_with(name=None, scope=None)
+        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=False)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -380,7 +381,7 @@ class TestOpenCommand(unittest.TestCase):
         result = runner.invoke(app_runner.app, ["open", "--server-name", "my-ws"])
 
         self.assertEqual(result.exit_code, 0)
-        mock_open_fns["open"].assert_called_once_with(name="my-ws", scope=None)
+        mock_open_fns["open"].assert_called_once_with(name="my-ws", scope=None, detached=False)
         self.assertIn("Opening app at:", result.output)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
@@ -397,7 +398,7 @@ class TestOpenCommand(unittest.TestCase):
         result = runner.invoke(app_runner.app, ["open", "--server-name", "my-ws", "--scope", "team-a"])
 
         self.assertEqual(result.exit_code, 0)
-        mock_open_fns["open"].assert_called_once_with(name="my-ws", scope="team-a")
+        mock_open_fns["open"].assert_called_once_with(name="my-ws", scope="team-a", detached=False)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -412,7 +413,48 @@ class TestOpenCommand(unittest.TestCase):
         result = runner.invoke(app_runner.app, ["open", "--scope", "team-a"])
 
         self.assertEqual(result.exit_code, 0)
-        mock_open_fns["open"].assert_called_once_with(name=None, scope="team-a")
+        mock_open_fns["open"].assert_called_once_with(name=None, scope="team-a", detached=False)
+
+    # --- Detached flag + wait() (proxy delegation lives in OpenHandler) ---
+
+    @patch("jupyter_deploy.cli.app.OpenHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_open_command_passes_detached_flag(self, mock_project_ctx: Mock, mock_open_handler_cls: Mock) -> None:
+        """`jd open -d` threads detached=True into the handler (proxy templates run in the background)."""
+        mock_open_handler_instance, mock_open_fns = self.get_mock_open_handler()
+        mock_open_handler_cls.return_value = mock_open_handler_instance
+
+        result = CliRunner().invoke(app_runner.app, ["open", "-d"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=True)
+
+    @patch("jupyter_deploy.cli.app.OpenHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_open_command_calls_wait(self, mock_project_ctx: Mock, mock_open_handler_cls: Mock) -> None:
+        """open() blocks on a foreground proxy via handler.wait() (no-op for public-URL templates)."""
+        mock_open_handler_instance, _ = self.get_mock_open_handler()
+        mock_open_handler_cls.return_value = mock_open_handler_instance
+
+        result = CliRunner().invoke(app_runner.app, ["open"])
+
+        self.assertEqual(result.exit_code, 0)
+        mock_open_handler_instance.wait.assert_called_once_with()
+
+    @patch("jupyter_deploy.cli.app.OpenHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_open_command_surfaces_detached_not_supported(
+        self, mock_project_ctx: Mock, mock_open_handler_cls: Mock
+    ) -> None:
+        """A DetachedNotSupportedError from the handler (open -d on a URL template) exits non-zero cleanly."""
+        mock_open_handler_instance, mock_open_fns = self.get_mock_open_handler()
+        mock_open_fns["open"].side_effect = DetachedNotSupportedError()
+        mock_open_handler_cls.return_value = mock_open_handler_instance
+
+        result = CliRunner().invoke(app_runner.app, ["open", "-d"])
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("--detached", result.output)
 
     # --- Multi-tenant troubleshooting hints ---
 

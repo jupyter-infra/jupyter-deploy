@@ -25,6 +25,7 @@ from __future__ import annotations
 import contextlib
 import datetime
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -56,6 +57,10 @@ _LOOPBACK_HOSTS = ("127.0.0.1", "localhost")
 # The console script installed by the [proxy] extra (client-proxy package's [project.scripts]).
 PROXY_CONSOLE_SCRIPT = "jupyter-deploy-client-proxy"
 
+# The CLI's own console script — the proxy re-execs it (with `proxy connect-info`) to refresh
+# credentials. Resolved from PATH like PROXY_CONSOLE_SCRIPT; both are co-installed by [proxy].
+CLI_CONSOLE_SCRIPT = "jupyter-deploy"
+
 # Default target for single-app templates (e.g. aws:ec2:jupyterlab).
 DEFAULT_TARGET_KIND = "server"
 DEFAULT_TARGET_NAME = "default"
@@ -81,17 +86,31 @@ def _now_timestamp() -> str:
     return datetime.datetime.now().strftime("%Y%m%d-%H%M%S.%f")[:-3]
 
 
+def resolve_console_script(name: str) -> str:
+    """Return an absolute path to a console script installed with the running interpreter.
+
+    Both jupyter-deploy console scripts (``jupyter-deploy``, ``jupyter-deploy-client-proxy``)
+    are installed into the same ``bin`` directory as the interpreter that runs ``jd``. Resolving
+    against ``sys.executable`` keeps the proxy launch and its token re-exec working regardless of
+    the child process's ``PATH`` — which a detached proxy, or a `.venv/bin/jd`-by-absolute-path
+    invocation from an unactivated shell, may not inherit. Falls back to a ``PATH`` lookup (covers
+    the Windows ``.exe`` suffix), then the bare name as a last resort.
+    """
+    candidate = Path(sys.executable).parent / name
+    if candidate.exists():
+        return str(candidate)
+    return shutil.which(name) or name
+
+
 def build_connect_info_token_command(project_path: Path) -> str:
     """Return the shell-safe command the proxy re-execs to refresh its bundle.
 
     Pins ``--path`` to this project so the proxy keeps working if the user later changes
-    directories. Uses the current interpreter's module entry point rather than the bare ``jd``
-    script so it resolves regardless of how the CLI was invoked.
+    directories. Invokes the ``jupyter-deploy`` console script by absolute path (see
+    :func:`resolve_console_script`) so the re-exec never depends on the proxy's ``PATH``.
     """
     parts = [
-        sys.executable,
-        "-m",
-        "jupyter_deploy.cli.app",
+        resolve_console_script(CLI_CONSOLE_SCRIPT),
         "proxy",
         "connect-info",
         "--path",
@@ -194,7 +213,7 @@ class ProxyManager:
     def _proxy_argv(self, instance_dir: Path) -> list[str]:
         """Build the client-proxy invocation for the given instance directory."""
         return [
-            PROXY_CONSOLE_SCRIPT,
+            resolve_console_script(PROXY_CONSOLE_SCRIPT),
             "--token-command",
             self._token_command,
             "--listen-port",
