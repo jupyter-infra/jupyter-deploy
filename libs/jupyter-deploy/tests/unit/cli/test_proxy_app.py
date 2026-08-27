@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 from unittest.mock import Mock, patch
 
@@ -13,6 +14,18 @@ from jupyter_deploy.exceptions import (
 )
 from jupyter_deploy.handlers.payloads import ProxyConnectBundle, ProxyStatus
 
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
+
+
+def _plain(text: str) -> str:
+    """Normalize CLI output for substring checks.
+
+    CI forces color, so Rich wraps + styles help/messages: it splits option names across
+    style spans (``--path`` → ``-\x1b[0m\x1b[1;36m-path``) and line-wraps long hints. Strip
+    ANSI escapes and collapse whitespace so a plain substring assertion is deterministic.
+    """
+    return re.sub(r"\s+", " ", _ANSI.sub("", text))
+
 
 class TestProxyApp(unittest.TestCase):
     def test_help_lists_subcommands(self) -> None:
@@ -20,7 +33,7 @@ class TestProxyApp(unittest.TestCase):
         result = runner.invoke(proxy_app, ["--help"])
         self.assertEqual(result.exit_code, 0)
         for cmd in ["connect-info", "start", "open", "stop", "status", "show"]:
-            self.assertIn(cmd, result.stdout)
+            self.assertIn(cmd, _plain(result.stdout))
 
     def test_no_arg_defaults_to_help(self) -> None:
         runner = CliRunner()
@@ -41,7 +54,7 @@ class TestStartCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         handler.start.assert_called_once_with(detached=True)
-        self.assertIn("51000", result.stdout)
+        self.assertIn("51000", _plain(result.stdout))
 
     def test_no_detached_flag(self) -> None:
         # `jd proxy start` is always detached; there is no --detached/-d flag to accept.
@@ -51,8 +64,8 @@ class TestStartCommand(unittest.TestCase):
     def test_exposes_only_path_flag(self) -> None:
         result = CliRunner().invoke(proxy_app, ["start", "--help"])
         for knob in ["--listen-port", "--log-dir", "--log-level", "--refresh-margin-seconds", "--cidr", "--any-ip"]:
-            self.assertNotIn(knob, result.stdout)
-        self.assertIn("--path", result.stdout)
+            self.assertNotIn(knob, _plain(result.stdout))
+        self.assertIn("--path", _plain(result.stdout))
 
     @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -65,7 +78,7 @@ class TestStartCommand(unittest.TestCase):
         result = CliRunner().invoke(proxy_app, ["start"])
 
         self.assertEqual(result.exit_code, 1)
-        self.assertIn("pip install 'jupyter-deploy[proxy]'", result.stdout)
+        self.assertIn("pip install 'jupyter-deploy[proxy]'", _plain(result.stdout))
 
     @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -78,10 +91,10 @@ class TestStartCommand(unittest.TestCase):
         result = CliRunner().invoke(proxy_app, ["start"])
 
         self.assertNotEqual(result.exit_code, 0)
-        self.assertIn("already running", result.stdout)
+        self.assertIn("already running", _plain(result.stdout))
         # points the user at the alternatives instead of clobbering
-        self.assertIn("jd proxy stop", result.stdout)
-        self.assertIn("jd proxy open", result.stdout)
+        self.assertIn("jd proxy stop", _plain(result.stdout))
+        self.assertIn("jd proxy open", _plain(result.stdout))
 
     @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -172,8 +185,8 @@ class TestConnectInfoCommand(unittest.TestCase):
         # SG-door mode is a deploy-time template setting (restrict_origin_ip); no runtime knobs.
         runner = CliRunner()
         result = runner.invoke(proxy_app, ["connect-info", "--help"])
-        self.assertNotIn("--any-ip", result.stdout)
-        self.assertNotIn("--cidr", result.stdout)
+        self.assertNotIn("--any-ip", _plain(result.stdout))
+        self.assertNotIn("--cidr", _plain(result.stdout))
 
     @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -200,7 +213,7 @@ class TestStopCommand(unittest.TestCase):
         result = runner.invoke(proxy_app, ["stop"])
 
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("4321", result.stdout)
+        self.assertIn("4321", _plain(result.stdout))
 
     @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -213,7 +226,7 @@ class TestStopCommand(unittest.TestCase):
         result = CliRunner().invoke(proxy_app, ["stop"])
 
         self.assertNotEqual(result.exit_code, 0)
-        self.assertIn("No running proxy", result.stdout)
+        self.assertIn("No running proxy", _plain(result.stdout))
 
     @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -226,9 +239,9 @@ class TestStopCommand(unittest.TestCase):
         result = CliRunner().invoke(proxy_app, ["stop"])
 
         self.assertNotEqual(result.exit_code, 0)
-        self.assertIn("could not confirm", result.stdout)
+        self.assertIn("could not confirm", _plain(result.stdout))
         # points the user at the stale directory for manual cleanup
-        self.assertIn("20260610", result.stdout)
+        self.assertIn("20260610", _plain(result.stdout))
 
     @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -255,8 +268,8 @@ class TestStatusCommand(unittest.TestCase):
         result = runner.invoke(proxy_app, ["status"])
 
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("Proxy status", result.stdout)
-        self.assertIn("running", result.stdout)
+        self.assertIn("Proxy status", _plain(result.stdout))
+        self.assertIn("running", _plain(result.stdout))
 
     @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -270,7 +283,7 @@ class TestStatusCommand(unittest.TestCase):
         runner = CliRunner()
         result = runner.invoke(proxy_app, ["status"])
         self.assertEqual(result.exit_code, 1)
-        self.assertIn("jd proxy start", result.stdout)
+        self.assertIn("jd proxy start", _plain(result.stdout))
 
     @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -318,7 +331,7 @@ class TestShowCommand(unittest.TestCase):
         runner = CliRunner()
         result = runner.invoke(proxy_app, ["show"])
         self.assertEqual(result.exit_code, 1)
-        self.assertIn("jd proxy start", result.stdout)
+        self.assertIn("jd proxy start", _plain(result.stdout))
 
     @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
