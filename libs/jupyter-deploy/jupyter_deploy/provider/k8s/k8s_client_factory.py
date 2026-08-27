@@ -36,10 +36,10 @@ class K8sClientFactory:
         configuration.host = endpoint
         configuration.ssl_ca_cert = ca_cert_path
         configuration.api_key_prefix["BearerToken"] = "Bearer"
-        configuration.api_key["BearerToken"] = get_eks_bearer_token(cluster_name, region)
+        configuration.api_key["BearerToken"] = get_eks_bearer_token(binding_id=cluster_name, region=region)
 
         def _refresh_token(cfg: client.Configuration) -> None:
-            cfg.api_key["BearerToken"] = get_eks_bearer_token(cluster_name, region)
+            cfg.api_key["BearerToken"] = get_eks_bearer_token(binding_id=cluster_name, region=region)
 
         configuration.refresh_api_key_hook = _refresh_token
 
