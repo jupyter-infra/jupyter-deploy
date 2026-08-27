@@ -1,0 +1,126 @@
+# Terraform provider configuration
+terraform {
+  required_providers {}
+}
+
+provider "aws" {
+  region = var.region
+}
+
+data "aws_region" "current" {}
+data "aws_partition" "current" {}
+data "aws_caller_identity" "current" {}
+resource "random_id" "postfix" {
+  byte_length = 4
+}
+
+locals {
+  template_name    = "tf-aws-ec2-jupyterlab"
+  template_version = "0.1.0"
+
+  default_tags = {
+    Source       = "jupyter-deploy"
+    Template     = local.template_name
+    Version      = local.template_version
+    DeploymentId = random_id.postfix.hex
+  }
+  combined_tags = merge(
+    local.default_tags,
+    var.custom_tags,
+  )
+  doc_postfix = random_id.postfix.hex
+
+  # ARNs authorized to reach JupyterLab through the auth sidecar. Defaults to the
+  # deploying identity; extra ARNs can be added via var.auth_arn_allowlist.
+  auth_arn_allowlist = distinct(concat([data.aws_caller_identity.current.arn], var.auth_arn_allowlist))
+}
+
+# Network module for VPC, subnet, security group (no EIP / Route53 — the proxy
+# resolves the instance's public IP live and pins the self-signed cert, not the address)
+module "network" {
+  source              = "./modules/network"
+  region              = var.region
+  combined_tags       = local.combined_tags
+  postfix             = local.doc_postfix
+  has_efs_filesystems = length(var.additional_efs_mounts) > 0
+}
+
+# IAM role module for instance profile and policies
+module "ec2_iam_role" {
+  source              = "./modules/ec2_iam_role"
+  region              = var.region
+  combined_tags       = local.combined_tags
+  postfix             = local.doc_postfix
+  iam_role_prefix     = var.iam_role_prefix
+  has_efs_filesystems = length(var.additional_efs_mounts) > 0
+}
+
+# Use the AMI module to select the appropriate AMI based on instance type
+module "ami_al2023" {
+  source        = "./modules/ami_al2023"
+  instance_type = var.instance_type
+}
+
+
+# EC2 instance module
+module "ec2_instance" {
+  source                  = "./modules/ec2_instance"
+  ami_id                  = coalesce(var.ami_id, module.ami_al2023.ami_id)
+  instance_type           = var.instance_type
+  subnet_id               = module.network.subnet_ids[0]
+  security_group_id       = module.network.security_group_id
+  combined_tags           = local.combined_tags
+  postfix                 = local.doc_postfix
+  region                  = var.region
+  min_root_volume_size_gb = var.min_root_volume_size_gb
+  instance_profile_name   = module.ec2_iam_role.instance_profile_name
+}
+
+# Query the selected subnet to get its AZ (known at plan time, avoids EBS volume replacement)
+data "aws_subnet" "selected" {
+  id = module.ec2_instance.subnet_id
+}
+
+# Volumes module for EBS/EFS volumes
+module "volumes" {
+  source                = "./modules/volumes"
+  region                = var.region
+  combined_tags         = local.combined_tags
+  postfix               = local.doc_postfix
+  volume_size_gb        = var.volume_size_gb
+  volume_type           = var.volume_type
+  additional_ebs_mounts = var.additional_ebs_mounts
+  additional_efs_mounts = var.additional_efs_mounts
+  availability_zone     = data.aws_subnet.selected.availability_zone
+  instance_id           = module.ec2_instance.id
+  efs_security_group_id = module.network.efs_security_group_id
+}
+
+# S3 bucket module for storing deployment scripts and service configuration files.
+# The SSM document that configures the instance pulls the script from this bucket.
+# This is necessary because the SSM document size must be below 65kB.
+# Note: cloudinit.sh and cloudinit-volumes.sh remain embedded in SSM for visibility
+module "s3_bucket" {
+  source             = "./modules/s3_bucket"
+  bucket_name_prefix = "${var.s3_bucket_prefix}-${local.doc_postfix}"
+  force_destroy      = true
+  script_files       = local.all_script_files
+  combined_tags      = local.combined_tags
+}
+
+# 'services.tf' configures the EC2 instance using the modules above to:
+# 1. create a SSM-document for the cloudinit script
+# 2. upload configurations files in ../services to the EC2 instance
+#   2.1. cloudinit, volume init
+#   2.2. docker-compose, dockerfiles, config files and scripts to /opt/docker
+#   2.3. command scripts in ../services/commands to /usr/local/bin
+# 3. create a SSM-instance association to run it automatically
+
+# 'commands.tf' configure the jupyter-deploy commands (e.g. 'jd host status'):
+# 1. create SSM-documents for each command
+# 2. referencing the file locations within the EC2 instance root dir
+# as uploaded 'by services.tf'
+
+# 'waiter.tf' creates a null_resource to await the full setup of the EC2 instance:
+# 1. successful execution of the cloudinit script
+# 2. successful start of the docker services (jupyter, traefik, auth sidecar)

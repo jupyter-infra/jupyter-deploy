@@ -23,11 +23,6 @@ variable "instance_type" {
   type        = string
 }
 
-variable "key_pair_name" {
-  description = "The name of the Key Pair to use for the EC2 instance."
-  type        = string
-}
-
 variable "subnet_id" {
   description = "Subnet ID where the instance will be placed."
   type        = string
