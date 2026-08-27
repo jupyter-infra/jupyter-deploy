@@ -1,0 +1,145 @@
+[project]
+name = "jupyter-deploy-tf-aws-ec2-jupyterlab"
+version = "0.1.0"
+description = "Terraform template to deploy a single-user JupyterLab on an AWS EC2 instance, accessed via a local proxy with AWS-identity auth."
+readme = "README.md"
+authors = [
+    { name = "Jonathan Guinegagne", email = "jggg@amazon.com" },
+    { name = "Gaurav Bhanderig", email = "bgrv@amazon.com" },
+    { name = "Michael Chin", email = "chnmch@amazon.com" },
+    { name = "Andrii Ieroshenko", email = "aieroshe@amazon.com" },
+]
+requires-python = ">=3.12"
+dependencies = [
+    "boto3",
+    "boto3-stubs",
+    "mypy-boto3-ec2",
+    "mypy-boto3-ecr",
+    "mypy-boto3-eks",
+    "mypy-boto3-elbv2",
+    "mypy-boto3-inspector2",
+    "mypy-boto3-resourcegroupstaggingapi",
+    "mypy-boto3-ssm",
+    "mypy-boto3-s3",
+    "mypy-boto3-dynamodb",
+    "mypy-boto3-sts",
+    "mypy-boto3-secretsmanager",
+]
+
+[project.license]
+file = "LICENSE"
+
+[project.entry-points."jupyter_deploy.terraform_templates"]
+aws_ec2_jupyterlab = "jupyter_deploy_tf_aws_ec2_jupyterlab.template:TEMPLATE_PATH"
+
+[project.urls]
+Homepage = "https://github.com/jupyter-infra/jupyter-deploy"
+github = "https://github.com/jupyter-infra/jupyter-deploy/tree/main/libs/jupyter-deploy-tf-aws-ec2-jupyterlab"
+
+[build-system]
+requires = [
+    "hatchling",
+]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "jupyter_deploy_tf_aws_ec2_jupyterlab",
+]
+
+[tool.mypy]
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+mypy_path = [
+    ".",
+]
+packages = [
+    "jupyter_deploy_tf_aws_ec2_jupyterlab",
+]
+
+[tool.ruff]
+extend-exclude = [
+    ".conda/",
+]
+line-length = 120
+
+[tool.ruff.lint]
+preview = true
+select = [
+    "E",
+    "F",
+    "UP",
+    "B",
+    "SIM",
+    "I",
+    "PLC0415",
+]
+ignore = [
+    "UP042",
+    "UP046",
+    "UP047",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "PLC0415",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+docstring-code-format = true
+docstring-code-line-length = 40
+
+[tool.pytest.ini_options]
+addopts = "--cov=jupyter_deploy_tf_aws_ec2_jupyterlab --cov-report=term-missing --cov-report=xml --cov-report=html"
+testpaths = [
+    "tests/unit",
+]
+markers = [
+    "e2e: End-to-end tests using playwright (deselect with '-m \"not e2e\"')",
+    "cli: Non-mutating CLI tests for release validation (select with '-m cli')",
+]
+
+[tool.coverage.run]
+source = [
+    "jupyter_deploy_tf_aws_ec2_jupyterlab",
+]
+omit = [
+    "tests/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "raise ImportError",
+]
+fail_under = 80
+show_missing = true
+
+[tool.uv.sources.jupyter-deploy]
+workspace = true
+
+[tool.uv.sources.pytest-jupyter-deploy]
+workspace = true
+
+[dependency-groups]
+dev = [
+    "jupyter-deploy",
+    "pytest-jupyter-deploy[ui]",
+    "mypy>=1.15.0",
+    "pytest>=8.3.5",
+    "pytest-cov>=6.1.1",
+    "python-hcl2>=7.2.1",
+    "pyyaml>=6.0.2",
+    "ruff>=0.11.8",
+    "types-pyyaml>=6.0.12.20250516",
+    "yamllint>=1.35.0",
+]
