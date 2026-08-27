@@ -5,11 +5,13 @@ from contextlib import contextmanager
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 
 from jupyter_deploy.exceptions import (
     CommandNotImplementedError,
     ComponentNotFoundError,
     ConfigurationError,
+    DetachedNotSupportedError,
     DownAutoApproveRequiredError,
     HostCommandInstructionError,
     ImageNotFoundError,
@@ -33,6 +35,7 @@ from jupyter_deploy.exceptions import (
     LogCleanupError,
     LogNotFoundError,
     ManifestNotFoundError,
+    NoProxyFoundError,
     OpenWebBrowserError,
     OutputNotFoundError,
     ProjectIdNotAvailableError,
@@ -41,6 +44,10 @@ from jupyter_deploy.exceptions import (
     ProjectStoreNotFoundError,
     ProjectStoreReadError,
     ProviderPermissionError,
+    ProxyAlreadyRunningError,
+    ProxyIdentityUnconfirmedError,
+    ProxyNotInstalledError,
+    ProxyStartError,
     ReadConfigurationError,
     ReadManifestError,
     ResourceNameRequiredError,
@@ -115,6 +122,41 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         if e.original_message:
             console.line()
             console.print(e.original_message, style="dim")
+        raise typer.Exit(code=1) from None
+
+    except ProxyNotInstalledError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        # escape(): "[proxy]" would otherwise be parsed as Rich markup.
+        console.print(f":bulb: Install the proxy extra: [bold cyan]{escape("pip install 'jupyter-deploy[proxy]'")}[/]")
+        raise typer.Exit(code=1) from None
+
+    except NoProxyFoundError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        console.print(":bulb: Start one first: [bold cyan]jd proxy start[/]")
+        raise typer.Exit(code=1) from None
+
+    except ProxyAlreadyRunningError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        console.print(":bulb: Stop it first: [bold cyan]jd proxy stop[/]")
+        console.print(":bulb: Or open a browser tab against it: [bold cyan]jd proxy open[/]")
+        raise typer.Exit(code=1) from None
+
+    except ProxyIdentityUnconfirmedError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        if e.log_dirs:
+            console.line()
+            dirs = ", ".join(f"[bold cyan]{d}[/]" for d in e.log_dirs)
+            console.print(f":bulb: If it's stale, remove its directory manually: {dirs}")
+        raise typer.Exit(code=1) from None
+
+    except ProxyStartError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        if e.log_dir:
+            console.line()
+            console.print(f":bulb: Check the proxy logs at: [bold cyan]{e.log_dir}[/]")
         raise typer.Exit(code=1) from None
 
     except ToolRequiredError as e:
@@ -275,6 +317,10 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         console.line()
         console.print(f"URL: [bold cyan]{e.url}[/]")
         console.print(":bulb: Copy the URL and open it manually in your browser.")
+        raise typer.Exit(code=1) from None
+
+    except DetachedNotSupportedError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
         raise typer.Exit(code=1) from None
 
     except (ReadConfigurationError, WriteConfigurationError) as e:

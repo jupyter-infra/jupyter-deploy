@@ -24,10 +24,13 @@ from jupyter_deploy.exceptions import (
     LogNotFoundError,
     ManifestNotADictError,
     ManifestNotFoundError,
+    NoProxyFoundError,
     OutputNotFoundError,
     ProjectIdNotAvailableError,
     ProjectStoreAccessConfigurationError,
     ProjectStoreNotFoundError,
+    ProxyNotInstalledError,
+    ProxyStartError,
     ReadConfigurationError,
     ReadManifestError,
     SupervisedExecutionError,
@@ -200,6 +203,31 @@ class TestToolErrors(unittest.TestCase):
         self.assertEqual(error.installation_url, "https://aws.amazon.com/cli/")
         self.assertEqual(error.error_msg, "Command not found: aws")
         self.assertIn("aws", str(error))
+        self.assertIsInstance(error, JupyterDeployError)
+        self.assertIsInstance(error, RuntimeError)
+
+    def test_proxy_not_installed_error(self) -> None:
+        """Test ProxyNotInstalledError carries the console script name."""
+        error = ProxyNotInstalledError("jupyter-deploy-client-proxy")
+        self.assertEqual(error.console_script, "jupyter-deploy-client-proxy")
+        self.assertIn("jupyter-deploy-client-proxy", str(error))
+        self.assertIsInstance(error, JupyterDeployError)
+        self.assertIsInstance(error, RuntimeError)
+
+    def test_no_proxy_found_error(self) -> None:
+        """Test NoProxyFoundError default + custom message."""
+        error = NoProxyFoundError()
+        self.assertIn("No running proxy", str(error))
+        self.assertIsInstance(error, JupyterDeployError)
+        self.assertIsInstance(error, RuntimeError)
+        self.assertEqual(str(NoProxyFoundError("custom")), "custom")
+
+    def test_proxy_start_error(self) -> None:
+        """Test ProxyStartError carries an optional log dir."""
+        error = ProxyStartError("proxy exited early", log_dir="/tmp/.jd-proxy/server/default/ts")
+        self.assertIn("proxy exited early", str(error))
+        self.assertEqual(error.log_dir, "/tmp/.jd-proxy/server/default/ts")
+        self.assertIsNone(ProxyStartError("x").log_dir)
         self.assertIsInstance(error, JupyterDeployError)
         self.assertIsInstance(error, RuntimeError)
 

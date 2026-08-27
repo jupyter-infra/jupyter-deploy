@@ -189,6 +189,18 @@ class OpenWebBrowserError(JupyterDeployError, RuntimeError):
         super().__init__(message)
 
 
+class DetachedNotSupportedError(JupyterDeployError, ValueError):
+    """Raised when `jd open --detached` is used on a template not reached through the local proxy.
+
+    ``--detached`` backgrounds the local proxy process, which only exists for proxy-mode
+    templates; on a public-URL template it is meaningless, so `jd open` rejects it rather than
+    silently ignoring it.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("--detached is only supported for templates reached through the local proxy.")
+
+
 class ConfigurationError(JupyterDeployError, RuntimeError):
     """Base exception for configuration errors."""
 
@@ -535,6 +547,85 @@ class ToolRequiredError(JupyterDeployError, RuntimeError):
         self.installation_url = installation_url
         self.error_msg = error_msg
         super().__init__(f"This operation requires {tool_name} to be installed in your system.")
+
+
+class ProxyNotInstalledError(JupyterDeployError, RuntimeError):
+    """Raised when the local client-proxy console script is not installed.
+
+    The proxy ships in an optional install (``jupyter-deploy[proxy]``); the CLI only shells
+    out to its console script, so this surfaces when that script is absent from PATH. The
+    install hint is a presentation concern owned by the CLI error handler.
+
+    Attributes:
+        console_script: The console-script name that could not be found.
+    """
+
+    def __init__(self, console_script: str) -> None:
+        self.console_script = console_script
+        super().__init__(f"'{console_script}' is not installed.")
+
+
+class NoProxyFoundError(JupyterDeployError, RuntimeError):
+    """Raised when no confirmed running proxy is found for the requested target.
+
+    A proxy counts only when its process identity is confirmed: the status file must exist
+    (a clean shutdown deletes it) and the live PID's creation time must match the recorded
+    one. A dead PID, a recycled/foreign PID, or an unverifiable record all read as "no proxy".
+    """
+
+    def __init__(self, message: str = "No running proxy found for this project.") -> None:
+        super().__init__(message)
+
+
+class ProxyStartError(JupyterDeployError, RuntimeError):
+    """Raised when a detached proxy fails to come up (exits early or never binds).
+
+    Attributes:
+        log_dir: Directory holding the failed proxy's console + rotating logs, if known.
+    """
+
+    def __init__(self, message: str, log_dir: str | None = None) -> None:
+        self.log_dir = log_dir
+        super().__init__(message)
+
+
+class ProxyAlreadyRunningError(JupyterDeployError, RuntimeError):
+    """Raised by ``jd proxy start`` when a confirmed proxy is already running for the project.
+
+    ``jd proxy start`` is an explicit start and never clobbers a live proxy (another terminal or
+    browser tab may be using it); the user stops it first or opens a tab against it. (``jd open``
+    owns the lifecycle and replaces instead — it does not raise this.)
+
+    Attributes:
+        pid: PID of the running proxy.
+        port: Loopback port it is listening on, if known.
+    """
+
+    def __init__(self, pid: int, port: int | None = None) -> None:
+        self.pid = pid
+        self.port = port
+        where = f" on http://127.0.0.1:{port}" if port else ""
+        super().__init__(f"A proxy is already running for this project (pid {pid}){where}.")
+
+
+class ProxyIdentityUnconfirmedError(JupyterDeployError, RuntimeError):
+    """Raised by ``jd proxy stop`` when a live proxy record's identity cannot be confirmed.
+
+    The recorded PID is alive but its creation time does not match (or cannot be read) — likely
+    a recycled/foreign PID, or a status file predating the identity field. We refuse to signal
+    it (killing a reused PID could terminate an unrelated process), so stop surfaces this rather
+    than silently doing nothing or risking the wrong process.
+
+    Attributes:
+        log_dirs: Directories of the unconfirmed proxy record(s), for manual cleanup.
+    """
+
+    def __init__(self, log_dirs: list[str] | None = None) -> None:
+        self.log_dirs = log_dirs or []
+        super().__init__(
+            "Found a running proxy record, but could not confirm the process is this project's "
+            "proxy (its PID may have been recycled)."
+        )
 
 
 # ============================================================================
