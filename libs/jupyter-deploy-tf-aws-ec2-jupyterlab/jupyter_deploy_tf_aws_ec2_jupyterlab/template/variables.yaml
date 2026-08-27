@@ -11,7 +11,7 @@ overrides:
   # ami_id: null
   # auth_arn_allowlist: []
   # custom_tags: {}
-  # iam_role_prefix: Jupyter-deploy-ec2-jupyterlab
+  # iam_role_prefix: Jupyter-deploy-jupyterlab
   # instance_type: t3.medium
   # jupyter_package_manager: uv
   # log_files_retention_count: 10

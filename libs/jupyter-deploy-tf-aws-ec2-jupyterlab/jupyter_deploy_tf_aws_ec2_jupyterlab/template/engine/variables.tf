@@ -100,15 +100,14 @@ variable "iam_role_prefix" {
 
     Terraform will assign the postfix to ensure there is no name collision in your AWS account.
 
-    Recommended: Jupyter-deploy-ec2-base
+    Recommended: Jupyter-deploy-jupyterlab
   EOT
   type        = string
   validation {
-    condition     = length(var.iam_role_prefix) <= 37
-    error_message = <<-EOT
-      Max length for prefix is 38.
-      Input at most 37 chars to account for the hyphen postfix.
-    EOT
+    # The role name_prefix is "${iam_role_prefix}-${postfix}-" and IAM caps name_prefix at 38.
+    # postfix is an 8-char hex id, so the prefix itself must be <= 28 (28 + 1 + 8 + 1 = 38).
+    condition     = length(var.iam_role_prefix) <= 28
+    error_message = "The iam_role_prefix must be at most 28 characters (an 8-char deployment id and two hyphens are appended, and the IAM name_prefix cap is 38)."
   }
 }
 
