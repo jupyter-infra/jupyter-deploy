@@ -79,7 +79,9 @@ def start(
         with display.spinner("Starting the local proxy …"):
             status = handler.start(detached=True)
         console.print(f"Proxy listening on [bold cyan]http://127.0.0.1:{status.port}[/]")
-        console.print(":bulb: Stop it with: [bold cyan]jd proxy stop[/]")
+        console.line()
+        console.print(":bulb: To open your app, run: [bold cyan]jd proxy open[/]")
+        console.print(":bulb: To stop the proxy, run: [bold cyan]jd proxy stop[/]")
 
 
 @proxy_app.command("open")
