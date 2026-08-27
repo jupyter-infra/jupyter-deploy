@@ -1,0 +1,186 @@
+services:
+  jupyter:
+    user: "$${SERVICE_UID}:$${SERVICE_GID}"
+    container_name: jupyter
+    group_add:
+      - "$${DOCKER_GID}"
+    build:
+      context: .
+      dockerfile: dockerfile.jupyter
+      args:
+        - SERVICE_UID=$${SERVICE_UID}
+        - SERVICE_GID=$${SERVICE_GID}
+        - DOCKER_GID=$${DOCKER_GID}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/lab/favicon.ico"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.jupyter"
+    networks:
+      - web
+    environment:
+      - AWS_REGION=${aws_region}
+    depends_on:
+      - fluent-bit
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jupyter.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.jupyter.entrypoints=websecure"
+      - "traefik.http.routers.jupyter.tls=true"
+      - "traefik.http.services.jupyter.loadbalancer.server.port=8888"
+      - "traefik.http.services.jupyter.loadbalancer.healthcheck.path=/lab/favicon.ico"
+      - "traefik.http.services.jupyter.loadbalancer.healthcheck.interval=30s"
+      - "traefik.http.services.jupyter.loadbalancer.healthcheck.timeout=10s"
+      - "traefik.http.routers.jupyter.middlewares=forwardauth@docker"
+    volumes:
+      - /mnt/jupyter-data:/home/jovyan
+      - /var/run/docker.sock:/var/run/docker.sock
+%{ if length(ebs_mounts) > 0 ~}
+%{ for ebs in ebs_mounts ~}
+      - /home/jovyan/${ebs.mount_point}:/home/jovyan/${ebs.mount_point}
+%{ endfor ~}
+%{ endif ~}
+%{ if length(efs_mounts) > 0 ~}
+%{ for efs in efs_mounts ~}
+      - /home/jovyan/${efs.mount_point}:/home/jovyan/${efs.mount_point}
+%{ endfor ~}
+%{ endif ~}
+    deploy:
+      resources:
+        limits:
+          memory: "$${JUPYTER_MEM_LIMIT_MB}M"
+        reservations:
+          memory: "$${JUPYTER_MEM_RESERVATION_MB}M"
+%{ if has_gpu ~}
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+%{ endif ~}
+%{ if has_neuron ~}
+          devices:
+            - driver: aws-neuron
+              count: all
+              capabilities: [neuron]
+%{ endif ~}
+  auth-sidecar:
+    build:
+      context: ./auth-sidecar
+      dockerfile: Dockerfile
+    container_name: auth-sidecar
+    restart: unless-stopped
+    mem_limit: "128M"
+    mem_reservation: "64M"
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.auth-sidecar"
+    depends_on:
+      - fluent-bit
+    healthcheck:
+      test: ["CMD", "/auth-sidecar", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - web
+    environment:
+      # The auth sidecar treats these as its whole interface (clean for later extraction):
+      # bind the token to this deployment, allowlist ARNs, pin the STS endpoint.
+      - DEPLOYMENT_ID=${deployment_id}
+      - ARN_ALLOWLIST=${arn_allowlist}
+      - AWS_REGION=${aws_region}
+      - STS_ENDPOINT=https://sts.${aws_region}.amazonaws.com
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.auth-sidecar.loadbalancer.server.port=4181"
+      # ForwardAuth middleware Traefik consults before proxying to jupyter.
+      - "traefik.http.middlewares.forwardauth.forwardauth.address=http://auth-sidecar:4181/auth"
+      - "traefik.http.middlewares.forwardauth.forwardauth.trustForwardHeader=true"
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    restart: unless-stopped
+    mem_limit: "256M"
+    mem_reservation: "128M"
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.traefik"
+    depends_on:
+      - fluent-bit
+    ports:
+      - "443:8443"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/traefik.yml:ro
+      - ./traefik-dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - ./certs:/certs:ro
+    networks:
+      - web
+    environment:
+      - AWS_REGION=${aws_region}
+  fluent-bit:
+    image: fluent/fluent-bit:latest
+    container_name: fluent-bit
+    restart: unless-stopped
+    mem_limit: "128M"
+    mem_reservation: "64M"
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    volumes:
+      - /var/log/services:/logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - web
+  log-rotator:
+    build:
+      context: .
+      dockerfile: dockerfile.logrotator
+    container_name: log-rotator
+    restart: unless-stopped
+    mem_limit: "128M"
+    mem_reservation: "64M"
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.log-rotator"
+    depends_on:
+      - fluent-bit
+    volumes:
+      - /var/log/services:/var/log/services
+      - /var/log/jupyter-deploy:/var/log/jupyter-deploy
+    networks:
+      - web
+    environment:
+      - TZ=UTC
+networks:
+  web:
+    name: web
+    driver: bridge

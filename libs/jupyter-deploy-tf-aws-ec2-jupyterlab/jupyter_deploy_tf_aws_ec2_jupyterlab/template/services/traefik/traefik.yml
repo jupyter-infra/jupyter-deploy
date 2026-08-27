@@ -1,0 +1,15 @@
+api:
+  dashboard: false
+entryPoints:
+  websecure:
+    address: ":8443"
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: web
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+accessLog:
+  bufferingSize: 50

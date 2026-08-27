@@ -1,0 +1,36 @@
+#!/bin/sh
+
+cat > /etc/logrotate.d/services << EOCONFIG
+/var/log/services/*.log {
+    size ${logrotate_size}
+    rotate ${logrotate_copies}
+    maxage ${logrotate_maxage}
+    compress
+    delaycompress
+    missingok
+    notifempty
+    dateext
+    dateformat -%Y-%m-%dT%H:%M:%S
+    copytruncate
+}
+
+/var/log/jupyter-deploy/*.log {
+    size ${logrotate_size}
+    rotate ${logrotate_copies}
+    maxage ${logrotate_maxage}
+    compress
+    delaycompress
+    missingok
+    notifempty
+    dateext
+    dateformat -%Y-%m-%dT%H:%M:%S
+    copytruncate
+}
+EOCONFIG
+
+# Run logrotate every 60 minutes
+while true; do
+    echo "Running logrotate at $(date)"
+    logrotate -v -s /var/log/services/logrotate.status /etc/logrotate.d/services
+    sleep 3600
+done

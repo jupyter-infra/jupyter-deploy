@@ -1,0 +1,151 @@
+#!/bin/bash
+set -e
+
+# Records logs
+mkdir -p /var/log/jupyter-deploy
+exec > >(tee /var/log/jupyter-deploy/cloudinit.log) 2>&1
+
+# Detect OS
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=$NAME
+    VERSION=$VERSION_ID
+else
+    echo "Cannot detect OS version"
+    exit 1
+fi
+
+if [[ "$OS" == "Amazon Linux" ]]; then
+    yum update -y
+
+    # docker
+    if ! command -v docker &> /dev/null; then
+        echo "Docker not found, installing..."
+        yum install -y docker
+
+        # Enable docker
+        systemctl start docker
+        systemctl enable docker
+    else
+        echo "Docker is already installed"
+    fi
+
+    # docker plugins
+    ARCH=$(uname -m)
+    BUILDX_ARCH=$(echo $${ARCH} | sed 's/x86_64/amd64/g' | sed 's/aarch64/arm64/g')
+    mkdir -p /usr/local/lib/docker/cli-plugins
+
+    # compose (uses x86_64, aarch64)
+    COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+    echo "Installing compose $${COMPOSE_VERSION}..."
+    curl -SL "https://github.com/docker/compose/releases/download/$${COMPOSE_VERSION}/docker-compose-linux-$${ARCH}" \
+        -o /usr/local/lib/docker/cli-plugins/docker-compose
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+    docker compose version
+
+    # buildx (uses amd64, arm64)
+    BUILDX_VERSION=$(curl -s https://api.github.com/repos/docker/buildx/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+    echo "Installing buildx $${BUILDX_VERSION}..."
+    curl -SL "https://github.com/docker/buildx/releases/download/$${BUILDX_VERSION}/buildx-$${BUILDX_VERSION}.linux-$${BUILDX_ARCH}" \
+        -o /usr/local/lib/docker/cli-plugins/docker-buildx
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+    docker buildx version
+
+    echo "Docker plugins installation complete"
+
+    # jq
+    if ! command -v jq &> /dev/null; then
+        echo "jq not found, installing..."
+        yum install -y jq
+    else
+        echo "jq is already installed"
+    fi
+
+    # ensure SSM agent is active
+    if ! systemctl is-active --quiet amazon-ssm-agent; then
+        echo "SSM agent not running, checking if installed..."
+        if ! rpm -q amazon-ssm-agent &> /dev/null; then
+            echo "SSM agent not found, installing..."
+            yum install -y amazon-ssm-agent
+        fi
+        echo "Starting SSM agent..."
+        # Retry logic for systemd transaction conflicts during boot
+        MAX_RETRIES=5
+        RETRY_COUNT=0
+        while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if systemctl start amazon-ssm-agent; then
+                echo "SSM agent started successfully"
+                systemctl enable amazon-ssm-agent
+                break
+            else
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                    echo "Failed to start SSM agent (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in 5 seconds..."
+                    sleep 5
+                else
+                    echo "Failed to start SSM agent after $MAX_RETRIES attempts"
+                    exit 1
+                fi
+            fi
+        done
+    else
+        echo "SSM agent is already running"
+    fi
+else
+    echo "Unsupported OS version. This script only supports Amazon Linux."
+    exit 1
+fi
+
+# service user (idempotent)
+if ! id service-user >/dev/null 2>&1; then
+    useradd -r -s /sbin/nologin -d /home/service-user -m service-user
+fi
+usermod -aG docker service-user
+
+tee /etc/sudoers.d/service-user << EOF
+service-user ALL=(ALL) NOPASSWD: /bin/systemctl start docker
+service-user ALL=(ALL) NOPASSWD: /bin/systemctl stop docker
+service-user ALL=(ALL) NOPASSWD: /bin/systemctl restart docker
+EOF
+chmod 440 /etc/sudoers.d/service-user
+
+tee /home/service-user/.bash_profile << EOF
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin
+EOF
+
+chown service-user:service-user /home/service-user/.bash_profile
+chmod 644 /home/service-user/.bash_profile
+
+mkdir -p /home/service-user/.aws
+chown -R service-user:service-user /home/service-user
+
+echo "Setting up resource limits..."
+tee /etc/security/limits.d/service-user.conf << EOF
+service-user soft nproc 1024
+service-user hard nproc 2048
+service-user soft nofile 4096
+service-user hard nofile 8192
+EOF
+chmod 440 /etc/security/limits.d/service-user.conf
+
+# Mount the jupyter-data drive and save config to persist on reboots
+mkdir -p /mnt/jupyter-data
+if ! blkid /dev/sdf | grep -q 'TYPE="ext4"'; then
+    echo "Formatting /dev/sdf as ext4..."
+    mkfs -t ext4 /dev/sdf
+else
+    echo "/dev/sdf is already formatted"
+fi
+if ! mountpoint -q /mnt/jupyter-data; then
+    mount /dev/sdf /mnt/jupyter-data
+fi
+
+chown -R service-user:service-user /mnt/jupyter-data
+chmod 750 /mnt/jupyter-data
+if ! grep -q '/mnt/jupyter-data' /etc/fstab; then
+    echo "/dev/sdf /mnt/jupyter-data ext4 defaults,nofail 0 2" | tee -a /etc/fstab
+fi
+
+# Create dirs
+mkdir -p /opt/docker
+mkdir -p /var/log/services

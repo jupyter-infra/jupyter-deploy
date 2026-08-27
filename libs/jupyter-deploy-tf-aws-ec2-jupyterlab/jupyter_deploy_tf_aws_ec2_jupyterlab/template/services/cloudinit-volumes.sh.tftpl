@@ -1,0 +1,155 @@
+#!/bin/bash
+set -e
+
+echo "Initializing additional volumes..."
+
+# Record logs
+mkdir -p /var/log/jupyter-deploy
+exec > >(tee /var/log/jupyter-deploy/volumes-init.log) 2>&1
+
+# EBS volumes
+%{ if length(ebs_volumes) > 0 ~}
+setup_ebs() {
+    local mount_point="$1"
+    local device_name="$2"
+
+    echo "Initializing EBS volume for $mount_point..."
+    FULL_MOUNT_POINT="/home/jovyan/$mount_point"
+
+    mkdir -p "$FULL_MOUNT_POINT"
+
+    # Wait for device to become available with retry
+    MAX_RETRIES=2
+    RETRY_COUNT=0
+    RETRY_DELAY=2
+
+    while [ $RETRY_COUNT -le $MAX_RETRIES ]; do
+        if [ -b "$device_name" ]; then
+            echo "Device $device_name is available"
+            break
+        else
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            if [ $RETRY_COUNT -le $MAX_RETRIES ]; then
+                echo "Device $device_name not yet available (attempt $RETRY_COUNT/$((MAX_RETRIES + 1))), waiting $${RETRY_DELAY}s..."
+                sleep $RETRY_DELAY
+                RETRY_DELAY=$((RETRY_DELAY * 2))
+            else
+                echo "Error: Device $device_name not found after $((MAX_RETRIES + 1)) attempts"
+                exit 1
+            fi
+        fi
+    done
+
+    # Device is available, proceed with setup
+    if ! blkid "$device_name" > /dev/null; then
+        echo "Formatting $device_name with ext4..."
+        mkfs -t ext4 "$device_name"
+    else
+        echo "Device $device_name already formatted"
+    fi
+
+    if ! grep -q "$FULL_MOUNT_POINT" /etc/fstab; then
+        echo "Adding to fstab: $device_name $FULL_MOUNT_POINT ext4 defaults 0 2"
+        echo "$device_name $FULL_MOUNT_POINT ext4 defaults,nofail 0 2" | tee -a /etc/fstab
+    else
+        echo "fstab entry for $FULL_MOUNT_POINT already exists"
+    fi
+
+    if ! mountpoint -q "$FULL_MOUNT_POINT"; then
+        echo "Mounting $device_name to $FULL_MOUNT_POINT"
+        mount "$FULL_MOUNT_POINT"
+    else
+        echo "$FULL_MOUNT_POINT is already mounted"
+    fi
+
+    echo "Setting permissions on $FULL_MOUNT_POINT"
+    chown -R service-user:service-user "$FULL_MOUNT_POINT"
+    chmod 750 "$FULL_MOUNT_POINT"
+    echo "EBS volume for $mount_point initialization complete"
+}
+%{ for ebs in ebs_volumes ~}
+setup_ebs "${ebs.mount_point}" "${ebs.device_name}"
+%{ endfor ~}
+%{ endif ~}
+
+# EFS volumes
+%{ if length(efs_volumes) > 0 ~}
+install_efs_utils() {
+    if ! rpm -q amazon-efs-utils &> /dev/null; then
+        echo "Installing amazon-efs-utils..."
+
+        # Retry configuration
+        # https://github.com/jupyter-infra/jupyter-deploy/issues/130
+        MAX_RETRIES=2
+        RETRY_COUNT=0
+        RETRY_DELAY=2
+
+        while [ $RETRY_COUNT -le $MAX_RETRIES ]; do
+            if yum install -y amazon-efs-utils; then
+                echo "Successfully installed amazon-efs-utils"
+                break
+            else
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                if [ $RETRY_COUNT -le $MAX_RETRIES ]; then
+                    echo "Failed to install amazon-efs-utils (attempt $RETRY_COUNT/$((MAX_RETRIES + 1))), retrying in $${RETRY_DELAY}s..."
+                    sleep $RETRY_DELAY
+                    RETRY_DELAY=$((RETRY_DELAY * 2))
+                else
+                    echo "Failed to install amazon-efs-utils after $((MAX_RETRIES + 1)) attempts"
+                    exit 1
+                fi
+            fi
+        done
+    else
+        echo "amazon-efs-utils is already installed"
+    fi
+
+    echo "Waiting for IAM role credentials to be available..."
+    sleep 10
+}
+    
+setup_efs() {
+    local mount_point="$1"
+    local efs_id="$2"
+
+    echo "Initializing EFS volume for $mount_point..."
+    FULL_MOUNT_POINT="/home/jovyan/$mount_point"
+
+    mkdir -p "$FULL_MOUNT_POINT"
+
+    if ! grep -q "$FULL_MOUNT_POINT" /etc/fstab; then
+        echo "Adding to fstab: $efs_id:/ $FULL_MOUNT_POINT efs _netdev,tls,iam,region=${aws_region} 0 0"
+        echo "$efs_id:/ $FULL_MOUNT_POINT efs _netdev,tls,iam,region=${aws_region} 0 0" | tee -a /etc/fstab
+    else
+        echo "fstab entry for $FULL_MOUNT_POINT already exists"
+    fi
+
+    if ! mountpoint -q "$FULL_MOUNT_POINT"; then
+        echo "Mounting $efs_id to $FULL_MOUNT_POINT"
+        mount -v "$FULL_MOUNT_POINT" || {
+            echo "Mount failed. Attempting direct mount with region."
+            mount -t efs -o tls,iam,region=${aws_region} $efs_id:/ $FULL_MOUNT_POINT
+        }
+    else
+        echo "$FULL_MOUNT_POINT is already mounted"
+    fi
+
+    # EFS mounts need extended permission for container user
+    echo "Setting permissions on $FULL_MOUNT_POINT"
+    chown -R service-user:service-user "$FULL_MOUNT_POINT"
+    chmod 750 "$FULL_MOUNT_POINT"
+    echo "EFS volume for $mount_point initialization complete"
+}
+
+install_efs_utils
+
+%{ for efs in efs_volumes ~}
+setup_efs "${efs.mount_point}" "${efs.file_system_id}"
+%{ endfor ~}
+%{ endif ~}
+
+%{ if length(ebs_volumes) == 0 && length(efs_volumes) == 0 ~}
+echo "No additional volumes required."
+%{ else ~}
+echo "Additional volumes initialization completed."
+%{ endif ~}
