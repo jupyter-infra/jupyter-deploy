@@ -10,6 +10,7 @@ from jupyter_deploy.provider.aws.aws_error_handler import aws_error_context_mana
 from jupyter_deploy.provider.aws.aws_inspector_runner import AwsInspectorRunner
 from jupyter_deploy.provider.aws.aws_secretsmanager_runner import AwsSecretsManagerRunner
 from jupyter_deploy.provider.aws.aws_ssm_runner import AwsSsmRunner
+from jupyter_deploy.provider.aws.aws_sts_runner import AwsStsRunner
 from jupyter_deploy.provider.instruction_runner import InstructionRunner
 from jupyter_deploy.provider.resolved_argdefs import ResolvedInstructionArgument
 from jupyter_deploy.provider.resolved_resultdefs import ResolvedInstructionResult
@@ -25,6 +26,7 @@ class AwsService(str, Enum):
     INSPECTOR2 = "inspector2"
     SECRETSMANAGER = "secretsmanager"
     SSM = "ssm"
+    STS = "sts"
 
 
 class AwsApiRunner(InstructionRunner):
@@ -84,6 +86,10 @@ class AwsApiRunner(InstructionRunner):
             return service_runner
         elif service_name == AwsService.SECRETSMANAGER:
             service_runner = AwsSecretsManagerRunner(self.display_manager, region_name=self.region_name)
+            self.service_runners[service_name] = service_runner
+            return service_runner
+        elif service_name == AwsService.STS:
+            service_runner = AwsStsRunner(self.display_manager, region_name=self.region_name)
             self.service_runners[service_name] = service_runner
             return service_runner
 
