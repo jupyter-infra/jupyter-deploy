@@ -306,6 +306,11 @@ class ProxyManager:
             if status is not None and status.alive and status.port is not None:
                 return status
             time.sleep(_LISTENING_POLL_INTERVAL_SECONDS)
+        # Timed out while the process is still alive but never bound. Reap it before raising: a
+        # detached proxy is orphaned in its own session and publishes a STARTING status.json (pid
+        # + created_at) before it binds, so if it bound *after* our deadline it would linger as an
+        # unconfirmed "running" proxy and wedge the next `jd proxy start` with ProxyAlreadyRunning.
+        cmd_utils.terminate_process(proc.pid)
         raise ProxyStartError("Timed out waiting for the proxy to start listening.", log_dir=str(instance_dir))
 
     # ------------------------------------------------------------------ open (browser)

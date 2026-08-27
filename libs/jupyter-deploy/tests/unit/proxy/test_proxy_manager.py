@@ -343,20 +343,25 @@ class TestWaitForListening(_ManagerTestCase):
             with self.assertRaises(ProxyStartError):
                 manager._wait_for_listening(proc, instance_dir)
 
-    def test_raises_on_timeout(self) -> None:
+    def test_raises_on_timeout_and_reaps_orphan(self) -> None:
+        # On timeout the process is still alive but never bound; it must be terminated before we
+        # raise, else a detached proxy that binds later lingers and wedges the next `start`.
         with tempfile.TemporaryDirectory() as tmp:
             manager = self._manager_rooted_at(tmp)
             instance_dir = manager._target_dir / "20260610-180100.123"
             instance_dir.mkdir(parents=True)
             proc = Mock()
             proc.poll.return_value = None
+            proc.pid = 4321
             # monotonic jumps past the deadline on the second read -> immediate timeout.
             with (
                 patch("jupyter_deploy.proxy.proxy_manager.time.monotonic", side_effect=[0.0, 999.0]),
                 patch("jupyter_deploy.proxy.proxy_manager.time.sleep"),
+                patch("jupyter_deploy.cmd_utils.terminate_process") as mock_terminate,
                 self.assertRaises(ProxyStartError),
             ):
                 manager._wait_for_listening(proc, instance_dir)
+        mock_terminate.assert_called_once_with(4321)
 
 
 class TestStop(_ManagerTestCase):
