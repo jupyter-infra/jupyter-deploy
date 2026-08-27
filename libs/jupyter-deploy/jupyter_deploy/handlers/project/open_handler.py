@@ -8,12 +8,19 @@ from jupyter_deploy.connection_utils import https_connection, resolve_ips
 from jupyter_deploy.engine.engine_open import EngineOpenHandler
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition
-from jupyter_deploy.engine.supervised_execution import NullDisplay
+from jupyter_deploy.engine.supervised_execution import DisplayManager, NullDisplay
 from jupyter_deploy.engine.terraform import tf_open, tf_variables
-from jupyter_deploy.exceptions import OpenWebBrowserError, UrlNotAvailableError, UrlNotSecureError
+from jupyter_deploy.enum import OpenMode
+from jupyter_deploy.exceptions import (
+    DetachedNotSupportedError,
+    OpenWebBrowserError,
+    UrlNotAvailableError,
+    UrlNotSecureError,
+)
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
 from jupyter_deploy.provider import manifest_command_runner as cmd_runner
 from jupyter_deploy.provider.resolved_clidefs import ResolvedCliParameter, StrResolvedCliParameter
+from jupyter_deploy.proxy.proxy_manager import ProxyManager
 
 
 @dataclass
@@ -23,12 +30,35 @@ class OpenHealthResult:
     detail: str
 
 
+def _is_secure_open_url(url: str) -> bool:
+    """Return True if the URL is safe for `jd open` to launch in a browser.
+
+    Safe = HTTPS (encrypted in transit) or an http loopback URL (never leaves the machine,
+    so no in-transit exposure). Loopback is what the ec2-jupyterlab template uses: the
+    browser talks to the local proxy on http://127.0.0.1:PORT, and the proxy handles TLS
+    to the remote instance.
+    """
+    if url.startswith("https://"):
+        return True
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme != "http":
+        return False
+    return (parsed.hostname or "").lower() in ("localhost", "127.0.0.1")
+
+
 class OpenHandler(BaseProjectHandler):
     _handler: EngineOpenHandler
 
-    def __init__(self) -> None:
+    def __init__(self, display_manager: DisplayManager | None = None) -> None:
         """Base class to manage the open command of a jupyter-deploy project."""
-        super().__init__(display_manager=NullDisplay())
+        super().__init__(display_manager=display_manager or NullDisplay())
+
+        # Set when open() drives a proxy-mode template; wait() blocks on its foreground proxy.
+        self._proxy: ProxyManager | None = None
+        self._proxy_detached = False
 
         if self.engine == EngineType.TERRAFORM:
             self._handler = tf_open.TerraformOpenHandler(
@@ -101,32 +131,73 @@ class OpenHandler(BaseProjectHandler):
 
         return url
 
-    def open(self, name: str | None = None, scope: str | None = None) -> str:
+    def open(self, name: str | None = None, scope: str | None = None, detached: bool = False) -> str:
         """Open the application or a specific server in the browser.
 
-        When name is provided, resolves the server URL via the open.server
-        manifest command. Otherwise falls back to the project open_url output.
+        Proxy-mode templates (manifest ``open: {mode: proxy}``) have no public URL: the app is
+        reached through the local client proxy, whose lifecycle ``jd open`` owns. Drive a
+        :class:`~jupyter_deploy.proxy.proxy_manager.ProxyManager` directly — always start a fresh
+        proxy (replacing any already running), attached unless ``detached``, then open the browser
+        and return the loopback URL. Call :meth:`wait` afterwards to block on an attached
+        (foreground) proxy until Ctrl-C.
+
+        Otherwise, when name is provided, resolves the server URL via the open.server manifest
+        command; else falls back to the project open_url output.
 
         Returns:
             str: The URL that was opened
 
         Raises:
             UrlNotAvailableError: If URL cannot be retrieved or is empty
-            UrlNotSecureError: If URL is not HTTPS
+            UrlNotSecureError: If URL is not HTTPS or an http loopback URL
             OpenWebBrowserError: If opening URL in browser fails
             CommandNotImplementedError: If name given but open.server not in manifest
             ResourceNotFoundError: If the named server does not exist
         """
+        open_config = self.project_manifest.get_open()
+        is_proxy_open = open_config.get_mode() == OpenMode.PROXY and name is None
+        # --detached backgrounds the local proxy process, which only exists for the proxy open
+        # flow; reject it elsewhere rather than silently ignoring it.
+        if detached and not is_proxy_open:
+            raise DetachedNotSupportedError()
+        if is_proxy_open:
+            self._proxy = ProxyManager.for_project(self.project_path, self.display_manager)
+            self._proxy_detached = detached
+            # jd open owns the proxy lifecycle: replace any running proxy with a fresh one. A
+            # single spinner covers the whole interaction; the manager narrates each phase
+            # (stopping existing / starting / waiting to bind / polling the app) onto it.
+            with self.display_manager.spinner("Preparing the local proxy …"):
+                self._proxy.restart(detached=detached)
+                return self._proxy.open(path=open_config.path)
+
         url = self.get_url() if name is None else self.get_server_url(name, scope)
 
-        if not url.startswith("https://"):
-            raise UrlNotSecureError("Insecure URL detected. Only HTTPS URLs are allowed for security reasons.", url)
+        if not _is_secure_open_url(url):
+            raise UrlNotSecureError(
+                "Insecure URL detected. Only HTTPS or http loopback URLs are allowed for security reasons.",
+                url,
+            )
 
         open_status = webbrowser.open(url, new=2)
         if not open_status:
             raise OpenWebBrowserError("Failed to open URL in browser.", url)
 
         return url
+
+    def wait(self) -> None:
+        """Print the proxy-lifecycle hint, then block on a foreground proxy; no-op otherwise.
+
+        Public-URL templates never start a proxy, so this returns immediately. For a detached
+        proxy (``jd open -d``) it prints where to stop it and returns; for a foreground proxy it
+        prints the Ctrl-C hint and blocks until the proxy is interrupted.
+        """
+        if self._proxy is None:
+            return
+        if self._proxy_detached:
+            self.display_manager.hint("The proxy keeps running in the background. Stop it with: jd proxy stop")
+        else:
+            self.display_manager.hint("Interrupt this command (Ctrl-C) to stop the proxy.")
+        self._proxy.wait_foreground()
 
     def health(self, expected_status_code: int = 200, port: int = 443) -> OpenHealthResult:
         """Check connection: DNS resolution and HTTP ping.
