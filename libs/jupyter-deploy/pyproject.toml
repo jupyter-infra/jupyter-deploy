@@ -22,6 +22,7 @@ dependencies = [
     "types-pyyaml>=6.0.12.20250516",
     "pathspec>=0.12.1",
     "certifi>=2024.0.0",
+    "psutil>=5.9.0",
 ]
 
 [project.scripts]
@@ -94,6 +95,12 @@ plugins = ["pydantic.mypy"]
 # kubernetes package ships without py.typed and no maintained stubs exist (kubernetes-stubs stuck at v22)
 [[tool.mypy.overrides]]
 module = "kubernetes.*"
+ignore_missing_imports = true
+follow_untyped_imports = true
+
+# psutil ships without py.typed; used for PID-identity checks in cmd_utils
+[[tool.mypy.overrides]]
+module = ["psutil", "psutil.*"]
 ignore_missing_imports = true
 follow_untyped_imports = true
 

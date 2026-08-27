@@ -1,10 +1,14 @@
 import os
 import shutil
+import signal
 import subprocess
 import threading
+import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
+
+import psutil
 
 from jupyter_deploy.exceptions import InvalidProjectPathError
 from jupyter_deploy.prompt_handler import PromptHandler
@@ -215,3 +219,76 @@ def project_dir(dir: Path | None) -> Generator:
         yield
     finally:
         os.chdir(original_dir)
+
+
+def is_pid_alive(pid: int) -> bool:
+    """Return True if a process with the given PID currently exists.
+
+    Uses the POSIX "signal 0" trick: ``os.kill(pid, 0)`` sends no actual signal — it only
+    runs the kernel's existence + permission checks it would perform before delivering one.
+    That makes it the standard, side-effect-free way to probe whether a PID is live:
+
+      - ``ProcessLookupError`` (ESRCH): no such process -> not alive.
+      - ``PermissionError`` (EPERM): the process exists but is owned by another user we may
+        not signal -> still counts as alive (it is there).
+      - no exception: we could signal it -> alive.
+
+    The ``pid <= 0`` guard rejects the sentinel/negative values, since ``os.kill`` treats
+    ``0`` and negatives as "signal my process group / every process" rather than a lookup.
+
+    Caveat: PIDs are recycled, so a True result means *some* process holds that PID, not
+    necessarily the original one. That best-effort guarantee is sufficient for liveness
+    reporting.
+    """
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def get_pid_create_time(pid: int) -> float | None:
+    """Return the process creation time (epoch seconds) for ``pid``, or None if unavailable.
+
+    Pairs with a recorded creation time to tell a still-running process from a **recycled
+    PID** before signaling it. Returns None when the process is gone or inaccessible, so a
+    caller can treat "cannot confirm" as "not our process" and refuse to signal it.
+    """
+    try:
+        return float(psutil.Process(pid).create_time())
+    except Exception:
+        # Any psutil failure (NoSuchProcess, AccessDenied, ...) means we cannot confirm
+        # identity; the caller must treat that as unverified.
+        return None
+
+
+def terminate_process(pid: int, timeout_seconds: float = 5.0, poll_interval_seconds: float = 0.1) -> bool:
+    """Terminate the process with the given PID; return True once it is gone.
+
+    Sends SIGTERM for a graceful stop, polls up to ``timeout_seconds`` for it to exit, then
+    escalates to SIGKILL for a process that ignores SIGTERM. A PID that is already absent is
+    a no-op success.
+    """
+    if not is_pid_alive(pid):
+        return True
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return True
+
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if not is_pid_alive(pid):
+            return True
+        time.sleep(poll_interval_seconds)
+
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return True
+    return not is_pid_alive(pid)

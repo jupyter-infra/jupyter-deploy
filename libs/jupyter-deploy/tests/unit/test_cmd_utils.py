@@ -1,20 +1,24 @@
 # mypy: disable-error-code=attr-defined
 # we need this mypy disable as we tinker with side effect attributes
 
+import os
 import subprocess
 import threading
 import time
 import unittest
 from collections.abc import Callable
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from jupyter_deploy.cmd_utils import (
     check_executable_installation,
+    get_pid_create_time,
+    is_pid_alive,
     project_dir,
     run_cmd_and_capture_output,
     run_cmd_and_pipe_to_terminal,
     switch_dir,
+    terminate_process,
 )
 from jupyter_deploy.exceptions import InvalidProjectPathError
 
@@ -674,3 +678,84 @@ class TestProjectManagerDirContextManager(unittest.TestCase):
 
         # Verify the correct error message
         self.assertEqual(str(context.exception), "Target path is not a directory: /path/to/file.txt")
+
+
+class TestIsPidAlive(unittest.TestCase):
+    def test_current_process_is_alive(self) -> None:
+        self.assertTrue(is_pid_alive(os.getpid()))
+
+    def test_zero_pid_is_not_alive(self) -> None:
+        # 0 would target the whole process group in os.kill; must be rejected outright.
+        self.assertFalse(is_pid_alive(0))
+
+    def test_negative_pid_is_not_alive(self) -> None:
+        # Negatives address a process group in os.kill; must be rejected outright.
+        self.assertFalse(is_pid_alive(-1))
+
+    @patch("jupyter_deploy.cmd_utils.os.kill")
+    def test_process_lookup_error_means_not_alive(self, mock_kill: Mock) -> None:
+        mock_kill.side_effect = ProcessLookupError()
+        self.assertFalse(is_pid_alive(12345))
+        mock_kill.assert_called_once_with(12345, 0)
+
+    @patch("jupyter_deploy.cmd_utils.os.kill")
+    def test_permission_error_means_alive(self, mock_kill: Mock) -> None:
+        # A PID we may not signal still exists -> alive.
+        mock_kill.side_effect = PermissionError()
+        self.assertTrue(is_pid_alive(12345))
+
+    @patch("jupyter_deploy.cmd_utils.os.kill")
+    def test_no_error_means_alive(self, mock_kill: Mock) -> None:
+        mock_kill.return_value = None
+        self.assertTrue(is_pid_alive(12345))
+
+
+class TestTerminateProcess(unittest.TestCase):
+    @patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=False)
+    @patch("jupyter_deploy.cmd_utils.os.kill")
+    def test_already_dead_is_noop_success(self, mock_kill: Mock, _mock_alive: Mock) -> None:
+        self.assertTrue(terminate_process(4321))
+        mock_kill.assert_not_called()
+
+    @patch("jupyter_deploy.cmd_utils.signal")
+    @patch("jupyter_deploy.cmd_utils.os.kill")
+    def test_sigterm_then_exits_gracefully(self, mock_kill: Mock, mock_signal: Mock) -> None:
+        # alive at the initial probe, gone on the first poll -> SIGTERM only, no SIGKILL.
+        with patch("jupyter_deploy.cmd_utils.is_pid_alive", side_effect=[True, False]):
+            result = terminate_process(4321)
+        self.assertTrue(result)
+        mock_kill.assert_called_once_with(4321, mock_signal.SIGTERM)
+
+    @patch("jupyter_deploy.cmd_utils.time.sleep")
+    @patch("jupyter_deploy.cmd_utils.time.monotonic", side_effect=[0.0, 0.0, 999.0, 999.0])
+    @patch("jupyter_deploy.cmd_utils.signal")
+    @patch("jupyter_deploy.cmd_utils.os.kill")
+    def test_escalates_to_sigkill_when_ignored(
+        self, mock_kill: Mock, mock_signal: Mock, _mock_monotonic: Mock, _mock_sleep: Mock
+    ) -> None:
+        # Alive at the probe, still alive through the poll window (loop exits on timeout),
+        # dead after SIGKILL -> both signals sent, in order.
+        with patch("jupyter_deploy.cmd_utils.is_pid_alive", side_effect=[True, True, False]):
+            result = terminate_process(4321, timeout_seconds=1.0)
+        self.assertTrue(result)
+        self.assertEqual(
+            mock_kill.call_args_list,
+            [call(4321, mock_signal.SIGTERM), call(4321, mock_signal.SIGKILL)],
+        )
+
+
+class TestGetPidCreateTime(unittest.TestCase):
+    def test_returns_float_for_current_process(self) -> None:
+        result = get_pid_create_time(os.getpid())
+        self.assertIsInstance(result, float)
+
+    @patch("jupyter_deploy.cmd_utils.psutil.Process")
+    def test_returns_none_when_psutil_raises(self, mock_process: Mock) -> None:
+        # Any psutil failure (no such process, access denied, ...) -> None = "cannot confirm".
+        mock_process.side_effect = RuntimeError("no such process")
+        self.assertIsNone(get_pid_create_time(999999))
+
+    @patch("jupyter_deploy.cmd_utils.psutil.Process")
+    def test_returns_recorded_create_time(self, mock_process: Mock) -> None:
+        mock_process.return_value.create_time.return_value = 1717000000.5
+        self.assertEqual(get_pid_create_time(4321), 1717000000.5)
