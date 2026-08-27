@@ -31,6 +31,7 @@ class SelfSignedOrigin:
         self._runner: web.AppRunner | None = None
         self.port: int = 0
         self.ws_upgrade_headers: dict[str, str] | None = None
+        self.ws_negotiated_protocol: str | None = None
 
     @property
     def ca_pem(self) -> str:
@@ -39,8 +40,12 @@ class SelfSignedOrigin:
     async def _handle(self, request: web.Request) -> web.StreamResponse:
         if request.headers.get("Upgrade", "").lower() == "websocket":
             self.ws_upgrade_headers = dict(request.headers)
-            ws = web.WebSocketResponse()
+            # Offer back whatever subprotocols the (proxied) client requested, mirroring how
+            # JupyterLab's server negotiates `v1.kernel.websocket.jupyter.org`.
+            requested = [p.strip() for p in request.headers.get("Sec-WebSocket-Protocol", "").split(",") if p.strip()]
+            ws = web.WebSocketResponse(protocols=requested)
             await ws.prepare(request)
+            self.ws_negotiated_protocol = ws.ws_protocol
             async for msg in ws:
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     await ws.send_str(msg.data)

@@ -54,5 +54,6 @@ DROP_FROM_REQUEST_HEADERS = HOP_BY_HOP_HEADERS | {
     "sec-websocket-version",
     "sec-websocket-extensions",
     "sec-websocket-accept",
+    "sec-websocket-protocol",
 }
 DROP_FROM_RESPONSE_HEADERS = HOP_BY_HOP_HEADERS | {"content-length"}

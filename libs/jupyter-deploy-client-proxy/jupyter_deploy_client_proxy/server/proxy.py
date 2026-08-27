@@ -228,14 +228,25 @@ class JupyterDeployClientProxy:
 
     async def _relay_ws(self, request: web.Request) -> web.StreamResponse:
         assert self._session is not None and self._bundle is not None
-        downstream = web.WebSocketResponse()
+
+        # Negotiate the WebSocket subprotocol symmetrically on both legs. JupyterLab's kernel
+        # channels request `v1.kernel.websocket.jupyter.org`, whose framing is binary; if the
+        # downstream response doesn't echo the negotiated subprotocol back to the browser, the
+        # client silently falls back to the v0 text protocol while the server speaks v1, and
+        # every kernel message fails to deserialize ("cannot convert 'str' object to bytes").
+        # Passing `protocols` to both ends lets aiohttp regenerate the handshake header (the raw
+        # sec-websocket-protocol header is dropped in get_forwarded_request_headers).
+        client_protocols = [
+            p.strip() for p in request.headers.get("Sec-WebSocket-Protocol", "").split(",") if p.strip()
+        ]
+        downstream = web.WebSocketResponse(protocols=client_protocols)
         await downstream.prepare(request)
 
         url = f"wss://{self._bundle.host}:{self._bundle.port}{request.raw_path}"
         headers = get_forwarded_request_headers(request.headers, self._bundle.headers)
         self._logger.debug(f"ws open: {request.path}")
         try:
-            async with self._session.ws_connect(url, headers=headers) as upstream:
+            async with self._session.ws_connect(url, headers=headers, protocols=client_protocols) as upstream:
                 await self._pipe_ws(downstream, upstream)
         except aiohttp.ClientError as e:
             self._logger.warning(f"ws upstream error for {request.path}: {e}")
