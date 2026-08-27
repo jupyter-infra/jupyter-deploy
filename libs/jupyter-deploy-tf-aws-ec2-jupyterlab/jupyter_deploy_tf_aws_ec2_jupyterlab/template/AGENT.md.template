@@ -1,0 +1,166 @@
+# Jupyter-deploy: Terraform AWS EC2 JupyterLab template
+
+## Project organization
+
+This project manages the AWS resources to deploy a single-user JupyterLab application on a remote
+Amazon EC2 instance, reached from your laptop through a local proxy over a pinned-TLS connection and
+authenticated with your AWS identity. **AWS credentials are the only prerequisite**.
+
+It uses Terraform as the infrastructure-as-code engine and places the EC2 instance in the default VPC
+of the AWS account. There is **no public URL and no Elastic IP** — the instance's public IP is resolved
+live at connection time, and the client proxy pins the instance's certificate rather than its address.
+
+Within the EC2 instance, it leverages `docker-compose` to run docker services:
+- the `jupyter` service itself (JupyterLab, on `:8888`)
+- a `traefik` sidecar to control ingress and TLS termination (serving a self-signed certificate on `:443`)
+- an `auth-sidecar` service that validates the AWS-identity token via Traefik ForwardAuth
+  [protocol](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/forwardauth/)
+- a `fluent-bit` service for log forwarding and a `logrotator` service for log rotation
+
+The instance only allows ingress on port 443 (HTTPS), which it routes to the `traefik` service. The
+security group opens `:443` to `0.0.0.0/0`; the real security boundary is the pinned self-signed TLS
+plus the short-lived AWS-identity token that `jd proxy connect-info` mints — not the network layer.
+
+Most `jupyter-deploy` commands act on the host via the `ssm-agent`.
+Refer to [AWS SSM](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html) for more details.
+SSM is used for host/server administration only — **not** for the JupyterLab data path.
+
+The interactive `jd host connect` and `jd server connect` commands open an SSM session and therefore
+require the [AWS Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
+installed locally. It is **not** needed for `jd up`, `jd open`, `jd proxy`, or the `jd server logs`/`exec` commands.
+
+The instance generates a long-lived self-signed TLS certificate at first boot and persists the key on the
+EBS data volume, so it survives instance stop/start. The public certificate PEM is published to an AWS SSM
+parameter, which `jd proxy connect-info` reads to pin the connection.
+
+## Usage
+{{ jupyter-deploy-cli-general-instructions }}
+
+## General project information
+{{ show-info-instructions }}
+
+### Configure and create the infrastructure
+{{ config-up-instructions }}
+
+{{ set-variables-with-cmd-instructions }}
+
+{{ set-variables-with-file-instructions }}
+
+{{ read-variables-with-cmd-instructions }}
+
+### Access the JupyterLab application
+
+`jd open` launches the local client proxy and opens your browser to the loopback address the proxy binds
+(e.g. `http://127.0.0.1:PORT/lab`). The browser talks plain HTTP to the loopback proxy, which forwards to
+the instance over pinned self-signed TLS and injects a short-lived AWS-identity token on every request —
+there is **no browser sign-in**. `jd open` runs in the foreground by default (Ctrl-C stops it); pass
+-d/--detached to run it in the background.
+
+{{ single-server-open-instructions }}
+
+The `jd proxy` command group drives the proxy directly:
+
+```bash
+# start the proxy in the background, then open a tab against it
+jd proxy start
+jd proxy open
+
+# inspect it
+jd proxy status
+jd proxy show --json
+
+# stop it
+jd proxy stop
+```
+
+The client proxy ships as an optional extra — install it with `pip install "jupyter-deploy[proxy]"`.
+
+### Manage the EC2 instance
+{{ single-host-management-instructions }}
+
+### Manage the docker services
+{{ single-host-server-management-instructions }}
+
+### Manage access
+
+Access is authorized by **AWS IAM identity**. The `auth-sidecar` validates a short-lived STS
+`GetCallerIdentity` token minted by `jd proxy connect-info` and checks the caller's ARN against the
+`auth_arn_allowlist` (defaults to the deployer's ARN). To grant additional identities, add their ARNs to
+the `auth_arn_allowlist` entry in the `overrides:` block of `./variables.yaml`, then re-apply with
+`jd config` followed by `jd up`.
+
+### View the full terraform logs
+
+{{ history-logs-instructions }}
+
+### Delete all the resources
+
+{{ down-instructions }}
+
+## The terraform project
+
+### Engine directory
+
+The core terraform files are located in `./engine`, including `main.tf`, `variables.tf` and `outputs.tf`.
+Standalone resources, such as IAM roles, are defined in `./engine/modules` as standard terraform modules.
+
+From the `engine` directory, this is a classic terraform project.
+It is possible to use the `terraform` CLI directly, but the recommended way is to use the jupyter-deploy commands.
+
+#### Presets
+`./engine/presets` correspond to optional set of default variables. Users SHOULD NOT modify these files.
+
+### Services directory
+
+Terraform creates and manages the AWS resources, it creates the EC2 instance, an AWS SSM Document and an
+AWS SSM Association between the SSM Document and the EC2 instance.
+
+AWS SSM automatically executes the SSM document on the EC2 instance to configure it.
+It consists of several steps. The first step downloads all configuration files defined in `./services`
+to the EC2 instance root volume. A later step generates the self-signed certificate, and the last step
+starts the docker services.
+
+## The deployed EC2 instance
+
+The EC2 instance runs the docker services.
+
+### Host execution commands (when host is running)
+- `jd host exec -- CMD` - Execute commands on the instance
+- `jd host exec -- docker container list` - View the docker services
+- `jd host exec -- tail -50 /var/log/jupyter-deploy/LOG-FILENAME` - View command logs
+- `jd host exec -- tail -50 /var/log/services/LOG-FILENAME` - View historic service logs
+
+### Server execution commands (when host and target docker service are running)
+- `jd server logs` - View docker logs of the jupyter service
+- `jd server logs -n traefik -- -n 50` - View last 50 lines of the docker logs of the traefik service
+- `jd server logs -n auth-sidecar` - View docker logs of the auth-sidecar service
+- `jd server exec -- ls -la` - Execute a command in the jupyter container (view home dir in this case)
+
+### Deployment scripts (downloaded from S3 by SSM association)
+- `/usr/local/bin/check-status-internal.sh` - Status checking logic
+- `/usr/local/bin/get-status.sh` - Status code mapping
+- `/usr/local/bin/update-server.sh` - Service management (start/stop/restart)
+- `/usr/local/bin/generate-cert.sh` - Self-signed certificate generation + cert-pin SSM publish
+
+### Docker configuration files
+- `/opt/docker/docker-compose.yml` - Docker Compose configuration
+- `/opt/docker/docker-startup.sh` - Docker services startup script
+- `/opt/docker/dockerfile.jupyter` - Jupyter container Dockerfile
+- `/opt/docker/traefik.yml` - Traefik static configuration
+- `/opt/docker/traefik-dynamic.yml` - Traefik dynamic configuration (routers, middlewares, TLS)
+- `/opt/docker/auth-sidecar/` - Auth sidecar sources (Go STS-identity token validator) + Dockerfile
+
+### TLS certificate
+- `/mnt/jupyter-data/.jupyter-deploy-tls/{cert.pem,key.pem}` - Self-signed cert + private key, persisted on the EBS data volume
+- `/opt/docker/certs/{cert.pem,key.pem}` - Copy used by the `traefik` service
+- The public certificate PEM is also published to the cert-pin SSM parameter that `jd proxy connect-info` reads
+
+### Logs
+- `/var/log/jupyter-deploy` - Logs generated by jupyter-deploy commands
+- `/var/log/services` - Logs generated by the docker services
+
+### Troubleshooting
+
+Refer to `./TROUBLESHOOT.md` for specific situations.
+
+{{ generated-by-footer }}

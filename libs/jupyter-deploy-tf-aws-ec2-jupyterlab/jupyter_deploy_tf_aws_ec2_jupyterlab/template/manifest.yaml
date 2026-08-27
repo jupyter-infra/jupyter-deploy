@@ -1,0 +1,315 @@
+schema_version: 1
+template:
+  name: tf-aws-ec2-jupyterlab
+  engine: terraform
+  version: 0.1.0
+requirements:
+- name: terraform
+- name: awscli
+- name: jq
+values:
+- name: deployment_id
+  source: output
+  source-key: deployment_id
+- name: aws_region
+  source: output
+  source-key: region
+- name: persisting_resources
+  source: output
+  source-key: persisting_resources
+- name: instance_id
+  source: output
+  source-key: instance_id
+- name: cert_pin_ssm_parameter_name
+  source: output
+  source-key: cert_pin_ssm_parameter_name
+- name: auth_arn_allowlist
+  source: output
+  source-key: auth_arn_allowlist
+project-store:
+  store-type: s3-only
+# `jd open` has no public URL for this template: it launches the local client proxy and
+# opens the loopback address the proxy binds, at <path>.
+open:
+  mode: proxy
+  path: /lab
+services:
+- jupyter
+- traefik
+- auth-sidecar
+commands:
+- cmd: host.status
+  sequence:
+  - api-name: aws.ec2.describe-instance-status
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+  results:
+  - result-name: host.status
+    source: result
+    source-key: '[0].InstanceStateName'
+- cmd: host.stop
+  sequence:
+  - api-name: aws.ec2.stop-instance
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+  - api-name: aws.ec2.wait-for-stopped
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+- cmd: host.start
+  sequence:
+  - api-name: aws.ec2.start-instance
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+  - api-name: aws.ec2.wait-for-running
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+- cmd: host.restart
+  sequence:
+  - api-name: aws.ec2.reboot-instance
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+  - api-name: aws.ec2.wait-for-running
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+- cmd: host.status-for-connection
+  sequence:
+  - api-name: aws.ssm.get-connection-status
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+  results:
+  - result-name: host.status-for-connection
+    source: result
+    source-key: '[0].Status'
+- cmd: host.connect
+  sequence:
+  - api-name: aws.ssm.start-session
+    arguments:
+    - api-attribute: target_id
+      source: output
+      source-key: instance_id
+- cmd: host.exec
+  sequence:
+  - api-name: aws.ssm.wait-default-shell-command-sync
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: commands
+      source: cli
+      source-key: commands
+  results:
+  - result-name: host.exec.stdout
+    source: result
+    source-key: '[0].StandardOutputContent'
+  - result-name: host.exec.stderr
+    source: result
+    source-key: '[0].StandardErrorContent'
+  - result-name: host.exec.returncode
+    source: result
+    source-key: '[0].ResponseCode'
+- cmd: server.status
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: server_status_check_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+  results:
+  - result-name: server.status
+    source: result
+    source-key: '[0].StandardOutputContent'
+- cmd: server.start
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: server_update_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: action
+      source: cli
+      source-key: action
+    - api-attribute: service
+      source: cli
+      source-key: service
+- cmd: server.stop
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: server_update_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: action
+      source: cli
+      source-key: action
+    - api-attribute: service
+      source: cli
+      source-key: service
+- cmd: server.restart
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: server_update_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: action
+      source: cli
+      source-key: action
+    - api-attribute: service
+      source: cli
+      source-key: service
+- cmd: server.logs
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: server_logs_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: service
+      source: cli
+      source-key: service
+    - api-attribute: extra
+      source: cli
+      source-key: extra
+  results:
+  - result-name: server.logs
+    source: result
+    source-key: '[0].StandardOutputContent'
+  - result-name: server.errors
+    source: result
+    source-key: '[0].StandardErrorContent'
+  - result-name: server.logs.returncode
+    source: result
+    source-key: '[0].ResponseCode'
+- cmd: server.exec
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: server_exec_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: service
+      source: cli
+      source-key: service
+    - api-attribute: commands
+      source: cli
+      source-key: commands
+  results:
+  - result-name: server.exec.stdout
+    source: result
+    source-key: '[0].StandardOutputContent'
+  - result-name: server.exec.stderr
+    source: result
+    source-key: '[0].StandardErrorContent'
+  - result-name: server.exec.returncode
+    source: result
+    source-key: '[0].ResponseCode'
+- cmd: server.connect
+  sequence:
+  - api-name: aws.ssm.start-session
+    arguments:
+    - api-attribute: target_id
+      source: output
+      source-key: instance_id
+    - api-attribute: document_name
+      source: output
+      source-key: server_connect_document
+    - api-attribute: service
+      source: cli
+      source-key: service
+- cmd: proxy.connect-info
+  sequence:
+  - api-name: aws.ec2.resolve-endpoint
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: port
+      source: literal
+      value: '443'
+  - api-name: aws.ssm.get-parameter
+    arguments:
+    - api-attribute: name
+      source: output
+      source-key: cert_pin_ssm_parameter_name
+  - api-name: aws.sts.mint-connect-token
+    arguments:
+    - api-attribute: binding_id
+      source: output
+      source-key: deployment_id
+  results:
+  - result-name: proxy.connect-info.host
+    source: result
+    source-key: '[0].PublicIpAddress'
+  - result-name: proxy.connect-info.port
+    source: result
+    source-key: '[0].Port'
+  - result-name: proxy.connect-info.ca_cert
+    source: result
+    source-key: '[1].Value'
+  - result-name: proxy.connect-info.headers
+    source: result
+    source-key: '[2].Headers'
+  - result-name: proxy.connect-info.expires_at
+    source: result
+    source-key: '[2].ExpiresAt'
+supervised-execution:
+  config:
+    config.terraform-plan:
+      default-phase:
+        label: Reading data sources
+        progress-pattern: (Read complete after|Refreshing state)
+        progress-events-estimate: 80
+  up:
+    up.terraform-apply:
+      phases:
+      - enter-pattern: 'null_resource.wait_for_instance_ready: Creating'
+        exit-pattern: 'null_resource.wait_for_instance_ready: Creation complete'
+        label: Configuring EC2 instance
+        weight: 30
+        phases:
+        - enter-pattern: Waiting for SSM agent
+          label: Waiting for SSM agent
+          weight: 10
+        - enter-pattern: Cloudinit script is running
+          label: Configuring EC2 instance
+          weight: 35
+        - enter-pattern: Generating self-signed cert
+          label: Generating self-signed cert
+          weight: 20
+        - enter-pattern: Checking instance status
+          label: Checking instance status
+          weight: 35
