@@ -586,6 +586,32 @@ class TestProgressDisplayManager(unittest.TestCase):
         self.assertEqual(len(manager._top_messages), 0)
 
     @patch("jupyter_deploy.cli.progress_display.Console")
+    def test_set_status_updates_spinner_when_spinner_active(self, mock_console_cls: Mock) -> None:
+        """set_status() updates the active spinner's message in place."""
+        mock_console, _ = self._create_mocked_console_and_mocks()
+        mock_console_cls.return_value = mock_console
+
+        manager = ProgressDisplayManager()
+        mock_status = Mock()
+        manager._in_spinner = True
+        manager._current_spinner = mock_status
+
+        manager.set_status("Phase 2")
+
+        mock_status.update.assert_called_once_with("Phase 2")
+
+    @patch("jupyter_deploy.cli.progress_display.Console")
+    def test_set_status_is_noop_when_no_spinner_active(self, mock_console_cls: Mock) -> None:
+        """set_status() is a silent no-op when no spinner is active (never prints)."""
+        mock_console, console_mocks = self._create_mocked_console_and_mocks()
+        mock_console_cls.return_value = mock_console
+
+        manager = ProgressDisplayManager()
+        manager.set_status("Phase 2")
+
+        console_mocks["print"].assert_not_called()
+
+    @patch("jupyter_deploy.cli.progress_display.Console")
     def test_warning_adds_message_with_style(self, mock_console_cls: Mock) -> None:
         """Test that warning() adds message with warning icon and yellow style."""
         mock_console, _ = self._create_mocked_console_and_mocks()

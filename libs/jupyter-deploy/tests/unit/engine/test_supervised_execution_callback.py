@@ -73,6 +73,9 @@ class MockPassThroughDisplay:
     def spinner(self, initial_message: str) -> None:
         pass
 
+    def set_status(self, message: str) -> None:
+        pass
+
     def stop_spinning(self) -> None:
         pass
 

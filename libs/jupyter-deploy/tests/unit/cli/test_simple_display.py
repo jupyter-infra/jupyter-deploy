@@ -126,6 +126,29 @@ class TestSimpleDisplayManager(unittest.TestCase):
         status_mocks["update"].assert_called_once_with("Updated message")
         console_mocks["print"].assert_not_called()
 
+    def test_set_status_updates_spinner_when_spinner_active(self) -> None:
+        """set_status() updates the active spinner's message in place."""
+        mock_console, console_mocks = self._create_mocked_console_and_mocks()
+        mock_status, status_mocks = self._create_mocked_status_and_mocks()
+        console_mocks["status"].return_value = mock_status
+
+        manager = SimpleDisplayManager(mock_console)
+
+        with manager.spinner("Initial"):
+            manager.set_status("Phase 2")
+
+        status_mocks["update"].assert_called_once_with("Phase 2")
+        console_mocks["print"].assert_not_called()
+
+    def test_set_status_is_noop_when_no_spinner_active(self) -> None:
+        """set_status() never prints on its own line — it is silent without an active spinner."""
+        mock_console, console_mocks = self._create_mocked_console_and_mocks()
+        manager = SimpleDisplayManager(mock_console)
+
+        manager.set_status("Phase 2")
+
+        console_mocks["print"].assert_not_called()
+
     def test_info_prints_to_console_when_no_spinner_active(self) -> None:
         """Test that info() prints to console when no spinner is active."""
         mock_console, console_mocks = self._create_mocked_console_and_mocks()

@@ -231,6 +231,19 @@ class DisplayManager(Protocol):
         """
         ...
 
+    def set_status(self, message: str) -> None:
+        """Update the active spinner's message in place, or do nothing if no spinner is active.
+
+        Unlike info(), this NEVER prints on its own line — it only narrates progress while a
+        spinner owns the terminal. Callers that want phase-by-phase narration (e.g. the proxy
+        lifecycle) can call this freely; outside a spinner it is a silent no-op, so the same
+        code path stays quiet for non-interactive/SDK callers.
+
+        Args:
+            message: The status message to show on the active spinner
+        """
+        ...
+
     def stop_spinning(self) -> None:
         """Stop the current spinner if one is active.
 
@@ -309,6 +322,10 @@ class NullDisplay:
     def spinner(self, initial_message: str) -> Any:
         """No-op spinner - returns nullcontext."""
         return nullcontext()
+
+    def set_status(self, message: str) -> None:
+        """No-op implementation."""
+        pass
 
     def stop_spinning(self) -> None:
         """No-op implementation."""

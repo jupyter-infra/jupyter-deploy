@@ -302,6 +302,15 @@ class ProgressDisplayManager:
             self._in_spinner = False
             self._current_spinner = None
 
+    def set_status(self, message: str) -> None:
+        """Update the active spinner's message in place; no-op when no spinner is active.
+
+        Args:
+            message: The status message to show on the active spinner
+        """
+        if self._in_spinner and self._current_spinner:
+            self._current_spinner.update(message)
+
     def stop_spinning(self) -> None:
         """Stop the current spinner if one is active.
 
