@@ -51,6 +51,7 @@ dev-dependencies = [
     "parameterized>=0.9.0",
     "tomli-w>=1.2.0",
     "yamllint>=1.35.0",
+    "trustme>=1.1.0",
     "types-aiofiles>=24.1.0",
     "types-pexpect>=4.9.0",
     "types-requests>=2.32.0",
