@@ -169,3 +169,43 @@ class ServerDetail:
 
     name: str = ""
     resource: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ProxyConnectBundle:
+    """The connect-info bundle emitted to the client proxy on stdout.
+
+    Field names and shape are the proxy's exec-credential contract
+    (`jupyter_deploy_client_proxy.credentials.bundle.ConnectBundle`): the proxy dials
+    `host:port`, pins `ca_cert`, injects `headers` verbatim on every request, and re-execs
+    the token command on a margin before `expires_at`. `headers` is opaque here — the
+    handler never interprets it.
+    """
+
+    host: str
+    port: int
+    ca_cert: str
+    headers: dict[str, str] = field(default_factory=dict)
+    expires_at: str = ""
+
+
+@dataclass
+class ProxyStatus:
+    """Detail of a single proxy instance, as observed on disk (jd proxy show).
+
+    `alive` is the live PID probe; `running` is `alive` AND a non-terminal published state.
+    `started_at` is the launch timestamp (its runtime directory name); `log_dir` is where
+    its console + rotating logs live.
+    """
+
+    state: str
+    pid: int
+    alive: bool
+    port: int | None = None
+    expires_at: str | None = None
+    running: bool = False
+    started_at: str = ""
+    log_dir: str = ""
+    # Process creation time (epoch seconds) recorded by the proxy; used to guard against
+    # signaling a recycled PID. None when read from a status file that predates the field.
+    process_created_at: float | None = None
