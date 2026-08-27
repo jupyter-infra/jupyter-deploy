@@ -229,6 +229,22 @@ class StoreType(str, Enum):
         raise ValueError(f"Unknown store type: '{value}'")
 
 
+class OpenMode(str, Enum):
+    """How `jd open` reaches the app for a template."""
+
+    URL = "url"
+    PROXY = "proxy"
+
+    @classmethod
+    def from_string(cls, value: str) -> "OpenMode":
+        """Return enum from string value, ignoring case; unknown values default to URL."""
+        value_lower = value.lower()
+        for member in cls:
+            if member.value.lower() == value_lower:
+                return member
+        return cls.URL
+
+
 class ProviderType(str, Enum):
     """Cloud provider types."""
 

@@ -6,6 +6,7 @@ from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.enum import (
     ConditionOperator,
     InstructionArgumentSource,
+    OpenMode,
     ResultSource,
     SecretSource,
     StoreType,
@@ -21,6 +22,11 @@ from jupyter_deploy.exceptions import (
     InvalidStoreTypeError,
     SecretNotFoundError,
 )
+
+# The manifest command a template must declare to support the local client proxy — it is the
+# token command the proxy re-execs to mint credentials, so the proxy cannot function without it.
+# Its presence is the contract for `jd proxy` / proxy-mode `jd open` (see supports_proxy()).
+PROXY_CONNECT_INFO_COMMAND = "proxy.connect-info"
 
 
 class JupyterDeployTemplateV1(BaseModel):
@@ -373,6 +379,23 @@ class JupyterDeployHealthV1(BaseModel):
     load_balancer_port: int = Field(alias="load-balancer-port", default=443)
 
 
+class JupyterDeployOpenV1(BaseModel):
+    """Declares how `jd open` reaches the app for this template.
+
+    - mode ``url`` (default): open a public URL resolved from the ``open_url`` value.
+    - mode ``proxy``: there is no public URL — launch the local client proxy and open the
+      loopback address it binds, appending ``path`` (e.g. ``/lab``).
+    """
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    mode: str = "url"
+    path: str = "/"
+
+    def get_mode(self) -> "OpenMode":
+        """Return the open mode, defaulting to URL for any unrecognized value."""
+        return OpenMode.from_string(self.mode)
+
+
 class JupyterDeployManifestV1(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
     schema_version: Literal[1]
@@ -391,10 +414,15 @@ class JupyterDeployManifestV1(BaseModel):
     components: dict[str, JupyterDeployComponentDefinitionV1] | None = None
     images: dict[str, JupyterDeployImageDefinitionV1] | None = None
     health: JupyterDeployHealthV1 | None = None
+    open: JupyterDeployOpenV1 | None = None
 
     def get_engine(self) -> EngineType:
         """Return the engine type."""
         return EngineType.from_string(self.template.engine)
+
+    def get_open(self) -> JupyterDeployOpenV1:
+        """Return the `jd open` behavior declaration (defaults to URL mode)."""
+        return self.open or JupyterDeployOpenV1()
 
     def get_declared_value(self, value_name: str) -> JupyterDeployValueV1:
         """Return the declared value definition.
@@ -454,6 +482,15 @@ class JupyterDeployManifestV1(BaseModel):
         """Return true if the manifest defines the command, false otherwise."""
         command = next((cmd for cmd in (self.commands or []) if cmd.cmd == cmd_name), None)
         return command is not None
+
+    def supports_proxy(self) -> bool:
+        """Return True if the template supports the local client proxy.
+
+        The contract is the presence of the ``proxy.connect-info`` command (the token command the
+        proxy re-execs to mint credentials); without it the proxy cannot function. Gates every
+        ``jd proxy`` command and proxy-mode ``jd open``.
+        """
+        return self.has_command(PROXY_CONNECT_INFO_COMMAND)
 
     def get_secret(self, name: str) -> JupyterDeploySecretV1:
         """Return the secret definition for the given variable name.

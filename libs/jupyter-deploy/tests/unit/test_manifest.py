@@ -6,7 +6,7 @@ import yaml
 from pydantic import ValidationError
 
 from jupyter_deploy.engine.enum import EngineType
-from jupyter_deploy.enum import StoreType
+from jupyter_deploy.enum import OpenMode, StoreType
 from jupyter_deploy.exceptions import (
     CommandNotImplementedError,
     ComponentNotFoundError,
@@ -87,6 +87,26 @@ class TestJupyterDeployManifestV1(unittest.TestCase):
             **self.manifest_v1_parsed_content  # type: ignore
         )
         self.assertFalse(manifest.has_command("i.do.not.exist"))
+
+    def test_supports_proxy_true_when_connect_info_declared(self) -> None:
+        manifest = JupyterDeployManifestV1(
+            **{  # type: ignore
+                "schema_version": 1,
+                "template": {"name": "t", "engine": "terraform", "version": "1.0.0"},
+                "commands": [{"cmd": "proxy.connect-info", "sequence": []}],
+            }
+        )
+        self.assertTrue(manifest.supports_proxy())
+
+    def test_supports_proxy_false_when_connect_info_absent(self) -> None:
+        manifest = JupyterDeployManifestV1(
+            **{  # type: ignore
+                "schema_version": 1,
+                "template": {"name": "t", "engine": "terraform", "version": "1.0.0"},
+                "commands": [{"cmd": "host.status", "sequence": []}],
+            }
+        )
+        self.assertFalse(manifest.supports_proxy())
 
     def test_manifest_v1_get_secrets(self) -> None:
         manifest = JupyterDeployManifestV1(
@@ -466,3 +486,30 @@ class TestCommandFlagsAndWhenSchema(unittest.TestCase):
                     ],
                 }
             )
+
+
+class TestManifestOpen(unittest.TestCase):
+    def _manifest(self, open_section: dict | None) -> JupyterDeployManifestV1:
+        data: dict = {
+            "schema_version": 1,
+            "template": {"name": "mock", "engine": "terraform", "version": "1.0.0"},
+        }
+        if open_section is not None:
+            data["open"] = open_section
+        return JupyterDeployManifestV1.model_validate(data)
+
+    def test_get_open_defaults_to_url_mode(self) -> None:
+        manifest = self._manifest(None)
+        open_config = manifest.get_open()
+        self.assertEqual(open_config.get_mode(), OpenMode.URL)
+        self.assertEqual(open_config.path, "/")
+
+    def test_get_open_proxy_mode(self) -> None:
+        manifest = self._manifest({"mode": "proxy", "path": "/lab"})
+        open_config = manifest.get_open()
+        self.assertEqual(open_config.get_mode(), OpenMode.PROXY)
+        self.assertEqual(open_config.path, "/lab")
+
+    def test_unknown_open_mode_falls_back_to_url(self) -> None:
+        manifest = self._manifest({"mode": "carrier-pigeon"})
+        self.assertEqual(manifest.get_open().get_mode(), OpenMode.URL)
