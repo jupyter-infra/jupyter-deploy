@@ -8,6 +8,7 @@ from jupyter_deploy.api.aws.ec2.ec2_instance import (
     _INSTANCE_CODE_MAP,
     _INSTANCE_REVERSE_CODE_MAP,
     Ec2InstanceState,
+    describe_instance_public_ip,
     describe_instance_status,
     poll_for_instance_status,
     restart_instance,
@@ -465,3 +466,49 @@ class TestRestartInstance(unittest.TestCase):
         # Execute & Assert
         with self.assertRaises(botocore.exceptions.ClientError):
             restart_instance(mock_ec2_client, "i-123")
+
+
+class TestDescribeInstancePublicIp(unittest.TestCase):
+    def test_returns_public_ip(self) -> None:
+        mock_client = Mock()
+        mock_client.describe_instances.return_value = {
+            "Reservations": [{"Instances": [{"PublicIpAddress": "203.0.113.7"}]}]
+        }
+
+        result = describe_instance_public_ip(mock_client, "i-abc")
+
+        self.assertEqual(result, "203.0.113.7")
+        mock_client.describe_instances.assert_called_once_with(InstanceIds=["i-abc"])
+
+    def test_raises_when_no_reservations(self) -> None:
+        mock_client = Mock()
+        mock_client.describe_instances.return_value = {"Reservations": []}
+
+        with self.assertRaises(ValueError) as ctx:
+            describe_instance_public_ip(mock_client, "i-missing")
+        self.assertIn("i-missing", str(ctx.exception))
+
+    def test_raises_when_no_instances(self) -> None:
+        mock_client = Mock()
+        mock_client.describe_instances.return_value = {"Reservations": [{"Instances": []}]}
+
+        with self.assertRaises(ValueError):
+            describe_instance_public_ip(mock_client, "i-abc")
+
+    def test_raises_when_no_public_ip(self) -> None:
+        # Stopped or private-subnet instance: PublicIpAddress may be absent/empty.
+        mock_client = Mock()
+        mock_client.describe_instances.return_value = {"Reservations": [{"Instances": [{"InstanceId": "i-abc"}]}]}
+
+        with self.assertRaises(ValueError) as ctx:
+            describe_instance_public_ip(mock_client, "i-abc")
+        self.assertIn("no public IP", str(ctx.exception))
+
+    def test_raises_when_describe_instances_raises(self) -> None:
+        mock_client = Mock()
+        mock_client.describe_instances.side_effect = botocore.exceptions.ClientError(
+            {"Error": {"Code": "UnauthorizedOperation", "Message": "denied"}}, "DescribeInstances"
+        )
+
+        with self.assertRaises(botocore.exceptions.ClientError):
+            describe_instance_public_ip(mock_client, "i-abc")

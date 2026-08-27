@@ -724,6 +724,7 @@ class TestStartSession(unittest.TestCase):
 
 
 class TestExecuteInstructions(unittest.TestCase):
+    @patch("jupyter_deploy.api.aws.ssm.ssm_parameter.get_parameter_value")
     @patch("jupyter_deploy.provider.aws.aws_ssm_runner.AwsSsmRunner._verify_ec2_instance_accessible")
     @patch("jupyter_deploy.provider.aws.aws_ssm_runner.verify_utils.verify_tools_installation")
     @patch("jupyter_deploy.provider.aws.aws_ssm_runner.cmd_utils.run_cmd_and_pipe_to_terminal")
@@ -738,6 +739,7 @@ class TestExecuteInstructions(unittest.TestCase):
         mock_run_cmd: Mock,
         mock_verify_tools: Mock,
         mock_verify_ec2: Mock,
+        mock_get_parameter: Mock,
     ) -> None:
         # Arrange
         runner = AwsSsmRunner(NullDisplay(), region_name="us-west-2")
@@ -758,6 +760,7 @@ class TestExecuteInstructions(unittest.TestCase):
         }
 
         mock_get_conn_status.return_value = "connected"
+        mock_get_parameter.return_value = "param-value"
 
         # Verify each instruction in AwsSsmInstruction can be executed
         for instruction in AwsSsmInstruction:
@@ -768,6 +771,7 @@ class TestExecuteInstructions(unittest.TestCase):
             mock_send_cmd.reset_mock()
             mock_describe_info.reset_mock()
             mock_get_conn_status.reset_mock()
+            mock_get_parameter.reset_mock()
 
             # Basic arguments that work for any instruction
             base_resolved_arguments: dict[str, ResolvedInstructionArgument] = {}
@@ -789,6 +793,10 @@ class TestExecuteInstructions(unittest.TestCase):
             elif instruction == AwsSsmInstruction.GET_CONNECTION_STATUS:
                 base_resolved_arguments = {
                     "instance_id": StrResolvedInstructionArgument(argument_name="instance_id", value="i-12345"),
+                }
+            elif instruction == AwsSsmInstruction.GET_PARAMETER:
+                base_resolved_arguments = {
+                    "name": StrResolvedInstructionArgument(argument_name="name", value="/jd/cert/pin"),
                 }
             else:
                 raise NotImplementedError(f"Instruction {instruction} not implemented")
@@ -813,6 +821,9 @@ class TestExecuteInstructions(unittest.TestCase):
             elif instruction == AwsSsmInstruction.GET_CONNECTION_STATUS:
                 mock_get_conn_status.assert_called_once()
                 self.assertEqual(result["Status"].value, "connected")
+            elif instruction == AwsSsmInstruction.GET_PARAMETER:
+                mock_get_parameter.assert_called_once()
+                self.assertEqual(result["Value"].value, "param-value")
 
     def test_raise_not_implemented_error_on_unrecognized_instruction(self) -> None:
         # Arrange
@@ -1112,4 +1123,44 @@ class TestGetConnectionStatus(unittest.TestCase):
             runner.execute_instruction(
                 instruction_name=AwsSsmInstruction.GET_CONNECTION_STATUS,
                 resolved_arguments={},
+            )
+
+
+class TestGetParameter(unittest.TestCase):
+    @patch("jupyter_deploy.api.aws.ssm.ssm_parameter.get_parameter_value")
+    def test_returns_parameter_value(self, mock_get_param: Mock) -> None:
+        runner = AwsSsmRunner(NullDisplay(), region_name="us-west-2")
+        mock_get_param.return_value = "-----BEGIN CERTIFICATE-----\nPEM\n"
+
+        resolved_arguments: dict[str, ResolvedInstructionArgument] = {
+            "name": StrResolvedInstructionArgument(argument_name="name", value="/jd/cert/pin"),
+        }
+        result = runner.execute_instruction(
+            instruction_name=AwsSsmInstruction.GET_PARAMETER,
+            resolved_arguments=resolved_arguments,
+        )
+
+        self.assertEqual(result["Value"].value, "-----BEGIN CERTIFICATE-----\nPEM\n")
+        mock_get_param.assert_called_once_with(runner.client, name="/jd/cert/pin")
+
+    def test_raises_on_missing_name(self) -> None:
+        runner = AwsSsmRunner(NullDisplay(), region_name="us-west-2")
+        with self.assertRaises(KeyError):
+            runner.execute_instruction(
+                instruction_name=AwsSsmInstruction.GET_PARAMETER,
+                resolved_arguments={},
+            )
+
+    @patch("jupyter_deploy.api.aws.ssm.ssm_parameter.get_parameter_value")
+    def test_raises_when_get_parameter_raises(self, mock_get_param: Mock) -> None:
+        runner = AwsSsmRunner(NullDisplay(), region_name="us-west-2")
+        mock_get_param.side_effect = ValueError("SSM parameter '/x' has no Value")
+
+        resolved_arguments: dict[str, ResolvedInstructionArgument] = {
+            "name": StrResolvedInstructionArgument(argument_name="name", value="/x"),
+        }
+        with self.assertRaises(ValueError):
+            runner.execute_instruction(
+                instruction_name=AwsSsmInstruction.GET_PARAMETER,
+                resolved_arguments=resolved_arguments,
             )

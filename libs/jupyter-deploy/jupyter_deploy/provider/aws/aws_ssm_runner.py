@@ -4,7 +4,7 @@ import boto3
 from mypy_boto3_ssm.client import SSMClient
 
 from jupyter_deploy import cmd_utils, verify_utils
-from jupyter_deploy.api.aws.ssm import ssm_command, ssm_connection, ssm_session
+from jupyter_deploy.api.aws.ssm import ssm_command, ssm_connection, ssm_parameter, ssm_session
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.enum import JupyterDeployTool
 from jupyter_deploy.exceptions import (
@@ -40,6 +40,7 @@ class AwsSsmInstruction(str, Enum):
     SEND_DFT_SHELL_DOC_CMD_AND_WAIT_SYNC = "wait-default-shell-command-sync"
     START_SESSION = "start-session"
     GET_CONNECTION_STATUS = "get-connection-status"
+    GET_PARAMETER = "get-parameter"
 
 
 class AwsSsmRunner(InstructionRunner):
@@ -282,6 +283,16 @@ class AwsSsmRunner(InstructionRunner):
             "Status": StrResolvedInstructionResult(result_name="Status", value=status),
         }
 
+    def _get_parameter(
+        self,
+        resolved_arguments: dict[str, ResolvedInstructionArgument],
+    ) -> dict[str, ResolvedInstructionResult]:
+        name_arg = require_arg(resolved_arguments, "name", StrResolvedInstructionArgument)
+        value = ssm_parameter.get_parameter_value(self.client, name=name_arg.value)
+        return {
+            "Value": StrResolvedInstructionResult(result_name="Value", value=value),
+        }
+
     def execute_instruction(
         self,
         instruction_name: str,
@@ -301,6 +312,10 @@ class AwsSsmRunner(InstructionRunner):
             )
         elif instruction_name == AwsSsmInstruction.GET_CONNECTION_STATUS:
             return self._get_connection_status(
+                resolved_arguments=resolved_arguments,
+            )
+        elif instruction_name == AwsSsmInstruction.GET_PARAMETER:
+            return self._get_parameter(
                 resolved_arguments=resolved_arguments,
             )
 

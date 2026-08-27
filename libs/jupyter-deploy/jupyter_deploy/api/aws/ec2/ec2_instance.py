@@ -234,3 +234,29 @@ def restart_instance(ec2_client: EC2Client, instance_id: str) -> None:
 
     request: RebootInstancesRequestTypeDef = {"InstanceIds": [instance_id]}
     ec2_client.reboot_instances(**request)
+
+
+def describe_instance_public_ip(ec2_client: EC2Client, instance_id: str) -> str:
+    """Return the instance's current public IPv4 (from ``PublicIpAddress``).
+
+    Resolved live per call for EC2 instance deployed without an EIP. Callers pin
+    on the cert/key, not the address, so the churn is expected.
+
+    Raises:
+        ValueError: if the instance is not found or has no public IP (typically stopped).
+    """
+    request: DescribeInstancesRequestTypeDef = {"InstanceIds": [instance_id]}
+    response = ec2_client.describe_instances(**request)
+
+    reservations = response.get("Reservations", [])
+    if not reservations:
+        raise ValueError(f"Instance not found: {instance_id}")
+
+    instances = reservations[0].get("Instances", [])
+    if not instances:
+        raise ValueError(f"Instance not found in reservation: {instance_id}")
+
+    public_ip = instances[0].get("PublicIpAddress")
+    if not public_ip:
+        raise ValueError(f"Instance '{instance_id}' has no public IP — it may be stopped or is in a private subnet.")
+    return public_ip
