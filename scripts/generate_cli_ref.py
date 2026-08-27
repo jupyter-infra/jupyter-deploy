@@ -24,7 +24,7 @@ COMMAND_GROUPS = {
             "Project commands manage the full lifecycle of a deployment project:"
             " initialization, configuration, provisioning, teardown, and inspection."
         ),
-        "commands": ["init", "config", "up", "down", "open", "show", "health", "history"],
+        "commands": ["init", "config", "up", "down", "open", "proxy", "show", "health", "history"],
     },
     "resource": {
         "title": "Resource Commands",

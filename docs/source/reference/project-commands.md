@@ -9,6 +9,7 @@ Project commands manage the full lifecycle of a deployment project: initializati
 | [up](project/up) | Apply the project configuration to the cloud resources. |
 | [down](project/down) | Destroy the cloud resources defined in the project configuration. |
 | [open](project/open) | Open the app in your web browser. |
+| [proxy](project/proxy) | Manage local processes that communicate with your project's host(s). |
 | [show](project/show) | Display information about the project. |
 | [health](project/health) | Check the health of the full deployment stack. |
 | [history](project/history) | View and manage logs emitted by the infrastructure-as-code engine. |
@@ -21,6 +22,7 @@ project/config
 project/up
 project/down
 project/open
+project/proxy
 project/show
 project/health
 project/history
