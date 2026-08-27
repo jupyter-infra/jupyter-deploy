@@ -3,8 +3,7 @@ from enum import Enum
 import boto3
 from mypy_boto3_ec2.client import EC2Client
 
-from jupyter_deploy.api.aws.ec2 import ec2_instance, ec2_security_group
-from jupyter_deploy.api.http import ip_echo
+from jupyter_deploy.api.aws.ec2 import ec2_instance
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.exceptions import IncompatibleHostStateError, InstructionNotFoundError
 from jupyter_deploy.provider.instruction_runner import InstructionRunner
@@ -29,7 +28,6 @@ class AwsEc2Instruction(str, Enum):
     WAIT_FOR_RUNNING = "wait-for-running"
     WAIT_FOR_STOPPED = "wait-for-stopped"
     RESOLVE_ENDPOINT = "resolve-endpoint"
-    AUTHORIZE_CALLER_INGRESS = "authorize-caller-ingress"
 
 
 class AwsEc2Runner(InstructionRunner):
@@ -251,32 +249,6 @@ class AwsEc2Runner(InstructionRunner):
             "Port": StrResolvedInstructionResult(result_name="Port", value=str(port)),
         }
 
-    def _authorize_caller_ingress(
-        self,
-        resolved_arguments: dict[str, ResolvedInstructionArgument],
-    ) -> dict[str, ResolvedInstructionResult]:
-        # Open the network door as a side effect of connect-info (restricted mode only): make
-        # the caller's server-observed /32 the sole ingress rule on `port`. The IP is read from
-        # the instance's plaintext /ip echo (reliable behind NAT, unlike a client-side probe),
-        # then reconciled on every refresh so a changed egress IP self-heals.
-        security_group_id_arg = require_arg(resolved_arguments, "security_group_id", StrResolvedInstructionArgument)
-        port_arg = require_arg(resolved_arguments, "port", StrResolvedInstructionArgument)
-        instance_ip_arg = require_arg(resolved_arguments, "instance_ip", StrResolvedInstructionArgument)
-        echo_port_arg = require_arg(resolved_arguments, "echo_port", StrResolvedInstructionArgument)
-        echo_path_arg = require_arg(resolved_arguments, "echo_path", StrResolvedInstructionArgument)
-        port = int(port_arg.value)
-        echo_port = int(echo_port_arg.value)
-
-        observed_ip = ip_echo.get_observed_ip(instance_ip_arg.value, echo_port, echo_path_arg.value)
-        cidr = f"{observed_ip}/32"
-
-        self.display_manager.info(f"Authorizing {cidr} on port {port} of security group {security_group_id_arg.value}")
-        ec2_security_group.reconcile_caller_ingress(
-            self.client, security_group_id=security_group_id_arg.value, cidr=cidr, port=port
-        )
-
-        return {"AuthorizedCidr": StrResolvedInstructionResult(result_name="AuthorizedCidr", value=cidr)}
-
     def execute_instruction(
         self,
         instruction_name: str,
@@ -312,7 +284,5 @@ class AwsEc2Runner(InstructionRunner):
             )
         elif instruction_name == AwsEc2Instruction.RESOLVE_ENDPOINT:
             return self._resolve_endpoint(resolved_arguments=resolved_arguments)
-        elif instruction_name == AwsEc2Instruction.AUTHORIZE_CALLER_INGRESS:
-            return self._authorize_caller_ingress(resolved_arguments=resolved_arguments)
 
         raise InstructionNotFoundError(f"No execution implementation for command: 'aws.ec2.{instruction_name}'")

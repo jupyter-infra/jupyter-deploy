@@ -70,9 +70,9 @@ class ProxyHandler(BaseProjectHandler):
     def get_connect_bundle(self) -> ProxyConnectBundle:
         """Run the manifest connect-info command and return the connection bundle.
 
-        The SG-door behavior (whether to restrict :443 to the caller's server-observed /32) is
-        a deploy-time template decision (ingress_mode), gated inside the manifest — so this
-        method takes no runtime knobs.
+        connect-info has no network side effect: it resolves the instance endpoint, reads the
+        pinned cert, and mints the token. The security boundary is the STS-identity token over
+        pinned self-signed TLS; the security group opens :443 to all.
 
         Raises:
             CommandNotImplementedError: If the template does not declare proxy.connect-info.
