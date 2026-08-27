@@ -1,0 +1,24 @@
+[workspace]
+channels = [
+    "conda-forge",
+]
+description = "A basic single-user JupyterLab image"
+name = "jupyter-pixi"
+platforms = [
+%{ if cpu_architecture == "arm64" ~}
+    "linux-aarch64",
+%{ else ~}
+    "linux-64",
+%{ endif ~}
+]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = ">=3.12"
+
+[pypi-dependencies]
+# Single-user template: no RTC / jupyter-server-documents, so no @jupyter/ydoc
+# frontend-singleton constraint — track the latest JupyterLab 4.x.
+jupyterlab = ">=4.6"
