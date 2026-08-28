@@ -72,7 +72,9 @@ class TestWriteProxyStatus(unittest.IsolatedAsyncioTestCase):
         # write_proxy_status does no logging itself, so the no-dir path is a clean no-op.
         await write_proxy_status(ProxyState.RUNNING, self._config(None), None)  # must not raise
 
-    async def test_write_is_atomic_leaves_no_tmp(self) -> None:
+    async def test_write_leaves_no_stray_tmp_file(self) -> None:
+        # The write is a plain in-place write (not yet a temp-file-plus-rename), so it
+        # should never leave a *.tmp artifact behind.
         with tempfile.TemporaryDirectory() as tmp:
             log_dir = Path(tmp) / "logs"
             await write_proxy_status(ProxyState.RUNNING, self._config(log_dir), None, port=1)
