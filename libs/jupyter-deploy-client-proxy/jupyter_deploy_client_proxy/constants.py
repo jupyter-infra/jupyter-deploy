@@ -12,7 +12,11 @@ DEFAULT_REFRESH_MARGIN_SECONDS = 15.0
 # Reconnect backoff + retries.
 DEFAULT_BASE_DELAY_SECONDS = 0.5
 DEFAULT_MAX_DELAY_SECONDS = 30.0
-DEFAULT_REFRESH_MAX_ATTEMPTS = 5  # per refresh cycle; the proxy's loop retries cycles indefinitely
+# Token-command attempt budgets per bundle fetch. Startup fails fast (the user is waiting on
+# `jd proxy start` / `jd open`); refresh retries harder to keep serving through transient blips,
+# and the refresh loop itself retries cycles indefinitely on top of this per-cycle budget.
+DEFAULT_STARTUP_MAX_ATTEMPTS = 2
+DEFAULT_REFRESH_MAX_ATTEMPTS = 5
 
 # Token-command exit code that signals a transient/retryable failure (sysexits EX_TEMPFAIL).
 # Any other non-zero exit is treated as permanent (non-retryable).
