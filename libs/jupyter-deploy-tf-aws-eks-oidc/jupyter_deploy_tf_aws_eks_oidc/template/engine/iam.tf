@@ -353,10 +353,12 @@ data "aws_iam_policy_document" "karpenter_controller" {
     }
   }
 
-  # Must also cover the <cluster>_<hash> profile names Karpenter auto-generates:
-  # the EC2NodeClass termination reconciler probes them on every delete even in
-  # pre-created-profile mode, and a 403 there (vs the expected 404) blocks the
-  # finalizer, wedging the NodeClass in Terminating forever.
+  # Must also cover the <cluster>_<hash> profile names Karpenter auto-generates
+  # (EC2NodeClass.LegacyInstanceProfileName as of karpenter v1.13.1): the termination
+  # reconciler probes them on every delete even in pre-created-profile mode, and a 403
+  # there (vs the expected 404) blocks the finalizer, leaving the NodeClass stuck in
+  # Terminating. New-style profiles live under an IAM path (/karpenter/<region>/...)
+  # and are only touched by ListInstanceProfiles, granted below.
   statement {
     sid     = "AllowInstanceProfileGet"
     actions = ["iam:GetInstanceProfile"]
