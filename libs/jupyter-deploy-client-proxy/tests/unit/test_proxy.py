@@ -146,6 +146,22 @@ class TestBundleFetchAttemptBudgets(unittest.IsolatedAsyncioTestCase):
                 await task
         self.assertEqual(mock_fetch.call_args.kwargs["max_attempts"], 9)
 
+    async def test_refresh_loop_marks_failed_when_apply_bundle_raises(self) -> None:
+        # _apply_bundle runs inside the try now: an unexpected error there (e.g. a bad PEM from
+        # build_pinned_ssl_context) must transition to FAILED and break the loop, not propagate
+        # uncaught while the proxy keeps reporting RUNNING.
+        proxy = JupyterDeployClientProxy(self._config())
+        proxy._logger = Mock()
+        proxy._bundle = ConnectBundle(host="h", port=443, expires_at=datetime.now(UTC))
+        fetched = ConnectBundle(host="h", port=443, expires_at=datetime.now(UTC))
+        with (
+            patch("jupyter_deploy_client_proxy.server.proxy.get_seconds_until_refresh", return_value=0.0),
+            patch.object(proxy, "_fetch_bundle", new_callable=AsyncMock, return_value=fetched),
+            patch.object(proxy, "_apply_bundle", new_callable=AsyncMock, side_effect=ValueError("bad PEM")),
+        ):
+            await asyncio.wait_for(proxy._refresh_loop(), timeout=1)  # returns via break, no hang
+        self.assertEqual(proxy.state, ProxyState.FAILED)
+
 
 class TestPipeWs(unittest.IsolatedAsyncioTestCase):
     """Teardown edge cases in `_pipe_ws`: a relay leg raising, and socket-close failures."""

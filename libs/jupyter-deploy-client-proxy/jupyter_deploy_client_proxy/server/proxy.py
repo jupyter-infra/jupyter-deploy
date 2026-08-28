@@ -194,15 +194,19 @@ class JupyterDeployClientProxy:
     async def _refresh_loop(self) -> None:
         while True:
             assert self._bundle is not None
-            delay = get_seconds_until_refresh(
-                self._bundle.expires_at, margin_seconds=self._config.refresh_margin_seconds
-            )
-            self._logger.debug(f"next credential refresh in {delay:.0f}s")
-            await asyncio.sleep(delay)
             try:
+                # Everything the cycle can throw is inside the try: the sleep math
+                # (get_seconds_until_refresh), the token command (_fetch_bundle), AND applying
+                # the bundle (_apply_bundle → build_pinned_ssl_context can raise on a bad PEM).
                 # A burst of attempts with backoff (the refresh budget, larger than startup's);
                 # this loop keeps retrying cycles forever.
+                delay = get_seconds_until_refresh(
+                    self._bundle.expires_at, margin_seconds=self._config.refresh_margin_seconds
+                )
+                self._logger.debug(f"next credential refresh in {delay:.0f}s")
+                await asyncio.sleep(delay)
                 bundle = await self._fetch_bundle(self._config.refresh_max_attempts)
+                await self._apply_bundle(bundle)
             except TokenCommandError:
                 # Already logged at error; keep serving on the current credential and cool down.
                 self._state = ProxyState.DEGRADED
@@ -211,13 +215,13 @@ class JupyterDeployClientProxy:
                 continue
             except Exception as e:
                 # An unexpected crash (not a token-command failure): the refresh machinery is
-                # dead and won't self-heal — mark FAILED and stop the loop. (CancelledError is a
-                # BaseException, so a stop()-driven cancel is not caught here.)
+                # dead and won't self-heal — mark FAILED and stop the loop, so the state reflects
+                # reality instead of a stale RUNNING. (CancelledError is a BaseException, so a
+                # stop()-driven cancel is not caught here.)
                 self._logger.error(f"refresh loop crashed, stopping refresh: {e}")
                 self._state = ProxyState.FAILED
                 await self.write_status_best_effort()
                 break
-            await self._apply_bundle(bundle)
             self._state = ProxyState.RUNNING
             await self.write_status_best_effort()
             self._logger.info(f"credential refreshed: {get_bundle_summary(bundle)}")
