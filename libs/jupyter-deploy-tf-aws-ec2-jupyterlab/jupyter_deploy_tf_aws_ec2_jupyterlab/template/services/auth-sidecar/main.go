@@ -95,10 +95,10 @@ type cacheEntry struct {
 	expires time.Time
 }
 
-// get returns the cached ARN for a token, treating an expired entry as a miss. Invalidation is
-// lazy: a past-TTL entry is deleted here on read (there is no background sweeper), so the caller
-// then re-verifies against STS. TTL is the only invalidation — entries are never updated in
-// place, so a revoked/expired AWS credential keeps working until at most cacheTTL elapses.
+// get returns the cached ARN for a token, treating an expired entry as a miss. A past-TTL entry
+// is deleted here on read, so the caller then re-verifies against STS. TTL is the only
+// invalidation — entries are never updated in place, so a revoked/expired AWS credential keeps
+// working until at most cacheTTL elapses.
 func (c *cache) get(token string) (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -111,12 +111,20 @@ func (c *cache) get(token string) (string, bool) {
 }
 
 // put caches a verified ARN under the full token string for cacheTTL. Keying on the exact token
-// means a refreshed/re-minted token is a distinct key that always forces a fresh STS check, and
-// bounds the cache to the set of live tokens (each self-evicts on its next expired read).
+// means a refreshed/re-minted token is a distinct key that always forces a fresh STS check. The
+// client re-mints a token roughly every cacheTTL, so a rotated-away key would otherwise never be
+// read again and never self-evict; to bound the map we sweep all expired entries on every write.
+// Only ~1 token is live at a time, so this keeps the map to a handful of entries.
 func (c *cache) put(token, arn string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.entries[token] = cacheEntry{arn: arn, expires: time.Now().Add(cacheTTL)}
+	now := time.Now()
+	for k, e := range c.entries {
+		if now.After(e.expires) {
+			delete(c.entries, k)
+		}
+	}
+	c.entries[token] = cacheEntry{arn: arn, expires: now.Add(cacheTTL)}
 }
 
 type stsResponse struct {
