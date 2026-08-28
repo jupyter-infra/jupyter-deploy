@@ -89,10 +89,11 @@ spec:
         - key: karpenter.k8s.aws/instance-family
           operator: In
           values: {{ .instanceFamilies | toJson }}
-        {{- /* Template comment (not rendered): accelerator families ship sizes
-             above this allowlist (p4d.24xlarge = 96 vCPUs, p5en.48xlarge = 192),
-             so on a GPU pool it can only exclude instances; the family list and
-             the gpu limit already pin the node size there. */}}
+        {{- /* On an accelerator pool the workspace's GPU request and the family
+             list determine the node choice; vCPU is noise there, and accelerator
+             families ship sizes far above this allowlist (p4d.24xlarge = 96
+             vCPUs), so the allowlist could only exclude instances. Per-node
+             size is deliberately unbounded on accelerator pools. */}}
         {{- if not .gpu }}
         - key: karpenter.k8s.aws/instance-cpu
           operator: In
