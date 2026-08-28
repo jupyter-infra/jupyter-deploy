@@ -21,6 +21,13 @@ RETRYABLE_EXIT_CODE = 75
 # TLS: offer only HTTP/1.1 on the upstream leg (deliberate — see design notes).
 ALPN_PROTOCOLS = ["http/1.1"]
 
+# Upstream request timeouts. aiohttp's default caps the *whole* operation at 300s, which
+# would sever any response streamed for longer (large `/api/contents` downloads, slow
+# endpoints). We disable the total cap and instead bound only connect + inter-read stalls,
+# so a dead/unresponsive upstream still fails fast without truncating a healthy transfer.
+UPSTREAM_SOCK_CONNECT_TIMEOUT_SECONDS = 30.0
+UPSTREAM_SOCK_READ_TIMEOUT_SECONDS = 300.0
+
 # Logging.
 DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MiB per file

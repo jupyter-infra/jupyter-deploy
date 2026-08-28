@@ -14,6 +14,10 @@ import contextlib
 import aiohttp
 from aiohttp import web
 
+from jupyter_deploy_client_proxy.constants import (
+    UPSTREAM_SOCK_CONNECT_TIMEOUT_SECONDS,
+    UPSTREAM_SOCK_READ_TIMEOUT_SECONDS,
+)
 from jupyter_deploy_client_proxy.credentials.bundle import ConnectBundle
 from jupyter_deploy_client_proxy.credentials.credential import fetch_bundle, fetch_bundle_with_retries
 from jupyter_deploy_client_proxy.enums import ProxyState
@@ -157,6 +161,11 @@ class JupyterDeployClientProxy:
         self._session = aiohttp.ClientSession(
             connector=aiohttp.TCPConnector(ssl=ssl_context),
             auto_decompress=False,
+            timeout=aiohttp.ClientTimeout(
+                total=None,
+                sock_connect=UPSTREAM_SOCK_CONNECT_TIMEOUT_SECONDS,
+                sock_read=UPSTREAM_SOCK_READ_TIMEOUT_SECONDS,
+            ),
         )
         self._logger.info("upstream TLS pin set")
         if old is not None:

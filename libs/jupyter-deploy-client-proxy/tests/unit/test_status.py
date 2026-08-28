@@ -52,7 +52,9 @@ class TestWriteStatusBestEffort(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status["port"], 51234)
         self.assertEqual(status["expires_at"], expires.isoformat())
 
-    async def test_write_is_atomic_leaves_no_tmp(self) -> None:
+    async def test_write_leaves_no_stray_tmp_file(self) -> None:
+        # The write is a plain in-place write (not yet a temp-file-plus-rename), so it
+        # should never leave a *.tmp artifact behind.
         proxy = self._proxy()
         await proxy.write_status_best_effort()
         log_dir = Path(self._tmp.name) / "logs"
