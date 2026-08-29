@@ -1,0 +1,22 @@
+# An accelerator entry without maxGpus, as platform_karpenter.tf emits for a custom
+# pool that sets accelerator but not max_gpus (the docs' p4d,p5,p5en example).
+clusterName: test-cluster
+nodeInstanceProfile: test-karpenter-node-profile
+expireAfter: 504h
+routingLimitsCpu: "32"
+routingLimitsMemory: 128Gi
+routing:
+  instanceCategories: ["c", "m"]
+  instanceGenerationMin: "6"
+  blockDevice:
+    deviceName: /dev/xvda
+    volumeSizeGi: 50
+    volumeType: gp3
+workspaceNodepools:
+  - name: workspace-gpu-p
+    instanceFamilies: ["p4d", "p5", "p5en"]
+    diskSizeGi: 200
+    maxCpu: "384"
+    maxMemory: 3000Gi
+    role: workspace-gpu-p
+    gpu: "true"

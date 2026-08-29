@@ -142,6 +142,15 @@ class TestKarpenterNodepoolsGpuRender(GoldenComparisonTestCase):
         self.assertEqual(self.gpu_pool["spec"]["limits"].get("nvidia.com/gpu"), "4")
         self.assertNotIn("nvidia.com/gpu", self.cpu_pool["spec"]["limits"])
 
+    def test_gpu_nodepool_no_instance_cpu_allowlist(self) -> None:
+        """Accelerator families ship sizes above the CPU allowlist (p4d.24xlarge
+        = 96 vCPUs); a GPU pool carrying it could never provision those families.
+        """
+        gpu_keys = {req["key"] for req in self.gpu_pool["spec"]["template"]["spec"]["requirements"]}
+        self.assertNotIn("karpenter.k8s.aws/instance-cpu", gpu_keys)
+        cpu_keys = {req["key"] for req in self.cpu_pool["spec"]["template"]["spec"]["requirements"]}
+        self.assertIn("karpenter.k8s.aws/instance-cpu", cpu_keys)
+
     def test_gpu_nodepool_instance_families(self) -> None:
         requirements = {req["key"]: req for req in self.gpu_pool["spec"]["template"]["spec"]["requirements"]}
         self.assertEqual(
@@ -151,6 +160,31 @@ class TestKarpenterNodepoolsGpuRender(GoldenComparisonTestCase):
     def test_gpu_ec2nodeclass_root_volume(self) -> None:
         nodeclass = yaml.safe_load(self.chunks[("EC2NodeClass", "workspace-gpu")])
         self.assertEqual(nodeclass["spec"]["blockDeviceMappings"][0]["ebs"]["volumeSize"], "100Gi")
+
+
+@_SKIP_WITHOUT_HELM
+class TestKarpenterNodepoolsAccelUnboundedRender(GoldenComparisonTestCase):
+    """An accelerator entry without maxGpus renders no instance-cpu allowlist and
+    no nvidia.com/gpu limit: per-node size is deliberately unbounded (#352 review).
+    """
+
+    rendered: ClassVar[str]
+    pool: ClassVar[dict[str, Any]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.rendered = _helm_template(
+            "charts/karpenter-nodepools", "karpenter-nodepools", "values_karpenter_accel_unbounded.yaml"
+        )
+        cls.pool = yaml.safe_load(_doc_chunks(cls.rendered)[("NodePool", "workspace-gpu-p")])
+
+    def test_render_matches_golden(self) -> None:
+        self.compare_to_golden(self.rendered, "golden_karpenter_nodepools_accel_unbounded.yaml")
+
+    def test_no_instance_cpu_and_no_gpu_limit(self) -> None:
+        keys = {req["key"] for req in self.pool["spec"]["template"]["spec"]["requirements"]}
+        self.assertNotIn("karpenter.k8s.aws/instance-cpu", keys)
+        self.assertNotIn("nvidia.com/gpu", self.pool["spec"]["limits"])
 
 
 @_SKIP_WITHOUT_HELM

@@ -114,6 +114,39 @@ def test_all_eks_addons_gated_by_cluster_addons() -> None:
     )
 
 
+def _extract_statement_block(content: str, sid: str) -> str:
+    """Return the body of the policy `statement { ... }` carrying `sid`, comment lines stripped."""
+    for start in re.finditer(r"statement\s*\{", content):
+        depth = 1
+        idx = start.end()
+        while idx < len(content) and depth > 0:
+            if content[idx] == "{":
+                depth += 1
+            elif content[idx] == "}":
+                depth -= 1
+            idx += 1
+        body = content[start.end() : idx - 1]
+        if re.search(rf'sid\s*=\s*"{re.escape(sid)}"', body):
+            return "\n".join(line for line in body.splitlines() if not line.lstrip().startswith("#"))
+    raise AssertionError(f'statement with sid "{sid}" not found in content')
+
+
+def test_karpenter_can_read_generated_instance_profiles() -> None:
+    """Karpenter's termination reconciler probes generated <cluster>_* profile
+    names with GetInstanceProfile; a 403 there blocks EC2NodeClass deletion (#349).
+    """
+    iam_tf = (TEMPLATE_PATH / "engine" / "iam.tf").read_text()
+    statement = _extract_statement_block(iam_tf, "AllowInstanceProfileGet")
+    assert "instance-profile/${module.eks_cluster.cluster_name}_*" in statement, (
+        "iam:GetInstanceProfile no longer covers Karpenter's generated <cluster>_* "
+        "instance profiles; deleting an EC2NodeClass will hang on a 403 probe (#349)."
+    )
+    assert "aws_iam_instance_profile.karpenter_node.arn" in statement, (
+        "iam:GetInstanceProfile no longer covers the pre-created node profile; "
+        "Karpenter's read of the profile recorded in Status.InstanceProfile will fail."
+    )
+
+
 def _iter_resource_blocks(content: str) -> list[tuple[str, str, str]]:
     """Yield (resource_type, resource_name, body) for every resource block in content."""
     blocks: list[tuple[str, str, str]] = []
