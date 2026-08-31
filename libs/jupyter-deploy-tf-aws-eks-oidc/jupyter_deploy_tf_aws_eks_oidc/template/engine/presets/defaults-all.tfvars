@@ -37,9 +37,9 @@ platform_disk_size_gb   = 50
 platform_min_size       = 2
 platform_max_size       = 3
 
-karpenter_version  = "1.13.1"
+karpenter_version  = "1.14.1"
 keda_version       = "2.20.2"
-prometheus_version = "29.21.0"
+prometheus_version = "29.27.0"
 
 routing_max_cpu    = "32"
 routing_max_memory = "128Gi"
@@ -62,4 +62,4 @@ workspace_nodepools = [
 
 workspace_templates          = []
 enable_default_gpu_pool      = false
-nvidia_device_plugin_version = "0.19.3"
+nvidia_device_plugin_version = "0.20.0"
