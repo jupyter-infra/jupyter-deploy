@@ -5,6 +5,7 @@ from __future__ import annotations
 import signal
 from collections.abc import Mapping
 from datetime import UTC, datetime
+from urllib.parse import urlsplit, urlunsplit
 
 from jupyter_deploy_client_proxy.constants import (
     DEFAULT_REFRESH_MARGIN_SECONDS,
@@ -27,10 +28,35 @@ def _merge_bundle_headers_into_incoming(
     return merged
 
 
-def get_forwarded_request_headers(incoming: Mapping[str, str], bundle_headers: Mapping[str, str]) -> dict[str, str]:
-    """Filter hop-by-hop/handshake headers off a request, then inject the bundle's headers."""
+def _rewrite_origin_headers(headers: dict[str, str], origin_host: str, origin_port: int) -> None:
+    """Rewrite ``Origin``/``Referer`` in place to the upstream origin.
+
+    The browser sends the loopback listener's origin (e.g. ``http://127.0.0.1:PORT``), which never
+    matches the instance-IP ``Host`` the request is forwarded to. Presenting the upstream origin lets
+    the server run its native same-origin/XSRF check instead of the template loosening ``allow_origin``.
+    Only rewrites headers already present (a missing ``Origin`` is same-origin by default upstream);
+    matches case-insensitively and preserves the original key casing.
+    """
+    origin = f"https://{origin_host}:{origin_port}"
+    netloc = f"{origin_host}:{origin_port}"
+    for key in list(headers):
+        lower = key.lower()
+        if lower == "origin":
+            headers[key] = origin
+        elif lower == "referer":
+            parts = urlsplit(headers[key])
+            headers[key] = urlunsplit(("https", netloc, parts.path, parts.query, parts.fragment))
+
+
+def get_forwarded_request_headers(
+    incoming: Mapping[str, str], bundle_headers: Mapping[str, str], origin_host: str, origin_port: int
+) -> dict[str, str]:
+    """Filter hop-by-hop/handshake headers off a request, inject the bundle's headers, then rewrite
+    ``Origin``/``Referer`` to the upstream origin so the server's native same-origin check passes."""
     filtered = {k: v for k, v in incoming.items() if k.lower() not in DROP_FROM_REQUEST_HEADERS}
-    return _merge_bundle_headers_into_incoming(filtered, bundle_headers)
+    merged = _merge_bundle_headers_into_incoming(filtered, bundle_headers)
+    _rewrite_origin_headers(merged, origin_host, origin_port)
+    return merged
 
 
 def get_forwarded_response_headers(upstream: Mapping[str, str]) -> dict[str, str]:

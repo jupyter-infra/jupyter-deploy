@@ -207,7 +207,9 @@ class JupyterDeployClientProxy:
     async def _forward_http(self, request: web.Request) -> web.StreamResponse:
         assert self._session is not None and self._bundle is not None
         url = f"https://{self._bundle.host}:{self._bundle.port}{request.raw_path}"
-        headers = get_forwarded_request_headers(request.headers, self._bundle.headers)
+        headers = get_forwarded_request_headers(
+            request.headers, self._bundle.headers, self._bundle.host, self._bundle.port
+        )
         body = await request.read()
         try:
             async with self._session.request(
@@ -243,7 +245,9 @@ class JupyterDeployClientProxy:
         await downstream.prepare(request)
 
         url = f"wss://{self._bundle.host}:{self._bundle.port}{request.raw_path}"
-        headers = get_forwarded_request_headers(request.headers, self._bundle.headers)
+        headers = get_forwarded_request_headers(
+            request.headers, self._bundle.headers, self._bundle.host, self._bundle.port
+        )
         self._logger.debug(f"ws open: {request.path}")
         try:
             async with self._session.ws_connect(url, headers=headers, protocols=client_protocols) as upstream:
