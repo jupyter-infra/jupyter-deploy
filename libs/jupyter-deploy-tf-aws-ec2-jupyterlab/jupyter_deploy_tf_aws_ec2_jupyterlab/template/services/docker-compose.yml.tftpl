@@ -24,6 +24,11 @@ services:
       driver: "fluentd"
       options:
         fluentd-address: "localhost:24224"
+        # Connect to fluent-bit asynchronously and buffer: without this, docker BLOCKS the
+        # container's start until :24224 is reachable, so a `docker compose up` that recreates
+        # fluent-bit alongside its dependents deadlocks (each waits on a fluent-bit that is briefly
+        # down). It also prevents a running container from stalling on stdout if fluent-bit restarts.
+        fluentd-async: "true"
         tag: "docker.jupyter"
     networks:
       - web
@@ -86,6 +91,11 @@ services:
       driver: "fluentd"
       options:
         fluentd-address: "localhost:24224"
+        # Connect to fluent-bit asynchronously and buffer: without this, docker BLOCKS the
+        # container's start until :24224 is reachable, so a `docker compose up` that recreates
+        # fluent-bit alongside its dependents deadlocks (each waits on a fluent-bit that is briefly
+        # down). It also prevents a running container from stalling on stdout if fluent-bit restarts.
+        fluentd-async: "true"
         tag: "docker.auth-sidecar"
     depends_on:
       - fluent-bit
@@ -125,6 +135,11 @@ services:
       driver: "fluentd"
       options:
         fluentd-address: "localhost:24224"
+        # Connect to fluent-bit asynchronously and buffer: without this, docker BLOCKS the
+        # container's start until :24224 is reachable, so a `docker compose up` that recreates
+        # fluent-bit alongside its dependents deadlocks (each waits on a fluent-bit that is briefly
+        # down). It also prevents a running container from stalling on stdout if fluent-bit restarts.
+        fluentd-async: "true"
         tag: "docker.traefik"
     depends_on:
       - fluent-bit
@@ -173,6 +188,11 @@ services:
       driver: "fluentd"
       options:
         fluentd-address: "localhost:24224"
+        # Connect to fluent-bit asynchronously and buffer: without this, docker BLOCKS the
+        # container's start until :24224 is reachable, so a `docker compose up` that recreates
+        # fluent-bit alongside its dependents deadlocks (each waits on a fluent-bit that is briefly
+        # down). It also prevents a running container from stalling on stdout if fluent-bit restarts.
+        fluentd-async: "true"
         tag: "docker.log-rotator"
     depends_on:
       - fluent-bit
