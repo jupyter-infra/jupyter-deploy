@@ -1,5 +1,6 @@
 # JD internal state and outputs
 .jd-history/
+.jd-proxy/
 jdout-*
 jdinputs.*
 
