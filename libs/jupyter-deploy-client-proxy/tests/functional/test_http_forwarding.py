@@ -29,6 +29,17 @@ class TestHttpForwarding(OriginTestCase):
         self.assertEqual(headers["origin"], f"https://127.0.0.1:{self.origin.port}")
         self.assertEqual(headers["referer"], f"https://127.0.0.1:{self.origin.port}/lab?a=1")
 
+    async def test_large_body_is_not_capped_by_client_max_size(self) -> None:
+        # A ~2 MiB PUT (over aiohttp's default 1 MiB client_max_size) must pass — reproduces a
+        # notebook save/upload on /api/contents. read()-ing the body would 413 at the proxy.
+        port = await self._start_proxy({"Authorization": "x"})
+        body = b"x" * (2 * 1024 * 1024)
+        async with (
+            aiohttp.ClientSession() as s,
+            s.put(f"http://127.0.0.1:{port}/api/contents/nb.ipynb", data=body) as r,
+        ):
+            self.assertEqual(r.status, 200)
+
     async def test_rejects_cross_origin_browser_request(self) -> None:
         # A hostile page must not be able to drive the loopback proxy: its Origin is not this
         # listener's, so the proxy rejects it BEFORE injecting the credential / rewriting Origin.

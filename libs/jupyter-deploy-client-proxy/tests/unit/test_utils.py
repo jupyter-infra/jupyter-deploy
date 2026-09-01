@@ -135,10 +135,18 @@ class TestGetSecondsUntilRefresh(unittest.TestCase):
         mock_datetime.now.return_value = now
         self.assertEqual(get_seconds_until_refresh(now + timedelta(seconds=60), margin_seconds=15), 45.0)
 
-    def test_never_negative(self, mock_datetime: Mock) -> None:
+    def test_margin_exceeds_remaining_falls_back_to_fraction(self, mock_datetime: Mock) -> None:
+        # 5s left, 15s margin: a plain lifetime-minus-margin sleep is -10 (would spin); instead we
+        # refresh at a fraction of what's left (5 * 0.5 = 2.5s), never 0.
         now = datetime(2026, 1, 1, tzinfo=UTC)
         mock_datetime.now.return_value = now
-        self.assertEqual(get_seconds_until_refresh(now + timedelta(seconds=5), margin_seconds=15), 0.0)
+        self.assertEqual(get_seconds_until_refresh(now + timedelta(seconds=5), margin_seconds=15), 2.5)
+
+    def test_already_expired_floors_to_minimum(self, mock_datetime: Mock) -> None:
+        # Past expiry (clock skew): never returns <= 0 — floors to MIN_REFRESH_SLEEP_SECONDS (1.0).
+        now = datetime(2026, 1, 1, tzinfo=UTC)
+        mock_datetime.now.return_value = now
+        self.assertEqual(get_seconds_until_refresh(now - timedelta(seconds=30), margin_seconds=15), 1.0)
 
     def test_reads_current_utc_clock(self, mock_datetime: Mock) -> None:
         fixed = datetime(2026, 1, 1, tzinfo=UTC)

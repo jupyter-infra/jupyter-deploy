@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from jupyter_deploy_client_proxy.credentials.bundle import ConnectBundle
 from jupyter_deploy_client_proxy.enums import ProxyState
-from jupyter_deploy_client_proxy.exceptions import NotRetryableTokenCommandError
+from jupyter_deploy_client_proxy.exceptions import NotRetryableTokenCommandError, RetryableTokenCommandError
 from jupyter_deploy_client_proxy.server.config import JupyterDeployClientProxyConfig
 from jupyter_deploy_client_proxy.server.proxy import JupyterDeployClientProxy
 
@@ -136,7 +136,8 @@ class TestRefreshLoopStateTransitions(unittest.IsolatedAsyncioTestCase):
             proxy._bundle = ConnectBundle(host="203.0.113.7", port=443, expires_at=datetime.now(UTC))
             proxy._state = ProxyState.RUNNING
 
-            failing: Mock = AsyncMock(side_effect=NotRetryableTokenCommandError("boom"))
+            # A transient (retryable) failure keeps retrying → DEGRADED, not FAILED.
+            failing: Mock = AsyncMock(side_effect=RetryableTokenCommandError("boom"))
             with patch("jupyter_deploy_client_proxy.server.proxy.fetch_bundle_with_retries", failing):
                 task = asyncio.create_task(proxy._refresh_loop())
                 for _ in range(200):  # poll up to ~2s for the transition
@@ -150,6 +151,25 @@ class TestRefreshLoopStateTransitions(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(proxy.state, ProxyState.DEGRADED)
             status = json.loads((Path(tmp) / "logs" / "status.json").read_text())
             self.assertEqual(status["state"], "degraded")
+            await proxy._logger.close()
+
+    async def test_non_retryable_refresh_marks_failed_and_stops(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = JupyterDeployClientProxyConfig(
+                token_argv=["true"], log_dir=Path(tmp) / "logs", refresh_margin_seconds=0
+            )
+            proxy = JupyterDeployClientProxy(config)
+            proxy._bundle = ConnectBundle(host="203.0.113.7", port=443, expires_at=datetime.now(UTC))
+            proxy._state = ProxyState.RUNNING
+
+            # A permanent failure (missing binary, bad bundle shape) cannot self-heal → FAILED + stop,
+            # so the loop breaks on its own rather than retrying forever as DEGRADED.
+            failing: Mock = AsyncMock(side_effect=NotRetryableTokenCommandError("missing binary"))
+            with patch("jupyter_deploy_client_proxy.server.proxy.fetch_bundle_with_retries", failing):
+                await asyncio.wait_for(proxy._refresh_loop(), timeout=2)
+
+            self.assertEqual(proxy.state, ProxyState.FAILED)
+            self.assertEqual(json.loads((Path(tmp) / "logs" / "status.json").read_text())["state"], "failed")
             await proxy._logger.close()
 
     async def test_unexpected_error_marks_failed_and_stops(self) -> None:

@@ -11,6 +11,8 @@ from jupyter_deploy_client_proxy.constants import (
     DEFAULT_REFRESH_MARGIN_SECONDS,
     DROP_FROM_REQUEST_HEADERS,
     DROP_FROM_RESPONSE_HEADERS,
+    MIN_REFRESH_SLEEP_SECONDS,
+    REFRESH_LIFETIME_FRACTION,
 )
 from jupyter_deploy_client_proxy.credentials.bundle import ConnectBundle
 
@@ -102,10 +104,16 @@ def get_bundle_summary(bundle: ConnectBundle) -> str:
 def get_seconds_until_refresh(expires_at: datetime, margin_seconds: float = DEFAULT_REFRESH_MARGIN_SECONDS) -> float:
     """Return how long to sleep before re-execing the token command.
 
-    Refreshes ``margin_seconds`` before ``expires_at``; never negative.
+    Normally refreshes ``margin_seconds`` before ``expires_at``. But if the margin swallows the whole
+    remaining lifetime (clock skew, or a token TTL shorter than the margin), a plain
+    lifetime-minus-margin sleep goes <= 0 and the refresh loop would re-exec continuously; instead we
+    floor the sleep and fall back to a fraction of the remaining lifetime. Always ``>= MIN_REFRESH_SLEEP_SECONDS``.
     """
-    delta = (expires_at - datetime.now(UTC)).total_seconds() - margin_seconds
-    return max(0.0, delta)
+    remaining = (expires_at - datetime.now(UTC)).total_seconds()
+    delay = remaining - margin_seconds
+    if delay < MIN_REFRESH_SLEEP_SECONDS:
+        delay = max(MIN_REFRESH_SLEEP_SECONDS, remaining * REFRESH_LIFETIME_FRACTION)
+    return delay
 
 
 def get_shutdown_signals() -> list[signal.Signals]:

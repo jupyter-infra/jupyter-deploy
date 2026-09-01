@@ -8,6 +8,13 @@ DEFAULT_LISTEN_HOST = "127.0.0.1"
 # Exec-credential loop.
 DEFAULT_TOKEN_COMMAND_TIMEOUT_SECONDS = 10.0
 DEFAULT_REFRESH_MARGIN_SECONDS = 15.0
+# Refresh-loop sleep floor + fallback. If the credential's remaining lifetime is already within the
+# refresh margin (client clock skew, or a token TTL shorter than the margin), a naive
+# lifetime-minus-margin sleep goes <= 0 and the loop re-execs the token command continuously
+# (≈one cloud call per token-command duration). Floor every sleep, and when the margin swallows the
+# whole remaining lifetime, refresh at a fraction of what's left rather than immediately.
+MIN_REFRESH_SLEEP_SECONDS = 1.0
+REFRESH_LIFETIME_FRACTION = 0.5
 
 # Reconnect backoff + retries.
 DEFAULT_BASE_DELAY_SECONDS = 0.5
