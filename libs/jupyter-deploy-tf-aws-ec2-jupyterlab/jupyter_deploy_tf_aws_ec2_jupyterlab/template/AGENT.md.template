@@ -56,6 +56,10 @@ the instance over pinned self-signed TLS and injects a short-lived AWS-identity 
 there is **no browser sign-in**. `jd open` runs in the foreground by default (Ctrl-C stops it); pass
 -d/--detached to run it in the background.
 
+Reopening a tab while kernels are still running triggers a brief (~15-20s) JupyterLab reconnect storm as
+it restores the workspace and re-attaches every kernel WebSocket at once. This is upstream client-side
+behavior (reproducible on stock JupyterLab, with no server-side config to tune it) and self-heals.
+
 {{ single-server-open-instructions }}
 
 The `jd proxy` command group drives the proxy directly:

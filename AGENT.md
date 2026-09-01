@@ -57,6 +57,20 @@ outside of the instruction runner code paths.
 4. **No Engine-specific implementation in Core**: use the `/engine/<engine-name>` module
 5. **Not Provider-specific implementation in Core**: use the `/provider/<provider-name>` or `/api/<api-name>` modules
 
+## Client proxy package
+Code: `./libs/jupyter-deploy-client-proxy`
+
+Client-side local reverse proxy that lets `jd open`/`jd proxy` reach a template's remote host over
+pinned self-signed TLS, injecting the rotating AWS-identity credential. Runs on the user's laptop,
+not the cloud host. Two boundary invariants define this package:
+- **Zero cloud / `jupyter_deploy` dependencies.** It must not import `boto3`, any cloud SDK, or the
+  `jupyter_deploy` CLI package. It ships only via the CLI's optional `[proxy]` extra.
+- **`jd` never imports it — it shells out to the `jupyter-deploy-client-proxy` console script.** The
+  bare-install test (`libs/jupyter-deploy/tests/e2e/test_bare_installation.py::test_no_client_proxy`)
+  enforces this: a handler importing it turns the bare CI track red.
+
+Its functional suite is a separate track — see "Running the client-proxy functional tests" below.
+
 ## Base template package
 Code: `./libs/jupyter-deploy-tf-ec2-base`
 
