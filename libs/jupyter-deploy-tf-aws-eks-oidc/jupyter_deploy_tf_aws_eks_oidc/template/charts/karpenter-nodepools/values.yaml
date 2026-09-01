@@ -24,5 +24,6 @@ routingLimitsMemory: "128Gi"
 # Injected by platform_karpenter.tf from var.workspace_nodepools.
 # Optional per-entry keys: role (label/taint value, defaults to "workspaces"),
 # maxGpus (renders a nvidia.com/gpu NodePool limit), gpu ("true" adds the
-# nvidia.com/gpu.present node label the NVIDIA device plugin selects on).
+# nvidia.com/gpu.present node label the NVIDIA device plugin selects on and
+# drops the instance-cpu size allowlist from the pool's requirements).
 workspaceNodepools: []

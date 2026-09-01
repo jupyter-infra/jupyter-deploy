@@ -332,9 +332,10 @@ resource "helm_release" "karpenter_nodepools" {
           },
           contains(keys(p), "role") ? { role = p["role"] } : {},
           contains(keys(p), "max_gpus") ? { maxGpus = p["max_gpus"] } : {},
-          # The chart's gpu value adds the nvidia.com/gpu.present node label;
-          # the key stays at the chart boundary so rendered pool bytes are
-          # untouched by the accelerator rename.
+          # The chart's gpu value adds the nvidia.com/gpu.present node label and
+          # drops the instance-cpu allowlist from the pool's requirements; the key
+          # stays at the chart boundary so rendered pool bytes are untouched by
+          # the accelerator rename.
           lookup(p, "accelerator", "") == "nvidia" ? { gpu = "true" } : {},
         )
       ]
