@@ -39,6 +39,12 @@ class TestConnectBundle(unittest.TestCase):
         with self.assertRaises(ValidationError):
             ConnectBundle.model_validate({**VALID_BUNDLE, "port": 70000})
 
+    def test_rejects_naive_expires_at(self) -> None:
+        # A timezone-naive expires_at (no Z/offset) would crash the refresh math against an
+        # aware `now`; the bundle contract rejects it up front.
+        with self.assertRaises(ValidationError):
+            ConnectBundle.model_validate({**VALID_BUNDLE, "expires_at": "2026-06-10T18:01:00"})
+
     def test_json_round_trips(self) -> None:
         bundle = ConnectBundle.model_validate(VALID_BUNDLE)
         self.assertEqual(ConnectBundle.model_validate_json(bundle.model_dump_json()), bundle)

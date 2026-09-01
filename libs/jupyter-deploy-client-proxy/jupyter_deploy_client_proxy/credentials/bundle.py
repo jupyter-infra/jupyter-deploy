@@ -7,9 +7,7 @@ interprets individual fields beyond what it needs to connect and inject headers.
 
 from __future__ import annotations
 
-from datetime import datetime
-
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 
 class ConnectBundle(BaseModel):
@@ -23,10 +21,12 @@ class ConnectBundle(BaseModel):
         headers: opaque name->value map injected on every forwarded request and the WS
             upgrade. The proxy never special-cases individual header names.
         expires_at: the proxy re-execs the token command on a margin before this instant.
+            Must be timezone-aware (ISO-8601 with ``Z`` or an offset) — a naive value is
+            rejected, since the refresh math subtracts it from an aware ``now``.
     """
 
     host: str
     port: int = Field(gt=0, le=65535)
     ca_cert: str = ""
     headers: dict[str, str] = Field(default_factory=dict)
-    expires_at: datetime
+    expires_at: AwareDatetime

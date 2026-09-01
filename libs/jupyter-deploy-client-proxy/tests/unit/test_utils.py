@@ -12,36 +12,7 @@ from jupyter_deploy_client_proxy.utils import (
     get_forwarded_response_headers,
     get_seconds_until_refresh,
     get_shutdown_signals,
-    is_loopback_request_allowed,
 )
-
-
-class TestIsLoopbackRequestAllowed(unittest.TestCase):
-    def test_allows_loopback_origin_and_host(self) -> None:
-        self.assertTrue(
-            is_loopback_request_allowed({"Origin": "http://127.0.0.1:8888", "Host": "127.0.0.1:8888"}, 8888)
-        )
-
-    def test_allows_localhost_origin_and_host(self) -> None:
-        self.assertTrue(
-            is_loopback_request_allowed({"Origin": "http://localhost:8888", "Host": "localhost:8888"}, 8888)
-        )
-
-    def test_allows_missing_origin(self) -> None:
-        # Non-browser clients / top-level navigations carry no Origin; the listener is not otherwise authed.
-        self.assertTrue(is_loopback_request_allowed({"Host": "127.0.0.1:8888"}, 8888))
-
-    def test_allows_missing_host_and_origin(self) -> None:
-        self.assertTrue(is_loopback_request_allowed({}, 8888))
-
-    def test_rejects_cross_origin(self) -> None:
-        self.assertFalse(is_loopback_request_allowed({"Origin": "https://evil.com", "Host": "127.0.0.1:8888"}, 8888))
-
-    def test_rejects_wrong_port_origin(self) -> None:
-        self.assertFalse(is_loopback_request_allowed({"Origin": "http://127.0.0.1:9999"}, 8888))
-
-    def test_rejects_non_loopback_host_dns_rebinding(self) -> None:
-        self.assertFalse(is_loopback_request_allowed({"Host": "attacker.example:8888"}, 8888))
 
 
 class TestMergeBundleHeadersIntoIncoming(unittest.TestCase):

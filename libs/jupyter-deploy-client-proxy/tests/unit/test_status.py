@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from jupyter_deploy_client_proxy.credentials.bundle import ConnectBundle
 from jupyter_deploy_client_proxy.enums import ProxyState
-from jupyter_deploy_client_proxy.exceptions import NotRetryableTokenCommandError, RetryableTokenCommandError
+from jupyter_deploy_client_proxy.exceptions import NotRetryableTokenCommandError
 from jupyter_deploy_client_proxy.server.config import JupyterDeployClientProxyConfig
 from jupyter_deploy_client_proxy.server.proxy import JupyterDeployClientProxy
 
@@ -52,7 +52,9 @@ class TestWriteStatusBestEffort(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status["port"], 51234)
         self.assertEqual(status["expires_at"], expires.isoformat())
 
-    async def test_write_is_atomic_leaves_no_tmp(self) -> None:
+    async def test_write_leaves_no_stray_tmp_file(self) -> None:
+        # The write is a plain in-place write (not yet a temp-file-plus-rename), so it
+        # should never leave a *.tmp artifact behind.
         proxy = self._proxy()
         await proxy.write_status_best_effort()
         log_dir = Path(self._tmp.name) / "logs"
@@ -136,8 +138,7 @@ class TestRefreshLoopStateTransitions(unittest.IsolatedAsyncioTestCase):
             proxy._bundle = ConnectBundle(host="203.0.113.7", port=443, expires_at=datetime.now(UTC))
             proxy._state = ProxyState.RUNNING
 
-            # A transient (retryable) failure keeps retrying → DEGRADED, not FAILED.
-            failing: Mock = AsyncMock(side_effect=RetryableTokenCommandError("boom"))
+            failing: Mock = AsyncMock(side_effect=NotRetryableTokenCommandError("boom"))
             with patch("jupyter_deploy_client_proxy.server.proxy.fetch_bundle_with_retries", failing):
                 task = asyncio.create_task(proxy._refresh_loop())
                 for _ in range(200):  # poll up to ~2s for the transition

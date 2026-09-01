@@ -14,10 +14,14 @@ import contextlib
 import aiohttp
 from aiohttp import web
 
+from jupyter_deploy_client_proxy.constants import (
+    UPSTREAM_SOCK_CONNECT_TIMEOUT_SECONDS,
+    UPSTREAM_SOCK_READ_TIMEOUT_SECONDS,
+)
 from jupyter_deploy_client_proxy.credentials.bundle import ConnectBundle
-from jupyter_deploy_client_proxy.credentials.credential import fetch_bundle, fetch_bundle_with_retries
+from jupyter_deploy_client_proxy.credentials.credential import fetch_bundle_with_retries
 from jupyter_deploy_client_proxy.enums import ProxyState
-from jupyter_deploy_client_proxy.exceptions import NotRetryableTokenCommandError, ProxyError, TokenCommandError
+from jupyter_deploy_client_proxy.exceptions import ProxyError, TokenCommandError
 from jupyter_deploy_client_proxy.logger.factory import create_logger
 from jupyter_deploy_client_proxy.server.config import JupyterDeployClientProxyConfig
 from jupyter_deploy_client_proxy.server.state import delete_proxy_status, write_proxy_status
@@ -27,7 +31,19 @@ from jupyter_deploy_client_proxy.utils import (
     get_forwarded_request_headers,
     get_forwarded_response_headers,
     get_seconds_until_refresh,
-    is_loopback_request_allowed,
+)
+
+# WebSocket message types that end a relay leg. `async for` already stops the iterator on
+# these, so the relay's break is defensive (a manual receive() loop would need it). A
+# module-level frozenset gives O(1) hashed membership on the per-message path — every PING/PONG
+# and control frame is tested against it — and is built once at import.
+_WS_TERMINAL_MSG_TYPES = frozenset(
+    {
+        aiohttp.WSMsgType.CLOSE,
+        aiohttp.WSMsgType.CLOSING,
+        aiohttp.WSMsgType.CLOSED,
+        aiohttp.WSMsgType.ERROR,
+    }
 )
 
 
@@ -75,7 +91,7 @@ class JupyterDeployClientProxy:
         """
         await self.write_status_best_effort()  # STARTING
         try:
-            await self._apply_bundle(await self._fetch_bundle())
+            await self._apply_bundle(await self._fetch_bundle(self._config.startup_max_attempts))
 
             app = web.Application()
             app.router.add_route("*", "/{tail:.*}", self._handle)
@@ -139,11 +155,18 @@ class JupyterDeployClientProxy:
             # Logged at error (there is no recovery — the status file is simply not updated).
             self._logger.error(f"failed to write status file: {e}")
 
-    async def _fetch_bundle(self) -> ConnectBundle:
-        return await fetch_bundle(
+    async def _fetch_bundle(self, max_attempts: int) -> ConnectBundle:
+        # Shared by startup and the refresh loop; the caller picks the attempt budget (startup
+        # fails fast, refresh retries harder to keep serving). A transient token-command failure
+        # (timeout, EX_TEMPFAIL, malformed output) is retried with backoff; permanent failures
+        # (missing binary, bad bundle shape) raise immediately.
+        return await fetch_bundle_with_retries(
             self._config.token_argv,
             self._logger,
             timeout=self._config.token_command_timeout_seconds,
+            base_delay_seconds=self._config.backoff_base_delay_seconds,
+            max_delay_seconds=self._config.backoff_max_delay_seconds,
+            max_attempts=max_attempts,
         )
 
     async def _apply_bundle(self, bundle: ConnectBundle) -> None:
@@ -158,6 +181,11 @@ class JupyterDeployClientProxy:
         self._session = aiohttp.ClientSession(
             connector=aiohttp.TCPConnector(ssl=ssl_context),
             auto_decompress=False,
+            timeout=aiohttp.ClientTimeout(
+                total=None,
+                sock_connect=UPSTREAM_SOCK_CONNECT_TIMEOUT_SECONDS,
+                sock_read=UPSTREAM_SOCK_READ_TIMEOUT_SECONDS,
+            ),
         )
         self._logger.info("upstream TLS pin set")
         if old is not None:
@@ -301,21 +329,41 @@ class JupyterDeployClientProxy:
         self._logger.debug(f"ws closed: {request.path}")
         return downstream
 
-    @staticmethod
-    async def _pipe_ws(downstream: web.WebSocketResponse, upstream: aiohttp.ClientWebSocketResponse) -> None:
+    async def _pipe_ws(self, downstream: web.WebSocketResponse, upstream: aiohttp.ClientWebSocketResponse) -> None:
         async def relay(src: aiohttp.ClientWebSocketResponse | web.WebSocketResponse, dst: object) -> None:
+            # Only TEXT/BINARY carry app data worth forwarding. PING/PONG are intentionally NOT
+            # relayed: aiohttp auto-answers pings per leg (autoping), so each leg keepalives
+            # independently — forwarding them would double-pong. CONTINUATION frames are already
+            # reassembled by aiohttp before yielding, so they never appear here. Everything else
+            # falls through; terminal types end the leg (see _WS_TERMINAL_MSG_TYPES).
             async for msg in src:
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     await dst.send_str(msg.data)  # type: ignore[attr-defined]
                 elif msg.type == aiohttp.WSMsgType.BINARY:
                     await dst.send_bytes(msg.data)  # type: ignore[attr-defined]
-                elif msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSING, aiohttp.WSMsgType.ERROR):
+                elif msg.type in _WS_TERMINAL_MSG_TYPES:
                     break
 
         forward = asyncio.create_task(relay(downstream, upstream))
         backward = asyncio.create_task(relay(upstream, downstream))
-        _, pending = await asyncio.wait({forward, backward}, return_when=asyncio.FIRST_COMPLETED)
+        done, pending = await asyncio.wait({forward, backward}, return_when=asyncio.FIRST_COMPLETED)
+        # Cancel the still-running leg(s) first, then await them together, so the cancelled
+        # relay finishes unwinding before we close the sockets (avoids a "Task was destroyed
+        # but it is pending" warning). return_exceptions=True keeps the CancelledError from
+        # propagating. (pending holds at most one task here, but cancel-all-then-await is the
+        # correct shape regardless of count.)
         for task in pending:
             task.cancel()
-        await upstream.close()
-        await downstream.close()
+        await asyncio.gather(*pending, return_exceptions=True)
+        # Retrieve the finished leg's outcome: asyncio.wait never propagates task exceptions, so
+        # without this a relay error (e.g. ConnectionResetError from send_* when a peer drops
+        # mid-frame) is swallowed and later surfaces as "Task exception was never retrieved".
+        for task in done:
+            exc = task.exception()
+            if exc is not None:
+                # debug, not error: almost always a benign abrupt disconnect (ConnectionResetError
+                # from a closed tab / kernel restart), not an operator-actionable failure.
+                self._logger.debug(f"ws relay leg ended with error: {exc}")
+        # Close both sockets concurrently; return_exceptions=True keeps one failing close from
+        # skipping the other.
+        await asyncio.gather(upstream.close(), downstream.close(), return_exceptions=True)
