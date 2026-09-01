@@ -3,13 +3,10 @@ c = get_config()  # noqa
 
 c.Application.log_level = "INFO"
 
-# This server is reached through the local jupyter-deploy client proxy: the browser's
-# Origin is the proxy's loopback (http://127.0.0.1:<random-port>) while the server sees
-# the instance IP as Host, so Jupyter's same-origin check blocks every websocket and
-# mutating API call. Allow the loopback origin on any port (the proxy picks a fresh port
-# each run). The real access boundary is the auth sidecar (STS-identity ForwardAuth) plus
-# pinned TLS, not this CORS check.
-c.ServerApp.allow_origin_pat = r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$"
+# This server is reached through the local jupyter-deploy client proxy. The proxy rewrites the
+# browser's Origin/Referer to the upstream origin (https://<instance-ip>:<port>) so they match the
+# Host the server sees, and Jupyter's default same-origin check passes with no allow_origin override
+# needed. The real access boundary is the auth sidecar (STS-identity ForwardAuth) plus pinned TLS.
 
 c.ServerApp.root_dir = "/home/jovyan"
 c.ServerApp.terminado_settings = {
