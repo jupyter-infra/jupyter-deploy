@@ -26,19 +26,27 @@ if [ ! -f "$${KEY_FILE}" ] || [ ! -f "$${CERT_FILE}" ]; then
         -days 3650 \
         -subj "/CN=jupyter-deploy" \
         -addext "subjectAltName=DNS:jupyter-deploy,IP:127.0.0.1"
-    chmod 600 "$${KEY_FILE}"
-    chmod 644 "$${CERT_FILE}"
     echo "Certificate generated at $${CERT_FILE}"
 else
     echo "Certificate already present at $${CERT_FILE}, reusing it"
 fi
+
+# Re-assert restrictive ownership/permissions on EVERY run, not just first generation. This dir
+# lives on the data volume that is bind-mounted into the notebook container as /home/jovyan, and a
+# redeploy re-runs cloudinit's `chown -R service-user /mnt/jupyter-data` BEFORE this script — which
+# would otherwise hand the private key to the notebook user. root:root + 600 keeps the key out of
+# every notebook cell; the traefik copy below gets its own perms.
+chown root:root "$${CERT_DIR}" "$${KEY_FILE}" "$${CERT_FILE}"
+chmod 700 "$${CERT_DIR}"
+chmod 600 "$${KEY_FILE}"
+chmod 644 "$${CERT_FILE}"
 
 # Publish the public PEM to the cert-pin SSM parameter (idempotent — --overwrite).
 echo "Publishing public certificate to SSM parameter $${CERT_PIN_PARAM}..."
 aws ssm put-parameter \
     --name "$${CERT_PIN_PARAM}" \
     --type String \
-    --tier Advanced \
+    --tier Standard \
     --overwrite \
     --value "$(cat "$${CERT_FILE}")" \
     --region "$${AWS_REGION}"

@@ -13,7 +13,7 @@ resource "aws_ssm_parameter" "cert_pin" {
   name        = "/jupyter-deploy/${local.doc_postfix}/cert-pin"
   description = "Public PEM of the instance self-signed cert; written by the instance at boot."
   type        = "String"
-  tier        = "Advanced" # PEMs can exceed the 4KB Standard-tier limit
+  tier        = "Standard" # one self-signed RSA-2048 leaf PEM (~1.2 KB) fits the 4 KB Standard limit
   value       = "placeholder-overwritten-by-instance-at-boot"
   tags        = local.combined_tags
 
