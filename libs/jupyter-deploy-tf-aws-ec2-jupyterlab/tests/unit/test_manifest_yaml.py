@@ -20,7 +20,8 @@ class TestManifest(unittest.TestCase):
         "persisting_resources",
         "instance_id",
         "cert_pin_ssm_parameter_name",
-        "auth_arn_allowlist",
+        "iam_role_names_allowlist",
+        "iam_user_names_allowlist",
     ]
     EXPECTED_SERVICES = ["jupyter", "traefik", "auth-sidecar"]
     EXPECTED_HOST_COMMANDS = ["host.status", "host.start", "host.stop", "host.restart", "host.connect", "host.exec"]
