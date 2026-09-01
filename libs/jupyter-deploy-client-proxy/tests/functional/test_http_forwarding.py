@@ -28,3 +28,17 @@ class TestHttpForwarding(OriginTestCase):
         headers = lower_keys(data["headers"])
         self.assertEqual(headers["origin"], f"https://127.0.0.1:{self.origin.port}")
         self.assertEqual(headers["referer"], f"https://127.0.0.1:{self.origin.port}/lab?a=1")
+
+    async def test_forwarded_origin_matches_host_header(self) -> None:
+        # The contract that broke live: the rewritten Origin's netloc MUST equal the Host header the
+        # upstream receives, or the app's same-origin check blocks every API/websocket call. Both are
+        # derived from (host, port) but by different code paths — our rewrite vs aiohttp's Host — so we
+        # assert they agree on whatever the upstream actually saw. (The default-port-443 case, where
+        # aiohttp drops the port and a naive rewrite would keep it, is pinned in the unit tests; the
+        # functional harness binds an ephemeral port, which can't bind :443 without privileges.)
+        port = await self._start_proxy({"Authorization": "x"})
+        incoming = {"Origin": f"http://127.0.0.1:{port}"}
+        async with aiohttp.ClientSession() as s, s.get(f"http://127.0.0.1:{port}/", headers=incoming) as r:
+            data = await r.json()
+        headers = lower_keys(data["headers"])
+        self.assertEqual(headers["origin"], f"https://{headers['host']}")
