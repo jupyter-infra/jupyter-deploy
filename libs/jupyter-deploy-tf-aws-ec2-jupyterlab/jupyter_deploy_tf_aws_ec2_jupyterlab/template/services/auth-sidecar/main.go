@@ -326,8 +326,14 @@ func (s *server) replayToSTS(ctx context.Context, replayURL, binding string) (st
 }
 
 func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) {
+	// Traefik's ForwardAuth passes the original request's method/URI here; we include it in the
+	// failure logs below for context. We log ONLY failures (401/403/503): a successful auth is the
+	// hot path — one per request, and the WebSocket firehose replays it constantly — so logging it
+	// would spam the log and re-emit the caller's identity + full browsing path on every request.
+	fwd := r.Header.Get("X-Forwarded-Method") + " " + r.Header.Get("X-Forwarded-Uri")
 	bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if bearer == "" {
+		log.Printf("auth 401 (%s): missing Authorization", fwd)
 		http.Error(w, "missing Authorization", http.StatusUnauthorized)
 		return
 	}
@@ -342,6 +348,7 @@ func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+		log.Printf("auth 403 (%s): %q not on allowlist [cached]", fwd, arn)
 		http.Error(w, "identity not allowed", http.StatusForbidden)
 		return
 	}
@@ -354,19 +361,19 @@ func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) {
 	arn, err := s.verify(ctx, bearer, binding)
 	if err != nil {
 		if _, ok := errors.AsType[*transientError](err); ok {
-			log.Printf("auth unavailable: %v", err)
+			log.Printf("auth 503 (%s): %v", fwd, err)
 			w.Header().Set("Retry-After", "2")
 			http.Error(w, "auth temporarily unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		log.Printf("auth denied: %v", err)
+		log.Printf("auth 401 (%s): %v", fwd, err)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	// Authorization: the caller's principal must be in this account and its role/user name on the
 	// matching allowlist. No prefix/wildcard matching — see config.allows.
 	if !s.cfg.allows(arn) {
-		log.Printf("auth denied: ARN %q not on allowlist", arn)
+		log.Printf("auth 403 (%s): ARN %q not on allowlist", fwd, arn)
 		http.Error(w, "identity not allowed", http.StatusForbidden)
 		return
 	}
