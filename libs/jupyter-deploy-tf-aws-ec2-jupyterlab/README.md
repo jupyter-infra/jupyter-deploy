@@ -24,8 +24,8 @@ jd open                                              # start the proxy and open 
 - **Auth:** `jd proxy connect-info` mints a `k8s-aws-v1` STS-identity token; a ForwardAuth
   sidecar behind Traefik validates it (STS replay + ARN allowlist + `x-k8s-aws-id` binding).
   No shared secret is stored anywhere.
-- **Network:** the security group allows `:443` only, reconciled to the caller's `/32` on
-  every `jd open`.
+- **Network:** the security group allows inbound `:443` only (open to `0.0.0.0/0`); the access
+  boundary is the pinned TLS cert plus the STS-identity token above, not the network layer.
 
 ## New IAM permissions
 

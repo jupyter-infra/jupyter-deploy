@@ -137,8 +137,8 @@ The EC2 instance runs the docker services.
 
 ### Server execution commands (when host and target docker service are running)
 - `jd server logs` - View docker logs of the jupyter service
-- `jd server logs -n traefik -- -n 50` - View last 50 lines of the docker logs of the traefik service
-- `jd server logs -n auth-sidecar` - View docker logs of the auth-sidecar service
+- `jd server logs -s traefik -- -n 50` - View last 50 lines of the docker logs of the traefik service
+- `jd server logs -s auth-sidecar` - View docker logs of the auth-sidecar service
 - `jd server exec -- ls -la` - Execute a command in the jupyter container (view home dir in this case)
 
 ### Deployment scripts (downloaded from S3 by SSM association)

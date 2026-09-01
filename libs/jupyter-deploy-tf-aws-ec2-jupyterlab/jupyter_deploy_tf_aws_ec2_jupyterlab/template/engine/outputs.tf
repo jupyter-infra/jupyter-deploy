@@ -15,7 +15,7 @@ output "cert_pin_ssm_parameter_name" {
   value       = aws_ssm_parameter.cert_pin.name
 }
 
-# ARNs authorized to reach JupyterLab through the auth sidecar.
+# IAM role/user names authorized to reach JupyterLab through the auth sidecar.
 output "iam_role_names_allowlist" {
   description = "IAM role names authorized to reach JupyterLab (includes the deployer's role, if any)."
   value       = local.auth_role_names
