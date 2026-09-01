@@ -2,7 +2,12 @@
 
 The proxy publishes its lifecycle state to ``<log_dir>/status.json`` so an out-of-process
 reader (``jd proxy status``) can observe liveness + endpoint. This module owns the payload
-schema and the atomic write; the proxy only supplies the live state, config, and bundle.
+schema and the write; the proxy only supplies the live state, config, and bundle.
+
+The write is a plain in-place truncate-and-write, not atomic — a reader that opens the file
+mid-write can see a partial payload (it recovers by treating an unparseable file as "no
+status yet"). A temp-file-plus-``os.replace`` rename can be layered on later if that race
+proves to matter in practice.
 """
 
 from __future__ import annotations

@@ -247,9 +247,6 @@ spec:
         - key: karpenter.k8s.aws/instance-family
           operator: In
           values: ["g4dn","g5","g6","g6e","g7","g7e"]
-        - key: karpenter.k8s.aws/instance-cpu
-          operator: In
-          values: ["2", "4", "8", "16", "32"]
         - key: karpenter.sh/capacity-type
           operator: In
           values: ["on-demand"]

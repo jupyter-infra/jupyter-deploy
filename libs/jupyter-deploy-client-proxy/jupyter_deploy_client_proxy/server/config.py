@@ -20,6 +20,7 @@ from jupyter_deploy_client_proxy.constants import (
     DEFAULT_MAX_DELAY_SECONDS,
     DEFAULT_REFRESH_MARGIN_SECONDS,
     DEFAULT_REFRESH_MAX_ATTEMPTS,
+    DEFAULT_STARTUP_MAX_ATTEMPTS,
     DEFAULT_TOKEN_COMMAND_TIMEOUT_SECONDS,
 )
 
@@ -46,6 +47,7 @@ class JupyterDeployClientProxyConfig(BaseModel):
         ca_cert_override: pin this CA PEM instead of the bundle's ``ca_cert`` (no-cloud/static case).
         backoff_base_delay_seconds: base delay for reconnect/refresh backoff.
         backoff_max_delay_seconds: cap for reconnect/refresh backoff.
+        startup_max_attempts: token-command attempts on start() before failing fast (the user is waiting).
         refresh_max_attempts: token-command attempts per refresh cycle (the loop retries cycles forever).
         log_dir: write ``0000.log``, ``0001.log``, … and ``status.json`` here (``jd`` passes
             ``.jd-proxy/<timestamp-id>``); None → stderr (and no status file).
@@ -62,6 +64,7 @@ class JupyterDeployClientProxyConfig(BaseModel):
     ca_cert_override: str | None = None
     backoff_base_delay_seconds: float = Field(default=DEFAULT_BASE_DELAY_SECONDS, gt=0)
     backoff_max_delay_seconds: float = Field(default=DEFAULT_MAX_DELAY_SECONDS, gt=0)
+    startup_max_attempts: int = Field(default=DEFAULT_STARTUP_MAX_ATTEMPTS, ge=1)
     refresh_max_attempts: int = Field(default=DEFAULT_REFRESH_MAX_ATTEMPTS, ge=1)
     log_dir: Path | None = None
     log_level: LogLevel = LogLevel.INFO

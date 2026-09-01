@@ -1,3 +1,15 @@
+---
+# Source: karpenter-nodepools/templates/ec2nodeclasses.yaml
+# EC2NodeClasses define the AWS-level node configuration for Karpenter.
+# One class per pool (routing + each workspace pool).
+# All pools pin httpPutResponseHopLimit: 1 — no routing or workspace pod needs
+# IMDS: cert-manager/external-dns use Pod Identity, and traefik/dex/oauth2-proxy/
+# authmiddleware/web-app make no AWS calls. Hop 1 blocks containerized pods from
+# reaching IMDS to assume the node role; node agents (CNI, EBS CSI) use
+# hostNetwork and reach IMDS at hop 1, so they are unaffected.
+# Both pin httpTokens: required (IMDSv2).
+---
+# Source: karpenter-nodepools/templates/nodepools.yaml
 # NodePools define scheduling constraints and node lifecycle for Karpenter.
 # Routing pool: always-on, conservative consolidation, small instances.
 # Workspace pools: scale-to-zero, aggressive consolidation, diverse instances.
@@ -13,6 +25,70 @@
 # Using only the absolute entry guarantees at least 1 node is always
 # disruptable, enabling scale-to-zero on workspace pools.
 ---
+# Source: karpenter-nodepools/templates/ec2nodeclasses.yaml
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: routing
+spec:
+  amiSelectorTerms:
+    - alias: al2023@latest
+  instanceProfile: "test-karpenter-node-profile"
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "test-cluster"
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "test-cluster"
+  tags:
+    karpenter.sh/cluster-name: "test-cluster"
+  metadataOptions:
+    httpPutResponseHopLimit: 1
+    httpEndpoint: enabled
+    httpTokens: required
+    httpProtocolIPv6: disabled
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 50Gi
+        volumeType: gp3
+        encrypted: true
+        deleteOnTermination: true
+---
+# Source: karpenter-nodepools/templates/ec2nodeclasses.yaml
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: workspace-gpu-p
+spec:
+  amiSelectorTerms:
+    - alias: al2023@latest
+  instanceProfile: "test-karpenter-node-profile"
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "test-cluster"
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "test-cluster"
+  tags:
+    karpenter.sh/cluster-name: "test-cluster"
+  metadataOptions:
+    httpPutResponseHopLimit: 1
+    httpEndpoint: enabled
+    httpTokens: required
+    httpProtocolIPv6: disabled
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        # Root volume: OS + container image cache. User data (notebooks, files)
+        # lives on the EBS volume mounted by the workspace pod via StorageClass.
+        # Override disk_size_gb in workspace_nodepools for large custom images.
+        volumeSize: 200Gi
+        volumeType: gp3
+        encrypted: true
+        deleteOnTermination: true
+---
+# Source: karpenter-nodepools/templates/nodepools.yaml
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
@@ -31,14 +107,14 @@ spec:
         - key: jupyter-deploy/role
           value: routing
           effect: NoSchedule
-      expireAfter: {{ .Values.expireAfter }}
+      expireAfter: 504h
       requirements:
         - key: karpenter.k8s.aws/instance-category
           operator: In
-          values: {{ .Values.routing.instanceCategories | toJson }}
+          values: ["c","m"]
         - key: karpenter.k8s.aws/instance-generation
           operator: Gt
-          values: ["{{ .Values.routing.instanceGenerationMin }}"]
+          values: ["6"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
           values: ["large", "xlarge", "2xlarge"]
@@ -49,19 +125,19 @@ spec:
           operator: In
           values: ["amd64"]
   limits:
-    cpu: {{ .Values.routingLimitsCpu | quote }}
-    memory: {{ .Values.routingLimitsMemory | quote }}
+    cpu: "32"
+    memory: "128Gi"
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 120s
     budgets:
       - nodes: "1"
-{{- range .Values.workspaceNodepools }}
 ---
+# Source: karpenter-nodepools/templates/nodepools.yaml
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
-  name: {{ .name }}
+  name: workspace-gpu-p
 spec:
   template:
     metadata:
@@ -70,33 +146,23 @@ spec:
         # spec.template, so any change here drift-replaces the pool's nodes
         # and restarts every workspace on them. Set values render quoted: an
         # unquoted role like "on" would parse as a YAML boolean and fail apply.
-        jupyter-deploy/role: {{ if .role }}{{ .role | quote }}{{ else }}workspaces{{ end }}
-        {{- if .gpu }}
+        jupyter-deploy/role: "workspace-gpu-p"
         # Satisfies the NVIDIA device plugin's default nodeAffinity without NFD.
         nvidia.com/gpu.present: "true"
-        {{- end }}
     spec:
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
-        name: {{ .name }}
+        name: workspace-gpu-p
       taints:
         - key: jupyter-deploy/role
-          value: {{ if .role }}{{ .role | quote }}{{ else }}workspaces{{ end }}
+          value: "workspace-gpu-p"
           effect: NoSchedule
-      expireAfter: {{ $.Values.expireAfter }}
+      expireAfter: 504h
       requirements:
         - key: karpenter.k8s.aws/instance-family
           operator: In
-          values: {{ .instanceFamilies | toJson }}
-        {{- /* Accelerator families ship sizes above this allowlist (p4d.24xlarge =
-             96 vCPUs), so it would block their provisioning (#351). Per-node size
-             is deliberately unbounded on accelerator pools (#352 review). */}}
-        {{- if not .gpu }}
-        - key: karpenter.k8s.aws/instance-cpu
-          operator: In
-          values: ["2", "4", "8", "16", "32"]
-        {{- end }}
+          values: ["p4d","p5","p5en"]
         - key: karpenter.sh/capacity-type
           operator: In
           values: ["on-demand"]
@@ -104,11 +170,8 @@ spec:
           operator: In
           values: ["amd64"]
   limits:
-    cpu: {{ .maxCpu | quote }}
-    memory: {{ .maxMemory | quote }}
-    {{- if .maxGpus }}
-    nvidia.com/gpu: {{ .maxGpus | quote }}
-    {{- end }}
+    cpu: "384"
+    memory: "3000Gi"
   disruption:
     # WhenEmpty (not WhenEmptyOrUnderutilized): workspace pods carry no PDB and
     # no karpenter.sh/do-not-disrupt annotation, so underutilized-consolidation
@@ -119,4 +182,3 @@ spec:
     consolidateAfter: 60s
     budgets:
       - nodes: "1"
-{{- end }}

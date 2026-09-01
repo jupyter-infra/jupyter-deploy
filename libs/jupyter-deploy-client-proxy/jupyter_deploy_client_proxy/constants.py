@@ -12,7 +12,11 @@ DEFAULT_REFRESH_MARGIN_SECONDS = 15.0
 # Reconnect backoff + retries.
 DEFAULT_BASE_DELAY_SECONDS = 0.5
 DEFAULT_MAX_DELAY_SECONDS = 30.0
-DEFAULT_REFRESH_MAX_ATTEMPTS = 5  # per refresh cycle; the proxy's loop retries cycles indefinitely
+# Token-command attempt budgets per bundle fetch. Startup fails fast (the user is waiting on
+# `jd proxy start` / `jd open`); refresh retries harder to keep serving through transient blips,
+# and the refresh loop itself retries cycles indefinitely on top of this per-cycle budget.
+DEFAULT_STARTUP_MAX_ATTEMPTS = 2
+DEFAULT_REFRESH_MAX_ATTEMPTS = 5
 
 # Token-command exit code that signals a transient/retryable failure (sysexits EX_TEMPFAIL).
 # Any other non-zero exit is treated as permanent (non-retryable).
@@ -20,6 +24,13 @@ RETRYABLE_EXIT_CODE = 75
 
 # TLS: offer only HTTP/1.1 on the upstream leg (deliberate — see design notes).
 ALPN_PROTOCOLS = ["http/1.1"]
+
+# Upstream request timeouts. aiohttp's default caps the *whole* operation at 300s, which
+# would sever any response streamed for longer (large `/api/contents` downloads, slow
+# endpoints). We disable the total cap and instead bound only connect + inter-read stalls,
+# so a dead/unresponsive upstream still fails fast without truncating a healthy transfer.
+UPSTREAM_SOCK_CONNECT_TIMEOUT_SECONDS = 30.0
+UPSTREAM_SOCK_READ_TIMEOUT_SECONDS = 300.0
 
 # Logging.
 DEFAULT_LOG_LEVEL = "INFO"

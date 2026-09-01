@@ -195,7 +195,7 @@ variable "karpenter_version" {
 
     Refer to: https://github.com/aws/karpenter-provider-aws/releases
 
-    Recommended: 1.13.1
+    Recommended: 1.14.1
   EOT
   type        = string
 }
@@ -220,7 +220,7 @@ variable "prometheus_version" {
 
     Refer to: https://github.com/prometheus-community/helm-charts/releases
 
-    Recommended: 29.21.0
+    Recommended: 29.27.0
   EOT
   type        = string
 }
@@ -498,7 +498,7 @@ variable "nvidia_device_plugin_version" {
 
     Refer to: https://github.com/NVIDIA/k8s-device-plugin/releases
 
-    Recommended: 0.19.3
+    Recommended: 0.20.0
   EOT
   type        = string
 }

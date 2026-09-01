@@ -2,7 +2,11 @@ import unittest
 
 from pydantic import ValidationError
 
-from jupyter_deploy_client_proxy.constants import DEFAULT_REFRESH_MARGIN_SECONDS
+from jupyter_deploy_client_proxy.constants import (
+    DEFAULT_REFRESH_MARGIN_SECONDS,
+    DEFAULT_REFRESH_MAX_ATTEMPTS,
+    DEFAULT_STARTUP_MAX_ATTEMPTS,
+)
 from jupyter_deploy_client_proxy.server.config import JupyterDeployClientProxyConfig
 
 
@@ -13,6 +17,10 @@ class TestJupyterDeployClientProxyConfig(unittest.TestCase):
         self.assertEqual(config.listen_port, 0)
         self.assertEqual(config.refresh_margin_seconds, DEFAULT_REFRESH_MARGIN_SECONDS)
         self.assertIsNone(config.ca_cert_override)
+        # Startup fails fast; refresh retries harder — and they are independently tunable.
+        self.assertEqual(config.startup_max_attempts, DEFAULT_STARTUP_MAX_ATTEMPTS)
+        self.assertEqual(config.refresh_max_attempts, DEFAULT_REFRESH_MAX_ATTEMPTS)
+        self.assertLess(config.startup_max_attempts, config.refresh_max_attempts)
 
     def test_overrides(self) -> None:
         config = JupyterDeployClientProxyConfig(

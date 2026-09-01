@@ -353,10 +353,19 @@ data "aws_iam_policy_document" "karpenter_controller" {
     }
   }
 
+  # Must also cover the <cluster>_<hash> profile names Karpenter auto-generates
+  # (EC2NodeClass.LegacyInstanceProfileName as of karpenter v1.13.1): the termination
+  # reconciler probes them on every delete even in pre-created-profile mode, and a 403
+  # there (vs the expected 404) blocks the finalizer, leaving the NodeClass stuck in
+  # Terminating. New-style profiles live under an IAM path (/karpenter/<region>/...)
+  # and are only touched by ListInstanceProfiles, granted below.
   statement {
-    sid       = "AllowInstanceProfileGet"
-    actions   = ["iam:GetInstanceProfile"]
-    resources = [aws_iam_instance_profile.karpenter_node.arn]
+    sid     = "AllowInstanceProfileGet"
+    actions = ["iam:GetInstanceProfile"]
+    resources = [
+      aws_iam_instance_profile.karpenter_node.arn,
+      "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:instance-profile/${module.eks_cluster.cluster_name}_*",
+    ]
   }
 
   # Karpenter >=1.7 runs an instance-profile garbage-collection reconciler that calls
