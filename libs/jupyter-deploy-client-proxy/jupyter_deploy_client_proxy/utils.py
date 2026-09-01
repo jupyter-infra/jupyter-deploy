@@ -36,9 +36,14 @@ def _rewrite_origin_headers(headers: dict[str, str], origin_host: str, origin_po
     the server run its native same-origin/XSRF check instead of the template loosening ``allow_origin``.
     Only rewrites headers already present (a missing ``Origin`` is same-origin by default upstream);
     matches case-insensitively and preserves the original key casing.
+
+    The netloc MUST match the ``Host`` header the upstream receives, and HTTP omits the default port
+    (443 for https) — which is exactly what aiohttp puts on the forwarded request. Keeping an explicit
+    ``:443`` here would make ``Origin`` (``host:443``) differ from ``Host`` (``host``), and the server's
+    same-origin check would block every API/websocket call.
     """
-    origin = f"https://{origin_host}:{origin_port}"
-    netloc = f"{origin_host}:{origin_port}"
+    netloc = origin_host if origin_port == 443 else f"{origin_host}:{origin_port}"
+    origin = f"https://{netloc}"
     for key in list(headers):
         lower = key.lower()
         if lower == "origin":

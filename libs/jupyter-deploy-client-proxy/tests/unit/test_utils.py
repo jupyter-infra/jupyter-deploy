@@ -50,19 +50,24 @@ class TestGetForwardedRequestHeaders(unittest.TestCase):
         result = get_forwarded_request_headers({"Accept": "*/*"}, {"x-k8s-aws-id": "dep-1"}, "10.0.0.1", 443)
         self.assertEqual(result["x-k8s-aws-id"], "dep-1")
 
-    def test_rewrites_origin_to_upstream(self) -> None:
+    def test_rewrites_origin_omitting_default_https_port(self) -> None:
+        # Port 443 must be omitted so Origin's netloc matches the Host header aiohttp sends (no port).
         result = get_forwarded_request_headers({"Origin": "http://127.0.0.1:9999"}, {}, "10.0.0.1", 443)
-        self.assertEqual(result["Origin"], "https://10.0.0.1:443")
+        self.assertEqual(result["Origin"], "https://10.0.0.1")
+
+    def test_rewrites_origin_including_non_default_port(self) -> None:
+        result = get_forwarded_request_headers({"Origin": "http://127.0.0.1:9999"}, {}, "10.0.0.1", 8443)
+        self.assertEqual(result["Origin"], "https://10.0.0.1:8443")
 
     def test_rewrites_referer_origin_preserving_path_and_query(self) -> None:
         result = get_forwarded_request_headers(
             {"Referer": "http://127.0.0.1:9999/lab/tree?a=1#frag"}, {}, "10.0.0.1", 443
         )
-        self.assertEqual(result["Referer"], "https://10.0.0.1:443/lab/tree?a=1#frag")
+        self.assertEqual(result["Referer"], "https://10.0.0.1/lab/tree?a=1#frag")
 
     def test_rewrites_case_insensitively_preserving_key_casing(self) -> None:
         result = get_forwarded_request_headers({"origin": "http://127.0.0.1:9999"}, {}, "10.0.0.1", 443)
-        self.assertEqual(result["origin"], "https://10.0.0.1:443")
+        self.assertEqual(result["origin"], "https://10.0.0.1")
         self.assertNotIn("Origin", result)
 
     def test_does_not_add_origin_when_absent(self) -> None:
