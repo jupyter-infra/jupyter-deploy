@@ -140,16 +140,57 @@ variable "s3_bucket_prefix" {
   }
 }
 
-variable "auth_arn_allowlist" {
+variable "iam_role_names_allowlist" {
   description = <<-EOT
-    Additional IAM principal ARNs authorized to reach JupyterLab through the auth sidecar.
+    IAM role names authorized to reach JupyterLab through the auth sidecar.
 
-    The deploying identity's ARN is always authorized. Add ARNs here to grant access to
-    other IAM users or roles (e.g. a teammate's role).
+    The deploying identity is always authorized. List every role that may open the app
+    (e.g. your Admin role, a teammate's role, CI/CD roles) so switching callers produces
+    no Terraform state diff.
+
+    Pass the bare role name only (e.g. "DataScience"), not an ARN or path. IAM role names
+    are unique per AWS account regardless of path, so the name alone identifies the role.
+    Authorization is scoped to this deployment's AWS account.
 
     Recommended: []
   EOT
   type        = list(string)
+
+  validation {
+    condition     = length(var.iam_role_names_allowlist) == length(distinct(var.iam_role_names_allowlist))
+    error_message = "iam_role_names_allowlist must not contain duplicate names."
+  }
+
+  validation {
+    condition     = alltrue([for name in var.iam_role_names_allowlist : can(regex("^[a-zA-Z0-9_+=,.@-]+$", name))])
+    error_message = "Each entry must be a bare IAM role name (e.g. 'DataScience'), not an ARN or path."
+  }
+}
+
+variable "iam_user_names_allowlist" {
+  description = <<-EOT
+    IAM user names authorized to reach JupyterLab through the auth sidecar.
+
+    The deploying identity is always authorized. List every user that may open the app
+    so switching callers produces no Terraform state diff.
+
+    Pass the bare user name only (e.g. "alice"), not an ARN or path. IAM user names are
+    unique per AWS account regardless of path, so the name alone identifies the user.
+    Authorization is scoped to this deployment's AWS account.
+
+    Recommended: []
+  EOT
+  type        = list(string)
+
+  validation {
+    condition     = length(var.iam_user_names_allowlist) == length(distinct(var.iam_user_names_allowlist))
+    error_message = "iam_user_names_allowlist must not contain duplicate names."
+  }
+
+  validation {
+    condition     = alltrue([for name in var.iam_user_names_allowlist : can(regex("^[a-zA-Z0-9_+=,.@-]+$", name))])
+    error_message = "Each entry must be a bare IAM user name (e.g. 'alice'), not an ARN or path."
+  }
 }
 
 variable "log_files_rotation_size_mb" {

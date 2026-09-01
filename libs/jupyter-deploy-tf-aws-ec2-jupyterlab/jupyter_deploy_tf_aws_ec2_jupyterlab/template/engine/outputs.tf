@@ -16,9 +16,14 @@ output "cert_pin_ssm_parameter_name" {
 }
 
 # ARNs authorized to reach JupyterLab through the auth sidecar.
-output "auth_arn_allowlist" {
-  description = "IAM principal ARNs authorized to reach JupyterLab (included the deployer's ARN)."
-  value       = local.auth_arn_allowlist
+output "iam_role_names_allowlist" {
+  description = "IAM role names authorized to reach JupyterLab (includes the deployer's role, if any)."
+  value       = local.auth_role_names
+}
+
+output "iam_user_names_allowlist" {
+  description = "IAM user names authorized to reach JupyterLab (includes the deployer's user, if any)."
+  value       = local.auth_user_names
 }
 
 # S3 bucket information

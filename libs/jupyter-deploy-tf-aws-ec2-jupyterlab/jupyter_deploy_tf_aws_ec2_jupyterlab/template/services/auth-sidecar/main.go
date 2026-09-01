@@ -8,7 +8,9 @@
 //   - the action must be GetCallerIdentity and X-Amz-Expires must be bounded,
 //   - the `x-k8s-aws-id` binding header must equal this deployment's id (cross-deployment
 //     replay defense) — and is replayed to STS so the signature covers it,
-//   - the ARN returned by STS must be on the allowlist.
+//   - the principal returned by STS must be in this deployment's AWS account AND its IAM role
+//     name (assumed-role caller) or user name (IAM-user caller) must be on the matching allowlist.
+//     IAM names are unique per account regardless of path, so name + account identifies the caller.
 //
 // A positive result is cached (keyed by the token string) for a short TTL, so the steady
 // state is ~1 STS call/minute regardless of request rate; the WebSocket firehose authenticates
@@ -16,17 +18,21 @@
 //
 // Interface (the whole contract — kept clean for later extraction to its own repo):
 //
-//	env DEPLOYMENT_ID   required binding id (x-k8s-aws-id)
-//	env ARN_ALLOWLIST   comma-separated allowed IAM principal ARNs
-//	env AWS_REGION      region (used only to derive the default STS endpoint)
-//	env STS_ENDPOINT    pinned STS endpoint (default https://sts.<region>.amazonaws.com)
-//	GET /auth           ForwardAuth endpoint -> 200 (allow) / 401 / 403
+//	env DEPLOYMENT_ID        required binding id (x-k8s-aws-id)
+//	env AWS_ACCOUNT_ID       required account the caller's principal must belong to
+//	env ROLE_NAME_ALLOWLIST  comma-separated allowed IAM role names (assumed-role callers)
+//	env USER_NAME_ALLOWLIST  comma-separated allowed IAM user names (IAM-user callers)
+//	env AWS_REGION           region (used only to derive the default STS endpoint)
+//	env STS_ENDPOINT         pinned STS endpoint (default https://sts.<region>.amazonaws.com)
+//	GET /auth           ForwardAuth endpoint -> 200 (allow) / 401 (auth failure) / 403 (not
+//	                    allowed) / 503 + Retry-After (STS transiently unavailable)
 package main
 
 import (
 	"context"
 	"encoding/base64"
 	"encoding/xml"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -47,11 +53,22 @@ const (
 	maxTokenExpirySec = 900
 	cacheTTL          = 60 * time.Second
 	stsCallTimeout    = 5 * time.Second
+	stsRetryBackoff   = 200 * time.Millisecond
 )
+
+// transientError marks an STS failure that is not the caller's fault — a network error, a 429,
+// or a 5xx. handleAuth maps it to 503 + Retry-After (not 401) so a running kernel's websocket
+// retries through a brief STS blip instead of being torn down as an auth failure.
+type transientError struct{ err error }
+
+func (e *transientError) Error() string { return e.err.Error() }
+func (e *transientError) Unwrap() error { return e.err }
 
 type config struct {
 	deploymentID string
-	allowlist    map[string]bool
+	accountID    string
+	roleNames    map[string]bool
+	userNames    map[string]bool
 	stsHost      string
 }
 
@@ -59,6 +76,10 @@ func loadConfig() (*config, error) {
 	deploymentID := os.Getenv("DEPLOYMENT_ID")
 	if deploymentID == "" {
 		return nil, fmt.Errorf("DEPLOYMENT_ID is required")
+	}
+	accountID := os.Getenv("AWS_ACCOUNT_ID")
+	if accountID == "" {
+		return nil, fmt.Errorf("AWS_ACCOUNT_ID is required")
 	}
 
 	endpoint := os.Getenv("STS_ENDPOINT")
@@ -74,14 +95,77 @@ func loadConfig() (*config, error) {
 		return nil, fmt.Errorf("invalid STS_ENDPOINT: %w", err)
 	}
 
-	allowlist := map[string]bool{}
-	for _, arn := range strings.Split(os.Getenv("ARN_ALLOWLIST"), ",") {
-		if arn = strings.TrimSpace(arn); arn != "" {
-			allowlist[arn] = true
+	return &config{
+		deploymentID: deploymentID,
+		accountID:    accountID,
+		roleNames:    csvSet(os.Getenv("ROLE_NAME_ALLOWLIST")),
+		userNames:    csvSet(os.Getenv("USER_NAME_ALLOWLIST")),
+		stsHost:      parsed.Host,
+	}, nil
+}
+
+// csvSet splits a comma-separated env value into a set, dropping blanks.
+func csvSet(raw string) map[string]bool {
+	set := map[string]bool{}
+	for v := range strings.SplitSeq(raw, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			set[v] = true
 		}
 	}
+	return set
+}
 
-	return &config{deploymentID: deploymentID, allowlist: allowlist, stsHost: parsed.Host}, nil
+// parsePrincipal extracts (account, kind, name) from the ARN STS returns for the caller:
+//
+//	arn:aws:sts::<acct>:assumed-role/<RoleName>/<session>  -> (<acct>, "role", "<RoleName>")
+//	arn:aws:iam::<acct>:user/<path...>/<UserName>          -> (<acct>, "user", "<UserName>")
+//
+// STS strips the IAM role path from an assumed-role ARN, and user ARNs carry the path as a prefix;
+// either way we key on the bare name, which is unique per account regardless of path. Any other
+// principal shape (root, federated-user, service principal) yields kind "" and is not authorized.
+func parsePrincipal(arn string) (account, kind, name string) {
+	parts := strings.Split(arn, ":") // arn:<partition>:<service>::<account>:<resource>
+	if len(parts) != 6 {
+		return "", "", ""
+	}
+	account = parts[4]
+	resource := parts[5]
+	switch parts[2] {
+	case "sts":
+		if rest, ok := strings.CutPrefix(resource, "assumed-role/"); ok {
+			if roleName, _, ok := strings.Cut(rest, "/"); ok && roleName != "" {
+				return account, "role", roleName
+			}
+		}
+	case "iam":
+		if rest, ok := strings.CutPrefix(resource, "user/"); ok {
+			// user/<path...>/<name> — the bare name is the last segment.
+			segs := strings.Split(rest, "/")
+			if userName := segs[len(segs)-1]; userName != "" {
+				return account, "user", userName
+			}
+		}
+	}
+	return "", "", ""
+}
+
+// allows reports whether STS's canonical caller principal is authorized: it must belong to this
+// deployment's account, and its IAM role name (assumed-role caller) or user name (IAM-user caller)
+// must be on the matching allowlist. No prefix/wildcard matching. Account scoping is essential —
+// names are only unique within an account, so matching by name alone would authorize a same-named
+// principal in a different account.
+func (c *config) allows(arn string) bool {
+	account, kind, name := parsePrincipal(arn)
+	if account == "" || account != c.accountID {
+		return false
+	}
+	switch kind {
+	case "role":
+		return c.roleNames[name]
+	case "user":
+		return c.userNames[name]
+	}
+	return false
 }
 
 // cache is a tiny TTL cache of positive auth results keyed by the token string.
@@ -180,6 +264,32 @@ func (s *server) verify(ctx context.Context, bearer, binding string) (string, er
 	// signed query string (the signature), so STS recomputes SigV4 over exactly what the client
 	// signed and validates it against the client's secret; we never reconstruct the signature.
 	replayURL := "https://" + s.cfg.stsHost + presigned.RequestURI()
+
+	// One bounded retry on the transient class (network error / 429 / 5xx) so a brief STS blip
+	// doesn't 401 a live session. A genuine rejection (bad signature/expiry/binding -> 4xx) is
+	// returned immediately and never retried.
+	var arn string
+	for attempt := 0; ; attempt++ {
+		arn, err = s.replayToSTS(ctx, replayURL, binding)
+		if err == nil {
+			return arn, nil
+		}
+		_, transient := errors.AsType[*transientError](err)
+		if attempt >= 1 || !transient {
+			return "", err
+		}
+		select {
+		case <-ctx.Done():
+			return "", err
+		case <-time.After(stsRetryBackoff):
+		}
+	}
+}
+
+// replayToSTS issues one presigned-request replay to the pinned STS host and returns the caller ARN.
+// Network failures and 429/5xx responses are wrapped in *transientError; a non-transient 4xx (STS
+// rejecting the signature) is a plain error the caller surfaces as a 401.
+func (s *server) replayToSTS(ctx context.Context, replayURL, binding string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, replayURL, nil)
 	if err != nil {
 		return "", err
@@ -193,12 +303,16 @@ func (s *server) verify(ctx context.Context, bearer, binding string) (string, er
 
 	resp, err := s.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("STS replay failed: %w", err)
+		return "", &transientError{fmt.Errorf("STS replay failed: %w", err)}
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("STS rejected the token (status %d)", resp.StatusCode)
+		err := fmt.Errorf("STS rejected the token (status %d)", resp.StatusCode)
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			return "", &transientError{err}
+		}
+		return "", err
 	}
 
 	// STS accepted the signature: the response carries the caller's canonical principal ARN
@@ -221,10 +335,10 @@ func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) {
 
 	// Fast path: a token we already verified this minute. Re-check the allowlist on every hit
 	// rather than caching the allow/deny decision — the cache holds the verified ARN, so an
-	// ARN_ALLOWLIST change takes effect immediately (on the next request) without a redeploy,
+	// allowlist change takes effect immediately (on the next request) without a redeploy,
 	// while still skipping the STS round-trip.
 	if arn, ok := s.cache.get(bearer); ok {
-		if s.cfg.allowlist[arn] {
+		if s.cfg.allows(arn) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -233,18 +347,25 @@ func (s *server) handleAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Slow path: prove the token via STS. A bad signature / wrong binding / expired token is a
-	// 401 (authentication failure); a valid identity that simply is not permitted is a 403.
+	// 401 (authentication failure); a valid identity that simply is not permitted is a 403; STS
+	// being unreachable/throttled is a 503 + Retry-After (transient, not the caller's fault).
 	ctx, cancel := context.WithTimeout(r.Context(), stsCallTimeout)
 	defer cancel()
 	arn, err := s.verify(ctx, bearer, binding)
 	if err != nil {
+		if _, ok := errors.AsType[*transientError](err); ok {
+			log.Printf("auth unavailable: %v", err)
+			w.Header().Set("Retry-After", "2")
+			http.Error(w, "auth temporarily unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		log.Printf("auth denied: %v", err)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	// Authorization is an exact-string membership test: STS's canonical ARN must appear verbatim
-	// in the allowlist built from ARN_ALLOWLIST at startup. No prefix/wildcard matching.
-	if !s.cfg.allowlist[arn] {
+	// Authorization: the caller's principal must be in this account and its role/user name on the
+	// matching allowlist. No prefix/wildcard matching — see config.allows.
+	if !s.cfg.allows(arn) {
 		log.Printf("auth denied: ARN %q not on allowlist", arn)
 		http.Error(w, "identity not allowed", http.StatusForbidden)
 		return

@@ -84,10 +84,11 @@ The client proxy ships as an optional extra — install it with `pip install "ju
 ### Manage access
 
 Access is authorized by **AWS IAM identity**. The `auth-sidecar` validates a short-lived STS
-`GetCallerIdentity` token minted by `jd proxy connect-info` and checks the caller's ARN against the
-`auth_arn_allowlist` (defaults to the deployer's ARN). To grant additional identities, add their ARNs to
-the `auth_arn_allowlist` entry in the `overrides:` block of `./variables.yaml`, then re-apply with
-`jd config` followed by `jd up`.
+`GetCallerIdentity` token minted by `jd proxy connect-info` and checks the caller's IAM role or user
+name (in this deployment's AWS account) against `iam_role_names_allowlist` / `iam_user_names_allowlist`
+(the deployer is always authorized). To grant additional identities, add their bare IAM role or user
+names — not ARNs — to the matching list in the `overrides:` block of `./variables.yaml`, then re-apply
+with `jd config` followed by `jd up`.
 
 ### View the full terraform logs
 

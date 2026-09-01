@@ -134,13 +134,15 @@ locals {
   })
   docker_startup_file = data.local_file.docker_startup.content
   docker_compose_file = templatefile("${path.module}/../services/docker-compose.yml.tftpl", {
-    aws_region    = data.aws_region.current.id
-    deployment_id = local.doc_postfix
-    arn_allowlist = join(",", local.auth_arn_allowlist)
-    ebs_mounts    = module.volumes.resolved_ebs_mounts
-    efs_mounts    = module.volumes.resolved_efs_mounts
-    has_gpu       = module.ami_al2023.has_gpu
-    has_neuron    = module.ami_al2023.has_neuron
+    aws_region     = data.aws_region.current.id
+    deployment_id  = local.doc_postfix
+    aws_account_id = data.aws_caller_identity.current.account_id
+    role_allowlist = join(",", local.auth_role_names)
+    user_allowlist = join(",", local.auth_user_names)
+    ebs_mounts     = module.volumes.resolved_ebs_mounts
+    efs_mounts     = module.volumes.resolved_efs_mounts
+    has_gpu        = module.ami_al2023.has_gpu
+    has_neuron     = module.ami_al2023.has_neuron
   })
   traefik_config_file         = data.local_file.traefik_yml.content
   traefik_dynamic_config_file = data.local_file.traefik_dynamic_yml.content

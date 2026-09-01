@@ -99,9 +99,12 @@ services:
       - web
     environment:
       # The auth sidecar treats these as its whole interface (clean for later extraction):
-      # bind the token to this deployment, allowlist ARNs, pin the STS endpoint.
+      # bind the token to this deployment, scope to this account, allowlist IAM role/user
+      # names (unique per account regardless of path), and pin the STS endpoint.
       - DEPLOYMENT_ID=${deployment_id}
-      - ARN_ALLOWLIST=${arn_allowlist}
+      - AWS_ACCOUNT_ID=${aws_account_id}
+      - ROLE_NAME_ALLOWLIST=${role_allowlist}
+      - USER_NAME_ALLOWLIST=${user_allowlist}
       - AWS_REGION=${aws_region}
       - STS_ENDPOINT=https://sts.${aws_region}.amazonaws.com
     labels:

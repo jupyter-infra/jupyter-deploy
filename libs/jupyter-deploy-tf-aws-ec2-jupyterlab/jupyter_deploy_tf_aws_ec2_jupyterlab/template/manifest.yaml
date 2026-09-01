@@ -23,9 +23,12 @@ values:
 - name: cert_pin_ssm_parameter_name
   source: output
   source-key: cert_pin_ssm_parameter_name
-- name: auth_arn_allowlist
+- name: iam_role_names_allowlist
   source: output
-  source-key: auth_arn_allowlist
+  source-key: iam_role_names_allowlist
+- name: iam_user_names_allowlist
+  source: output
+  source-key: iam_user_names_allowlist
 project-store:
   store-type: s3-only
 # `jd open` has no public URL for this template: it launches the local client proxy and

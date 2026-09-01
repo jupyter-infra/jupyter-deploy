@@ -9,9 +9,10 @@ overrides:
   # additional_ebs_mounts: []
   # additional_efs_mounts: []
   # ami_id: null
-  # auth_arn_allowlist: []
   # custom_tags: {}
+  # iam_role_names_allowlist: []
   # iam_role_prefix: Jupyter-deploy-jupyterlab
+  # iam_user_names_allowlist: []
   # instance_type: t3.medium
   # jupyter_package_manager: uv
   # log_files_retention_count: 10

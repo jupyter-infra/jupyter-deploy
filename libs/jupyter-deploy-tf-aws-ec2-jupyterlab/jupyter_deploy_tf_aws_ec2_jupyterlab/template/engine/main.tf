@@ -30,9 +30,17 @@ locals {
   )
   doc_postfix = random_id.postfix.hex
 
-  # ARNs authorized to reach JupyterLab through the auth sidecar. Defaults to the
-  # deploying identity; extra ARNs can be added via var.auth_arn_allowlist.
-  auth_arn_allowlist = distinct(concat([data.aws_caller_identity.current.arn], var.auth_arn_allowlist))
+  # Principals authorized to reach JupyterLab through the auth sidecar, by IAM name (unique
+  # per account regardless of path). The caller is merged into the matching list so switching
+  # callers produces no state diff (as long as every caller is declared in the right list).
+  # For an assumed-role caller, arn is arn:aws:sts::<acct>:assumed-role/<RoleName>/<session>
+  # (element 1 == RoleName); for a user, arn is arn:aws:iam::<acct>:user/<path...>/<name>.
+  caller_is_user   = can(regex(":user/", data.aws_caller_identity.current.arn))
+  caller_role_name = !local.caller_is_user ? element(split("/", data.aws_caller_identity.current.arn), 1) : ""
+  caller_user_name = local.caller_is_user ? element(reverse(split("/", data.aws_caller_identity.current.arn)), 0) : ""
+
+  auth_role_names = local.caller_is_user ? var.iam_role_names_allowlist : distinct(concat(var.iam_role_names_allowlist, [local.caller_role_name]))
+  auth_user_names = local.caller_is_user ? distinct(concat(var.iam_user_names_allowlist, [local.caller_user_name])) : var.iam_user_names_allowlist
 }
 
 # Network module for VPC, subnet, security group (no EIP / Route53 — the proxy
