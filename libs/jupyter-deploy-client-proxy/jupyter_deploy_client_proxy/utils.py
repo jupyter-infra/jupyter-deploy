@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from urllib.parse import urlsplit, urlunsplit
 
+from multidict import CIMultiDict
+
 from jupyter_deploy_client_proxy.constants import (
     DEFAULT_REFRESH_MARGIN_SECONDS,
     DROP_FROM_REQUEST_HEADERS,
@@ -91,9 +93,19 @@ def get_forwarded_request_headers(
     return merged
 
 
-def get_forwarded_response_headers(upstream: Mapping[str, str]) -> dict[str, str]:
-    """Filter hop-by-hop headers off an upstream response before relaying it downstream."""
-    return {k: v for k, v in upstream.items() if k.lower() not in DROP_FROM_RESPONSE_HEADERS}
+def get_forwarded_response_headers(upstream: Mapping[str, str]) -> CIMultiDict[str]:
+    """Filter hop-by-hop headers off an upstream response before relaying it downstream.
+
+    Returns a multidict, not a plain dict: a response can carry the same header name more than once
+    (``Set-Cookie`` is the load-bearing case — Jupyter sets ``_xsrf`` and ``username-*`` as separate
+    lines, and per RFC 6265 they must never be folded into one). A dict would keep only the last,
+    silently dropping the others; aiohttp writes each multidict entry back as its own header line.
+    """
+    forwarded: CIMultiDict[str] = CIMultiDict()
+    for name, value in upstream.items():
+        if name.lower() not in DROP_FROM_RESPONSE_HEADERS:
+            forwarded.add(name, value)
+    return forwarded
 
 
 def get_bundle_summary(bundle: ConnectBundle) -> str:

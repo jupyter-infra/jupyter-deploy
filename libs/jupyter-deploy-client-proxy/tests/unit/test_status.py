@@ -143,7 +143,12 @@ class TestRefreshLoopStateTransitions(unittest.IsolatedAsyncioTestCase):
             # subclass and expects FAILED.
             status_path = Path(tmp) / "logs" / "status.json"
             failing: Mock = AsyncMock(side_effect=TokenCommandError("boom"))
-            with patch("jupyter_deploy_client_proxy.server.proxy.fetch_bundle_with_retries", failing):
+            # Pin the sleep to 0 so the transition is immediate: with margin=0 the clamp floors the
+            # refresh sleep to MIN_REFRESH_SLEEP_SECONDS (1s), which otherwise makes this poll racy.
+            with (
+                patch("jupyter_deploy_client_proxy.server.proxy.get_seconds_until_refresh", return_value=0.0),
+                patch("jupyter_deploy_client_proxy.server.proxy.fetch_bundle_with_retries", failing),
+            ):
                 task = asyncio.create_task(proxy._refresh_loop())
                 # Poll on the persisted status, not the in-memory state: the loop sets state before
                 # the (awaited) status write, so cancelling on the in-memory flip could abort mid-write.

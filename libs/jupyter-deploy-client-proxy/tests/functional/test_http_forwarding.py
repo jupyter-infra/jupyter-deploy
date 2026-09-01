@@ -40,6 +40,15 @@ class TestHttpForwarding(OriginTestCase):
         ):
             self.assertEqual(r.status, 200)
 
+    async def test_repeated_response_headers_are_not_collapsed(self) -> None:
+        # Upstream sends two Set-Cookie lines (Jupyter's `_xsrf` + `username-*`). A dict-based
+        # forwarder would keep only the last, silently dropping a cookie; both must survive.
+        port = await self._start_proxy({"Authorization": "x"})
+        async with aiohttp.ClientSession() as s, s.get(f"http://127.0.0.1:{port}/multi-set-cookie") as r:
+            self.assertEqual(r.status, 200)
+            cookies = r.headers.getall("Set-Cookie")
+        self.assertEqual(sorted(cookies), ["a=1; Path=/", "b=2; Path=/"])
+
     async def test_rejects_cross_origin_browser_request(self) -> None:
         # A hostile page must not be able to drive the loopback proxy: its Origin is not this
         # listener's, so the proxy rejects it BEFORE injecting the credential / rewriting Origin.

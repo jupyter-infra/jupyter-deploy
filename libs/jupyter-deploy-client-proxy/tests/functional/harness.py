@@ -54,6 +54,13 @@ class SelfSignedOrigin:
                 else:
                     break
             return ws
+        if request.path == "/multi-set-cookie":
+            # Emit two Set-Cookie lines (as Jupyter does: `_xsrf` + `username-*`) so a test can
+            # assert the proxy relays repeated response headers instead of collapsing them.
+            resp = web.Response(text="ok")
+            resp.headers.add("Set-Cookie", "a=1; Path=/")
+            resp.headers.add("Set-Cookie", "b=2; Path=/")
+            return resp
         return web.json_response({"method": request.method, "path": request.path, "headers": dict(request.headers)})
 
     async def start(self) -> None:
