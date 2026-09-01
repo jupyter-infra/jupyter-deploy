@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from jupyter_deploy_client_proxy.credentials.bundle import ConnectBundle
 from jupyter_deploy_client_proxy.enums import ProxyState
-from jupyter_deploy_client_proxy.exceptions import NotRetryableTokenCommandError
+from jupyter_deploy_client_proxy.exceptions import NotRetryableTokenCommandError, TokenCommandError
 from jupyter_deploy_client_proxy.server.config import JupyterDeployClientProxyConfig
 from jupyter_deploy_client_proxy.server.proxy import JupyterDeployClientProxy
 
@@ -138,11 +138,17 @@ class TestRefreshLoopStateTransitions(unittest.IsolatedAsyncioTestCase):
             proxy._bundle = ConnectBundle(host="203.0.113.7", port=443, expires_at=datetime.now(UTC))
             proxy._state = ProxyState.RUNNING
 
-            failing: Mock = AsyncMock(side_effect=NotRetryableTokenCommandError("boom"))
+            # A transient (retryable) token-command failure → DEGRADED (keep serving, cool down);
+            # contrast test_non_retryable_refresh_marks_failed_and_stops, which uses the permanent
+            # subclass and expects FAILED.
+            status_path = Path(tmp) / "logs" / "status.json"
+            failing: Mock = AsyncMock(side_effect=TokenCommandError("boom"))
             with patch("jupyter_deploy_client_proxy.server.proxy.fetch_bundle_with_retries", failing):
                 task = asyncio.create_task(proxy._refresh_loop())
+                # Poll on the persisted status, not the in-memory state: the loop sets state before
+                # the (awaited) status write, so cancelling on the in-memory flip could abort mid-write.
                 for _ in range(200):  # poll up to ~2s for the transition
-                    if proxy.state == ProxyState.DEGRADED:
+                    if status_path.exists() and json.loads(status_path.read_text())["state"] == "degraded":
                         break
                     await asyncio.sleep(0.01)
                 task.cancel()
@@ -150,8 +156,7 @@ class TestRefreshLoopStateTransitions(unittest.IsolatedAsyncioTestCase):
                     await task
 
             self.assertEqual(proxy.state, ProxyState.DEGRADED)
-            status = json.loads((Path(tmp) / "logs" / "status.json").read_text())
-            self.assertEqual(status["state"], "degraded")
+            self.assertEqual(json.loads(status_path.read_text())["state"], "degraded")
             await proxy._logger.close()
 
     async def test_non_retryable_refresh_marks_failed_and_stops(self) -> None:

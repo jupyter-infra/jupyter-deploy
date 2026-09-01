@@ -21,7 +21,7 @@ from jupyter_deploy_client_proxy.constants import (
 from jupyter_deploy_client_proxy.credentials.bundle import ConnectBundle
 from jupyter_deploy_client_proxy.credentials.credential import fetch_bundle_with_retries
 from jupyter_deploy_client_proxy.enums import ProxyState
-from jupyter_deploy_client_proxy.exceptions import ProxyError, TokenCommandError
+from jupyter_deploy_client_proxy.exceptions import NotRetryableTokenCommandError, ProxyError, TokenCommandError
 from jupyter_deploy_client_proxy.logger.factory import create_logger
 from jupyter_deploy_client_proxy.server.config import JupyterDeployClientProxyConfig
 from jupyter_deploy_client_proxy.server.state import delete_proxy_status, write_proxy_status
@@ -31,6 +31,7 @@ from jupyter_deploy_client_proxy.utils import (
     get_forwarded_request_headers,
     get_forwarded_response_headers,
     get_seconds_until_refresh,
+    is_loopback_request_allowed,
 )
 
 # WebSocket message types that end a relay leg. `async for` already stops the iterator on
@@ -209,15 +210,12 @@ class JupyterDeployClientProxy:
                 self._logger.debug(f"next credential refresh in {delay:.0f}s")
             await asyncio.sleep(delay)
             try:
-                # A burst of attempts with backoff; this loop keeps retrying cycles forever.
-                bundle = await fetch_bundle_with_retries(
-                    self._config.token_argv,
-                    self._logger,
-                    timeout=self._config.token_command_timeout_seconds,
-                    base_delay_seconds=self._config.backoff_base_delay_seconds,
-                    max_delay_seconds=self._config.backoff_max_delay_seconds,
-                    max_attempts=self._config.refresh_max_attempts,
-                )
+                # Both the token command (_fetch_bundle bursts attempts with backoff) AND applying
+                # the bundle (_apply_bundle → build_pinned_ssl_context can raise on a bad PEM) are
+                # inside the try, so the loop reports the right terminal state rather than a stale
+                # RUNNING or an uncaught crash. This loop keeps retrying cycles forever.
+                bundle = await self._fetch_bundle(self._config.refresh_max_attempts)
+                await self._apply_bundle(bundle)
             except NotRetryableTokenCommandError as e:
                 # Permanent (missing binary, bad bundle shape): retrying cannot help, and DEGRADED
                 # would promise a self-heal that never comes. Mark FAILED and stop the loop
@@ -240,7 +238,6 @@ class JupyterDeployClientProxy:
                 self._state = ProxyState.FAILED
                 await self.write_status_best_effort()
                 break
-            await self._apply_bundle(bundle)
             self._state = ProxyState.RUNNING
             await self.write_status_best_effort()
             self._logger.info(f"credential refreshed: {get_bundle_summary(bundle)}")
