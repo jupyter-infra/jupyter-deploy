@@ -27,6 +27,7 @@ from jupyter_deploy_client_proxy.utils import (
     get_forwarded_request_headers,
     get_forwarded_response_headers,
     get_seconds_until_refresh,
+    is_loopback_request_allowed,
 )
 
 
@@ -200,6 +201,16 @@ class JupyterDeployClientProxy:
             self._logger.info(f"credential refreshed: {get_bundle_summary(bundle)}")
 
     async def _handle(self, request: web.Request) -> web.StreamResponse:
+        # Enforce same-origin at the proxy BEFORE injecting the credential / rewriting Origin: only
+        # this listener's own loopback origin may drive it, else a hostile page could launder its
+        # Origin into an authorized request while `jd open` runs. self._port is set once started.
+        assert self._port is not None
+        if not is_loopback_request_allowed(request.headers, self._port):
+            self._logger.warning(
+                f"rejected non-loopback request: origin={request.headers.get('Origin')!r} "
+                f"host={request.headers.get('Host')!r}"
+            )
+            return web.Response(status=403, text="forbidden")
         if request.headers.get("Upgrade", "").lower() == "websocket":
             return await self._relay_ws(request)
         return await self._forward_http(request)

@@ -28,6 +28,31 @@ def _merge_bundle_headers_into_incoming(
     return merged
 
 
+def is_loopback_request_allowed(incoming: Mapping[str, str], port: int) -> bool:
+    """Gate a browser->proxy request before the proxy injects the credential and rewrites Origin.
+
+    The proxy is the component that must enforce same-origin: it forwards a valid Bearer credential
+    and rewrites ``Origin``/``Referer`` so the upstream's own same-origin check always passes,
+    so without this gate a malicious web page could ``fetch``/WebSocket the loopback listener
+    while ``jd open`` is running and have its hostile ``Origin`` laundered into an authorized
+    same-origin request (kernel WebSocket -> code execution on the notebook host).
+
+    Accept only requests that name the proxy's own loopback listener:
+      - if ``Origin`` is present, its netloc must be ``127.0.0.1:PORT`` or ``localhost:PORT``;
+      - if ``Host`` is present, it must equal one of those too (closes DNS-rebinding, where a name
+        resolving to 127.0.0.1 would otherwise carry the attacker's domain as ``Host``).
+
+    A missing ``Origin`` (non-browser client, top-level navigation) or missing ``Host`` is allowed:
+    the loopback listener is not otherwise authenticated, and this gate only closes the browser leg.
+    """
+    allowed = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    host = incoming.get("Host")
+    if host is not None and host not in allowed:
+        return False
+    origin = incoming.get("Origin")
+    return origin is None or urlsplit(origin).netloc in allowed
+
+
 def _rewrite_origin_headers(headers: dict[str, str], origin_host: str, origin_port: int) -> None:
     """Rewrite ``Origin``/``Referer`` in place to the upstream origin.
 

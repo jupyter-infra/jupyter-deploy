@@ -29,6 +29,16 @@ class TestHttpForwarding(OriginTestCase):
         self.assertEqual(headers["origin"], f"https://127.0.0.1:{self.origin.port}")
         self.assertEqual(headers["referer"], f"https://127.0.0.1:{self.origin.port}/lab?a=1")
 
+    async def test_rejects_cross_origin_browser_request(self) -> None:
+        # A hostile page must not be able to drive the loopback proxy: its Origin is not this
+        # listener's, so the proxy rejects it BEFORE injecting the credential / rewriting Origin.
+        port = await self._start_proxy({"Authorization": "x"})
+        async with (
+            aiohttp.ClientSession() as s,
+            s.get(f"http://127.0.0.1:{port}/", headers={"Origin": "https://evil.com"}) as r,
+        ):
+            self.assertEqual(r.status, 403)
+
     async def test_forwarded_origin_matches_host_header(self) -> None:
         # The contract that broke live: the rewritten Origin's netloc MUST equal the Host header the
         # upstream receives, or the app's same-origin check blocks every API/websocket call. Both are
