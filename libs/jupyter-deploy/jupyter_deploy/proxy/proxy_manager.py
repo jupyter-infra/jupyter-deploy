@@ -69,8 +69,8 @@ DEFAULT_TARGET_NAME = "default"
 _LISTENING_TIMEOUT_SECONDS = 10.0
 _LISTENING_POLL_INTERVAL_SECONDS = 0.1
 
-# How long to wait for the app to answer through the proxy (SG door reconcile + upstream
-# TLS handshake + app readiness) before opening the browser anyway.
+# How long to wait for the app to answer through the proxy (upstream TLS handshake + app
+# readiness) before opening the browser anyway.
 _APP_READY_TIMEOUT_SECONDS = 60.0
 _APP_READY_POLL_INTERVAL_SECONDS = 1.0
 _APP_READY_REQUEST_TIMEOUT_SECONDS = 3.0
