@@ -3,9 +3,6 @@ FROM golang:1.26 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
-# Bypass Go proxy due to corporate network issues
-ENV GOPROXY=direct
-
 # Set working directory
 WORKDIR /workspace
 
@@ -27,7 +24,7 @@ WORKDIR /
 COPY --from=builder /workspace/auth-sidecar /auth-sidecar
 USER 65532:65532
 
-# ForwardAuth + server-observed-IP endpoint
+# ForwardAuth endpoint
 EXPOSE 4181
 
 ENTRYPOINT ["/auth-sidecar"]
