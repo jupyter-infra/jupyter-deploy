@@ -43,12 +43,32 @@ class TestGetForwardedRequestHeaders(unittest.TestCase):
             "Sec-WebSocket-Key": "abc",
             "Accept": "*/*",
         }
-        result = get_forwarded_request_headers(incoming, {"Authorization": "Bearer x"})
+        result = get_forwarded_request_headers(incoming, {"Authorization": "Bearer x"}, "10.0.0.1", 443)
         self.assertEqual(result, {"Accept": "*/*", "Authorization": "Bearer x"})
 
     def test_injects_bundle_headers(self) -> None:
-        result = get_forwarded_request_headers({"Accept": "*/*"}, {"x-k8s-aws-id": "dep-1"})
+        result = get_forwarded_request_headers({"Accept": "*/*"}, {"x-k8s-aws-id": "dep-1"}, "10.0.0.1", 443)
         self.assertEqual(result["x-k8s-aws-id"], "dep-1")
+
+    def test_rewrites_origin_to_upstream(self) -> None:
+        result = get_forwarded_request_headers({"Origin": "http://127.0.0.1:9999"}, {}, "10.0.0.1", 443)
+        self.assertEqual(result["Origin"], "https://10.0.0.1:443")
+
+    def test_rewrites_referer_origin_preserving_path_and_query(self) -> None:
+        result = get_forwarded_request_headers(
+            {"Referer": "http://127.0.0.1:9999/lab/tree?a=1#frag"}, {}, "10.0.0.1", 443
+        )
+        self.assertEqual(result["Referer"], "https://10.0.0.1:443/lab/tree?a=1#frag")
+
+    def test_rewrites_case_insensitively_preserving_key_casing(self) -> None:
+        result = get_forwarded_request_headers({"origin": "http://127.0.0.1:9999"}, {}, "10.0.0.1", 443)
+        self.assertEqual(result["origin"], "https://10.0.0.1:443")
+        self.assertNotIn("Origin", result)
+
+    def test_does_not_add_origin_when_absent(self) -> None:
+        result = get_forwarded_request_headers({"Accept": "*/*"}, {}, "10.0.0.1", 443)
+        self.assertNotIn("Origin", result)
+        self.assertNotIn("Referer", result)
 
 
 class TestGetForwardedResponseHeaders(unittest.TestCase):
@@ -116,7 +136,7 @@ class TestDropFromRequestHeaders(unittest.TestCase):
         for name in DROP_FROM_REQUEST_HEADERS:
             with self.subTest(header=name):
                 # Use realistic (title-cased) casing to also assert the drop is case-insensitive.
-                result = get_forwarded_request_headers({name.title(): "v", "X-Keep": "1"}, {})
+                result = get_forwarded_request_headers({name.title(): "v", "X-Keep": "1"}, {}, "10.0.0.1", 443)
                 self.assertNotIn(name.title(), result)
                 self.assertNotIn(name, {k.lower() for k in result})
                 self.assertEqual(result["X-Keep"], "1")
