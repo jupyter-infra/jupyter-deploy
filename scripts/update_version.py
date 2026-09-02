@@ -4,12 +4,13 @@
 Usage:
     python scripts/update_version.py <target> <bump-or-version>
 
-    <target>           cli | plugin | base-template | eks-oidc-template
+    <target>           cli | plugin | proxy | base-template | eks-oidc-template
     <bump-or-version>  patch | minor | major | an explicit version (e.g. 0.1.4, 0.1.0rc1)
 
 Dispatch:
     - cli               bumps BOTH the root and CLI pyproject.toml (they move in lockstep)
     - plugin            bumps the plugin pyproject.toml
+    - proxy             bumps the client-proxy pyproject.toml
     - base-template     delegates to scripts/upgrade_base_template_version.py
     - eks-oidc-template delegates to scripts/upgrade_eks_oidc_template_version.py
 
@@ -33,6 +34,7 @@ REPO_ROOT = Path(__file__).parent.parent
 TARGET_PYPROJECT: dict[str, Path] = {
     "cli": REPO_ROOT / "libs" / "jupyter-deploy" / "pyproject.toml",
     "plugin": REPO_ROOT / "libs" / "pytest-jupyter-deploy" / "pyproject.toml",
+    "proxy": REPO_ROOT / "libs" / "jupyter-deploy-client-proxy" / "pyproject.toml",
     "base-template": REPO_ROOT / "libs" / "jupyter-deploy-tf-aws-ec2-base" / "pyproject.toml",
     "eks-oidc-template": REPO_ROOT / "libs" / "jupyter-deploy-tf-aws-eks-oidc" / "pyproject.toml",
 }
@@ -114,8 +116,8 @@ def main() -> None:
         # root and CLI versions move in lockstep
         set_pyproject_version(REPO_ROOT / "pyproject.toml", new_version)
         set_pyproject_version(TARGET_PYPROJECT["cli"], new_version)
-    else:  # plugin
-        set_pyproject_version(TARGET_PYPROJECT["plugin"], new_version)
+    else:  # plugin | proxy — single-file bump
+        set_pyproject_version(TARGET_PYPROJECT[args.target], new_version)
 
     print("\nRun `uv lock` to update the lockfile (the just recipe does this).")
 

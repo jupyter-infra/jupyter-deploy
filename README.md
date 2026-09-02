@@ -8,6 +8,7 @@
 [![PyPI - base template](https://img.shields.io/pypi/v/jupyter-deploy-tf-aws-ec2-base?label=base-template)](https://pypi.org/project/jupyter-deploy-tf-aws-ec2-base/)
 [![PyPI - eks-oidc template](https://img.shields.io/pypi/v/jupyter-deploy-tf-aws-eks-oidc?label=eks-oidc-template)](https://pypi.org/project/jupyter-deploy-tf-aws-eks-oidc/)
 [![PyPI - pytest plugin](https://img.shields.io/pypi/v/pytest-jupyter-deploy?label=pytest-plugin)](https://pypi.org/project/pytest-jupyter-deploy/)
+[![PyPI - client proxy](https://img.shields.io/pypi/v/jupyter-deploy-client-proxy?label=client-proxy)](https://pypi.org/project/jupyter-deploy-client-proxy/)
 
 An open-source command line interface (CLI) to deploy interactive applications to the Cloud.
 
