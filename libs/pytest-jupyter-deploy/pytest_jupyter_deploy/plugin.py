@@ -354,6 +354,10 @@ def client_proxy_app(page: Page, e2e_deployment: EndToEndDeployment) -> Generato
     """
     e2e_deployment.ensure_server_running()
     app = LocalProxyApplication(page=page, deployment=e2e_deployment)
+    # `jd proxy start` refuses to replace a running proxy, so clear any leaked by an
+    # interrupted prior run first — otherwise start() errors at setup for every test here.
+    with contextlib.suppress(Exception):
+        e2e_deployment.cli.stop_proxy()
     app.start()
     try:
         yield app

@@ -333,8 +333,9 @@ class JDCli:
         """Start the local client proxy for this project and return its loopback URL.
 
         Runs `jd proxy start` (always detached) then reads the bound port back from
-        `jd proxy show --json`. Any proxy already running for the project is replaced.
-        The instance must be running first — the proxy resolves the endpoint via
+        `jd proxy show --json`. `jd proxy start` never replaces a running proxy — it exits
+        non-zero if one is already running for the project, so callers must stop any prior
+        proxy first. The instance must be running first — the proxy resolves the endpoint via
         `jd proxy connect-info`, which fails if the host is stopped.
 
         Args:

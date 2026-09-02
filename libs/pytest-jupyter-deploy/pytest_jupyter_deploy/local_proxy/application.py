@@ -45,7 +45,8 @@ class LocalProxyApplication:
         """Start the local proxy and return the loopback URL to the app.
 
         The path is taken from the template manifest's ``open`` spec (e.g. ``/lab``), so the
-        helper stays template-agnostic. Any proxy already running for the project is replaced.
+        helper stays template-agnostic. ``jd proxy start`` does not replace a running proxy;
+        the caller must stop any prior proxy first (the ``client_proxy_app`` fixture does).
 
         Returns:
             The loopback URL the app is served at (e.g. "http://127.0.0.1:54321/lab").
