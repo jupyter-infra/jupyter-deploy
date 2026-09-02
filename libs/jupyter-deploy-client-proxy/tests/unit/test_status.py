@@ -14,6 +14,20 @@ from jupyter_deploy_client_proxy.server.config import JupyterDeployClientProxyCo
 from jupyter_deploy_client_proxy.server.proxy import JupyterDeployClientProxy
 
 
+def _read_state_best_effort(status_path: Path) -> str | None:
+    """Return the persisted ``state``, or None if the file is absent/mid-write.
+
+    The proxy's status write is a plain truncate-and-write (see ``server/state.py``), so a
+    reader can catch an empty/partial file. Mirror the production reader
+    (``read_instance_status``), which treats an unparseable file as "no status yet" rather
+    than raising — otherwise a poll loop racing the writer flakes on ``JSONDecodeError``.
+    """
+    try:
+        return str(json.loads(status_path.read_text())["state"])
+    except (FileNotFoundError, KeyError, json.JSONDecodeError):
+        return None
+
+
 class TestWriteStatusBestEffort(unittest.IsolatedAsyncioTestCase):
     def _proxy(self, token_argv: list[str] | None = None, **overrides: object) -> JupyterDeployClientProxy:
         self._tmp = tempfile.TemporaryDirectory()
@@ -152,16 +166,21 @@ class TestRefreshLoopStateTransitions(unittest.IsolatedAsyncioTestCase):
                 task = asyncio.create_task(proxy._refresh_loop())
                 # Poll on the persisted status, not the in-memory state: the loop sets state before
                 # the (awaited) status write, so cancelling on the in-memory flip could abort mid-write.
+                persisted_degraded = False
                 for _ in range(200):  # poll up to ~2s for the transition
-                    if status_path.exists() and json.loads(status_path.read_text())["state"] == "degraded":
+                    if _read_state_best_effort(status_path) == "degraded":
+                        persisted_degraded = True
                         break
                     await asyncio.sleep(0.01)
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
 
+            # Assert on what the poll observed, not a fresh read: the loop keeps rewriting the
+            # file, so cancelling it can freeze status.json mid-write (a truncate-and-write is
+            # not atomic) and a re-read would flake on the partial payload.
+            self.assertTrue(persisted_degraded)
             self.assertEqual(proxy.state, ProxyState.DEGRADED)
-            self.assertEqual(json.loads(status_path.read_text())["state"], "degraded")
             await proxy._logger.close()
 
     async def test_non_retryable_refresh_marks_failed_and_stops(self) -> None:
