@@ -36,11 +36,13 @@ ARG TEMPLATE=base
 USER root
 COPY --chown=testuser:testuser pyproject.toml /workspace/
 COPY --chown=testuser:testuser libs/jupyter-deploy/pyproject.toml /workspace/libs/jupyter-deploy/
+COPY --chown=testuser:testuser libs/jupyter-deploy-client-proxy/pyproject.toml /workspace/libs/jupyter-deploy-client-proxy/
 COPY --chown=testuser:testuser libs/jupyter-deploy-tf-aws-ec2-base/pyproject.toml /workspace/libs/jupyter-deploy-tf-aws-ec2-base/
+COPY --chown=testuser:testuser libs/jupyter-deploy-tf-aws-ec2-jupyterlab/pyproject.toml /workspace/libs/jupyter-deploy-tf-aws-ec2-jupyterlab/
 COPY --chown=testuser:testuser libs/jupyter-deploy-tf-aws-eks-oidc/pyproject.toml /workspace/libs/jupyter-deploy-tf-aws-eks-oidc/
 COPY --chown=testuser:testuser libs/jupyter-infra-tf-aws-iam-ci/pyproject.toml /workspace/libs/jupyter-infra-tf-aws-iam-ci/
 COPY --chown=testuser:testuser libs/pytest-jupyter-deploy/pyproject.toml /workspace/libs/pytest-jupyter-deploy/
-RUN for lib in jupyter-deploy jupyter-deploy-tf-aws-ec2-base jupyter-deploy-tf-aws-eks-oidc jupyter-infra-tf-aws-iam-ci pytest-jupyter-deploy; do \
+RUN for lib in jupyter-deploy jupyter-deploy-client-proxy jupyter-deploy-tf-aws-ec2-base jupyter-deploy-tf-aws-ec2-jupyterlab jupyter-deploy-tf-aws-eks-oidc jupyter-infra-tf-aws-iam-ci pytest-jupyter-deploy; do \
         touch /workspace/libs/$lib/LICENSE /workspace/libs/$lib/README.md; \
     done && chown -R testuser /workspace/libs
 USER testuser
