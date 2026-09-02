@@ -300,7 +300,7 @@ class GitHubOAuth2ProxyApplication:
             return True
 
         # Check if we ended up on the GitHub login page (cookies expired)
-        if "github.com" in current_url:
+        if urlparse(current_url).hostname == "github.com":
             # Page is on GitHub login — caller must handle credentials
             return False
 
@@ -363,7 +363,7 @@ class GitHubOAuth2ProxyApplication:
                 self.page.wait_for_url(lambda url: urlparse(url).hostname != "github.com", timeout=5000)
             except Exception:
                 self._handle_oauth_authorize_page()
-        elif "github.com" in current_url:
+        elif urlparse(current_url).hostname == "github.com":
             # Wait a bit for any redirects to complete
             with contextlib.suppress(Exception):
                 self.page.wait_for_url(lambda url: urlparse(url).hostname != "github.com", timeout=10000)
@@ -461,7 +461,7 @@ class GitHubOAuth2ProxyApplication:
         """
         current_url = self.page.url
         # If we're on GitHub or see the OAuth2 sign-in button, not authenticated
-        if "github.com" in current_url:
+        if urlparse(current_url).hostname == "github.com":
             return False
         if self.page.get_by_role("button", name="Sign in with GitHub").is_visible():
             return False

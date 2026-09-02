@@ -45,13 +45,9 @@ class DexGitHubOAuth2ProxyApplication(GitHubOAuth2ProxyApplication):
             except Exception:
                 self._handle_oauth_authorize_page()
 
-        if self._is_on_app_domain():
-            return True
-
-        if "github.com" in self.page.url:
-            return False
-
-        return False
+        # Back on the app domain means the flow completed; otherwise we are still
+        # mid-flow (GitHub/Dex) or on an error page.
+        return self._is_on_app_domain()
 
     def _try_auth_session(self) -> bool:
         """Try authenticating through the Dex OAuth flow with existing cookies.
