@@ -58,6 +58,12 @@ jobs:
     with:
       working-directory: ${{ matrix.working-directory }}
 
+  # The client-proxy functional suite is excluded from the per-dir `test` run (root
+  # `norecursedirs`), so it runs here on every PR as its own job.
+  functional-test:
+    name: Run functional tests
+    uses: ./.github/workflows/functional-test.yml
+
   docs-sync:
     name: Verify CLI reference docs are in sync
     runs-on: ubuntu-latest

@@ -1,0 +1,224 @@
+name: Release proxy (jupyter-deploy-client-proxy)
+
+run-name: Release jupyter-deploy-client-proxy
+
+# Mirrors release-plugin.yml (no live-deploy E2E gate — the proxy is cloud-blind). Its gate is
+# the offline functional suite; the Test PyPI install-check doubles as a CLI-with-proxy smoke.
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      pkg-name: ${{ steps.get-version.outputs.pkg-name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: '3.13'
+          working-directory: '.'
+
+      - name: Build package
+        run: |
+          cd libs/jupyter-deploy-client-proxy
+          uv build
+
+      - name: Get package version
+        id: get-version
+        run: |
+          cd libs/jupyter-deploy-client-proxy
+          echo version=$(uv version --short) >> $GITHUB_OUTPUT
+          echo pkg-name="$(uv version | cut -d ' ' -f 1)" >> $GITHUB_OUTPUT
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  lint:
+    name: Run linters
+    needs: [build]
+    uses: ./.github/workflows/lint.yml
+    with:
+      working-directory: libs/jupyter-deploy-client-proxy
+
+  test:
+    name: Run tests
+    needs: [lint]
+    uses: ./.github/workflows/test.yml
+    with:
+      working-directory: libs/jupyter-deploy-client-proxy
+
+  functional:
+    name: Run functional tests
+    needs: [test]
+    uses: ./.github/workflows/functional-test.yml
+
+  test-pypi-publish:
+    name: Publish to Test PyPI
+    needs: [functional, build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: test-release
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: List build artifacts
+        run: ls -la dist/
+
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v3
+
+      - name: Publish to Test PyPI
+        run: |
+          uv publish \
+            --publish-url https://test.pypi.org/legacy/ \
+            --check-url https://test.pypi.org/simple \
+            --trusted-publishing always
+
+  test-pypi-install:
+    name: Check Test PyPI build + CLI-with-proxy smoke
+    needs: [test-pypi-publish, build]
+    runs-on: ubuntu-latest
+    env:
+      PKG_NAME: ${{ needs.build.outputs.pkg-name }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v3
+
+      - name: Wait for Test PyPI availability
+        run: |
+          url="https://test.pypi.org/pypi/${PKG_NAME}/${VERSION}/json"
+          echo "Polling ${url}"
+          for i in $(seq 1 20); do
+            if curl -fsS -o /dev/null "${url}"; then
+              echo "${PKG_NAME}==${VERSION} is available on Test PyPI"
+              exit 0
+            fi
+            echo "Attempt ${i}/20: not yet available, retrying in 15s..."
+            sleep 15
+          done
+          echo "::error::${PKG_NAME}==${VERSION} did not appear on Test PyPI within 5 minutes"
+          exit 1
+
+      - name: Test installation from Test PyPI
+        run: |
+          uv venv
+          for i in 1 2; do
+            if uv pip install \
+              --extra-index-url https://test.pypi.org/simple/ \
+              --index-strategy unsafe-best-match \
+              ${{ env.PKG_NAME }}==${{ env.VERSION }} 2>&1 | tee /tmp/install.log; then
+              exit 0
+            fi
+            if ! grep -qi "No solution found\|no version of" /tmp/install.log; then
+              echo "::error::Install failed with non-transient error"
+              exit 1
+            fi
+            echo "Attempt ${i}/2 failed (package not yet installable), retrying in 60s..."
+            sleep 60
+          done
+          echo "::error::Test PyPI install failed after 2 attempts"
+          exit 1
+
+      # CLI-with-proxy smoke: install the CLI (prod PyPI, [aws]) alongside the just-published
+      # proxy build (Test PyPI, pinned exactly so a pre-release like 0.1.0rc1 resolves — the
+      # CLI's [proxy] extra pins `>=0.1.0`, which excludes pre-releases). Assert the proxy
+      # console script is on PATH and `jd proxy` is wired.
+      - name: CLI-with-proxy smoke
+        run: |
+          uv venv smoke-venv
+          uv pip install --python smoke-venv \
+            --extra-index-url https://test.pypi.org/simple/ \
+            --index-strategy unsafe-best-match \
+            "jupyter-deploy[aws]" \
+            "${{ env.PKG_NAME }}==${{ env.VERSION }}"
+          echo "--- proxy console script ---"
+          smoke-venv/bin/jupyter-deploy-client-proxy --help
+          echo "--- jd proxy group ---"
+          smoke-venv/bin/jd proxy --help | tee /tmp/proxy-help.txt
+          for cmd in connect-info start open stop status show; do
+            grep -q "$cmd" /tmp/proxy-help.txt || { echo "::error::jd proxy missing '$cmd'"; exit 1; }
+          done
+          echo "CLI-with-proxy smoke passed"
+
+  prod-pypi-publish:
+    name: Publish to PyPI
+    needs: [test-pypi-install, build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: release
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: List build artifacts
+        run: ls -la dist/
+
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v3
+
+      - name: Publish to PyPI
+        run: |
+          uv publish \
+            --trusted-publishing always
+
+  mark-release:
+    name: Create GitHub Release
+    needs: [prod-pypi-publish, build]
+    if: always() && needs.prod-pypi-publish.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      PKG_NAME: ${{ needs.build.outputs.pkg-name }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: '3.13'
+          working-directory: '.'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "dist/*"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          generateReleaseNotes: true
+          prerelease: ${{ contains(env.VERSION, 'rc') || contains(env.VERSION, 'a') || contains(env.VERSION, 'b') }}
+          tag: ${{ env.PKG_NAME }}==${{ env.VERSION }}
+          commit: ${{ github.sha }}

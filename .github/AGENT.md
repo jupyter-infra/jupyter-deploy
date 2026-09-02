@@ -4,9 +4,10 @@
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `ci.yml` | push/PR | Lint + unit tests |
-| `lint.yml`, `test.yml` | `workflow_call` | Reusable lint/test jobs |
+| `ci.yml` | push/PR | Lint + unit tests + client-proxy functional tests |
+| `lint.yml`, `test.yml`, `functional-test.yml` | `workflow_call` | Reusable lint / unit-test / client-proxy functional-test jobs |
 | `release-cli.yml` | `workflow_dispatch` | Release `jupyter-deploy` CLI to PyPI — pre-publish smoke gate (local wheel) → Test PyPI → E2E gate → PyPI |
+| `release-proxy.yml` | `workflow_dispatch` | Release `jupyter-deploy-client-proxy` to PyPI — functional gate → Test PyPI → CLI-with-proxy smoke → PyPI (no live-deploy E2E; cloud-blind) |
 | `release-base.yml` | `workflow_dispatch` | Release `jupyter-deploy-tf-aws-ec2-base` to PyPI (with E2E gate) |
 | `release-plugin.yml` | `workflow_dispatch` | Release `pytest-jupyter-deploy` to PyPI |
 | `e2e-cli.yml` | `workflow_call` | CLI release E2E gate — smoke tests (bare/aws/aws-k8s) + functional tests against base app #2 and EKS app #5 |
@@ -59,7 +60,11 @@ deploys the published package). The ~30-min deploy is readable in its own job; t
 
 Lessons from coordinated plugin/CLI/template releases — read before releasing:
 
-- **Release order for coupled changes: plugin → CLI → templates.** A template's
+- **Release order for coupled changes: plugin → proxy → CLI → templates.** The CLI's `[proxy]`
+  extra pins `jupyter-deploy-client-proxy>=0.1.0`; publish the proxy (a final, non-pre-release
+  version) **before** a CLI release so the CLI's `[proxy]` extra resolves from prod PyPI. (A
+  pre-release like `0.1.0rc1` does NOT satisfy `>=0.1.0` — the CLI-with-proxy smoke in
+  `release-proxy.yml` pins the exact version to work around this for the gate.) A template's
   `manifest.yaml` can require CLI features (e.g. new component/health command schema);
   the eks-oidc release gate installs the CLI *unpinned from prod PyPI*, so the CLI must
   be published **first** or the gate's deploy fails at `jd config` with a manifest schema

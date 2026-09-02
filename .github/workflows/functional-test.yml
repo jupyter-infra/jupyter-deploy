@@ -1,0 +1,35 @@
+name: functional-test
+
+# Reusable: the client-proxy functional suite (real proxy in-process against a trustme
+# self-signed origin — no cloud). Excluded from the root `unit-test` run via `norecursedirs`,
+# so it needs its own job. Called by `ci.yml` (on PRs touching the proxy) and `release-proxy.yml`.
+on:
+  workflow_call:
+
+jobs:
+  functional-test:
+    name: Run client-proxy functional tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.12', '3.13']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: ${{ matrix.python-version }}
+          working-directory: '.'
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Install unpinned dependencies
+        run: |
+          rm -f uv.lock
+          uv sync --all-extras
+
+      - name: Run functional tests
+        run: just functional-test
