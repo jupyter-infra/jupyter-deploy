@@ -384,7 +384,13 @@ class JDCli:
         raise ValueError("Could not parse proxy status from command output")
 
     def stop_proxy(self) -> None:
-        """Stop any local proxy running for this project (no-op if none)."""
+        """Stop the local proxy for this project.
+
+        Raises:
+            JDCliError: If no proxy is running (`jd proxy stop` exits non-zero via
+                `NoProxyFoundError`). Callers using this for idempotent setup/teardown must
+                suppress it — see the ``client_proxy_app`` fixture.
+        """
         self.run_command(["jupyter-deploy", "proxy", "stop"])
 
     def get_str_output(self, output_name: str) -> str:

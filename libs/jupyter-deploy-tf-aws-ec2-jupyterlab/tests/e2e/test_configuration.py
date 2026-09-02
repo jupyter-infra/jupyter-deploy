@@ -60,6 +60,8 @@ def test_gitignore_generated_after_init(e2e_deployment: EndToEndDeployment) -> N
 
         content = gitignore_path.read_text()
         assert ".jd-history/" in content
+        # #348: without this, `jd up` backs up proxy runtime dirs (logs included) to S3.
+        assert ".jd-proxy/" in content
         assert "jdout-" in content
         assert "jdinputs." in content
         assert ".terraform/" in content

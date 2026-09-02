@@ -57,7 +57,12 @@ class LocalProxyApplication:
         return self.jupyterlab_url
 
     def stop(self) -> None:
-        """Stop the local proxy (no-op if none is running)."""
+        """Stop the local proxy.
+
+        Raises:
+            JDCliError: If no proxy is running — callers doing idempotent teardown must
+                suppress it (the ``client_proxy_app`` fixture does).
+        """
         self.deployment.cli.stop_proxy()
 
     def verify_jupyterlab_accessible(self, timeout_ms: int = 60000, max_retries: int = 5) -> None:
