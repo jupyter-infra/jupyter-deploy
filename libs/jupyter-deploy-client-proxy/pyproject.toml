@@ -1,6 +1,6 @@
 [project]
 name = "jupyter-deploy-client-proxy"
-version = "0.1.0"
+version = "0.1.0rc1"
 description = "Local client that routes an app from localhost to a jupyter-deploy-managed remote host."
 readme = "README.md"
 requires-python = ">=3.12"

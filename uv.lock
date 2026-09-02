@@ -1050,7 +1050,7 @@ dev = [
 
 [[package]]
 name = "jupyter-deploy-client-proxy"
-version = "0.1.0"
+version = "0.1.0rc1"
 source = { editable = "libs/jupyter-deploy-client-proxy" }
 dependencies = [
     { name = "aiofiles" },
