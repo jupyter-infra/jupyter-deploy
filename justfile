@@ -485,6 +485,15 @@ e2e-all project_dir test_filter="" options="" no_cache="false" template=default-
 test-e2e-base project_dir="sandbox-e2e" test_filter="" options="":
     @just test-e2e {{project_dir}} "{{test_filter}}" "{{options}}" tf-aws-ec2-base
 
+# Run E2E tests for the JupyterLab template (tf-aws-ec2-jupyterlab)
+# Needs AWS credentials but NO test env vars and NO ci-dir (the local client proxy injects
+# the identity token itself — there is no browser sign-in).
+# Example: just test-e2e-jupyterlab sandbox-lab test_project_is_configurable   # config only
+# Example: just test-e2e-jupyterlab sandbox-lab test_configuration              # all config tests
+# Example: just test-e2e-jupyterlab sandbox-lab test_application                 # proxy + notebook in browser
+test-e2e-jupyterlab project_dir="sandbox-e2e" test_filter="" options="":
+    @just test-e2e {{project_dir}} "{{test_filter}}" "{{options}}" tf-aws-ec2-jupyterlab
+
 # Run E2E tests for the EKS OIDC template (tf-aws-eks-oidc)
 # Example: just test-e2e-eks-oidc sandbox-eks test_configuration                              # config only (no ci-dir needed)
 # Example: just test-e2e-eks-oidc sandbox-eks "" ci-dir=sandbox-ci                            # all non-full-deploy, non-mutating tests
