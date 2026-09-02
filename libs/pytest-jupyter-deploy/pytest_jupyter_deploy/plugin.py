@@ -12,6 +12,7 @@ from playwright.sync_api import Page
 from pytest_jupyter_deploy import constants
 from pytest_jupyter_deploy.constants import DEPLOY_TIMEOUT_SECONDS, DESTROY_TIMEOUT_SECONDS
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
+from pytest_jupyter_deploy.local_proxy import LocalProxyApplication
 from pytest_jupyter_deploy.oauth2_proxy.ci_credentials import fetch_ci_credentials
 from pytest_jupyter_deploy.oauth2_proxy.dex import DexGitHubOAuth2ProxyApplication
 from pytest_jupyter_deploy.oauth2_proxy.github import GitHubOAuth2ProxyApplication
@@ -335,6 +336,30 @@ def github_oauth_app(
         ci_password=ci_password,
         ci_totp_fn=ci_totp_fn,
     )
+
+
+@pytest.fixture(scope="function")
+def client_proxy_app(page: Page, e2e_deployment: EndToEndDeployment) -> Generator[LocalProxyApplication, None, None]:
+    """Local client-proxy application helper (templates with no public OAuth URL).
+
+    For templates that reach JupyterLab through the ``jupyter-deploy`` client proxy over
+    pinned TLS + STS-identity auth (e.g. aws-ec2-jupyterlab). Ensures the server is running,
+    starts the local proxy, and yields a :class:`LocalProxyApplication` pointed at the
+    loopback URL. Stops the proxy on teardown.
+
+    Unlike ``github_oauth_app`` this needs no bot credentials / ``--ci-dir`` — there is no
+    browser sign-in; the proxy injects the identity token itself.
+
+    Note: function-scoped to match the ``page`` fixture from pytest-playwright.
+    """
+    e2e_deployment.ensure_server_running()
+    app = LocalProxyApplication(page=page, deployment=e2e_deployment)
+    app.start()
+    try:
+        yield app
+    finally:
+        with contextlib.suppress(Exception):
+            app.stop()
 
 
 @pytest.fixture(scope="function")
