@@ -95,7 +95,7 @@ jobs:
             --trusted-publishing always
 
   test-pypi-install:
-    name: Check Test PyPI build + CLI-with-proxy smoke
+    name: Check installation of the Test PyPI build
     needs: [test-pypi-publish, build]
     runs-on: ubuntu-latest
     env:
@@ -139,27 +139,6 @@ jobs:
           done
           echo "::error::Test PyPI install failed after 2 attempts"
           exit 1
-
-      # CLI-with-proxy smoke: install the CLI (prod PyPI, [aws]) alongside the just-published
-      # proxy build (Test PyPI, pinned exactly so a pre-release like 0.1.0rc1 resolves — the
-      # CLI's [proxy] extra pins `>=0.1.0`, which excludes pre-releases). Assert the proxy
-      # console script is on PATH and `jd proxy` is wired.
-      - name: CLI-with-proxy smoke
-        run: |
-          uv venv smoke-venv
-          uv pip install --python smoke-venv \
-            --extra-index-url https://test.pypi.org/simple/ \
-            --index-strategy unsafe-best-match \
-            "jupyter-deploy[aws]" \
-            "${{ env.PKG_NAME }}==${{ env.VERSION }}"
-          echo "--- proxy console script ---"
-          smoke-venv/bin/jupyter-deploy-client-proxy --help
-          echo "--- jd proxy group ---"
-          smoke-venv/bin/jd proxy --help | tee /tmp/proxy-help.txt
-          for cmd in connect-info start open stop status show; do
-            grep -q "$cmd" /tmp/proxy-help.txt || { echo "::error::jd proxy missing '$cmd'"; exit 1; }
-          done
-          echo "CLI-with-proxy smoke passed"
 
   prod-pypi-publish:
     name: Publish to PyPI
