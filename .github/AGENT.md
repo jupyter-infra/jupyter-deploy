@@ -18,6 +18,7 @@
 | `e2e-base-canary.yml` | `schedule` / `workflow_dispatch` | Weekly canary — calls fresh workflow |
 | `e2e-base-job.yml` | `workflow_call` | Reusable base E2E job (called by the above) |
 | `e2e-eks-oidc.yml` | `workflow_dispatch` | EKS E2E tests against an existing deployment |
+| `e2e-eks-oidc-pr.yml` | `pull_request` | Per-PR EKS E2E against the restored deployment (same-repo PRs only; mutating job gated on the `e2e-approval` environment) |
 | `e2e-eks-oidc-fresh.yml` | `workflow_dispatch` / `workflow_call` | Deploy EKS from scratch (in-container, so pypi-mode deploys the published package) + full E2E chain |
 | `e2e-eks-oidc-release.yml` | `workflow_call` | EKS template release E2E gate — calls fresh workflow with Test PyPI install |
 | `e2e-eks-oidc-canary.yml` | `schedule` / `workflow_dispatch` | Weekly canary — calls fresh workflow |

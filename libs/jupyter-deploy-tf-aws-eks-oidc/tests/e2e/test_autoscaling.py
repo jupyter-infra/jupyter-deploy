@@ -1,8 +1,10 @@
 """E2E tests for Karpenter + KEDA autoscaling on the EKS OIDC template."""
 
+import string
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Generator
+from contextlib import contextmanager
 
 import pytest
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
@@ -16,10 +18,10 @@ from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_delete_workspace,
 )
 
-from .conftest import WORKSPACES_DIR
+from .conftest import WORKSPACE_NAMESPACE, WORKSPACES_DIR
+from .test_utils import kubectl_stdout, poll
 
 ROUTER_NAMESPACE = "jupyter-k8s-router"
-WORKSPACE_NAMESPACE = "default"
 KARPENTER_NAMESPACE = "karpenter"
 
 # Routing nodes are tainted with jupyter-deploy/role=routing:NoSchedule so ballast
@@ -33,19 +35,119 @@ BALLAST_IMAGE = "public.ecr.aws/docker/library/busybox:1.36"
 # Workspace used to trigger Karpenter workspace node provisioning.
 _SCALE_WORKSPACE = "e2e-autoscaling-workspace"
 
+# ── KEDA connection-load ballast ──────────────────────────────────────────────
+# All three routing ScaledObjects trigger on the same Prometheus metric,
+# sum(traefik_open_connections{entrypoint="websecure"}), divided per pod
+# (AverageValue). Per-pod thresholds from the aws-oidc chart values: traefik
+# 100, authmiddleware 150, web-app 200; each tier's minReplicaCount is 2. So
+# 3 pods x 200 held connections = 600 total moves every tier above its floor:
+# desired replicas 6 / 4 / 3.
+KEDA_SCALED_DEPLOYMENTS = ("traefik", "authmiddleware", "web-app")
+_CONN_BALLAST_NAME = "keda-conn-ballast"
+_CONN_BALLAST_PODS = 3
+_CONN_BALLAST_CONNECTIONS_PER_POD = 200
+_TRAEFIK_IN_CLUSTER_HOST = f"traefik.{ROUTER_NAMESPACE}.svc.cluster.local"
+_PYTHON_IMAGE = "public.ecr.aws/docker/library/python:3.12-alpine"
 
-def _kubectl(*args: str) -> str:
-    result = subprocess.run(["kubectl", *args], capture_output=True, text=True, check=True)
-    return result.stdout.strip()
+# Each holder pod keeps N TLS connections open to traefik's websecure
+# entrypoint, re-sending a keep-alive HEAD every 30s (under traefik's idle
+# timeout) and replacing dropped sockets, so the metric holds steady at the
+# target. Certificate verification is off: the in-cluster service DNS name is
+# not on the deployment's public certificate.
+_CONN_BALLAST_MANIFEST = string.Template(
+    """
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${name}
+  namespace: ${namespace}
+spec:
+  replicas: ${replicas}
+  selector:
+    matchLabels:
+      app: ${name}
+  template:
+    metadata:
+      labels:
+        app: ${name}
+    spec:
+      nodeSelector:
+        jupyter-deploy/role: platform
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: holder
+          image: ${image}
+          env:
+            - name: TARGET_HOST
+              value: ${target_host}
+            - name: CONNECTIONS
+              value: "${connections}"
+          command: ["python", "-u", "-c"]
+          args:
+            - |
+              import os, socket, ssl, time
+              host = os.environ["TARGET_HOST"]
+              target = int(os.environ["CONNECTIONS"])
+              ctx = ssl.create_default_context()
+              ctx.check_hostname = False
+              ctx.verify_mode = ssl.CERT_NONE
+              req = ("HEAD / HTTP/1.1\\r\\nHost: " + host + "\\r\\nConnection: keep-alive\\r\\n\\r\\n").encode()
+              conns = []
+              while True:
+                  alive = []
+                  for s in conns:
+                      try:
+                          s.sendall(req)
+                          s.recv(4096)
+                          alive.append(s)
+                      except OSError:
+                          try:
+                              s.close()
+                          except OSError:
+                              pass
+                  conns = alive
+                  while len(conns) < target:
+                      try:
+                          raw = socket.create_connection((host, 443), timeout=10)
+                          tls = ctx.wrap_socket(raw, server_hostname=host)
+                          tls.sendall(req)
+                          tls.recv(4096)
+                          conns.append(tls)
+                      except OSError:
+                          break
+                  print("holding", len(conns), "connections", flush=True)
+                  time.sleep(30)
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+"""
+)
 
 
-def _poll(condition: "Callable[[], bool]", timeout_s: int, interval_s: int = 5, msg: str = "") -> None:
-    deadline = time.time() + timeout_s
-    while time.time() < deadline:
-        if condition():
-            return
-        time.sleep(interval_s)
-    raise TimeoutError(f"Condition not met within {timeout_s}s: {msg}")
+def _routing_deployment_replicas(name: str) -> int:
+    return int(kubectl_stdout("get", "deployment", name, "-n", ROUTER_NAMESPACE, "-o", "jsonpath={.spec.replicas}"))
+
+
+@contextmanager
+def _connection_ballast() -> Generator[None, None, None]:
+    manifest = _CONN_BALLAST_MANIFEST.substitute(
+        name=_CONN_BALLAST_NAME,
+        namespace=ROUTER_NAMESPACE,
+        replicas=str(_CONN_BALLAST_PODS),
+        image=_PYTHON_IMAGE,
+        target_host=_TRAEFIK_IN_CLUSTER_HOST,
+        connections=str(_CONN_BALLAST_CONNECTIONS_PER_POD),
+    )
+    subprocess.run(["kubectl", "apply", "-f", "-"], input=manifest, text=True, check=True, capture_output=True)
+    try:
+        yield
+    finally:
+        subprocess.run(
+            ["kubectl", "delete", "deployment", _CONN_BALLAST_NAME, "-n", ROUTER_NAMESPACE, "--ignore-not-found"],
+            capture_output=True,
+            text=True,
+        )
 
 
 # ── KEDA HPAs ────────────────────────────────────────────────────────────────
@@ -56,7 +158,9 @@ def test_keda_hpas_exist(e2e_deployment: EndToEndDeployment) -> None:
     """KEDA must create HPAs for traefik, authmiddleware, and web-app."""
     e2e_deployment.ensure_deployed()
 
-    output = _kubectl("get", "hpa", "-n", ROUTER_NAMESPACE, "--no-headers", "-o", "custom-columns=NAME:.metadata.name")
+    output = kubectl_stdout(
+        "get", "hpa", "-n", ROUTER_NAMESPACE, "--no-headers", "-o", "custom-columns=NAME:.metadata.name"
+    )
     hpa_names = set(output.splitlines())
 
     assert "keda-hpa-traefik" in hpa_names, f"Expected keda-hpa-traefik HPA, got: {hpa_names}"
@@ -75,7 +179,7 @@ def test_keda_hpas_reference_correct_deployments(e2e_deployment: EndToEndDeploym
         "keda-hpa-web-app": "web-app",
     }
     for hpa_name, deployment_name in expected.items():
-        ref = _kubectl(
+        ref = kubectl_stdout(
             "get",
             "hpa",
             hpa_name,
@@ -123,7 +227,7 @@ def test_routing_deployments_have_no_hardcoded_replicas(e2e_deployment: EndToEnd
 
 def _workspaces_nodes() -> set[str]:
     """Return the set of node names currently labeled as workspaces-role nodes."""
-    output = _kubectl(
+    output = kubectl_stdout(
         "get",
         "nodes",
         "-l",
@@ -138,7 +242,7 @@ def _workspaces_nodes() -> set[str]:
 
 def _workspace_pod_node() -> str:
     """Return the node hosting the _SCALE_WORKSPACE pod, or '' if none is scheduled yet."""
-    return _kubectl(
+    return kubectl_stdout(
         "get",
         "pods",
         "-n",
@@ -174,7 +278,7 @@ def test_karpenter_workspace_provisioning_and_scale_to_zero(e2e_deployment: EndT
     # pod to be gone so its node isn't misattributed to this run.
     try:
         kubectl_delete_workspace(_SCALE_WORKSPACE)
-        _poll(
+        poll(
             lambda: _workspace_pod_node() == "",
             timeout_s=300,
             msg="pre-test cleanup: leftover workspace pod did not terminate",
@@ -192,10 +296,10 @@ def test_karpenter_workspace_provisioning_and_scale_to_zero(e2e_deployment: EndT
         pod_node = _workspace_pod_node()
         assert pod_node, f"Could not find pod node for workspace {_SCALE_WORKSPACE}"
 
-        node_role = _kubectl("get", "node", pod_node, "-o", "jsonpath={.metadata.labels.jupyter-deploy/role}")
+        node_role = kubectl_stdout("get", "node", pod_node, "-o", "jsonpath={.metadata.labels.jupyter-deploy/role}")
         assert node_role == "workspaces", f"Workspace pod landed on node with role '{node_role}', expected 'workspaces'"
 
-        nodepool = _kubectl("get", "node", pod_node, "-o", r"jsonpath={.metadata.labels.karpenter\.sh/nodepool}")
+        nodepool = kubectl_stdout("get", "node", pod_node, "-o", r"jsonpath={.metadata.labels.karpenter\.sh/nodepool}")
         assert nodepool == "workspace-cpu", f"Workspace pod node has nodepool '{nodepool}', expected 'workspace-cpu'"
 
         # Nodes Karpenter provisioned for this workspace (excludes any pre-existing
@@ -212,7 +316,7 @@ def test_karpenter_workspace_provisioning_and_scale_to_zero(e2e_deployment: EndT
 
     # After deletion Karpenter should terminate the node(s) it added for this
     # workspace (consolidateAfter is 60s; allow up to 10 minutes for drain + delete).
-    _poll(
+    poll(
         lambda: _workspaces_nodes().isdisjoint(new_nodes),
         timeout_s=600,
         msg=f"nodes {new_nodes} were not terminated after workspace deletion",
@@ -271,7 +375,7 @@ def test_karpenter_routing_nodepool_scales_up(e2e_deployment: EndToEndDeployment
             time.sleep(10)
 
         if not scaled_up:
-            karpenter_logs = _kubectl(
+            karpenter_logs = kubectl_stdout(
                 "logs",
                 "-n",
                 KARPENTER_NAMESPACE,
@@ -285,3 +389,45 @@ def test_karpenter_routing_nodepool_scales_up(e2e_deployment: EndToEndDeployment
                 f"Karpenter did not provision a new routing node.\n"
                 f"--- Karpenter logs ---\n{karpenter_logs}"
             )
+
+
+# ── KEDA load-driven replica scaling ─────────────────────────────────────────
+
+
+@pytest.mark.mutating
+@pytest.mark.usefixtures("kubernetes_cluster_login")
+def test_keda_scales_routing_tier_under_connection_load(e2e_deployment: EndToEndDeployment) -> None:
+    """Held connections drive every KEDA-scaled Deployment above its floor, then back.
+
+    Ballast pods hold 600 connections open on traefik's websecure entrypoint —
+    the shared metric behind all three routing ScaledObjects — so traefik,
+    authmiddleware, and web-app must each scale above their pre-load replica
+    count. Removing the ballast must return each Deployment exactly to its
+    pre-load count (KEDA pins the floor via minReplicaCount; on an idle e2e
+    deployment the pre-load count IS that floor).
+
+    Asserts spec.replicas (the HPA decision), not pod readiness: extra pods may
+    wait on a Karpenter routing node, which is not this test's contract. Node
+    consolidation after scale-down is not asserted either (jupyter-k8s-aws#81).
+    """
+    e2e_deployment.ensure_deployed()
+
+    baselines = {name: _routing_deployment_replicas(name) for name in KEDA_SCALED_DEPLOYMENTS}
+
+    with _connection_ballast():
+        # Metric path: prometheus scrape + KEDA poll (30s) + HPA sync. Allow 7 minutes.
+        poll(
+            lambda: all(_routing_deployment_replicas(name) > baselines[name] for name in KEDA_SCALED_DEPLOYMENTS),
+            timeout_s=420,
+            interval_s=10,
+            msg=f"KEDA did not scale all of {KEDA_SCALED_DEPLOYMENTS} above their pre-load replica counts",
+        )
+
+    # HPA scale-down waits out its stabilization window (300s) after the
+    # connections drop; allow 15 minutes for every tier to settle back.
+    poll(
+        lambda: all(_routing_deployment_replicas(name) == baselines[name] for name in KEDA_SCALED_DEPLOYMENTS),
+        timeout_s=900,
+        interval_s=15,
+        msg=f"routing Deployments did not settle back to pre-load replica counts {baselines}",
+    )

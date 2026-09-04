@@ -53,7 +53,11 @@ jobs:
   # autoscaling, …) are picked up without editing this workflow. Some require the
   # deployment to be configured a certain way (e.g. idle shutdown needs
   # workspaces_idle_shutdown_timeout_min=1, set in tests/e2e/configurations/base.yaml);
-  # a restored sandbox deployed with an older config may fail those.
+  # a restored sandbox deployed with an older config may fail those. The GPU pool
+  # lifecycle test adds two jd config + jd up cycles and two GPU workspace
+  # cycles including the torch/CUDA notebook (about an hour typical), and the
+  # KEDA load test waits out the HPA scale-down stabilization window (bounded
+  # ~25 min), hence the 210-minute timeout.
   test-mutating:
     name: "Mutating tests"
     needs: [build-image, test-non-mutating]
@@ -66,4 +70,4 @@ jobs:
       ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
       marker: mutating
       mutate: true
-      timeout-minutes: 60
+      timeout-minutes: 210

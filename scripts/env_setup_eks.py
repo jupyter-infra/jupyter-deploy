@@ -54,6 +54,7 @@ OPTION_MAP = {
     "team": "JD_E2E_TEAM",
     "rbac-team": "JD_E2E_RBAC_TEAM",
     "enable-default-gpu-pool": "JD_E2E_VAR_ENABLE_DEFAULT_GPU_POOL",
+    "gpu-tests": "JD_E2E_GPU_ENABLED",
 }
 
 

@@ -23,6 +23,7 @@ from ci_restore_base import (
     restore_project,
     restore_secrets,
 )
+from orphan_scan import read_deployment_id, scan_or_fail
 
 
 def takedown_project(project_dir: Path) -> None:
@@ -86,7 +87,12 @@ def main() -> None:
     print("\nRestoring secrets from cloud provider...")
     restore_secrets(project_dir, required=False)
 
+    deployment_id = read_deployment_id(project_dir)
     takedown_project(project_dir)
+    if deployment_id:
+        scan_or_fail(deployment_id)
+    else:
+        print("  Warning: deployment_id output unavailable before takedown; skipping the orphan scan.")
     delete_project_from_store(project_id)
 
     print(f"\nProject {project_id} taken down and deleted (subdomain: {subdomain})")

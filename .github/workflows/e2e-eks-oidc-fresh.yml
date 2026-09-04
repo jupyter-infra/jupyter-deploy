@@ -259,7 +259,11 @@ jobs:
   # All mutating EKS tests, selected by the `mutating` marker so new ones (GPU,
   # autoscaling, …) are picked up without editing this workflow. The fresh deploy
   # uses tests/e2e/configurations/base.yaml, which satisfies their config needs
-  # (e.g. idle shutdown's workspaces_idle_shutdown_timeout_min=1).
+  # (e.g. idle shutdown's workspaces_idle_shutdown_timeout_min=1). The GPU pool
+  # lifecycle test adds two jd config + jd up cycles and two GPU workspace
+  # cycles including the torch/CUDA notebook (about an hour typical), and the
+  # KEDA load test waits out the HPA scale-down stabilization window (bounded
+  # ~25 min), hence the 210-minute timeout.
   test-mutating:
     name: "Mutating tests"
     needs: [build-image, test-non-mutating]
@@ -272,7 +276,7 @@ jobs:
       ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
       marker: mutating
       mutate: true
-      timeout-minutes: 60
+      timeout-minutes: 210
 
   # --- Cleanup: destroy cluster (only if all tests passed) ---
 
@@ -320,5 +324,17 @@ jobs:
       - name: Restore EKS project
         run: just ci-restore-eks ${{ inputs.oauth-app-num }} sandbox-ci sandbox-e2e
 
+      # deployment_id must be captured before the down: the destroy removes the
+      # terraform outputs along with the state.
       - name: Take down the deployment
-        run: cd sandbox-e2e && uv run jd down -y -v
+        id: takedown
+        run: |
+          DEPLOYMENT_ID="$(cd sandbox-e2e && uv run jd show -o deployment_id --text || true)"
+          echo "deployment-id=${DEPLOYMENT_ID}" >> "$GITHUB_OUTPUT"
+          cd sandbox-e2e && uv run jd down -y -v
+
+      # Anything still tagged DeploymentId leaked from the destroy. Known blind
+      # spot: controller-created NLB/ENIs/SGs carry no terraform tags.
+      - name: Scan for orphaned resources
+        if: steps.takedown.outputs.deployment-id != ''
+        run: uv run python scripts/orphan_scan.py "${{ steps.takedown.outputs.deployment-id }}"

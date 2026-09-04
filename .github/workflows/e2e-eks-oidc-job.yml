@@ -86,10 +86,12 @@ jobs:
       - name: Restore EKS project
         run: just ci-restore-eks ${{ inputs.oauth-app-num }} sandbox-ci sandbox-e2e
 
+      # gpu-tests=1 sets JD_E2E_GPU_ENABLED (#357). GPU tests self-gate further:
+      # the mutating marker plus a runtime skip unless the deployment has the GPU pool.
       - name: Generate .env
         run: >-
           just env-setup-eks sandbox-e2e sandbox-ci ${{ inputs.oauth-app-num }}
-          "org=jupyter-infra,team=jupyter-deploy-e2e-app-access,rbac-team=jupyter-deploy-e2e-app-access,admin-roles=[\"Admin\",\"DeployRole\",\"jupyter-infra-ci-e2e-6a3e2625\"]"
+          "org=jupyter-infra,team=jupyter-deploy-e2e-app-access,rbac-team=jupyter-deploy-e2e-app-access,admin-roles=[\"Admin\",\"DeployRole\",\"jupyter-infra-ci-e2e-6a3e2625\"],gpu-tests=1"
 
       - name: Import auth state
         run: just auth-import sandbox-ci

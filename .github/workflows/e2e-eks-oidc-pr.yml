@@ -1,0 +1,68 @@
+# Per-PR e2e for the eks-oidc template against the restored shared deployment.
+# No fresh deploy happens here, so no Let's Encrypt certificate is consumed.
+#
+# Same-repo PRs only: pull_request runs from forks get no secrets and no OIDC
+# role, so the AWS steps cannot work; the guard skips them instead of failing.
+#
+# The mutating job runs only after the approve-mutating gate clears the
+# e2e-approval environment. Protection rules (required reviewers) on that
+# environment are configured by a repo admin; until they exist, GitHub
+# auto-creates the environment on first use with no rules and the gate passes
+# without review.
+#
+# Concurrency joins the e2e-eks-4 group shared with the manual and fresh
+# runs on OAuth app 4, so runs against the shared deployment serialize across
+# PRs and with manual dispatches.
+name: E2E PR (eks-oidc template)
+
+on:
+  pull_request:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: e2e-eks-4
+  cancel-in-progress: false
+
+jobs:
+  build-image:
+    name: "Build E2E image"
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/e2e-build-image.yml
+    secrets: inherit
+    with:
+      oauth-app-num: "4"
+
+  test-non-mutating:
+    name: "Non-mutating tests"
+    needs: build-image
+    uses: ./.github/workflows/e2e-eks-oidc-job.yml
+    secrets: inherit
+    with:
+      oauth-app-num: "4"
+      ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
+      timeout-minutes: 120
+
+  approve-mutating:
+    name: "Approval gate for mutating tests"
+    needs: test-non-mutating
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    environment: e2e-approval
+    steps:
+      - name: Gate cleared
+        run: echo "e2e-approval environment cleared — mutating tests may run"
+
+  test-mutating:
+    name: "Mutating tests"
+    needs: [build-image, approve-mutating]
+    uses: ./.github/workflows/e2e-eks-oidc-job.yml
+    secrets: inherit
+    with:
+      oauth-app-num: "4"
+      ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
+      marker: mutating
+      mutate: true
+      timeout-minutes: 210

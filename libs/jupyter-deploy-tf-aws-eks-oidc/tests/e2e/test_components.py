@@ -11,6 +11,8 @@ from pytest_jupyter_deploy.cli import JDCliError
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 
+from .test_utils import require_gpu_pool, verify_nvidia_device_plugin_daemonset
+
 
 def _get_manifest_components(e2e_deployment: EndToEndDeployment) -> dict:
     """Read component definitions from the project manifest."""
@@ -254,18 +256,9 @@ def test_nvidia_device_plugin_daemonset_when_gpu_enabled(e2e_deployment: EndToEn
     non-GPU deployments).
     """
     e2e_deployment.ensure_deployed()
+    require_gpu_pool()
 
-    # check=False: with check=True an absent daemonset dies as CalledProcessError
-    # before the assertion below can surface stdout/stderr in the test report.
-    result = subprocess.run(
-        ["kubectl", "get", "daemonset", "nvidia-device-plugin", "-n", "kube-system", "-o", "jsonpath={.metadata.name}"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.stdout.strip() == "nvidia-device-plugin", (
-        f"device plugin daemonset missing: {result.stdout} {result.stderr}"
-    )
+    verify_nvidia_device_plugin_daemonset()
 
 
 @pytest.mark.usefixtures("kubernetes_cluster_login")
