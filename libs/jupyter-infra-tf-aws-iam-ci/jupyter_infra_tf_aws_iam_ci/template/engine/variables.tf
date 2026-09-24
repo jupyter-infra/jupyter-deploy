@@ -429,9 +429,22 @@ variable "publish_repo" {
 variable "review_repos" {
   description = <<-EOT
     GitHub repositories that run reviews (assume the run role). Used only when
-    create_review_resources is true.
+    create_review_resources is true and review_trust_workflow_refs is empty.
 
     Example: ["jupyter-k8s"]
+  EOT
+  type        = list(string)
+}
+
+variable "review_trust_workflow_refs" {
+  description = <<-EOT
+    Reusable-workflow refs the run role trusts via the OIDC job_workflow_ref
+    claim. When non-empty, the run role trusts any repo in the org whose job
+    runs one of these workflows (from its review environment), replacing the
+    review_repos allowlist; onboarding a repo then needs no terraform change.
+    Used only when create_review_resources is true.
+
+    Example: ["jupyter-infra/jupyter-deploy/.github/workflows/roborev-review.yml@refs/heads/main"]
   EOT
   type        = list(string)
 }
