@@ -9,6 +9,15 @@ tls:
       keyFile: /certs/key.pem
 http:
   middlewares:
+    # gzip/br the responses before they cross the wire to the user's laptop: the whole
+    # JupyterLab frontend bundle is served by the jupyter container through this proxy.
+    compress:
+      compress:
+        # SSE must NOT be compressed — compressing text/event-stream buffers/breaks
+        # JupyterLab live event delivery. Traefik does NOT exclude it by default
+        # (default excludes are only application/grpc), so exclude it here.
+        excludedContentTypes:
+          - text/event-stream
     # ForwardAuth to the auth sidecar. Defined here (file provider) rather than via Docker labels
     # on the sidecar so the sidecar needs no `traefik.enable`: with an enabled service and no
     # router labels, Traefik would apply its defaultRule and publish a plain-HTTP route to the

@@ -643,7 +643,12 @@ resource "aws_ssm_association" "instance_startup_with_secret" {
   automation_target_parameter_name = "InstanceIds"
   max_concurrency                  = "1"
   max_errors                       = "0"
-  wait_for_success_timeout_seconds = 300
+  # 15min, not 5: this document fetches the S3 bundle and then BUILDS the jupyter image on the
+  # instance, which does not reliably fit in 300s. Measured on the jupyterlab template, whose startup
+  # document has the same shape: CloudInit ~2m + StartDockerServices ~3m, on a deployment that was
+  # in fact healthy -- the association reached Success 61s after terraform gave up.
+  # The window only bounds how much slowness is tolerated; it costs nothing when the build is fast.
+  wait_for_success_timeout_seconds = 900
   tags                             = local.combined_tags
 
   lifecycle {

@@ -21,8 +21,10 @@ on (2).
 
 3. **It applied the sections in a fixed order.** The reconcile writes one section per SSM call, and
    ``update-auth.sh`` refuses any single call that would leave no users and no org. A fixed order
-   therefore fails one direction of change or the other, whichever empties a section first --
-   covered by ``test_swapping_org_auth_for_user_auth_in_one_apply``.
+   therefore fails one direction of change or the other, whichever empties a section first -- so both
+   directions are pinned, one per branch of the ordering split:
+   ``test_swapping_org_auth_for_user_auth_in_one_apply`` (org cleared: users, teams, org) and
+   ``test_swapping_user_auth_for_org_auth_in_one_apply`` (org set: org, teams, users).
 
 Uses ``safe_user`` as the probe rather than the logged-in user: granting and revoking access for
 somebody who is not driving the browser cannot lock the suite out of its own deployment.
@@ -284,4 +286,74 @@ def test_swapping_org_auth_for_user_auth_in_one_apply(
     )
     assert not e2e_deployment.get_allowlisted_org(), (
         f"The org should have been cleared, but is still {e2e_deployment.get_allowlisted_org()!r}"
+    )
+
+
+@pytest.mark.order(ORDER_MUTATING_AUTH_VARIABLES + 5)
+@pytest.mark.mutating
+@skip_if_testvars_not_set(["JD_E2E_ORG", "JD_E2E_USER"])
+def test_swapping_user_auth_for_org_auth_in_one_apply(
+    e2e_deployment: EndToEndDeployment,
+    logged_org: str,
+    logged_user: str,
+) -> None:
+    """Adding the org and dropping the users in ONE apply reconciles, instead of refusing.
+
+    The mirror of ``test_swapping_org_auth_for_user_auth_in_one_apply``, and the other half of the
+    ordering fix: the reconcile's section order is chosen per direction, so each branch of the
+    ``local.allowed_github_org != ""`` split needs its own test. This one drives the `org set` branch,
+    which writes org, then teams, then users -- the trailing empty `users set` is only accepted
+    because the org landed first. Ordering this branch users-first (the order the other direction
+    needs) would hand ``update-auth.sh`` an empty user list with no org yet in the file, which it
+    refuses, failing an apply whose end state the plan had accepted.
+
+    Driven through ``variables.yaml`` for the same reason as its mirror: emptying
+    ``oauth_allowed_usernames`` is not expressible as a `jd config` flag, since repeating a list flag
+    replaces the list and omitting it leaves it untouched.
+    """
+    e2e_deployment.ensure_server_running()
+
+    # Get to user-only auth. Already where the preceding test leaves the deployment, so this is a
+    # no-op reconcile in a full-suite run -- stated explicitly so the test also holds when selected
+    # on its own.
+    e2e_deployment.update_required_value("oauth_allowed_usernames", [logged_user])
+    e2e_deployment.update_required_value("oauth_allowed_org", "")
+    e2e_deployment.update_required_value("oauth_allowed_teams", [])
+    e2e_deployment.ensure_deployed_with([])
+
+    live_before = [name.lower() for name in e2e_deployment.get_allowlisted_users()]
+    assert logged_user.lower() in live_before, (
+        f"Setup did not reach user-only auth ({live_before}); the swap below would not be testing the failing order"
+    )
+    assert not e2e_deployment.get_allowlisted_org(), (
+        f"Expected no allowlisted org before the swap, got {e2e_deployment.get_allowlisted_org()!r}"
+    )
+
+    # The swap, in one apply: org filled and users emptied together. Safe for the suite's own access
+    # because the browser user is a member of this org -- which is the whole point of the end state.
+    e2e_deployment.update_required_value("oauth_allowed_org", logged_org)
+    e2e_deployment.update_required_value("oauth_allowed_usernames", [])
+    e2e_deployment.ensure_deployed_with([])
+
+    assert e2e_deployment.get_allowlisted_org() == logged_org, (
+        f"{logged_org!r} is in oauth_allowed_org but not on the instance ({e2e_deployment.get_allowlisted_org()!r})"
+    )
+    assert not e2e_deployment.get_allowlisted_users(), (
+        f"The user list should have been emptied, but is still {e2e_deployment.get_allowlisted_users()}. "
+        "The reconcile must apply `set` semantics to a cleared variable, not skip the empty write."
+    )
+
+    # Hand the module back with access resting on the user allowlist again. `restore_allowlist` only
+    # repairs the FILE and deliberately leaves the variables as the test left them, so stopping here
+    # would leave the next module's `jd up` reconciling straight back to org-only -- dropping the
+    # logged user the teardown had just re-granted.
+    e2e_deployment.update_required_value("oauth_allowed_usernames", [logged_user])
+    e2e_deployment.update_required_value("oauth_allowed_org", "")
+    e2e_deployment.update_required_value("oauth_allowed_teams", [])
+    e2e_deployment.ensure_deployed_with([])
+
+    live_after = [name.lower() for name in e2e_deployment.get_allowlisted_users()]
+    assert logged_user.lower() in live_after, (
+        f"Failed to restore the user allowlist after the swap ({live_after}); the suite's own access "
+        "is left resting on org membership"
     )

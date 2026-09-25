@@ -35,20 +35,57 @@ if [[ "$OS" == "Amazon Linux" ]]; then
     BUILDX_ARCH=$(echo $${ARCH} | sed 's/x86_64/amd64/g' | sed 's/aarch64/arm64/g')
     mkdir -p /usr/local/lib/docker/cli-plugins
 
+    # Resolve a repo's latest release tag, or fail. A GitHub 5xx or a rate-limit reply carries no
+    # tag_name, and an empty version silently builds a `.../download//<asset>` URL.
+    get_latest_release_tag() {
+        local repo="$1" tag
+        tag=$(curl -fsS --retry 3 --retry-delay 2 --retry-all-errors \
+            "https://api.github.com/repos/$${repo}/releases/latest" \
+            | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+        if [ -z "$${tag}" ]; then
+            echo "ERROR: could not resolve the latest release tag of $${repo} from the GitHub API" >&2
+            return 1
+        fi
+        printf '%s\n' "$${tag}"
+    }
+
+    # Install a docker CLI plugin. Two failures this shape avoids, both seen live:
+    # - without -f, curl writes the HTTP error body to its -o target, so a GitHub 5xx installs a
+    #   157 KB "Server Error" HTML page as the plugin and chmod +x's it;
+    # - writing straight over the destination fails with ETXTBSY on a re-run, because a running
+    #   service holds the plugin open -- hence the temp path and the unlink before install(1).
+    install_docker_plugin() {
+        local url="$1" dest="$2" tmp
+        tmp=$(mktemp)
+        if ! curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors "$${url}" -o "$${tmp}"; then
+            echo "ERROR: could not download the docker plugin from $${url}" >&2
+            rm -f "$${tmp}"
+            return 1
+        fi
+        if [ ! -s "$${tmp}" ]; then
+            echo "ERROR: the docker plugin downloaded from $${url} is empty" >&2
+            rm -f "$${tmp}"
+            return 1
+        fi
+        rm -f "$${dest}"
+        install -m 755 "$${tmp}" "$${dest}"
+        rm -f "$${tmp}"
+    }
+
     # compose (uses x86_64, aarch64)
-    COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+    COMPOSE_VERSION=$(get_latest_release_tag docker/compose)
     echo "Installing compose $${COMPOSE_VERSION}..."
-    curl -SL "https://github.com/docker/compose/releases/download/$${COMPOSE_VERSION}/docker-compose-linux-$${ARCH}" \
-        -o /usr/local/lib/docker/cli-plugins/docker-compose
-    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+    install_docker_plugin \
+        "https://github.com/docker/compose/releases/download/$${COMPOSE_VERSION}/docker-compose-linux-$${ARCH}" \
+        /usr/local/lib/docker/cli-plugins/docker-compose
     docker compose version
 
     # buildx (uses amd64, arm64)
-    BUILDX_VERSION=$(curl -s https://api.github.com/repos/docker/buildx/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+    BUILDX_VERSION=$(get_latest_release_tag docker/buildx)
     echo "Installing buildx $${BUILDX_VERSION}..."
-    curl -SL "https://github.com/docker/buildx/releases/download/$${BUILDX_VERSION}/buildx-$${BUILDX_VERSION}.linux-$${BUILDX_ARCH}" \
-        -o /usr/local/lib/docker/cli-plugins/docker-buildx
-    chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+    install_docker_plugin \
+        "https://github.com/docker/buildx/releases/download/$${BUILDX_VERSION}/buildx-$${BUILDX_VERSION}.linux-$${BUILDX_ARCH}" \
+        /usr/local/lib/docker/cli-plugins/docker-buildx
     docker buildx version
 
     echo "Docker plugins installation complete"

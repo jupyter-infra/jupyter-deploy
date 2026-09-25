@@ -45,7 +45,9 @@ services:
       - "traefik.http.services.jupyter.loadbalancer.healthcheck.path=/lab/favicon.ico"
       - "traefik.http.services.jupyter.loadbalancer.healthcheck.interval=30s"
       - "traefik.http.services.jupyter.loadbalancer.healthcheck.timeout=10s"
-      - "traefik.http.routers.jupyter.middlewares=forwardauth@file"
+      # compress is listed first so it is the outermost middleware: it compresses whatever
+      # the chain below ends up returning.
+      - "traefik.http.routers.jupyter.middlewares=compress@file,forwardauth@file"
     volumes:
       - /mnt/jupyter-data:/home/jovyan
       - /var/run/docker.sock:/var/run/docker.sock

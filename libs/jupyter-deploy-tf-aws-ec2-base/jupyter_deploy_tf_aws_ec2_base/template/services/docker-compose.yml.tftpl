@@ -40,7 +40,14 @@ services:
       - "traefik.http.services.jupyter.loadbalancer.healthcheck.path=/lab/favicon.ico"
       - "traefik.http.services.jupyter.loadbalancer.healthcheck.interval=30s"
       - "traefik.http.services.jupyter.loadbalancer.healthcheck.timeout=10s"
-      - "traefik.http.routers.jupyter.middlewares=oauth-errors@docker,oauth-auth@docker,oauth-faults@docker,jupyter-unavailable@docker"
+      # gzip/br the responses before they cross the wire: the whole JupyterLab frontend
+      # bundle is served by this container. SSE must NOT be compressed — compressing
+      # text/event-stream buffers/breaks JupyterLab live event delivery, and Traefik does
+      # NOT exclude it by default (default excludes are only application/grpc).
+      - "traefik.http.middlewares.compress.compress.excludedContentTypes=text/event-stream"
+      # compress is listed first so it is the outermost middleware: it compresses whatever
+      # the chain below ends up returning, including the oauth error pages.
+      - "traefik.http.routers.jupyter.middlewares=compress@docker,oauth-errors@docker,oauth-auth@docker,oauth-faults@docker,jupyter-unavailable@docker"
     volumes:
       - /mnt/jupyter-data:/home/jovyan
       - /var/run/docker.sock:/var/run/docker.sock
