@@ -9,6 +9,12 @@ Omitted: covered by the base template suite (`test_open.py::test_open_show_corre
   The public-URL flow — resolving `open_url` and asserting an https:// address. It cannot
   apply here: there is no such output and the URL is loopback http by design.
 
+Omitted: covered by the base template suite (`test_open_rejects_server_name_on_a_single_app_template`)
+  Rejecting `--server-name`. The guard is in `OpenHandler.open` and both templates lack the
+  `open.server` command, so one suite is enough. Note what that leaves untested here: passing
+  a name is what makes `is_proxy_open` false in proxy mode, so a change to that condition could
+  start a proxy and ignore the flag, and only a jupyterlab test would see it.
+
 Deliberately elsewhere:
   - "jd open fails cleanly while the host is stopped" is asserted in ``test_host.py``, which
     owns the suite's single EC2 stop/start cycle.

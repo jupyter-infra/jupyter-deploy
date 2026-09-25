@@ -14,6 +14,17 @@ class JupyterDeployError(Exception):
     pass
 
 
+class LookupJupyterDeployError(JupyterDeployError):
+    """Base for errors that also subclass a lookup type such as KeyError.
+
+    ``KeyError.__str__`` returns ``repr(args[0])``, which wraps the message in quotes
+    when the CLI prints it; this restores the plain message.
+    """
+
+    def __str__(self) -> str:
+        return str(self.args[0]) if self.args else ""
+
+
 # ============================================================================
 # Manifest and project errors
 # ============================================================================
@@ -35,6 +46,18 @@ class CommandNotImplementedError(JupyterDeployError, NotImplementedError):
     def __init__(self, command_name: str) -> None:
         self.command_name = command_name
         super().__init__(f"Command '{command_name}' is not implemented in this template.")
+
+
+class ManifestValueNotDeclaredError(JupyterDeployError, NotImplementedError):
+    """Raised when a value a command depends on is not declared in the project manifest.
+
+    Attributes:
+        value_name: The name of the value that was not declared
+    """
+
+    def __init__(self, value_name: str) -> None:
+        self.value_name = value_name
+        super().__init__(f"This project's template does not declare the value '{value_name}'.")
 
 
 class ReadManifestError(JupyterDeployError, OSError):
@@ -79,7 +102,7 @@ class InvalidVariablesDotYamlError(JupyterDeployError, ValueError):
 # ============================================================================
 
 
-class VariableNotFoundError(JupyterDeployError, KeyError):
+class VariableNotFoundError(LookupJupyterDeployError, KeyError):
     """Raised when a variable name is not found in the project.
 
     Attributes:
@@ -91,7 +114,7 @@ class VariableNotFoundError(JupyterDeployError, KeyError):
         super().__init__(f"Variable '{variable_name}' not found.")
 
 
-class OutputNotFoundError(JupyterDeployError, KeyError):
+class OutputNotFoundError(LookupJupyterDeployError, KeyError):
     """Raised when an output name is not found in the project.
 
     Attributes:
@@ -103,7 +126,56 @@ class OutputNotFoundError(JupyterDeployError, KeyError):
         super().__init__(f"Output '{output_name}' not found.")
 
 
-class InstructionResultNotFoundError(JupyterDeployError, KeyError):
+class ProjectOutputsNotAvailableError(LookupJupyterDeployError, KeyError):
+    """Raised when a command needs a project output but the engine reports no outputs at all.
+
+    Nothing is wrong with the template: an empty state produces no outputs, so the usual
+    cause is a project that was never deployed, or was destroyed.
+
+    Attributes:
+        output_name: The name of the output the command requires
+    """
+
+    def __init__(self, output_name: str) -> None:
+        self.output_name = output_name
+        super().__init__(f"This project reports no outputs; '{output_name}' is required by this command.")
+
+
+class RequiredOutputNotFoundError(LookupJupyterDeployError, KeyError):
+    """Raised when an output that a command depends on is missing from the project outputs.
+
+    Distinct from OutputNotFoundError, which reports a name the user asked for: the name
+    here comes from the template. Other outputs did resolve, so the deployed resources
+    predate the template revision that declares this one, or the template is inconsistent.
+
+    Attributes:
+        output_name: The name of the output that could not be resolved
+    """
+
+    def __init__(self, output_name: str) -> None:
+        self.output_name = output_name
+        super().__init__(f"The project outputs do not include '{output_name}', which this command requires.")
+
+
+class RequiredOutputTypeError(JupyterDeployError, TypeError):
+    """Raised when an output that a command depends on has an unexpected type.
+
+    Attributes:
+        output_name: The name of the output whose type did not match
+        expected_type: Name of the expected output definition type
+        actual_type: Name of the output definition type found instead
+    """
+
+    def __init__(self, output_name: str, expected_type: str, actual_type: str) -> None:
+        self.output_name = output_name
+        self.expected_type = expected_type
+        self.actual_type = actual_type
+        super().__init__(
+            f"Project output '{output_name}' has an unexpected type: expected {expected_type}, got {actual_type}."
+        )
+
+
+class InstructionResultNotFoundError(LookupJupyterDeployError, KeyError):
     """Raised when an instruction-result source-key is not found in prior results.
 
     Subclasses KeyError for backward-compat with callers that catch KeyError. The runner
@@ -189,16 +261,23 @@ class OpenWebBrowserError(JupyterDeployError, RuntimeError):
         super().__init__(message)
 
 
-class DetachedNotSupportedError(JupyterDeployError, ValueError):
-    """Raised when `jd open --detached` is used on a template not reached through the local proxy.
+class OptionalParameterNotSupportedError(JupyterDeployError, ValueError):
+    """Raised when an optional CLI parameter needs a capability the template does not declare.
 
-    ``--detached`` backgrounds the local proxy process, which only exists for proxy-mode
-    templates; on a public-URL template it is meaningless, so `jd open` rejects it rather than
-    silently ignoring it.
+    The command itself is supported; only the parameter is not. Raising this instead of letting
+    the missing manifest command surface as :class:`CommandNotImplementedError` keeps the error
+    from disowning the whole command -- `jd open --server-name` on a single-app template needs
+    ``open.server``, but plain `jd open` works.
+
+    Attributes:
+        parameter_name: The CLI parameter that is not supported, e.g. '--server-name'
+        requirement: What does support it, e.g. 'multi-app templates'
     """
 
-    def __init__(self) -> None:
-        super().__init__("--detached is only supported for templates reached through the local proxy.")
+    def __init__(self, parameter_name: str, requirement: str) -> None:
+        self.parameter_name = parameter_name
+        self.requirement = requirement
+        super().__init__(f"{parameter_name} is only supported for {requirement}.")
 
 
 class ConfigurationError(JupyterDeployError, RuntimeError):
@@ -393,14 +472,19 @@ class ResourceNameRequiredError(JupyterDeployError, ValueError):
     Attributes:
         resource_type: The type of resource (e.g., 'host', 'server')
         list_command: The CLI command to list available resources
+        parameter_name: The CLI parameter that selects one, e.g. '--name'
     """
 
-    def __init__(self, resource_type: str, list_command: str) -> None:
+    def __init__(self, resource_type: str, list_command: str, parameter_name: str = "--name") -> None:
         self.resource_type = resource_type
         self.list_command = list_command
+        self.parameter_name = parameter_name
+        # Say why the command cannot proceed and how to fix it in one line: the command works
+        # unqualified on a single-resource project, so the count is the part the user is
+        # missing. Discovering the names is the CLI's hint, built from list_command.
         super().__init__(
-            f"This template manages multiple {resource_type}s. "
-            f"Specify a name — use {list_command} to see available {resource_type}s."
+            f"This project has multiple {resource_type}s: "
+            f"specify which one with {parameter_name} <{resource_type}-name>."
         )
 
 

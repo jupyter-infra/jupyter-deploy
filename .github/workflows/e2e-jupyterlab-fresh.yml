@@ -101,9 +101,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # --- Input gate: must precede the deploy, which replaces the slot's deployment ---
+
+  validate:
+    name: "Validate inputs"
+    uses: ./.github/workflows/e2e-validate-inputs.yml
+    with:
+      install-mode: ${{ inputs.install-mode || 'workspace' }}
+      pkg-version: ${{ inputs.pkg-version }}
+      ref: ${{ inputs.ref }}
+
   # jupyterlab owns ECR e2e-image repos 7-9 (no OAuth app); the slot input selects one.
   build-image:
     name: "Build E2E image"
+    needs: [validate]
     uses: ./.github/workflows/e2e-build-image.yml
     secrets: inherit
     with:

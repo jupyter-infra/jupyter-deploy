@@ -26,7 +26,7 @@ class HealthHandler(BaseProjectHandler):
 
         health_config = self.project_manifest.health
         if not health_config or not health_config.active:
-            raise CommandNotImplementedError("health command is not enabled for this template")
+            raise CommandNotImplementedError("health")
 
         if self.project_manifest.has_command("cluster.status"):
             self._cluster_handler = ClusterHandler(display_manager=display_manager)

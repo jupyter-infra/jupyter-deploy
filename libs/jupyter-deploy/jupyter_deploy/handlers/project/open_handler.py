@@ -12,8 +12,8 @@ from jupyter_deploy.engine.supervised_execution import DisplayManager, NullDispl
 from jupyter_deploy.engine.terraform import tf_open, tf_variables
 from jupyter_deploy.enum import OpenMode
 from jupyter_deploy.exceptions import (
-    DetachedNotSupportedError,
     OpenWebBrowserError,
+    OptionalParameterNotSupportedError,
     UrlNotAvailableError,
     UrlNotSecureError,
 )
@@ -151,7 +151,8 @@ class OpenHandler(BaseProjectHandler):
             UrlNotAvailableError: If URL cannot be retrieved or is empty
             UrlNotSecureError: If URL is not HTTPS or an http loopback URL
             OpenWebBrowserError: If opening URL in browser fails
-            CommandNotImplementedError: If name given but open.server not in manifest
+            OptionalParameterNotSupportedError: If detached is set on a non-proxy template, or
+                name is given but open.server is not in the manifest
             ResourceNotFoundError: If the named server does not exist
         """
         open_config = self.project_manifest.get_open()
@@ -159,7 +160,12 @@ class OpenHandler(BaseProjectHandler):
         # --detached backgrounds the local proxy process, which only exists for the proxy open
         # flow; reject it elsewhere rather than silently ignoring it.
         if detached and not is_proxy_open:
-            raise DetachedNotSupportedError()
+            raise OptionalParameterNotSupportedError("--detached", "templates reached through the local proxy")
+        # Selecting a server needs open.server, which single-app templates do not declare.
+        # Reject the flag by name: letting get_server_url raise CommandNotImplementedError
+        # instead reports the whole of `jd open` as unsupported, which it is not.
+        if name is not None and not self.project_manifest.has_command("open.server"):
+            raise OptionalParameterNotSupportedError("--server-name", "multi-app templates")
         if is_proxy_open:
             self._proxy = ProxyManager.for_project(self.project_path, self.display_manager)
             self._proxy_detached = detached

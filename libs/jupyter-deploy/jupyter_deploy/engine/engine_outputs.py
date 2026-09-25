@@ -36,10 +36,10 @@ class EngineOutputsHandler(ABC):
         """Return the output defintion for the value declared in the manifest.values section.
 
         Raises:
-            NotImplementedError if the value_name is not declared in the manifest
+            ManifestValueNotDeclaredError if the value_name is not declared in the manifest
             ValueError if the value.source is not a template output
-            KeyError if the output name declared in the manifest cannot be found
-            TypeError if the output def exists but is not of the valid type
+            RequiredOutputNotFoundError if the output name declared in the manifest cannot be found
+            RequiredOutputTypeError if the output def exists but is not of the valid type
         """
         value_def = self.project_manifest.get_declared_value(value_name)
         value_source_type = value_def.get_source_type()

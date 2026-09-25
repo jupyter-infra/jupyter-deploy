@@ -3,6 +3,11 @@ from typing import Generic, TypeVar
 from pydantic import BaseModel, ConfigDict
 
 from jupyter_deploy import str_utils
+from jupyter_deploy.exceptions import (
+    ProjectOutputsNotAvailableError,
+    RequiredOutputNotFoundError,
+    RequiredOutputTypeError,
+)
 
 S = TypeVar("S")
 
@@ -50,17 +55,24 @@ def require_output_def(
         output_type: The expected type of the output def, a subclass of TemplateOutputDefinition.
 
     Raises:
-        KeyError: If output_name is not in resolved_args.
-        TypeError: If the argument is not of the expected type.
+        ProjectOutputsNotAvailableError: If output_defs is empty.
+        RequiredOutputNotFoundError: If output_name is not in a non-empty output_defs.
+        RequiredOutputTypeError: If the output def is not of the expected type.
     """
     if output_name not in output_defs:
-        raise KeyError(f"Required output '{output_name}' not found in output definitions")
+        # No outputs at all means the project is not deployed; a single missing name among
+        # others means the deployed resources do not match the template that declares it.
+        if not output_defs:
+            raise ProjectOutputsNotAvailableError(output_name)
+        raise RequiredOutputNotFoundError(output_name)
 
     output_def = output_defs[output_name]
 
     if not isinstance(output_def, output_type):
-        raise TypeError(
-            f"Expected output '{output_def}' to be of type {output_type.__name__}, got {type(output_def).__name__}"
+        raise RequiredOutputTypeError(
+            output_name=output_name,
+            expected_type=output_type.__name__,
+            actual_type=type(output_def).__name__,
         )
 
     return output_def

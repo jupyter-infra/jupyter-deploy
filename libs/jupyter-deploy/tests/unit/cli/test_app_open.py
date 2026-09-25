@@ -7,8 +7,8 @@ from typer.testing import CliRunner
 from jupyter_deploy.cli.app import runner as app_runner
 from jupyter_deploy.exceptions import (
     CommandNotImplementedError,
-    DetachedNotSupportedError,
     OpenWebBrowserError,
+    OptionalParameterNotSupportedError,
     UrlNotAvailableError,
     UrlNotSecureError,
 )
@@ -324,7 +324,7 @@ class TestOpenCommand(unittest.TestCase):
         result = runner.invoke(app_runner.app, ["open"])
 
         self.assertEqual(result.exit_code, 1)
-        self.assertIn("not implemented", result.output)
+        self.assertIn("'open' command is not supported by this project's template", result.output)
         self.assertNotIn("Having trouble?", result.output)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
@@ -446,9 +446,11 @@ class TestOpenCommand(unittest.TestCase):
     def test_open_command_surfaces_detached_not_supported(
         self, mock_project_ctx: Mock, mock_open_handler_cls: Mock
     ) -> None:
-        """A DetachedNotSupportedError from the handler (open -d on a URL template) exits non-zero cleanly."""
+        """An OptionalParameterNotSupportedError (open -d on a URL template) exits non-zero cleanly."""
         mock_open_handler_instance, mock_open_fns = self.get_mock_open_handler()
-        mock_open_fns["open"].side_effect = DetachedNotSupportedError()
+        mock_open_fns["open"].side_effect = OptionalParameterNotSupportedError(
+            "--detached", "templates reached through the local proxy"
+        )
         mock_open_handler_cls.return_value = mock_open_handler_instance
 
         result = CliRunner().invoke(app_runner.app, ["open", "-d"])

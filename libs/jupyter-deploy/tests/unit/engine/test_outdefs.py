@@ -4,6 +4,11 @@ from unittest.mock import Mock, patch
 from parameterized import parameterized  # type: ignore
 
 from jupyter_deploy.engine import outdefs
+from jupyter_deploy.exceptions import (
+    ProjectOutputsNotAvailableError,
+    RequiredOutputNotFoundError,
+    RequiredOutputTypeError,
+)
 
 
 class TestStrTemplateOutputDefinition(unittest.TestCase):
@@ -67,10 +72,13 @@ class TestRequireOutputDef(unittest.TestCase):
             pass
 
         # Act & Assert
-        with self.assertRaises(TypeError):
+        with self.assertRaises(RequiredOutputTypeError) as type_context:
             outdefs.require_output_def(output_defs, output_name, OtherTypeClass)
 
-    def test_should_raise_key_error_when_output_not_found(self) -> None:
+        self.assertIsInstance(type_context.exception, TypeError)
+        self.assertEqual(type_context.exception.output_name, output_name)
+
+    def test_should_raise_required_output_not_found_error_when_output_not_found(self) -> None:
         # Arrange
         output_defs: dict[str, outdefs.TemplateOutputDefinition] = {
             "existing_output": outdefs.StrTemplateOutputDefinition(output_name="existing_output")
@@ -78,10 +86,25 @@ class TestRequireOutputDef(unittest.TestCase):
         non_existent_output = "non_existent_output"
 
         # Act & Assert
-        with self.assertRaises(KeyError) as context:
+        with self.assertRaises(RequiredOutputNotFoundError) as context:
             outdefs.require_output_def(output_defs, non_existent_output, outdefs.StrTemplateOutputDefinition)
 
-        self.assertIn(f"Required output '{non_existent_output}' not found", str(context.exception))
+        # callers catch KeyError to degrade gracefully when outputs cannot be read
+        self.assertIsInstance(context.exception, KeyError)
+        self.assertEqual(context.exception.output_name, non_existent_output)
+        self.assertIn(non_existent_output, str(context.exception))
+
+    def test_should_raise_outputs_not_available_error_when_no_output_at_all(self) -> None:
+        # Arrange
+        output_defs: dict[str, outdefs.TemplateOutputDefinition] = {}
+
+        # Act & Assert
+        with self.assertRaises(ProjectOutputsNotAvailableError) as context:
+            outdefs.require_output_def(output_defs, "deployment_id", outdefs.StrTemplateOutputDefinition)
+
+        self.assertIsInstance(context.exception, KeyError)
+        self.assertNotIsInstance(context.exception, RequiredOutputNotFoundError)
+        self.assertEqual(context.exception.output_name, "deployment_id")
 
 
 class TestListStrTemplateOutputDefinition(unittest.TestCase):

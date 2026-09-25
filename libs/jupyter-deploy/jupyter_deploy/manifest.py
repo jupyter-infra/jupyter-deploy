@@ -20,6 +20,7 @@ from jupyter_deploy.exceptions import (
     ImageNotFoundError,
     InvalidServiceError,
     InvalidStoreTypeError,
+    ManifestValueNotDeclaredError,
     SecretNotFoundError,
 )
 
@@ -545,12 +546,12 @@ class JupyterDeployManifestV1(BaseModel):
         """Return the declared value definition.
 
         Raises:
-            NotImplementedError if the manifest has no declared values.
-            NotImplementedError if the value is not found.
+            ManifestValueNotDeclaredError if the manifest has no declared values.
+            ManifestValueNotDeclaredError if the value is not found.
         """
         value = next((val for val in (self.values or []) if val.name == value_name), None)
         if not value:
-            raise NotImplementedError(f"No declaration found for value: {value_name}")
+            raise ManifestValueNotDeclaredError(value_name)
         return value
 
     def get_command(self, cmd_name: str) -> JupyterDeployCommandV1:

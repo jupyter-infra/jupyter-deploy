@@ -97,10 +97,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # --- Input gate: must precede cleanup, which tears down the existing deployment ---
+
+  validate:
+    name: "Validate inputs"
+    uses: ./.github/workflows/e2e-validate-inputs.yml
+    with:
+      install-mode: ${{ inputs.install-mode || 'workspace' }}
+      pkg-version: ${{ inputs.pkg-version }}
+      ref: ${{ inputs.ref }}
+
   # --- Build E2E image (runs in parallel with cleanup) ---
 
   build-image:
     name: "Build E2E image"
+    needs: [validate]
     uses: ./.github/workflows/e2e-build-image.yml
     secrets: inherit
     with:
@@ -115,6 +126,7 @@ jobs:
 
   cleanup-existing:
     name: "Cleanup existing deployment"
+    needs: [validate]
     if: ${{ !inputs.skip-deployment }}
     runs-on: ubuntu-latest
     timeout-minutes: 90

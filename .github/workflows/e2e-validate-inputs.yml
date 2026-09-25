@@ -1,0 +1,82 @@
+name: Validate E2E dispatch inputs
+
+# Guards the two dispatch inputs that are easy to swap: `pkg-version` sits directly above `ref`
+# in the fresh workflows' forms, and a ref typed into `pkg-version` used to be accepted and then
+# silently dropped (the Dockerfile only reads PKG_VERSION when INSTALL_MODE=pypi), so the run
+# tested the dropdown branch instead. Runs as a gate job ahead of the teardown and build jobs --
+# a misfire otherwise costs a full suite plus, for base, a Let's Encrypt cert.
+
+on:
+  workflow_call:
+    inputs:
+      install-mode:
+        description: "Install mode the caller resolved: workspace or pypi"
+        required: false
+        type: string
+        default: "workspace"
+      pkg-version:
+        description: "Package version to pin (only read when install-mode=pypi)"
+        required: false
+        type: string
+        default: ""
+      ref:
+        description: "Git ref to checkout (empty = the triggering ref)"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  validate:
+    name: "Validate inputs"
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check ref and pkg-version
+        env:
+          INSTALL_MODE: ${{ inputs.install-mode }}
+          PKG_VERSION: ${{ inputs.pkg-version }}
+          REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+
+          fail() {
+            echo "::error title=Bad dispatch input::$1"
+            exit 1
+          }
+
+          # Versions this repo publishes: 0.7.0, 0.1.0rc2, 1.0. Never contains a slash, so this
+          # also rejects refs/pull/N/merge, branch names and 'heads/...' landing in pkg-version.
+          version_re='^[0-9]+(\.[0-9]+)+[0-9a-z.]*$'
+
+          if [ -n "$PKG_VERSION" ]; then
+            case "$PKG_VERSION" in
+              */*)
+                fail "pkg-version='$PKG_VERSION' looks like a git ref (it has a '/'). Did you mean the 'ref' input?"
+                ;;
+            esac
+
+            if ! printf '%s' "$PKG_VERSION" | grep -qE "$version_re"; then
+              fail "pkg-version='$PKG_VERSION' is not a version like 0.7.0 or 0.1.0rc2."
+            fi
+
+            # Fail loudly where the old behaviour silently discarded the value. Keep the message on
+            # one line: a newline inside a ::error:: annotation needs %0A escaping to survive.
+            if [ "$INSTALL_MODE" != "pypi" ]; then
+              fail "pkg-version='$PKG_VERSION' set with install-mode='$INSTALL_MODE'; only read when pypi."
+            fi
+          fi
+
+          # The inverse swap. Release tags are '<package>==<version>', so they do not match.
+          if [ -n "$REF" ] && printf '%s' "$REF" | grep -qE "$version_re"; then
+            fail "ref='$REF' looks like a package version. Did you mean the 'pkg-version' input?"
+          fi
+
+          {
+            echo "### E2E inputs validated"
+            echo ""
+            echo "| input | value |"
+            echo "| --- | --- |"
+            echo "| install-mode | \`$INSTALL_MODE\` |"
+            echo "| pkg-version | \`${PKG_VERSION:-(empty)}\` |"
+            echo "| ref | \`${REF:-(empty, uses the triggering ref)}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

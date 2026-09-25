@@ -1,7 +1,9 @@
 """CLI error handling context manager for jupyter-deploy exceptions."""
 
+import importlib
 from collections.abc import Generator
 from contextlib import contextmanager
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -12,7 +14,6 @@ from jupyter_deploy.exceptions import (
     CommandNotImplementedError,
     ComponentNotFoundError,
     ConfigurationError,
-    DetachedNotSupportedError,
     DownAutoApproveRequiredError,
     HostCommandInstructionError,
     ImageNotFoundError,
@@ -36,11 +37,14 @@ from jupyter_deploy.exceptions import (
     LogCleanupError,
     LogNotFoundError,
     ManifestNotFoundError,
+    ManifestValueNotDeclaredError,
     NoProxyFoundError,
     OpenWebBrowserError,
+    OptionalParameterNotSupportedError,
     OutputNotFoundError,
     ProjectIdNotAvailableError,
     ProjectNotFoundInStoreError,
+    ProjectOutputsNotAvailableError,
     ProjectStoreAccessConfigurationError,
     ProjectStoreNotFoundError,
     ProjectStoreReadError,
@@ -51,6 +55,8 @@ from jupyter_deploy.exceptions import (
     ProxyStartError,
     ReadConfigurationError,
     ReadManifestError,
+    RequiredOutputNotFoundError,
+    RequiredOutputTypeError,
     ResourceNameRequiredError,
     ResourceNotFoundError,
     ResourcePollTimeoutError,
@@ -65,6 +71,52 @@ from jupyter_deploy.exceptions import (
     VolumeNotFoundError,
     WriteConfigurationError,
 )
+
+
+def invoked_cli_command() -> str:
+    """Return the command the user typed, without its options, e.g. 'jd pool show'.
+
+    Recent typer versions vendor their own copy of click, so the context stack of the
+    installed click package stays empty while a typer command runs; older ones drive the
+    installed package. Try both, and return an empty string when neither has a context
+    (e.g. when a handler is called outside of a CLI invocation).
+    """
+    for module_name in ("typer._click.globals", "click"):
+        try:
+            globals_module: Any = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        get_current_context = getattr(globals_module, "get_current_context", None)
+        if get_current_context is None:
+            continue
+        context = get_current_context(silent=True)
+        if context is not None:
+            return str(context.command_path)
+    return ""
+
+
+def unsupported_command_message(error: CommandNotImplementedError) -> str:
+    """Describe a capability the template lacks in terms of the command the user typed.
+
+    The exception names a manifest command (e.g. 'pool.status'), which is not what the user
+    typed (e.g. 'jd pool show'). Naming the invoked command reads better, but only when the
+    two refer to the same feature: a command such as `jd config` may also fail on a
+    capability of its own (e.g. 'secret.reveal'), so in that case name both.
+
+    Drops the program name, so the subject reads as the command the user would look up in
+    `jd --help` ('pool show'), not as the shell line they typed ('jd pool show').
+    """
+    cli_command = invoked_cli_command()
+    manifest_group = error.command_name.split(".")[0]
+    # 'jd pool show' -> 'pool show'; a bare 'jd' (no subcommand) leaves nothing to name.
+    cli_words = cli_command.split()[1:]
+
+    if not cli_words:
+        return f"This project's template does not support '{error.command_name}'."
+    subject = " ".join(cli_words)
+    if manifest_group in cli_words:
+        return f"'{subject}' command is not supported by this project's template."
+    return f"'{subject}' command requires '{error.command_name}', which this project's template does not support."
 
 
 @contextmanager
@@ -111,7 +163,7 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         raise typer.Exit(code=1) from None
 
     except CommandNotImplementedError as e:
-        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.print(f":x: {unsupported_command_message(e)}", style="bold red", highlight=False)
         raise typer.Exit(code=1) from None
 
     except InvalidProviderCredentialsError as e:
@@ -330,6 +382,33 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         # check if next steps provided, if so print them
         raise typer.Exit(code=1) from None
 
+    except ProjectOutputsNotAvailableError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        console.print("A project reports no outputs until it is deployed, and none after it is destroyed.")
+        console.print(":bulb: To deploy it, run: [bold cyan]jd config[/], then [bold cyan]jd up[/]")
+        raise typer.Exit(code=1) from None
+
+    except RequiredOutputNotFoundError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        console.print("The deployed resources do not match the template that declares this output.")
+        console.print(":bulb: To re-apply the template, run: [bold cyan]jd config[/], then [bold cyan]jd up[/]")
+        raise typer.Exit(code=1) from None
+
+    except RequiredOutputTypeError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        console.print("The template declares this output with a different type than the command expects.")
+        console.print(":bulb: This is an error in the project template: re-running the command will not help.")
+        raise typer.Exit(code=1) from None
+
+    except ManifestValueNotDeclaredError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        console.print("This project may have been created from a template revision that predates the command.")
+        raise typer.Exit(code=1) from None
+
     except UrlNotAvailableError as e:
         console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
@@ -351,8 +430,10 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         console.print(":bulb: Copy the URL and open it manually in your browser.")
         raise typer.Exit(code=1) from None
 
-    except DetachedNotSupportedError as e:
+    except OptionalParameterNotSupportedError as e:
         console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        console.print(f":bulb: Run the command without [bold cyan]{e.parameter_name}[/]")
         raise typer.Exit(code=1) from None
 
     except (ReadConfigurationError, WriteConfigurationError) as e:

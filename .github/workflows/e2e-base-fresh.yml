@@ -87,10 +87,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # --- Input gate: must precede cleanup, which tears down the existing deployment ---
+
+  validate:
+    name: "Validate inputs"
+    uses: ./.github/workflows/e2e-validate-inputs.yml
+    with:
+      install-mode: ${{ inputs.install-mode || 'workspace' }}
+      pkg-version: ${{ inputs.pkg-version }}
+      ref: ${{ inputs.ref }}
+
   # --- Build E2E image (runs in parallel with cleanup) ---
 
   build-image:
     name: "Build E2E image"
+    needs: [validate]
     uses: ./.github/workflows/e2e-build-image.yml
     secrets: inherit
     with:
@@ -104,6 +115,7 @@ jobs:
 
   cleanup-existing:
     name: "Cleanup existing deployment"
+    needs: [validate]
     if: ${{ !inputs.skip-deployment }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -285,13 +297,18 @@ jobs:
 
   # --- Cleanup: stop host (deployment stays in S3 for auditability) ---
 
+  # `always()` so the host is stopped whatever the tests did -- but not when `validate` rejected the
+  # inputs. Without the validate guard a bad dispatch still restores the project from S3 and stops
+  # the host, i.e. a typo in a form field touches infrastructure. `needs` lists validate for the
+  # sole purpose of making its result readable here.
   cleanup:
     name: "Cleanup: stop host"
     needs:
+      - validate
       - test-non-mutating
       - test-gpu
       - test-mutating
-    if: always()
+    if: always() && needs.validate.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: e2e

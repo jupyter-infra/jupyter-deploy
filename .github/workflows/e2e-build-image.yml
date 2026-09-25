@@ -47,12 +47,33 @@ jobs:
       id-token: write
       contents: read
     outputs:
-      ecr-tag: ${{ github.sha }}
+      ecr-tag: ${{ steps.resolve-ref.outputs.sha }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.ref }}
+
+      # Tag the image with the sha actually checked out, not github.sha: with a `ref` input those
+      # differ (github.sha is the dropdown branch), and tagging by github.sha both mislabels the
+      # image and lets two runs at the same branch sha with different refs overwrite each other.
+      - name: Resolve checked-out ref
+        id: resolve-ref
+        run: |
+          set -euo pipefail
+          SHA=$(git rev-parse HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          {
+            echo "### E2E image source"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| requested ref | \`${{ inputs.ref || github.ref }}\` |"
+            echo "| resolved sha | \`$SHA\` |"
+            echo "| subject | $(git log -1 --format=%s) |"
+            echo "| install-mode | \`${{ inputs.install-mode }}\` |"
+            echo "| ecr tag | \`$SHA\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install UV and Python
         uses: ./.github/actions/install-uv
@@ -92,4 +113,4 @@ jobs:
           just ci-e2e-base-build "$ECR_URL:latest" "$BUILD_ARGS"
 
       - name: Push to ECR
-        run: just ci-e2e-base-push ${{ inputs.oauth-app-num }} ${{ github.sha }}
+        run: just ci-e2e-base-push ${{ inputs.oauth-app-num }} ${{ steps.resolve-ref.outputs.sha }}

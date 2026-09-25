@@ -24,15 +24,19 @@ from jupyter_deploy.exceptions import (
     LogNotFoundError,
     ManifestNotADictError,
     ManifestNotFoundError,
+    ManifestValueNotDeclaredError,
     NoProxyFoundError,
     OutputNotFoundError,
     ProjectIdNotAvailableError,
+    ProjectOutputsNotAvailableError,
     ProjectStoreAccessConfigurationError,
     ProjectStoreNotFoundError,
     ProxyNotInstalledError,
     ProxyStartError,
     ReadConfigurationError,
     ReadManifestError,
+    RequiredOutputNotFoundError,
+    RequiredOutputTypeError,
     ResourcePollTimeoutError,
     SupervisedExecutionError,
     ToolRequiredError,
@@ -115,6 +119,51 @@ class TestVariableErrors(unittest.TestCase):
         self.assertIn("my_output", str(error))
         self.assertIsInstance(error, JupyterDeployError)
         self.assertIsInstance(error, KeyError)
+
+    def test_key_error_subclasses_render_message_without_quotes(self) -> None:
+        """KeyError.__str__ returns repr(args[0]); the CLI must print the plain message."""
+        self.assertEqual(str(OutputNotFoundError("my_output")), "Output 'my_output' not found.")
+        self.assertEqual(str(VariableNotFoundError("my_variable")), "Variable 'my_variable' not found.")
+
+    def test_project_outputs_not_available_error(self) -> None:
+        """Test ProjectOutputsNotAvailableError with output name."""
+        error = ProjectOutputsNotAvailableError("deployment_id")
+        self.assertEqual(error.output_name, "deployment_id")
+        self.assertIn("deployment_id", str(error))
+        self.assertIsInstance(error, JupyterDeployError)
+        self.assertIsInstance(error, KeyError)
+        # the two cases carry different next steps, so neither may catch the other
+        self.assertNotIsInstance(error, RequiredOutputNotFoundError)
+
+    def test_required_output_not_found_error(self) -> None:
+        """Test RequiredOutputNotFoundError with output name."""
+        error = RequiredOutputNotFoundError("deployment_id")
+        self.assertEqual(error.output_name, "deployment_id")
+        self.assertIn("deployment_id", str(error))
+        self.assertNotIn('"', str(error))
+        self.assertIsInstance(error, JupyterDeployError)
+        self.assertIsInstance(error, KeyError)
+
+    def test_required_output_type_error(self) -> None:
+        """Test RequiredOutputTypeError with the expected and actual type names."""
+        error = RequiredOutputTypeError(
+            output_name="deployment_id",
+            expected_type="StrTemplateOutputDefinition",
+            actual_type="ListStrTemplateOutputDefinition",
+        )
+        self.assertEqual(error.output_name, "deployment_id")
+        self.assertEqual(error.expected_type, "StrTemplateOutputDefinition")
+        self.assertEqual(error.actual_type, "ListStrTemplateOutputDefinition")
+        self.assertIsInstance(error, JupyterDeployError)
+        self.assertIsInstance(error, TypeError)
+
+    def test_manifest_value_not_declared_error(self) -> None:
+        """Test ManifestValueNotDeclaredError with value name."""
+        error = ManifestValueNotDeclaredError("open_url")
+        self.assertEqual(error.value_name, "open_url")
+        self.assertIn("open_url", str(error))
+        self.assertIsInstance(error, JupyterDeployError)
+        self.assertIsInstance(error, NotImplementedError)
 
     def test_invalid_preset_error(self) -> None:
         """Test InvalidPresetError with preset name and valid presets."""

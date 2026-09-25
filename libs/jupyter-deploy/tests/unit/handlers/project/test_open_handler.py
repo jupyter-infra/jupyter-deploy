@@ -2,7 +2,11 @@ import unittest
 from unittest.mock import Mock, patch
 
 from jupyter_deploy.engine.enum import EngineType
-from jupyter_deploy.exceptions import DetachedNotSupportedError, UrlNotAvailableError, UrlNotSecureError
+from jupyter_deploy.exceptions import (
+    OptionalParameterNotSupportedError,
+    UrlNotAvailableError,
+    UrlNotSecureError,
+)
 from jupyter_deploy.handlers.project.open_handler import OpenHandler, _is_secure_open_url
 from jupyter_deploy.manifest import JupyterDeployManifestV1
 
@@ -127,8 +131,22 @@ class TestOpenHandler(unittest.TestCase):
         with patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest") as mock_retrieve_manifest:
             mock_retrieve_manifest.return_value = mock_manifest
             handler = OpenHandler()
-            with self.assertRaises(DetachedNotSupportedError):
+            with self.assertRaises(OptionalParameterNotSupportedError):
                 handler.open(detached=True)
+
+    def test_open_with_server_name_on_single_app_template_raises(self) -> None:
+        # Selecting a server needs the open.server command, which the default (single-app)
+        # manifest does not declare. Must name the flag: letting get_server_url raise
+        # CommandNotImplementedError instead reports all of `jd open` as unsupported.
+        mock_manifest = _make_manifest()
+        with patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest") as mock_retrieve_manifest:
+            mock_retrieve_manifest.return_value = mock_manifest
+            handler = OpenHandler()
+            with self.assertRaises(OptionalParameterNotSupportedError) as ctx:
+                handler.open(name="default")
+
+            self.assertEqual(ctx.exception.parameter_name, "--server-name")
+            self.assertIn("--server-name", str(ctx.exception))
 
     def test_wait_noop_without_proxy(self) -> None:
         mock_manifest = _make_manifest()
