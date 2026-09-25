@@ -41,13 +41,14 @@ The order of `nav_links` in `conf.py` must match the `{toctree}` order in `index
 
 ### README and docs sync
 
-The base template README and its docs pages share content.
-A unit test (`libs/jupyter-deploy-tf-aws-ec2-base/tests/unit/test_docs_consistency.py`)
+Each template README and its docs pages share content.
+A unit test per template (`libs/<template-package>/tests/unit/test_docs_consistency.py`)
 enforces that they stay in sync.
 
 Key differences the test normalizes:
 - README uses `###` where docs use `##` (heading promotion)
 - README uses absolute GitHub raw URLs for images; docs use relative paths
+- README uses `> **Note:** ...` blockquotes where docs use MyST admonitions (```` ```{note} ````); jupyterlab template only
 
 When editing content in either place, update the other to match.
 

@@ -1,0 +1,71 @@
+# AWS EC2 JupyterLab Template — Proxy and Authentication Flow
+
+seq: "" {
+  shape: sequence_diagram
+
+  # Actors
+  Browser {
+    shape: page
+  }
+  Proxy: "Local proxy"
+  AWS APIs: "EC2 / SSM APIs"
+  Traefik
+  Auth Sidecar: "Auth sidecar"
+  STS: "AWS STS"
+  JupyterLab
+
+  # ── Flow 1 (blue): jd open prepares the connection ──
+
+  Proxy.setup -> AWS APIs.lookup: "DescribeInstances\n(current public IP)" {
+    style.stroke: "#1565c0"
+  }
+  Proxy.setup -> AWS APIs.lookup: "GetParameter\n(certificate PEM = TLS pin)" {
+    style.stroke: "#1565c0"
+  }
+  Proxy.setup.note: "Presign sts:GetCallerIdentity\nwith local AWS credentials\n(k8s-aws-v1 token, no API call)"
+
+  # ── Flow 2 (red): each request ──
+
+  Browser -> Proxy.req: "GET http://127.0.0.1:PORT/lab" {
+    style.stroke: "#c62828"
+  }
+  Proxy.req -> Traefik.tls: "TLS handshake on :443\nverify cert == pinned PEM" {
+    style.stroke: "#c62828"
+  }
+  Proxy.req -> Traefik.tls: "GET /lab\n+ Authorization: Bearer <token>\n+ x-k8s-aws-id: <deployment id>" {
+    style.stroke: "#c62828"
+  }
+  Traefik.tls -> Auth Sidecar.check: "ForwardAuth /auth" {
+    style.stroke: "#c62828"
+  }
+  Auth Sidecar.check -> STS.verify: "Replay presigned\nGetCallerIdentity" {
+    style.stroke: "#c62828"
+  }
+  STS.verify -> Auth Sidecar.check: "Caller ARN" {
+    style.stroke: "#c62828"
+    style.stroke-dash: 3
+  }
+  Auth Sidecar.check.note: "Check account, deployment binding,\nIAM role/user allowlist"
+  Auth Sidecar.check -> Traefik.tls: "200 OK" {
+    style.stroke: "#c62828"
+    style.stroke-dash: 3
+  }
+
+  # ── Flow 3 (green): authorized request reaches the app ──
+
+  Traefik.tls -> JupyterLab.serve: "GET /lab" {
+    style.stroke: "#2e7d32"
+  }
+  JupyterLab.serve -> Traefik.tls: "Response" {
+    style.stroke: "#2e7d32"
+    style.stroke-dash: 3
+  }
+  Traefik.tls -> Proxy.req: "Compressed response (TLS)" {
+    style.stroke: "#2e7d32"
+    style.stroke-dash: 3
+  }
+  Proxy.req -> Browser: "Response" {
+    style.stroke: "#2e7d32"
+    style.stroke-dash: 3
+  }
+}

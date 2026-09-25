@@ -1,244 +1,18 @@
-# Jupyter Deploy AWS EC2 JupyterLab template
+# Details
 
-The **AWS EC2 JupyterLab Template** deploys a **single-user JupyterLab** application to a dedicated
-Amazon EC2 instance, reached from your laptop through a local client proxy over a pinned
-self-signed TLS connection, authorized by your AWS identity.
-
-**AWS credentials are the only prerequisite.**
-
-**Documentation:** [jupyter-deploy.readthedocs.io](https://jupyter-deploy.readthedocs.io)
-
-The **AWS EC2 JupyterLab Template** is maintained and supported by AWS.
-
-## 10k View
-
-When you run `jd open`, `jupyter-deploy` starts a local proxy on your laptop and opens your web
-browser to a loopback address (for example `http://127.0.0.1:PORT/lab`). Your browser connects to
-your app via the local proxy; the proxy forwards each request to the EC2 instance over TLS. The app
-authenticates and authorizes each request based on your AWS credentials.
-
-![Overview](https://raw.githubusercontent.com/jupyter-infra/jupyter-deploy/main/docs/source/templates/aws-ec2-jupyterlab-template/diagrams/overview.svg)
-
-## Prerequisites
-
-### AWS account
-
-The template needs to create AWS resources. Your local environment needs access to valid AWS credentials.
-
-If you do not have an AWS account, follow the [official guide](https://docs.aws.amazon.com/accounts/latest/reference/manage-acct-creating.html) to create one.
-
-If you already have an AWS account, make sure your [CLI credentials are configured](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html).
-
-> **Note:** You must deploy as an **IAM role** (assumed role) or an **IAM user**. The template rejects root and
-> federated identities at plan time, because access to the application is granted by allowlisting IAM
-> role and user names.
-
-## Usage
-
-This terraform project is meant to be used with the [jupyter-deploy](https://github.com/jupyter-infra/jupyter-deploy/tree/main/libs/jupyter-deploy) CLI.
-
-### Installation
-
-Recommended: create or activate a Python virtual environment.
-
-```bash
-uv add "jupyter-deploy[aws,proxy]" jupyter-deploy-tf-aws-ec2-jupyterlab
-```
-
-Or with pip:
-
-```bash
-pip install "jupyter-deploy[aws,proxy]" jupyter-deploy-tf-aws-ec2-jupyterlab
-```
-
-The `proxy` extra installs the local client proxy that `jd open` and `jd proxy` use to reach the
-instance.
-
-### Project setup
-
-```bash
-mkdir my-jupyterlab-deployment
-cd my-jupyterlab-deployment
-
-jd init . -E terraform -P aws -I ec2 -T jupyterlab
-```
-
-Consider making `my-jupyterlab-deployment` a git repository.
-
-### Configure and create the infrastructure
-
-```bash
-jd config
-jd up
-```
-
-The interactive configuration walks you through the deployment variables such as region, instance
-type, and volume size. No domain or OAuth settings are needed.
-
-### Access your JupyterLab application
-
-```bash
-# verify that your host and containers are running
-jd host status
-jd server status
-
-# start the local proxy and open your application in your web browser
-jd open
-```
-
-`jd open` runs in the foreground by default; press Ctrl-C to stop it. Pass -d or --detached to run
-it in the background.
-
-You can also drive the proxy directly:
-
-```bash
-# start the proxy in the background, then open a tab against it
-jd proxy start
-jd proxy open
-
-# inspect it
-jd proxy status
-jd proxy show --json
-
-# stop it
-jd proxy stop
-```
-
-### Manage access
-
-Access is granted by AWS IAM identity. The deploying identity is always authorized. To grant
-others, allowlist their IAM role or IAM user names (matched case-insensitively by bare name,
-scoped to this AWS account):
-
-```bash
-# By IAM role names
-jd teams list
-jd teams add ROLE-NAME1 ROLE-NAME2
-jd teams remove ROLE-NAME1
-jd teams set ROLE-NAME1 ROLE-NAME2
-
-# By IAM user names
-jd users list
-jd users add USER-NAME1 USER-NAME2
-jd users remove USER-NAME1
-jd users set USER-NAME1 USER-NAME2
-```
-
-`jd teams` manages IAM **roles**; `jd users` manages IAM **users**. Pass bare names (for example
-`DataScience` or `alice`), not ARNs or paths.
-
-These commands recreate only the auth sidecar container (about 1-2 seconds) and leave
-**JupyterLab** running. They also write the change back into the
-`iam_role_names_allowlist` / `iam_user_names_allowlist` terraform variables, so a later `jd up`
-re-applies the same list rather than reverting it.
-
-Editing those variables and running `jd up` also reconciles the allowlist, but restarts the whole
-application. Prefer the commands above for routine access changes.
-
-### Temporarily stop/start your EC2 instance
-
-```bash
-# To stop your instance
-jd host stop
-jd host status
-
-# To start it again
-jd host start
-jd server start
-jd server status
-```
-
-The instance's public IP usually changes after a stop/start cycle. This is a non-event: the proxy
-resolves the IP live at connection time and pins the instance's certificate, not its address.
-
-### Manage your EC2 instance
-
-```bash
-# connect to your host
-jd host connect
-
-# disconnect
-exit
-```
-
-The interactive `jd host connect` and `jd server connect` commands open an AWS SSM session and
-require the [AWS Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
-installed locally. It is not needed for `jd up`, `jd open`, `jd proxy`, or the
-`jd server logs` / `jd server exec` commands.
-
-### Take down all the infrastructure
-
-This operation removes all the resources associated with this project in your AWS account.
-
-```bash
-jd down
-```
-
-## Architecture
-
-### Data path
-
-The browser never talks to the instance directly. It talks plain HTTP to a local client proxy
-bound to a loopback address on your laptop. The proxy forwards each request to the instance's
-Traefik on port 443 over TLS, verifying the connection against the instance's pinned self-signed
-certificate, and injects a short-lived AWS-identity (STS) token as a request header. Because the
-pin is on the certificate rather than the address, a new public IP after an instance stop/start
-does not break the connection.
-
-![Proxy and authentication flow](https://raw.githubusercontent.com/jupyter-infra/jupyter-deploy/main/docs/source/templates/aws-ec2-jupyterlab-template/diagrams/proxy-flow.svg)
-
-### Certificate pinning
-
-The instance generates a long-lived self-signed TLS certificate at first boot and persists the
-private key on the EBS data volume, so the certificate survives instance stop/start cycles. The
-instance publishes only the public certificate PEM to an AWS SSM parameter. `jd proxy connect-info`
-reads that parameter live and hands the PEM to the client proxy as the pin target. The private key
-never leaves the instance, and the certificate value never lands in the terraform state.
-
-### Authentication flow
-
-`jd proxy connect-info` mints a `k8s-aws-v1` token: a presigned `sts:GetCallerIdentity` URL bound
-to this deployment's identifier. The proxy attaches the token to every request. On the instance, a
-ForwardAuth sidecar behind Traefik validates each token by replaying the presigned call against
-AWS STS, checking the deployment binding (the `x-k8s-aws-id` header), verifying the AWS account,
-and matching the returned IAM identity against the allowlist of role and user names. Requests with
-a valid token from an allowlisted identity reach **JupyterLab**; everything else is rejected. No
-shared secret is stored anywhere.
-
-### Containers
-
-The application runs as a set of containerized services orchestrated by Docker Compose.
-[Traefik](https://doc.traefik.io/traefik/) terminates TLS on port 443 with the self-signed
-certificate and delegates authentication decisions to the auth sidecar via the
-[ForwardAuth](https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/forwardauth/)
-middleware. The auth sidecar is a small Go service that validates the AWS-identity token. Traefik
-forwards authenticated requests to the **JupyterLab** container and compresses the responses
-(except server-sent event streams, which **JupyterLab** uses for live updates). A **Fluent Bit**
-sidecar collects service logs, and a log-rotator container manages log retention on disk.
-
-![Containers](https://raw.githubusercontent.com/jupyter-infra/jupyter-deploy/main/docs/source/templates/aws-ec2-jupyterlab-template/diagrams/containers.svg)
-
-### Network boundary
-
-The instance's security group allows inbound traffic on port 443 only, open to `0.0.0.0/0`.
-The access boundary is the pinned self-signed TLS connection plus the short-lived AWS-identity
-token, not the network layer. There is no SSH access; all administrator operations go through
-AWS Systems Manager (SSM). SSM handles host and server administration only, never the
-**JupyterLab** data path.
-
-## Details
-
-### Networking
+## Networking
 
 The template places the EC2 instance in the default VPC of the selected AWS region. Set the
 `availability_zone` variable to place the instance in a specific zone, for example when the chosen
 instance type has no capacity in the default zone.
 
-> **Warning:** Changing `availability_zone` on an existing deployment replaces every EBS volume and destroys
-> their data: EBS volumes cannot cross zones, so terraform must recreate them. There is no
-> plan-time guard. To relocate an existing deployment safely, back up the volumes first with
-> `jd volume backup --all`, then run `jd config --restore-volumes --availability-zone <zone>`
-> so each volume is recreated from its backup.
+```{warning}
+Changing `availability_zone` on an existing deployment replaces every EBS volume and destroys
+their data: EBS volumes cannot cross zones, so terraform must recreate them. There is no
+plan-time guard. To relocate an existing deployment safely, back up the volumes first with
+`jd volume backup --all`, then run `jd config --restore-volumes --availability-zone <zone>`
+so each volume is recreated from its backup.
+```
 
 There is no Elastic IP and no DNS record: the client proxy resolves the instance's current public
 IP live at connection time and pins the instance's certificate, not its address.
@@ -246,7 +20,7 @@ IP live at connection time and pins the instance's certificate, not its address.
 The instance's security group only allows ingress on port 443 (HTTPS). There is no SSH access — all
 administrator operations go through AWS Systems Manager (SSM).
 
-### Compute
+## Compute
 
 The template selects the latest Amazon Linux 2023 AMI compatible with the chosen instance type:
 - Standard AL2023 AMI for CPU instances (x86_64 or arm64)
@@ -254,7 +28,7 @@ The template selects the latest Amazon Linux 2023 AMI compatible with the chosen
 
 You can also provide a specific AMI ID to override automatic selection.
 
-### Storage
+## Storage
 
 The instance has two volumes. The root volume inherits its size and settings from the selected AMI,
 with a configurable minimum size. The template attaches a separate EBS data volume and mounts it
@@ -264,14 +38,14 @@ private key) across container restarts and instance stop/start cycles.
 You can optionally attach additional EBS volumes or EFS file systems and mount them into the
 Jupyter home directory.
 
-### TLS
+## TLS
 
 The instance generates a long-lived self-signed certificate at first boot and persists the key
 material on the EBS data volume, so it survives instance stop/start cycles. The instance publishes
 only the public certificate PEM to an AWS SSM parameter, which `jd proxy connect-info` reads to pin
 the connection. No certificate authority, domain validation, or renewal is involved.
 
-### IAM
+## IAM
 
 The template creates an IAM role for the EC2 instance with permissions for SSM, read access to the
 deployment S3 bucket, write access to the certificate-pin SSM parameter, and (optionally) EFS
@@ -290,7 +64,7 @@ permission.
 The template creates no secrets: authentication relies on short-lived AWS-identity tokens minted
 locally, so there is no OAuth client secret or certificate secret to store.
 
-### Deployment Configuration
+## Deployment Configuration
 
 An S3 bucket stores the deployment configuration files: bash scripts, Docker service definitions,
 and application configuration. The instance pulls these files during setup or updates via an SSM
@@ -321,7 +95,7 @@ pixi variants of the Jupyter container files instead.
 
 An SSM association triggers the startup script on the instance whenever the configuration changes.
 
-### Operations
+## Operations
 
 The template creates SSM documents that the `jd` CLI uses to manage the deployment remotely:
 
@@ -333,18 +107,18 @@ The template creates SSM documents that the `jd` CLI uses to manage the deployme
 | `update-allowlist.sh` | Update the allowlisted IAM role and user names |
 | `get-allowlist.sh` | Retrieve the current allowlist |
 
-### Logging
+## Logging
 
 Fluent Bit collects Docker service logs and writes them to `/var/log/services` on the instance
 volume. A logrotate sidecar container handles automatic rotation of all log files based on
 configurable size and retention settings.
 
-### Presets
+## Presets
 
 The template provides one variable preset:
 - **`defaults-all.tfvars`**: comprehensive preset with all recommended values
 
-### Terraform Modules
+## Terraform Modules
 
 | Name | Location |
 |---|---|
@@ -355,7 +129,7 @@ The template provides one variable preset:
 | `s3_bucket` | `template/engine/modules/s3_bucket` |
 | `volumes` | `template/engine/modules/volumes` |
 
-### Inputs
+## Inputs
 
 | Name | Type | Default | Description |
 |---|---|---|---|
@@ -379,7 +153,7 @@ The template provides one variable preset:
 | additional_efs_mounts | `list(map(string))` | `[]` | Elastic file systems to mount on the notebook home directory |
 | ebs_snapshot_ids | `map(string)` | `{}` | Map of volume name to the EBS snapshot id to create that volume from |
 
-### Outputs
+## Outputs
 
 | Name | Description |
 |---|---|
@@ -407,7 +181,3 @@ The template provides one variable preset:
 | `jupyter_data_volume_id` | ID of the EBS volume mounted on the notebook home directory |
 | `additional_ebs_volumes` | JSON-encoded inventory of the configured additional EBS mounts, consumed by `jd volume` |
 | `additional_efs_volumes` | JSON-encoded inventory of the configured additional EFS mounts, consumed by `jd volume` |
-
-## License
-
-MIT License. See [LICENSE](./LICENSE).

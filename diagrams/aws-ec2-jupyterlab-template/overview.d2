@@ -1,0 +1,98 @@
+# AWS EC2 JupyterLab Template — 10,000-foot View
+
+vars: {
+  d2-config: {
+    layout-engine: dagre
+  }
+}
+
+classes: {
+  box: {
+    shape: rectangle
+    style: {
+      bold: true
+      stroke-width: 3
+      font-size: 20
+    }
+  }
+
+  red_flow: {
+    style: {
+      stroke: "#c62828"
+      stroke-width: 3
+    }
+  }
+
+  blue_flow: {
+    style: {
+      stroke: "#1565c0"
+      stroke-width: 3
+    }
+  }
+}
+
+direction: right
+
+laptop: "Your laptop" {
+  style: {
+    stroke: "#1565c0"
+    stroke-dash: 5
+    fill: "#fafafa"
+  }
+
+  webbrowser: "Web Browser" {
+    class: box
+    icon: ../shared/icons/firefox.svg
+    style: {
+      fill: "#e3f2fd"
+      stroke: "#1565c0"
+    }
+  }
+
+  proxy: "Local proxy\n(jd open)" {
+    class: box
+    icon: ../shared/icons/jupyter.svg
+    style: {
+      fill: "#e3f2fd"
+      stroke: "#1565c0"
+    }
+  }
+}
+
+aws: "AWS" {
+  style: {
+    stroke: "#e65100"
+    stroke-dash: 5
+    fill: "#fafafa"
+  }
+
+  ec2: "EC2 Instance" {
+    class: box
+    icon: ../shared/icons/ec2.svg
+    style: {
+      fill: "#fff3e0"
+      stroke: "#e65100"
+    }
+  }
+
+  sts: "AWS STS" {
+    class: box
+    icon: ../shared/icons/iam.svg
+    style: {
+      fill: "#fff3e0"
+      stroke: "#e65100"
+    }
+  }
+}
+
+laptop.webbrowser -> laptop.proxy: "1. http://127.0.0.1:PORT/lab" {
+  class: blue_flow
+}
+
+laptop.proxy -> aws.ec2: "2. HTTPS :443 (pinned cert)\n+ AWS-identity token" {
+  class: blue_flow
+}
+
+aws.ec2 -> aws.sts: "3. verify identity" {
+  class: red_flow
+}
