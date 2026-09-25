@@ -74,3 +74,6 @@ networkPolicy:
   operatorNamespace: jupyter-k8s-system
   # -- Workspace application port allowed for ingress.
   port: 8888
+  # -- Port of the remote access proxy sidecar, allowed for ingress alongside the
+  # application port.
+  remoteAccessPort: ""

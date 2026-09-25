@@ -24,6 +24,10 @@ spec:
       ports:
         - port: {{ $.Values.networkPolicy.port }}
           protocol: TCP
+        {{- if $.Values.networkPolicy.remoteAccessPort }}
+        - port: {{ $.Values.networkPolicy.remoteAccessPort }}
+          protocol: TCP
+        {{- end }}
     # Operator idle-detection probes (transport: network).
     - from:
         - namespaceSelector:
@@ -32,5 +36,9 @@ spec:
       ports:
         - port: {{ $.Values.networkPolicy.port }}
           protocol: TCP
+        {{- if $.Values.networkPolicy.remoteAccessPort }}
+        - port: {{ $.Values.networkPolicy.remoteAccessPort }}
+          protocol: TCP
+        {{- end }}
 {{- end }}
 {{- end }}

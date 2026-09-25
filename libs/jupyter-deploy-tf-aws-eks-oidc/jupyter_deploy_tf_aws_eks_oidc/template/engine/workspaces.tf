@@ -1,7 +1,8 @@
 locals {
-  workspace_namespace     = "default"
-  access_strategy_name    = "oauth-access-strategy"
-  workspace_storage_class = "ebs-sc"
+  workspace_namespace      = "default"
+  access_strategy_name     = "oauth-access-strategy"
+  remote_access_proxy_port = 8080
+  workspace_storage_class  = "ebs-sc"
 }
 
 # Destroy-time hook: delete operator-managed Workspaces and WorkspaceTemplates
@@ -249,6 +250,10 @@ resource "helm_release" "workspace_defaults" {
     {
       name  = "networkPolicy.operatorNamespace"
       value = var.workspace_operator_namespace
+    },
+    {
+      name  = "networkPolicy.remoteAccessPort"
+      value = var.enable_remote_access ? tostring(local.remote_access_proxy_port) : ""
     },
     ],
     # One workspace-ingress NetworkPolicy per namespace where workspaces run.
