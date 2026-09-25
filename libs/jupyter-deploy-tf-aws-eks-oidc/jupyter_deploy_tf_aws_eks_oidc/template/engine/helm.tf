@@ -83,6 +83,10 @@ resource "helm_release" "jupyter_k8s" {
       name  = "manager.nodeSelector.jupyter-deploy/role"
       value = "platform"
     },
+    {
+      name  = "extensionApi.jwtSecret.enable"
+      value = tostring(var.enable_remote_access)
+    },
   ]
 
   depends_on = [null_resource.platform, helm_release.traefik_crds, kubernetes_namespace_v1.shared, aws_eks_node_group.platform]
@@ -212,6 +216,14 @@ resource "helm_release" "workspace_router" {
       {
         name  = "githubRbac.create"
         value = "false"
+      },
+      {
+        name  = "accessStrategy.webSocket.enabled"
+        value = tostring(var.enable_remote_access)
+      },
+      {
+        name  = "authmiddleware.enableBearerAuth"
+        value = tostring(var.enable_remote_access)
       },
     ],
     # Kubectl access page: cluster details injected from EKS module outputs
