@@ -26,4 +26,5 @@ $ jd open [OPTIONS]
 * `--scope <str>`: Scope or group the server belongs to.
 * `-p, --path <path>`: Directory of the project to open.
 * `-d, --detached`: Run the local proxy in the background.
+* `--proxy-idle-timeout-seconds <float>`: Detached mode only: stop the proxy after this long with no activity (0 = never). Default: 7200.
 * `--help`: Show this message and exit.

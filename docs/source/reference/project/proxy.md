@@ -28,6 +28,9 @@ Emit the JSON connection bundle for the local proxy to consume.
 Resolves the endpoint, reads the cert to pin, and mints a short-lived token. The proxy
 calls this command before each credential expiry so the bundle stays fresh.
 
+Exits 75 when the failure may be transient (network blip, throttling), telling the proxy to
+keep serving and retry; exits 1 when it cannot succeed on retry, which stops the proxy.
+
 Run either from a project directory that you created with <jd init>;
 or pass --path <project-dir>.
 
@@ -66,6 +69,7 @@ $ jd proxy start [OPTIONS]
 **Options**:
 
 * `-p, --path <path>`: Directory of the project to launch the proxy for.
+* `--idle-timeout-seconds <float>`: Stop the proxy after this long with no activity (0 = never). Default: 7200.
 * `--help`: Show this message and exit.
 
 ## `proxy open`

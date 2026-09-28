@@ -30,4 +30,25 @@ The token command emits, on stdout:
 The proxy re-execs the command on a margin before `expires_at`, reconnecting with
 the fresh endpoint/pin/credential and keeping `localhost:PORT` stable.
 
+A token command signals a **transient** failure (network blip, throttling) by exiting
+`75` (`EX_TEMPFAIL`): the proxy keeps serving on its last-good credential and retries.
+Any other non-zero exit is permanent — the proxy can no longer serve anything, so it
+stops itself and exits `78`.
+
+## Auto-shutdown
+
+The proxy ends its own process in two cases, so a background one cannot outlive its
+session:
+
+- **the credential can no longer be refreshed** (the token command failed permanently)
+  — exits `78`, leaving `status.json` behind to record why;
+- **no client activity for `--idle-timeout-seconds`** (default 7200, two hours) — exits
+  `0` and removes `status.json`, like any clean stop. Pass `0` to disable, which is
+  what `jd open` does when it runs the proxy in the foreground: there the terminal
+  governs the lifetime.
+
+Activity means traffic from a client. **An open WebSocket counts even while no frames
+flow**, so a kernel computing silently for hours keeps its tunnel. Credential refreshes
+do not count — they are the proxy's own traffic.
+
 Part of the [jupyter-deploy](https://github.com/jupyter-infra/jupyter-deploy) project.
