@@ -41,18 +41,26 @@ class LocalProxyApplication:
         self.deployment = deployment
         self.jupyterlab_url: str | None = None
 
-    def start(self) -> str:
+    def start(self, replace: bool = False, idle_timeout_seconds: float | None = None) -> str:
         """Start the local proxy and return the loopback URL to the app.
 
         The path is taken from the template manifest's ``open`` spec (e.g. ``/lab``), so the
         helper stays template-agnostic. ``jd proxy start`` does not replace a running proxy;
-        the caller must stop any prior proxy first (the ``client_proxy_app`` fixture does).
+        the caller must stop any prior proxy first (the ``client_proxy_app`` fixture does) or
+        pass ``replace``.
+
+        Args:
+            replace: Stop any proxy already running for the project first.
+            idle_timeout_seconds: Override the proxy's idle auto-shutdown (default two hours,
+                longer than any test can wait); 0 disables it.
 
         Returns:
             The loopback URL the app is served at (e.g. "http://127.0.0.1:54321/lab").
         """
         app_path = self.deployment.get_manifest().get_open().path
-        self.jupyterlab_url = self.deployment.cli.start_proxy(path=app_path)
+        self.jupyterlab_url = self.deployment.cli.start_proxy(
+            path=app_path, replace=replace, idle_timeout_seconds=idle_timeout_seconds
+        )
         logger.info("Local proxy started; app URL: %s", self.jupyterlab_url)
         return self.jupyterlab_url
 

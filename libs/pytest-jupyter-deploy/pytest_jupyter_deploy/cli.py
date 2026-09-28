@@ -345,7 +345,7 @@ class JDCli:
         self._jupyterlab_url = result.stdout.strip()
         return self._jupyterlab_url
 
-    def start_proxy(self, path: str = "", replace: bool = False) -> str:
+    def start_proxy(self, path: str = "", replace: bool = False, idle_timeout_seconds: float | None = None) -> str:
         """Start the local client proxy for this project and return its loopback URL.
 
         Runs `jd proxy start` (always detached) then reads the bound port back from
@@ -359,6 +359,9 @@ class JDCli:
             replace: Stop any proxy already running for the project first, so the start
                 cannot fail with ProxyAlreadyRunningError. Use for idempotent setup; leave
                 False when the refusal itself is what a test asserts.
+            idle_timeout_seconds: Override the proxy's idle auto-shutdown. The default is two
+                hours, which no test can wait out, so a test asserting that behavior passes a
+                short value here; 0 disables it.
 
         Returns:
             The loopback URL the proxy is listening on (e.g. "http://127.0.0.1:54321/lab").
@@ -368,7 +371,10 @@ class JDCli:
         """
         if replace:
             self.stop_proxy_if_running()
-        self.run_command(["jupyter-deploy", "proxy", "start"])
+        cmd = ["jupyter-deploy", "proxy", "start"]
+        if idle_timeout_seconds is not None:
+            cmd += ["--idle-timeout-seconds", str(idle_timeout_seconds)]
+        self.run_command(cmd)
         return self.get_proxy_url(path)
 
     def get_proxy_details(self) -> dict:
@@ -467,6 +473,31 @@ class JDCli:
         """
         with contextlib.suppress(JDCliError):
             self.stop_proxy()
+
+    def is_proxy_running(self) -> bool:
+        """Return whether a confirmed proxy is running for this project.
+
+        Reads the on-disk status (`jd proxy show`), so polling it costs no request *through* the
+        proxy — which matters when what is being observed is the proxy going idle.
+        """
+        try:
+            self.get_proxy_details()
+        except JDCliError:
+            return False
+        return True
+
+    def wait_until_proxy_stopped(self, timeout_seconds: float, poll_interval_seconds: float = 2.0) -> bool:
+        """Poll until no proxy is running for this project; return False on timeout.
+
+        For asserting a proxy stopped *itself* (idle auto-shutdown, or a permanently failed
+        credential refresh), where the test cannot know the exact moment it exits.
+        """
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            if not self.is_proxy_running():
+                return True
+            time.sleep(poll_interval_seconds)
+        return not self.is_proxy_running()
 
     def open_app(self, detached: bool = True, timeout_seconds: int | None = 180) -> str:
         """Run `jd open` and return the URL it reports opening.

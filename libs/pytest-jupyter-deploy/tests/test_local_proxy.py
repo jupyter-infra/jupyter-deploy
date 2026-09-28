@@ -47,10 +47,55 @@ class TestJDCliProxyMethods(unittest.TestCase):
         assert url == "http://127.0.0.1:9000/lab"
         mock_run.assert_called_once_with(["jupyter-deploy", "proxy", "start"])
 
+    def test_start_proxy_passes_idle_timeout_when_given(self) -> None:
+        with (
+            patch.object(self.cli, "run_command") as mock_run,
+            patch.object(self.cli, "get_proxy_port", return_value=9000),
+        ):
+            self.cli.start_proxy(idle_timeout_seconds=45)
+
+        mock_run.assert_called_once_with(
+            ["jupyter-deploy", "proxy", "start", "--idle-timeout-seconds", "45"],
+        )
+
+    def test_start_proxy_passes_idle_timeout_zero(self) -> None:
+        # 0 means "never auto-shut down" — a real value, not an absent one, so it must be sent.
+        with (
+            patch.object(self.cli, "run_command") as mock_run,
+            patch.object(self.cli, "get_proxy_port", return_value=9000),
+        ):
+            self.cli.start_proxy(idle_timeout_seconds=0)
+
+        assert "--idle-timeout-seconds" in mock_run.call_args.args[0]
+
     def test_stop_proxy_invokes_cli(self) -> None:
         with patch.object(self.cli, "run_command") as mock_run:
             self.cli.stop_proxy()
         mock_run.assert_called_once_with(["jupyter-deploy", "proxy", "stop"])
+
+    def test_is_proxy_running_true_when_details_readable(self) -> None:
+        with patch.object(self.cli, "get_proxy_details", return_value={"state": "running", "port": 1}):
+            assert self.cli.is_proxy_running() is True
+
+    def test_is_proxy_running_false_when_no_proxy(self) -> None:
+        with patch.object(self.cli, "get_proxy_details", side_effect=JDCliError("no proxy")):
+            assert self.cli.is_proxy_running() is False
+
+    def test_wait_until_proxy_stopped_returns_true_once_gone(self) -> None:
+        # Running, running, then gone: the poll has to keep looking rather than judge on first read.
+        with (
+            patch.object(self.cli, "is_proxy_running", side_effect=[True, True, False]),
+            patch("pytest_jupyter_deploy.cli.time.sleep"),
+        ):
+            assert self.cli.wait_until_proxy_stopped(timeout_seconds=30) is True
+
+    def test_wait_until_proxy_stopped_returns_false_on_timeout(self) -> None:
+        with (
+            patch.object(self.cli, "is_proxy_running", return_value=True),
+            patch("pytest_jupyter_deploy.cli.time.sleep"),
+            patch("pytest_jupyter_deploy.cli.time.monotonic", side_effect=[0.0, 0.0, 99.0, 99.0]),
+        ):
+            assert self.cli.wait_until_proxy_stopped(timeout_seconds=30) is False
 
     def test_get_proxy_status_parses_line(self) -> None:
         with patch.object(self.cli, "run_command", return_value=_completed("Proxy status: \x1b[36mrunning\x1b[0m")):
@@ -81,7 +126,15 @@ class TestLocalProxyApplication(unittest.TestCase):
 
         assert url == "http://127.0.0.1:5000/lab"
         assert app.jupyterlab_url == "http://127.0.0.1:5000/lab"
-        deployment.cli.start_proxy.assert_called_once_with(path="/lab")
+        deployment.cli.start_proxy.assert_called_once_with(path="/lab", replace=False, idle_timeout_seconds=None)
+
+    def test_start_forwards_replace_and_idle_timeout(self) -> None:
+        # A test asserting idle auto-shutdown needs a window it can wait out; the shipped default is
+        # two hours. `replace` goes with it, since such a test restarts the fixture's own proxy.
+        app, _, deployment = _make_app("/lab")
+        app.start(replace=True, idle_timeout_seconds=45)
+
+        deployment.cli.start_proxy.assert_called_once_with(path="/lab", replace=True, idle_timeout_seconds=45)
 
     def test_stop_delegates_to_cli(self) -> None:
         app, _, deployment = _make_app()
