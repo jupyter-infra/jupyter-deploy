@@ -11,12 +11,25 @@ jupyter-k8s operator for workspace lifecycle management, and controls access wit
 The template deploys:
 - A VPC with public and private subnets across 2 AZs
 - An EKS cluster in the VPC with Identity provider configured for GitHub
-- Two EKS managed node groups: `components` (operators/platform pods) and `workspaces` (workspace pods),
-  each labelled `jupyter-deploy/role=<components|workspaces>` and autoscaled by the cluster-autoscaler
+- One EKS managed node group, `platform`, labelled `jupyter-deploy/role=platform` and untainted. It
+  runs the operators and platform pods, and the cluster-autoscaler scales it within
+  `platform_min_size`/`platform_max_size`.
+- Karpenter NodePools for everything else, each labelled AND tainted `jupyter-deploy/role=<role>`
+  so only pods carrying the matching toleration land there: `routing` for the ingress/auth tier,
+  plus one pool per entry in `workspace_nodepools` (default `workspace-cpu`, role `workspaces`) and
+  an optional GPU pool. Use `jd pool list` to see them.
 - EKS add-ons: vpc-cni, kube-proxy, coredns, pod-identity-agent, ebs-csi-driver, cert-manager, external-dns
+- A public ACM certificate for `<subdomain>.<domain>`, DNS-validated against the hosted zone
+  (`engine/acm.tf`, output `acm_certificate_arn`). Public TLS terminates at the NLB with this
+  certificate and is re-encrypted to Traefik, which serves a certificate from a private CA that
+  cert-manager mints in the cluster: there is no Let's Encrypt and no ACME challenge, so nothing
+  here needs an email address. Note the NLB does NOT verify what Traefik presents, so a stalled
+  in-cluster certificate is invisible at the edge — check `kubectl get certificate -n <router-namespace>`.
 - Helm releases: traefik-crds, jupyter-k8s operator, jupyter-k8s-aws-oidc (OIDC routing + web UI),
-  workspace-defaults and github-rbac (local charts), cluster-autoscaler, and optionally aws-for-fluent-bit
-  for send pod logs to CloudWatch.
+  karpenter, keda and prometheus (which KEDA scales the routing tier from), cluster-autoscaler,
+  karpenter-nodepools / workspace-defaults / github-rbac (local charts), optionally
+  nvidia-device-plugin when a GPU pool is enabled, and optionally aws-for-fluent-bit to send pod
+  logs to CloudWatch.
 - Dex as an OIDC identity provider on the cluster for kubectl authentication
 
 Unlike the single-host EC2 template, this is a multi-app deployment: each user gets their own
