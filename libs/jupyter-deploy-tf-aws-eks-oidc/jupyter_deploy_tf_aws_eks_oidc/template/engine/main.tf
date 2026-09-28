@@ -33,8 +33,8 @@ provider "aws" {
   region = var.region
 }
 
-# The ecr-public API is only served from us-east-1, whatever var.region is. Used solely to mint the
-# ECR Public pull token for the helm provider below.
+# The ecr-public API is served only from us-east-1 and us-west-2, whatever var.region is. Used solely
+# to mint the ECR Public pull token for the helm provider below.
 provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"
@@ -49,7 +49,13 @@ provider "aws" {
 # The helm provider re-fetches the chart to render a diff, so this is on the path of every plan, not
 # just an apply. Being a data source, the 12h token is re-read each run and cannot go stale -- which
 # is the failure the upstream Karpenter docs work around by telling you to `helm registry logout`.
+#
+# Commercial partition only: ECR Public has no endpoint in aws-us-gov or aws-cn, and a caller there
+# cannot sign against a commercial one, so requesting a token would fail the plan outright. Those
+# partitions keep the anonymous pull the template used before, hence the count rather than a
+# hardcoded token.
 data "aws_ecrpublic_authorization_token" "public_ecr" {
+  count    = data.aws_partition.current.partition == "aws" ? 1 : 0
   provider = aws.us_east_1
 }
 
@@ -64,11 +70,15 @@ provider "kubernetes" {
 }
 
 provider "helm" {
-  registries = [{
-    url      = "oci://public.ecr.aws"
-    username = data.aws_ecrpublic_authorization_token.public_ecr.user_name
-    password = data.aws_ecrpublic_authorization_token.public_ecr.password
-  }]
+  # Empty outside the commercial partition, which leaves the pull anonymous. A comprehension over the
+  # count-ed token yields [] when it has no instances, so there is no index to fall out of range.
+  registries = [
+    for token in data.aws_ecrpublic_authorization_token.public_ecr : {
+      url      = "oci://public.ecr.aws"
+      username = token.user_name
+      password = token.password
+    }
+  ]
 
   kubernetes = {
     host                   = module.eks_cluster.cluster_endpoint
