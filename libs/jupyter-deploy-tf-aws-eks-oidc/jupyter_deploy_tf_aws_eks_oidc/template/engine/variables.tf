@@ -864,6 +864,25 @@ variable "workspaces_default_ownership_type" {
   }
 }
 
+variable "enable_remote_access" {
+  description = <<-EOT
+    Whether to allow desktop IDEs to reach workspaces over SSH inside a WebSocket.
+
+    When true, a ws-proxy sidecar runs alongside each workspace and the router
+    serves an /ssh-ws route authenticated by the same short-lived JWT as the web UI,
+    so VS Code, Cursor and Kiro connect through the existing HTTPS ingress with no
+    extra port to open. Requires a workspace image that embeds the remote access
+    server; the JupyterLab image built by this template does.
+
+    NOTE: idle detection reads JupyterLab's last-activity timestamp, which no
+    session reaching the workspace outside the Jupyter server advances. A workspace
+    worked on only through a desktop IDE can therefore be stopped as idle.
+
+    Recommended: false until the feature leaves release-candidate images.
+  EOT
+  type        = bool
+}
+
 variable "workspaces_idle_shutdown_enabled" {
   description = <<-EOT
     Whether to enable automatic idle shutdown for workspaces.

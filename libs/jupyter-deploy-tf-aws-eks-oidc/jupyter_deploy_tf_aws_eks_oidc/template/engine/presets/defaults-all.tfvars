@@ -12,7 +12,7 @@ workspace_shared_namespace       = "jupyter-k8s-shared"
 workspace_operator_chart_oci     = "oci://ghcr.io/jupyter-infra/charts/jupyter-k8s"
 workspace_operator_chart_version = "0.3.0"
 workspace_router_chart_oci       = "oci://ghcr.io/jupyter-infra/charts/jupyter-k8s-aws-oidc"
-workspace_router_chart_version   = "0.2.1"
+workspace_router_chart_version   = "0.2.2"
 traefik_crd_chart_version        = "1.15.0"
 
 cluster_autoscaler_chart_version = "9.59.0"
@@ -20,6 +20,8 @@ cluster_autoscaler_chart_version = "9.59.0"
 enable_component_logging     = true
 component_log_retention_days = 7
 fluentbit_chart_version      = "0.2.0"
+
+enable_remote_access = false
 
 workspaces_default_access_type           = "OwnerOnly"
 workspaces_default_ownership_type        = "OwnerOnly"
