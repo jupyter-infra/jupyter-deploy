@@ -45,6 +45,7 @@ docs-diagrams:
     declare -A TEMPLATE_OUTPUT=(
         ["aws-base-template"]="docs/source/templates/aws-base-template/diagrams"
         ["aws-eks-oidc-template"]="docs/source/templates/aws-eks-oidc-template/diagrams"
+        ["aws-ec2-jupyterlab-template"]="docs/source/templates/aws-ec2-jupyterlab-template/diagrams"
     )
     for template_dir in diagrams/*/; do
         [ -d "$template_dir" ] || continue

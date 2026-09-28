@@ -22,7 +22,7 @@ This compiles all `.d2` files and writes SVGs to the mapped docs directories.
 - **README on PyPI/GitHub**: referenced with absolute GitHub raw URLs, e.g.
   `https://raw.githubusercontent.com/jupyter-infra/jupyter-deploy/main/docs/source/templates/aws-base-template/diagrams/overview.svg`
 
-A unit test (`libs/jupyter-deploy-tf-aws-ec2-base/tests/unit/test_docs_consistency.py`)
+A unit test per template (`libs/<template-package>/tests/unit/test_docs_consistency.py`)
 verifies that diagram references stay in sync between the README and docs pages.
 
 ## Adding icons

@@ -1,0 +1,325 @@
+# AWS EC2 JupyterLab Template — Container Architecture
+
+vars: {
+  d2-config: {
+    layout-engine: elk
+  }
+}
+
+classes: {
+  large_icon: {
+    shape: image
+    width: 96
+    height: 96
+    style: {
+      font-size: 18
+    }
+  }
+
+  column_container: {
+    style: {
+      stroke-width: 0
+      fill: transparent
+    }
+    grid-columns: 1
+    grid-gap: 30
+  }
+
+  spacer: {
+    style: {
+      opacity: 0
+      stroke-width: 0
+    }
+  }
+
+  icon_labeled_block: {
+    shape: rectangle
+    label.near: top-right
+    style: {
+      bold: true
+      stroke-width: 3
+    }
+  }
+
+  process: {
+    shape: rectangle
+    height: 120
+    style: {
+      border-radius: 8
+    }
+  }
+
+  flow_relay: {
+    shape: square
+    width: 1
+    height: 1
+    style: {
+      stroke-width: 0
+      fill: transparent
+    }
+  }
+
+  blue_flow: {
+    style: {
+      stroke: "#1565c0"
+      stroke-width: 3
+    }
+  }
+
+  red_flow: {
+    style: {
+      stroke: "#c62828"
+      stroke-width: 3
+    }
+  }
+
+  green_flow: {
+    style: {
+      stroke: "#2e7d32"
+      stroke-width: 3
+    }
+  }
+
+  gray_flow: {
+    style: {
+      stroke: "#757575"
+      stroke-width: 2
+      stroke-dash: 5
+    }
+  }
+}
+
+# Local proxy (not in grid — standalone so it doesn't stretch)
+user: "Local proxy" {
+  shape: rectangle
+  style: {
+    bold: true
+    font-size: 20
+    fill: "#e3f2fd"
+    stroke: "#1565c0"
+    stroke-width: 3
+  }
+}
+
+
+s0: "" { class: spacer }
+
+# EC2 Instance
+ec2: |md
+  **EC2 Instance**
+| {
+  class: icon_labeled_block
+  icon: ../shared/icons/aws.svg
+  icon.near: top-left
+  style: {
+    fill: "#fff3e0"
+    stroke: "#e65100"
+  }
+
+  grid-rows: 1
+  grid-columns: 3
+
+  traefik_column: "" {
+    class: column_container
+
+    s1a: "" { class: spacer }
+
+    traefik: "Traefik" {
+      class: process
+      icon: ../shared/icons/traefik.svg
+      style: {
+        fill: "#e1f5fe"
+        stroke: "#0288d1"
+        stroke-width: 2
+        bold: true
+        font-size: 18
+      }
+    }
+
+
+    s2b: "" { class: spacer }
+
+    certs_relay1: "" {
+      class: flow_relay
+    }
+
+    certs_relay2: "" {
+      class: flow_relay
+    }
+  }
+
+  containers_column: "" {
+    class: column_container
+    grid-rows: 3
+
+    jupyter: "JupyterLab" {
+      class: process
+      icon: ../shared/icons/jupyter.svg
+      style: {
+        fill: "#fff3e0"
+        stroke: "#f37726"
+        stroke-width: 3
+        bold: true
+        font-size: 18
+      }
+    }
+
+    s2a: "" { class: spacer }
+
+    auth_sidecar: "Auth sidecar" {
+      class: process
+      icon: ../shared/icons/docker.svg
+      style: {
+        fill: "#fce4ec"
+        stroke: "#c62828"
+        stroke-width: 2
+        bold: true
+        font-size: 18
+      }
+    }
+  }
+
+  logs_column: "" {
+    class: column_container
+    grid-rows: 3
+
+    s3a: "" { class: spacer }
+
+    fluentbit: "Fluent-bit" {
+      class: process
+      icon: ../shared/icons/fluentbit.svg
+      style: {
+        fill: "#f3e5f5"
+        stroke: "#7b1fa2"
+        stroke-width: 2
+        bold: true
+        font-size: 18
+      }
+    }
+
+    rotator: "Rotator" {
+      class: process
+      icon: ../shared/icons/docker.svg
+      style: {
+        fill: "#f3e5f5"
+        stroke: "#7b1fa2"
+        stroke-width: 2
+        bold: true
+        font-size: 18
+      }
+    }
+  }
+}
+
+s1: "" { class: spacer }
+
+# Volumes
+volumes: "" {
+  class: column_container
+  grid-rows: 2
+
+  app_volume: |md
+    **App volume**
+  | {
+    class: icon_labeled_block
+    icon: ../shared/icons/aws.svg
+    icon.near: top-left
+    style: {
+      fill: "#fff3e0"
+      stroke: "#e65100"
+    }
+
+    volume_content: "" {
+      class: column_container
+
+      ebs: "/mnt/jupyter-data" {
+        shape: cylinder
+        style: {
+          fill: "#ffe0b2"
+          stroke: "#f37726"
+          bold: true
+        }
+      }
+    }
+  }
+
+  instance_volume: |md
+    **Instance volume**
+  | {
+    class: icon_labeled_block
+    icon: ../shared/icons/aws.svg
+    icon.near: top-left
+    style: {
+      fill: "#fff3e0"
+      stroke: "#e65100"
+    }
+
+    volume_content: "" {
+      class: column_container
+
+      logs: "/var/log/services" {
+        shape: cylinder
+        style: {
+          fill: "#e0e0e0"
+          stroke: "#757575"
+          bold: true
+        }
+      }
+
+      certs: "TLS certs" {
+        shape: cylinder
+        style: {
+          fill: "#e0e0e0"
+          stroke: "#757575"
+          bold: true
+        }
+      }
+    }
+  }
+}
+
+# Flows
+user -> ec2.traefik_column.traefik: "HTTPS :443\n(pinned cert + token)" {
+  class: blue_flow
+}
+
+ec2.traefik_column.traefik -> ec2.containers_column.auth_sidecar: "ForwardAuth" {
+  class: red_flow
+}
+
+ec2.traefik_column.traefik -> ec2.containers_column.jupyter: "proxy" {
+  class: green_flow
+}
+
+ec2.containers_column.jupyter -> volumes.app_volume.volume_content.ebs: "mount\n/home/jovyan" {
+  class: gray_flow
+}
+
+ec2.logs_column.fluentbit -> volumes.instance_volume.volume_content.logs: "write" {
+  class: gray_flow
+}
+
+ec2.logs_column.rotator -> volumes.instance_volume.volume_content.logs: "rotate" {
+  class: gray_flow
+}
+
+ec2.containers_column.jupyter -> ec2.logs_column.fluentbit: "logs" {
+  class: gray_flow
+}
+
+ec2.traefik_column.traefik -> ec2.logs_column.fluentbit: "logs" {
+  class: gray_flow
+}
+
+ec2.containers_column.auth_sidecar -> ec2.logs_column.fluentbit: "logs" {
+  class: gray_flow
+}
+
+ec2.traefik_column.traefik -> ec2.traefik_column.certs_relay2: "" {
+  class: gray_flow
+  target-arrowhead.shape: none
+}
+
+ec2.traefik_column.certs_relay2 -> volumes.instance_volume.volume_content.certs: "read" {
+  class: gray_flow
+}

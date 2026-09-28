@@ -98,6 +98,7 @@ and serves your **JupyterLab** application to a URL in your domain.
 
 ## What's Next
 
+- Explore the [**AWS EC2 JupyterLab Template**](../templates/aws-ec2-jupyterlab-template/index) for single-user deployments with AWS credentials as the only prerequisite
 - Explore the [**AWS Base Template**](../templates/aws-base-template/index) for single-instance deployments
 - Explore the [**AWS EKS OIDC Template**](../templates/aws-eks-oidc-template/index) for multi-user workspace platforms
 - Learn about the [**CLI Reference**](../reference/overview) available
