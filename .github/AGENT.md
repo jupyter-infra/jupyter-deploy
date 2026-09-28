@@ -33,8 +33,10 @@
 
 ## OAuth app slots
 
-Fresh deploys consume a Let's Encrypt cert (limit: 5/subdomain/week), so canary and
-release gates use dedicated app slots to avoid contention:
+A fresh **base** deploy consumes a Let's Encrypt cert (limit: 5/subdomain/week); eks-oidc
+issues from ACM and has no such quota. Either way a slot is one OAuth app and one subdomain,
+and two clusters cannot share a subdomain, so canary and release gates use dedicated app
+slots to avoid contention:
 
 | Template | Manual/PR fresh | Release gate | Canary |
 |----------|-----------------|--------------|--------|

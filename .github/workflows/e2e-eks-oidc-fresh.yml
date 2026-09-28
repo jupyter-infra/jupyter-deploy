@@ -45,7 +45,7 @@ on:
   workflow_dispatch:
     inputs:
       oauth-app-num:
-        description: "OAuth app number (4-6). Fresh deploys consume a LE cert (limit: 5/subdomain/week)"
+        description: "OAuth app number (4-6) — determines subdomain"
         required: false
         type: choice
         options: ["4", "5", "6"]
