@@ -55,6 +55,23 @@ class TestStartCommand(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         handler.start.assert_called_once_with(detached=True)
         self.assertIn("51000", _plain(result.stdout))
+        # No flag given → the handler takes the default idle timeout, it is not pinned here.
+        self.assertIsNone(mock_handler_cls.call_args.kwargs["idle_timeout_seconds"])
+
+    @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_passes_idle_timeout_to_handler(self, mock_project_dir: Mock, mock_handler_cls: Mock) -> None:
+        mock_project_dir.return_value.__enter__.return_value = None
+        handler = Mock()
+        handler.start.return_value = ProxyStatus(state="running", pid=1, alive=True, port=51000, running=True)
+        mock_handler_cls.return_value = handler
+
+        result = CliRunner().invoke(proxy_app, ["start", "--idle-timeout-seconds", "0"])
+
+        self.assertEqual(result.exit_code, 0)
+        # 0 opts out of auto-shutdown entirely, so it has to survive as 0 rather than being
+        # treated as "unset" and replaced by the default.
+        self.assertEqual(mock_handler_cls.call_args.kwargs["idle_timeout_seconds"], 0)
 
     def test_no_detached_flag(self) -> None:
         # `jd proxy start` is always detached; there is no --detached/-d flag to accept.

@@ -37,8 +37,15 @@ class ProxyHandler(BaseProjectHandler):
     _outputs_handler: EngineOutputsHandler
     _variable_handler: EngineVariablesHandler
 
-    def __init__(self, display_manager: DisplayManager | None = None) -> None:
+    def __init__(
+        self, display_manager: DisplayManager | None = None, idle_timeout_seconds: float | None = None
+    ) -> None:
         """Instantiate the proxy handler.
+
+        Args:
+            display_manager: Sink for status/warning messages.
+            idle_timeout_seconds: Idle auto-shutdown for a proxy this handler starts; None takes
+                the default. ``jd proxy start`` is always detached, so it always applies.
 
         Raises:
             CommandNotImplementedError: If the template does not support the proxy (declares no
@@ -63,7 +70,9 @@ class ProxyHandler(BaseProjectHandler):
         else:
             raise NotImplementedError(f"ProxyHandler implementation not found for engine: {self.engine}")
 
-        self._manager = ProxyManager.for_project(self.project_path, self.display_manager)
+        self._manager = ProxyManager.for_project(
+            self.project_path, self.display_manager, idle_timeout_seconds=idle_timeout_seconds
+        )
 
     # ------------------------------------------------------------------ connect-info
 

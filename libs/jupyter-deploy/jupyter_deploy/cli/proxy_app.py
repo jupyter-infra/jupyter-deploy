@@ -16,7 +16,7 @@ import typer
 from rich.console import Console
 
 from jupyter_deploy import cmd_utils
-from jupyter_deploy.cli.error_decorator import handle_cli_errors
+from jupyter_deploy.cli.error_decorator import handle_cli_errors, handle_connect_info_errors
 from jupyter_deploy.cli.simple_display import SimpleDisplayManager
 from jupyter_deploy.handlers.proxy_handler import ProxyHandler
 
@@ -38,12 +38,15 @@ def connect_info(
     Resolves the endpoint, reads the cert to pin, and mints a short-lived token. The proxy
     calls this command before each credential expiry so the bundle stays fresh.
 
+    Exits 75 when the failure may be transient (network blip, throttling), telling the proxy to
+    keep serving and retry; exits 1 when it cannot succeed on retry, which stops the proxy.
+
     Run either from a project directory that you created with <jd init>;
     or pass --path <project-dir>.
     """
     stdout_console = Console(emoji=False, highlight=False, markup=False)
     err_console = Console(stderr=True)
-    with handle_cli_errors(err_console), cmd_utils.project_dir(project_dir):
+    with handle_connect_info_errors(err_console), cmd_utils.project_dir(project_dir):
         handler = ProxyHandler()
         bundle = handler.get_connect_bundle()
         stdout_console.out(json.dumps(asdict(bundle)))
@@ -54,6 +57,13 @@ def start(
     project_dir: Annotated[
         Path | None,
         typer.Option("--path", "-p", help="Directory of the project to launch the proxy for."),
+    ] = None,
+    idle_timeout_seconds: Annotated[
+        float | None,
+        typer.Option(
+            "--idle-timeout-seconds",
+            help="Stop the proxy after this long with no activity (0 = never). Default: 7200.",
+        ),
     ] = None,
 ) -> None:
     """Launch a background local proxy to communicate with the project's remote host(s).
@@ -75,7 +85,7 @@ def start(
         # proxy record (possible PID reuse) it leaves untouched, and narrate startup phases
         # onto the spinner below.
         display = SimpleDisplayManager(console=console)
-        handler = ProxyHandler(display_manager=display)
+        handler = ProxyHandler(display_manager=display, idle_timeout_seconds=idle_timeout_seconds)
         with display.spinner("Starting the local proxy …"):
             status = handler.start(detached=True)
         console.print(f"Proxy listening on [bold cyan]http://127.0.0.1:{status.port}[/]")

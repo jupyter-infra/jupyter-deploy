@@ -63,6 +63,29 @@ class TestProxyHandlerInit(unittest.TestCase):
         self.assertIsNotNone(handler._variable_handler)
         self.assertIsNotNone(handler._manager)
 
+    def test_init_passes_idle_timeout_to_the_manager(self) -> None:
+        # `jd proxy start` is always detached, so its --idle-timeout-seconds always applies; the
+        # handler only has to forward it rather than interpret it.
+        with (
+            patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest") as mock_retrieve,
+            patch("jupyter_deploy.handlers.proxy_handler.ProxyManager") as mock_manager_cls,
+        ):
+            mock_retrieve.return_value = _make_manifest()
+            handler = ProxyHandler(idle_timeout_seconds=0)
+
+            self.assertEqual(mock_manager_cls.for_project.call_args.kwargs["idle_timeout_seconds"], 0)
+            self.assertIs(handler._manager, mock_manager_cls.for_project.return_value)
+
+    def test_init_defaults_idle_timeout_to_none(self) -> None:
+        with (
+            patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest") as mock_retrieve,
+            patch("jupyter_deploy.handlers.proxy_handler.ProxyManager") as mock_manager_cls,
+        ):
+            mock_retrieve.return_value = _make_manifest()
+            ProxyHandler()
+
+            self.assertIsNone(mock_manager_cls.for_project.call_args.kwargs["idle_timeout_seconds"])
+
     def test_init_raises_when_template_lacks_proxy_support(self) -> None:
         # No `proxy.connect-info` command -> the template does not support the proxy, so every
         # `jd proxy` command fails fast (uniformly) at handler construction.
