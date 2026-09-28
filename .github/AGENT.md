@@ -29,6 +29,7 @@
 | `e2e-jupyterlab-job.yml` | `workflow_call` | Reusable jupyterlab E2E job (called by the above) |
 | `e2e-reap-stale.yml` | `schedule` / `workflow_dispatch` | Daily (08:00 UTC): destroys any jupyterlab E2E deployment older than 12h, which is what makes the fresh workflow's "teardown only when every test passed" safe |
 | `e2e-build-image.yml` | `workflow_call` | Reusable build-and-push E2E image to ECR (`TEMPLATE` build-arg selects base / eks-oidc / jupyterlab for pypi-mode installs) |
+| `e2e-validate-inputs.yml` | `workflow_call` | Reusable dispatch-input gate for the three fresh workflows: rejects a `pkg-version`/`ref` swap, and an `install-mode`/`install-variant`/`pkg-version` combination the build would silently discard or choke on. Runs ahead of `build-image` and `cleanup-existing`, which start in parallel |
 | `e2e-canary-dispatch.yml` | `workflow_call` | Reusable canary scheduler: resolves the template's version on PyPI, dispatches its fresh workflow at tag `<pkg>==<version>` in canary mode, waits and mirrors the result. `slot` is the value, `slot-input` the input name to send it as (`oauth-app-num`, or `ecr-slot` for jupyterlab) |
 
 ## OAuth app slots

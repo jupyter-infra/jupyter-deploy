@@ -108,6 +108,7 @@ jobs:
     uses: ./.github/workflows/e2e-validate-inputs.yml
     with:
       install-mode: ${{ inputs.install-mode || 'workspace' }}
+      install-variant: ${{ inputs.install-variant || 'release' }}
       pkg-version: ${{ inputs.pkg-version }}
       ref: ${{ inputs.ref }}
 
