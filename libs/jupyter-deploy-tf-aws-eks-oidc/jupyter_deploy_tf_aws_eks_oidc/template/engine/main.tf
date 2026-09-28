@@ -120,6 +120,7 @@ resource "null_resource" "wait_for_lb_cleanup" {
   provisioner "local-exec" {
     when        = destroy
     interpreter = ["/bin/bash", "-c"]
+    quiet       = true
     command     = self.triggers.script
   }
 }

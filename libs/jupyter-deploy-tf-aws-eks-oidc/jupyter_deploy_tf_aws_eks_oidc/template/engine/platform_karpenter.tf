@@ -162,6 +162,7 @@ resource "null_resource" "karpenter_restart" {
 
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
+    quiet       = true
     command     = <<-EOT
       aws eks update-kubeconfig --name "${module.eks_cluster.cluster_name}" --region "${var.region}" --kubeconfig /tmp/karpenter-restart-kubeconfig 2>/dev/null
       KUBECONFIG=/tmp/karpenter-restart-kubeconfig kubectl rollout restart deployment/karpenter -n karpenter
@@ -198,6 +199,7 @@ resource "null_resource" "karpenter_nodepools_finalizer_cleanup" {
   provisioner "local-exec" {
     when        = destroy
     interpreter = ["/bin/bash", "-c"]
+    quiet       = true
     command     = <<-EOT
       tmp_kubeconfig=$(mktemp)
       aws eks update-kubeconfig --name "${self.triggers.cluster_name}" --region "${self.triggers.region}" --kubeconfig "$tmp_kubeconfig" 2>/dev/null
