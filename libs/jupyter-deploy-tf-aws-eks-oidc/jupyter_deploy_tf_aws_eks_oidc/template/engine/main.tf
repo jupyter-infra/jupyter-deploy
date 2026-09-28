@@ -1,16 +1,20 @@
 terraform {
   required_providers {
     aws = {
+      # 6.0+, not 5.0: the per-resource `region` attribute used by the ECR Public token below only
+      # exists in v6, so a mirror pinned to 5.x must fail on the version, not on an unknown attribute.
       source  = "hashicorp/aws"
-      version = ">= 5.0"
+      version = ">= 6.0"
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
       version = ">= 2.30"
     }
+    # 3.0+, not 2.14: the `kubernetes`/`exec` and `registries` provider attributes and the
+    # `set = [...]` list on helm_release below are all v3 syntax, which v2 cannot parse.
     helm = {
       source  = "hashicorp/helm"
-      version = ">= 2.14"
+      version = ">= 3.0"
     }
     random = {
       source  = "hashicorp/random"
@@ -31,6 +35,27 @@ provider "aws" {
   region = var.region
 }
 
+# Authenticates the Karpenter chart pull from oci://public.ecr.aws (platform_karpenter.tf), the only
+# public.ecr.aws chart source in this template. Anonymous pulls share a 500 GB/month non-adjustable
+# ECR Public quota keyed on source IP, which CI runners exhaust for reasons unrelated to us -- a plan
+# then dies on `429 toomanyrequests: Data limit exceeded`. Authenticating moves us to a per-account
+# quota and 10 pulls/s instead of 1. See issue #411.
+#
+# The helm provider re-fetches the chart to render a diff, so this is on the path of every plan, not
+# just an apply. Being a data source, the 12h token is re-read each run and cannot go stale -- which
+# is the failure the upstream Karpenter docs work around by telling you to `helm registry logout`.
+#
+# Commercial partition only: ECR Public is served from us-east-1 and us-west-2 alone, and a caller in
+# aws-us-gov or aws-cn cannot sign against either, so those partitions skip the token and keep the
+# anonymous pull the template used before. `region` here rather than a second aliased provider -- an
+# aliased provider is configured whenever anything references it, so it would validate credentials
+# against us-east-1 STS on every run even at count = 0, defeating the guard in the partitions it
+# exists to protect.
+data "aws_ecrpublic_authorization_token" "public_ecr" {
+  count  = data.aws_partition.current.partition == "aws" ? 1 : 0
+  region = "us-east-1"
+}
+
 provider "kubernetes" {
   host                   = module.eks_cluster.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks_cluster.cluster_ca_certificate)
@@ -42,6 +67,16 @@ provider "kubernetes" {
 }
 
 provider "helm" {
+  # Empty outside the commercial partition, which leaves the pull anonymous. A comprehension over the
+  # count-ed token yields [] when it has no instances, so there is no index to fall out of range.
+  registries = [
+    for token in data.aws_ecrpublic_authorization_token.public_ecr : {
+      url      = "oci://public.ecr.aws"
+      username = token.user_name
+      password = token.password
+    }
+  ]
+
   kubernetes = {
     host                   = module.eks_cluster.cluster_endpoint
     cluster_ca_certificate = base64decode(module.eks_cluster.cluster_ca_certificate)

@@ -94,6 +94,7 @@ jobs:
     uses: ./.github/workflows/e2e-validate-inputs.yml
     with:
       install-mode: ${{ inputs.install-mode || 'workspace' }}
+      install-variant: ${{ inputs.install-variant || 'release' }}
       pkg-version: ${{ inputs.pkg-version }}
       ref: ${{ inputs.ref }}
 
@@ -228,10 +229,13 @@ jobs:
 
   # --- Gate: allows test chain to start when deploy succeeded or was skipped ---
 
+  # `validate` is in `needs` for its result alone: under a bare `always()` a rejected dispatch skips
+  # `deploy`, this job reads that `skipped` as a failure, and the run shows a red "Deploy gate" for a
+  # deploy that never ran -- which buries the `Bad dispatch input` annotation naming the field to fix.
   deploy-gate:
     name: "Deploy gate"
-    needs: [build-image, cleanup-existing, deploy]
-    if: always() && !cancelled()
+    needs: [validate, build-image, cleanup-existing, deploy]
+    if: always() && !cancelled() && needs.validate.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:

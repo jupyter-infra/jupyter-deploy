@@ -38,6 +38,7 @@ class EngineOutputsHandler(ABC):
         Raises:
             ManifestValueNotDeclaredError if the value_name is not declared in the manifest
             ValueError if the value.source is not a template output
+            ProjectOutputsNotAvailableError if the project reports no outputs at all
             RequiredOutputNotFoundError if the output name declared in the manifest cannot be found
             RequiredOutputTypeError if the output def exists but is not of the valid type
         """
