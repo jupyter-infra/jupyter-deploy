@@ -56,7 +56,7 @@ class TestOpenCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with(None)
-        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=False)
+        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=False, idle_timeout_seconds=None)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -70,7 +70,7 @@ class TestOpenCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_project_ctx_manager.assert_called_once_with(Path("/custom/path"))
-        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=False)
+        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=False, idle_timeout_seconds=None)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -88,7 +88,7 @@ class TestOpenCommand(unittest.TestCase):
         result = runner.invoke(app_runner.app, ["open"])
 
         self.assertEqual(result.exit_code, 1)
-        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=False)
+        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=False, idle_timeout_seconds=None)
         self.assertIn("Failed to open URL in browser", result.output)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
@@ -283,7 +283,7 @@ class TestOpenCommand(unittest.TestCase):
         result = runner.invoke(app_runner.app, ["open"])
 
         self.assertNotEqual(result.exit_code, 0)
-        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=False)
+        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=False, idle_timeout_seconds=None)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -381,7 +381,9 @@ class TestOpenCommand(unittest.TestCase):
         result = runner.invoke(app_runner.app, ["open", "--server-name", "my-ws"])
 
         self.assertEqual(result.exit_code, 0)
-        mock_open_fns["open"].assert_called_once_with(name="my-ws", scope=None, detached=False)
+        mock_open_fns["open"].assert_called_once_with(
+            name="my-ws", scope=None, detached=False, idle_timeout_seconds=None
+        )
         self.assertIn("Opening app at:", result.output)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
@@ -398,7 +400,9 @@ class TestOpenCommand(unittest.TestCase):
         result = runner.invoke(app_runner.app, ["open", "--server-name", "my-ws", "--scope", "team-a"])
 
         self.assertEqual(result.exit_code, 0)
-        mock_open_fns["open"].assert_called_once_with(name="my-ws", scope="team-a", detached=False)
+        mock_open_fns["open"].assert_called_once_with(
+            name="my-ws", scope="team-a", detached=False, idle_timeout_seconds=None
+        )
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -413,7 +417,9 @@ class TestOpenCommand(unittest.TestCase):
         result = runner.invoke(app_runner.app, ["open", "--scope", "team-a"])
 
         self.assertEqual(result.exit_code, 0)
-        mock_open_fns["open"].assert_called_once_with(name=None, scope="team-a", detached=False)
+        mock_open_fns["open"].assert_called_once_with(
+            name=None, scope="team-a", detached=False, idle_timeout_seconds=None
+        )
 
     # --- Detached flag + wait() (proxy delegation lives in OpenHandler) ---
 
@@ -427,7 +433,7 @@ class TestOpenCommand(unittest.TestCase):
         result = CliRunner().invoke(app_runner.app, ["open", "-d"])
 
         self.assertEqual(result.exit_code, 0)
-        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=True)
+        mock_open_fns["open"].assert_called_once_with(name=None, scope=None, detached=True, idle_timeout_seconds=None)
 
     @patch("jupyter_deploy.cli.app.OpenHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -558,3 +564,34 @@ class TestOpenCommand(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         self.assertNotIn("Having trouble?", result.output)
+
+
+class TestOpenIdleTimeoutFlag(unittest.TestCase):
+    """`jd open --idle-timeout-seconds` reaches the handler verbatim.
+
+    The handler decides whether the combination is legal (it rejects the flag without -d); the CLI's
+    job is only to pass the value through without reinterpreting it — 0 in particular, which means
+    "never auto-shut down" and must not be collapsed into "unset".
+    """
+
+    @patch("jupyter_deploy.cli.app.OpenHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_passes_idle_timeout_with_detached(self, _project_dir: Mock, mock_open_handler_cls: Mock) -> None:
+        handler, fns = TestOpenCommand().get_mock_open_handler()
+        mock_open_handler_cls.return_value = handler
+
+        result = CliRunner().invoke(app_runner.app, ["open", "-d", "--proxy-idle-timeout-seconds", "60"])
+
+        self.assertEqual(result.exit_code, 0)
+        fns["open"].assert_called_once_with(name=None, scope=None, detached=True, idle_timeout_seconds=60.0)
+
+    @patch("jupyter_deploy.cli.app.OpenHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_passes_explicit_zero(self, _project_dir: Mock, mock_open_handler_cls: Mock) -> None:
+        handler, fns = TestOpenCommand().get_mock_open_handler()
+        mock_open_handler_cls.return_value = handler
+
+        result = CliRunner().invoke(app_runner.app, ["open", "-d", "--proxy-idle-timeout-seconds", "0"])
+
+        self.assertEqual(result.exit_code, 0)
+        fns["open"].assert_called_once_with(name=None, scope=None, detached=True, idle_timeout_seconds=0.0)

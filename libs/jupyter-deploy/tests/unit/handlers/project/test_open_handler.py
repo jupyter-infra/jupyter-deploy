@@ -115,7 +115,9 @@ class TestOpenHandler(unittest.TestCase):
 
                 self.assertEqual(url, "http://127.0.0.1:35289/lab")
                 # Builds its own manager for the project and drives it directly (no ProxyHandler).
-                mock_manager_cls.for_project.assert_called_once_with(handler.project_path, handler.display_manager)
+                mock_manager_cls.for_project.assert_called_once_with(
+                    handler.project_path, handler.display_manager, idle_timeout_seconds=None
+                )
                 # jd open owns the lifecycle: restart (replace any running proxy), then open.
                 mock_manager.restart.assert_called_once_with(detached=True)
                 mock_manager.start.assert_not_called()
@@ -133,6 +135,60 @@ class TestOpenHandler(unittest.TestCase):
             handler = OpenHandler()
             with self.assertRaises(OptionalParameterNotSupportedError):
                 handler.open(detached=True)
+
+    def test_open_idle_timeout_without_detached_raises(self) -> None:
+        # An attached proxy is governed by the terminal running it; arming an idle timer there would
+        # kill a proxy whose user is sitting in front of it. Reject the flag by name rather than
+        # accepting it and quietly doing nothing.
+        proxy_manifest = JupyterDeployManifestV1(
+            **{  # type: ignore
+                "schema_version": 1,
+                "template": {"name": "mock", "engine": "terraform", "version": "1.0.0"},
+                "open": {"mode": "proxy", "path": "/lab"},
+            }
+        )
+        with patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest") as mock_retrieve:
+            mock_retrieve.return_value = proxy_manifest
+            handler = OpenHandler()
+            with self.assertRaises(OptionalParameterNotSupportedError) as ctx:
+                handler.open(idle_timeout_seconds=60)
+
+            self.assertEqual(ctx.exception.parameter_name, "--proxy-idle-timeout-seconds")
+            self.assertIn("-d", ctx.exception.requirement)
+
+    def test_open_idle_timeout_on_non_proxy_template_blames_the_template(self) -> None:
+        # On a URL template the flag is meaningless for the same reason --detached is, and the order
+        # of the two checks decides whether the error is useful: blaming the missing -d would send
+        # the user to add a flag that is itself rejected here, so the template must be named first.
+        mock_manifest = _make_manifest()  # default manifest is URL-mode (no proxy open block)
+        with patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest") as mock_retrieve:
+            mock_retrieve.return_value = mock_manifest
+            handler = OpenHandler()
+            with self.assertRaises(OptionalParameterNotSupportedError) as ctx:
+                handler.open(idle_timeout_seconds=60)
+
+            self.assertEqual(ctx.exception.parameter_name, "--proxy-idle-timeout-seconds")
+            self.assertNotIn("-d", ctx.exception.requirement)
+
+    def test_open_detached_passes_idle_timeout_to_the_manager(self) -> None:
+        proxy_manifest = JupyterDeployManifestV1(
+            **{  # type: ignore
+                "schema_version": 1,
+                "template": {"name": "mock", "engine": "terraform", "version": "1.0.0"},
+                "open": {"mode": "proxy", "path": "/lab"},
+            }
+        )
+        with patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest") as mock_retrieve:
+            mock_retrieve.return_value = proxy_manifest
+            handler = OpenHandler()
+            with patch("jupyter_deploy.handlers.project.open_handler.ProxyManager") as mock_manager_cls:
+                mock_manager_cls.for_project.return_value = Mock()
+
+                handler.open(detached=True, idle_timeout_seconds=60)
+
+                mock_manager_cls.for_project.assert_called_once_with(
+                    handler.project_path, handler.display_manager, idle_timeout_seconds=60
+                )
 
     def test_open_with_server_name_on_single_app_template_raises(self) -> None:
         # Selecting a server needs the open.server command, which the default (single-app)

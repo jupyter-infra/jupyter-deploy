@@ -131,7 +131,13 @@ class OpenHandler(BaseProjectHandler):
 
         return url
 
-    def open(self, name: str | None = None, scope: str | None = None, detached: bool = False) -> str:
+    def open(
+        self,
+        name: str | None = None,
+        scope: str | None = None,
+        detached: bool = False,
+        idle_timeout_seconds: float | None = None,
+    ) -> str:
         """Open the application or a specific server in the browser.
 
         Proxy-mode templates (manifest ``open: {mode: proxy}``) have no public URL: the app is
@@ -144,6 +150,13 @@ class OpenHandler(BaseProjectHandler):
         Otherwise, when name is provided, resolves the server URL via the open.server manifest
         command; else falls back to the project open_url output.
 
+        Args:
+            name: Open this server rather than the project's own URL (multi-app templates).
+            scope: Scope the named server is looked up in.
+            detached: Background the local proxy instead of holding it in the foreground.
+            idle_timeout_seconds: Idle auto-shutdown for a detached proxy; None takes the default.
+                Only meaningful with ``detached`` — an attached proxy never stops itself.
+
         Returns:
             str: The URL that was opened
 
@@ -151,8 +164,9 @@ class OpenHandler(BaseProjectHandler):
             UrlNotAvailableError: If URL cannot be retrieved or is empty
             UrlNotSecureError: If URL is not HTTPS or an http loopback URL
             OpenWebBrowserError: If opening URL in browser fails
-            OptionalParameterNotSupportedError: If detached is set on a non-proxy template, or
-                name is given but open.server is not in the manifest
+            OptionalParameterNotSupportedError: If detached or idle_timeout_seconds is set on a
+                non-proxy template, if idle_timeout_seconds is set without detached, or if name is
+                given but open.server is not in the manifest
             ResourceNotFoundError: If the named server does not exist
         """
         open_config = self.project_manifest.get_open()
@@ -161,13 +175,27 @@ class OpenHandler(BaseProjectHandler):
         # flow; reject it elsewhere rather than silently ignoring it.
         if detached and not is_proxy_open:
             raise OptionalParameterNotSupportedError("--detached", "templates reached through the local proxy")
+        # Both proxy flags are rejected for the template first and for the missing -d second, so the
+        # remedy each names is one the user can actually reach. Reversed, a URL-template user passing
+        # only --proxy-idle-timeout-seconds would be told to add -d, and -d is rejected too.
+        if idle_timeout_seconds is not None and not is_proxy_open:
+            raise OptionalParameterNotSupportedError(
+                "--proxy-idle-timeout-seconds", "templates reached through the local proxy"
+            )
+        # An attached proxy is governed by the terminal running it, so an idle timeout there would
+        # kill a proxy its user is watching. Reject the flag instead of quietly dropping it. Names
+        # the flag as `jd open` spells it — the only command that reaches this path.
+        if idle_timeout_seconds is not None and not detached:
+            raise OptionalParameterNotSupportedError("--proxy-idle-timeout-seconds", "a detached proxy (-d)")
         # Selecting a server needs open.server, which single-app templates do not declare.
         # Reject the flag by name: letting get_server_url raise CommandNotImplementedError
         # instead reports the whole of `jd open` as unsupported, which it is not.
         if name is not None and not self.project_manifest.has_command("open.server"):
             raise OptionalParameterNotSupportedError("--server-name", "multi-app templates")
         if is_proxy_open:
-            self._proxy = ProxyManager.for_project(self.project_path, self.display_manager)
+            self._proxy = ProxyManager.for_project(
+                self.project_path, self.display_manager, idle_timeout_seconds=idle_timeout_seconds
+            )
             self._proxy_detached = detached
             # jd open owns the proxy lifecycle: replace any running proxy with a fresh one. A
             # single spinner covers the whole interaction; the manager narrates each phase
