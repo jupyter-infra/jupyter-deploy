@@ -33,6 +33,14 @@ from pytest_jupyter_deploy.local_proxy.requests import static_bundle_proxy
 # guarantees at least one refresh cycle has completed.
 _CREDENTIAL_REFRESH_WAIT_SECONDS = 75
 
+# Idle auto-shutdown window for the idle test, and the waits around it (multiples of it, so the
+# relationship survives a change to the window). Short on purpose: the thing held open below is a
+# kernel websocket, which holds the proxy up with no traffic at all, so nothing here depends on how
+# often anything polls. The shipped default is two hours.
+_IDLE_TIMEOUT_SECONDS = 20
+_IDLE_ALIVE_WAIT_SECONDS = _IDLE_TIMEOUT_SECONDS * 2
+_IDLE_SHUTDOWN_WAIT_SECONDS = _IDLE_TIMEOUT_SECONDS * 3
+
 # A status.json naming a live-but-foreign PID: `state` and `pid` look running, but
 # `process_created_at` cannot match PID 1's real start time, so the record must be treated as
 # unconfirmed (possible PID reuse) rather than as this project's proxy.
@@ -319,4 +327,56 @@ def test_proxy_relays_an_upstream_401_verbatim(connect_bundle: dict) -> None:
 
     assert response.status_code == 401, (
         f"Expected the upstream 401 to be relayed verbatim, got {response.status_code}: {response.text[:200]}"
+    )
+
+
+# --------------------------------------------------------------------------- idle auto-shutdown
+
+
+def test_proxy_idles_out_only_after_the_kernel_connection_closes(e2e_deployment: EndToEndDeployment) -> None:
+    """A live kernel holds a detached proxy up with no traffic at all; it stops once the kernel is gone.
+
+    The consequence that makes idle auto-shutdown safe to ship. A kernel can compute for hours
+    without sending a frame, so if "no traffic" alone meant "nobody is there", a detached proxy
+    would pull the tunnel out from under a running computation — the worst failure this feature
+    could have. What prevents it is that an open websocket counts as activity by itself, which this
+    asserts against a *real* kernel channel: the v1 binary subprotocol, through Traefik and the
+    ForwardAuth sidecar. The functional suite asserts the same rule against a plain echo origin,
+    which cannot exercise that path.
+
+    The second half is the feature working: with the kernel gone nothing is left holding the proxy
+    and it exits on its own. That half also quietly proves the credential refresh does not count as
+    activity — the token lives 60s and is re-minted while this waits, so a refresh that stamped
+    activity would keep the deadline out of reach forever.
+
+    **Not asserted here: that a JupyterLab *tab* keeps the proxy alive.** It does, but only via the
+    frontend's own polling, and `@jupyterlab/services` polls with ``backoff: true`` up to a 5-minute
+    ceiling — so a reliable browser-based version of this test needs a window longer than 5 minutes,
+    several times the cost of this one. The risk it would cover is bounded: the shipped default is
+    two hours, 24x that ceiling, so a real tab is never close to being reaped.
+
+    Runs against a deliberately short window (``_IDLE_TIMEOUT_SECONDS``); the shipped default is two
+    hours, which no test can wait out.
+    """
+    e2e_deployment.ensure_server_running()
+    url = e2e_deployment.cli.start_proxy(replace=True, idle_timeout_seconds=_IDLE_TIMEOUT_SECONDS)
+
+    with kernel_websocket(url):
+        # Deliberately send nothing: a silent kernel is the case at risk.
+        time.sleep(_IDLE_ALIVE_WAIT_SECONDS)
+
+        assert e2e_deployment.cli.is_proxy_running(), (
+            f"The proxy shut down after {_IDLE_ALIVE_WAIT_SECONDS}s while a kernel websocket was "
+            f"open (idle timeout {_IDLE_TIMEOUT_SECONDS}s). An open connection must count as "
+            "activity on its own, or a running computation loses its tunnel."
+        )
+        response = requests.get(f"{url}/api/status", timeout=30)
+        assert response.status_code == 200, f"Proxy stopped serving while the kernel was open: {response.status_code}"
+
+    # The kernel websocket is closed and its kernel deleted, so nothing is talking to the proxy.
+    # The wait starts now rather than at the assertion above: the delete is itself a request, so it
+    # is the last thing to push the deadline out.
+    assert e2e_deployment.cli.wait_until_proxy_stopped(_IDLE_SHUTDOWN_WAIT_SECONDS), (
+        f"The proxy was still running {_IDLE_SHUTDOWN_WAIT_SECONDS}s after the last traffic, with an "
+        f"idle timeout of {_IDLE_TIMEOUT_SECONDS}s — it is not reaping itself."
     )

@@ -20,13 +20,13 @@ The trade-off, accepted knowingly: the assertions are coupled to one shared act,
 in the cycle itself fails the whole group rather than pinpointing one command. Per-test
 attribution is preserved for everything *after* the cycle runs.
 
-Four assertions live here rather than in the file their subject suggests, for exactly that reason:
-`connect-info` and `jd open` failing cleanly against a stopped host (which would otherwise sit in
-``test_proxy.py`` / ``test_open.py``), and the data-volume and cert-pin survival (which would
-otherwise sit in ``test_home_volume.py`` / ``test_auth.py``). Each would have bought a second full
-cycle for a single status check.
+Five assertions live here rather than in the file their subject suggests, for exactly that reason:
+`connect-info` failing cleanly against a stopped host *and* reporting that failure as retryable,
+`jd open` failing cleanly (all of which would otherwise sit in ``test_proxy.py`` / ``test_open.py``),
+and the data-volume and cert-pin survival (which would otherwise sit in ``test_home_volume.py`` /
+``test_auth.py``). Each would have bought a second full cycle for a single status check.
 
-The two relocated failure cases are named ``test_host_stopped_*`` rather than ``test_proxy_*`` /
+The relocated failure cases are named ``test_host_stopped_*`` rather than ``test_proxy_*`` /
 ``test_open_*`` deliberately: with the old names, `just test-e2e-jupyterlab <dir> test_proxy` matched
 one of them and silently dragged the whole ~4-minute EC2 cycle into what should be a fast, scoped
 proxy run. A test's name is part of its selection contract when `-k` is the only filter available.
@@ -39,6 +39,7 @@ from dataclasses import dataclass
 
 import pexpect
 import pytest
+from jupyter_deploy.constants import RETRYABLE_EXIT_CODE
 from pytest_jupyter_deploy.cli import NOOP_BROWSER, JDCliError
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.local_proxy.jupyterlab import AUTH_PROBE_PATH
@@ -46,6 +47,19 @@ from pytest_jupyter_deploy.local_proxy.requests import cert_fingerprint, pinned_
 
 # Written to the home volume before the cycle; its survival is the data-volume remount proof.
 _PERSISTENCE_FLAG = "e2e_flag_host_cycle.txt"
+
+
+@dataclass
+class _CommandFailure:
+    """How a command failed: with a handled error, and with which exit code.
+
+    Attributes:
+        graceful: the CLI reported a handled error rather than letting a traceback escape.
+        exit_code: the process exit code (0 if it unexpectedly succeeded, None if unreadable).
+    """
+
+    graceful: bool
+    exit_code: int | None
 
 
 @dataclass
@@ -57,7 +71,7 @@ class HostCycleObservations:
     cert_fingerprint_before: str
     stopped_host_status: str
     stopped_connection_status: str
-    stopped_connect_info_failed: bool
+    stopped_connect_info: _CommandFailure
     stopped_open_failed: bool
     stopped_host_status_after_open: str
     running_host_status: str
@@ -158,8 +172,8 @@ def host_cycle(e2e_deployment: EndToEndDeployment) -> Iterator[HostCycleObservat
     e2e_deployment.cli.run_command(["jupyter-deploy", "host", "stop"])
     stopped_host_status = e2e_deployment.cli.get_host_status()
     stopped_connection_status = e2e_deployment.cli.get_connection_status()
-    stopped_connect_info_failed = _fails_gracefully(e2e_deployment, ["jupyter-deploy", "proxy", "connect-info"])
-    stopped_open_failed = _fails_gracefully(e2e_deployment, ["jupyter-deploy", "open", "--detached"])
+    stopped_connect_info = _observe_failure(e2e_deployment, ["jupyter-deploy", "proxy", "connect-info"])
+    stopped_open_failed = _observe_failure(e2e_deployment, ["jupyter-deploy", "open", "--detached"]).graceful
     # Read the status straight after the failed `jd open`, while the host is still stopped: this is
     # the only point where "jd open did not start the instance" is observable. Read after the
     # `jd host start` below it would be "running" no matter what `jd open` did.
@@ -192,7 +206,7 @@ def host_cycle(e2e_deployment: EndToEndDeployment) -> Iterator[HostCycleObservat
             cert_fingerprint_before=fingerprint_before,
             stopped_host_status=stopped_host_status,
             stopped_connection_status=stopped_connection_status,
-            stopped_connect_info_failed=stopped_connect_info_failed,
+            stopped_connect_info=stopped_connect_info,
             stopped_open_failed=stopped_open_failed,
             stopped_host_status_after_open=stopped_host_status_after_open,
             running_host_status=running_host_status,
@@ -207,13 +221,20 @@ def host_cycle(e2e_deployment: EndToEndDeployment) -> Iterator[HostCycleObservat
             e2e_deployment.cli.run_command(["jupyter-deploy", "server", "exec", "--", "rm", "-f", _PERSISTENCE_FLAG])
 
 
-def _fails_gracefully(e2e_deployment: EndToEndDeployment, cmd: list[str]) -> bool:
-    """Return True if ``cmd`` exits non-zero with a handled error rather than a traceback."""
+def _observe_failure(e2e_deployment: EndToEndDeployment, cmd: list[str]) -> _CommandFailure:
+    """Run ``cmd`` once and record how it failed: gracefully or not, and with which exit code.
+
+    One invocation, two observations — running the command twice to ask two questions about the
+    same moment would let the answers disagree.
+    """
     try:
         e2e_deployment.cli.run_command(cmd, env={"BROWSER": NOOP_BROWSER}, timeout_seconds=180)
     except JDCliError as e:
-        return "Traceback" not in str(e)
-    return False
+        # JDCliError wraps the CalledProcessError that carries the real exit code.
+        cause = e.__cause__
+        exit_code = cause.returncode if isinstance(cause, subprocess.CalledProcessError) else None
+        return _CommandFailure(graceful="Traceback" not in str(e), exit_code=exit_code)
+    return _CommandFailure(graceful=False, exit_code=0)
 
 
 def _flag_present(e2e_deployment: EndToEndDeployment, path: str) -> bool:
@@ -257,8 +278,29 @@ def test_host_stopped_fails_connect_info_gracefully(host_cycle: HostCycleObserva
     point at the host rather than surface as a traceback: this is the state a user lands in
     after any overnight stop, and "start the host" is the whole fix.
     """
-    assert host_cycle.stopped_connect_info_failed, (
+    assert host_cycle.stopped_connect_info.graceful, (
         "`jd proxy connect-info` did not fail gracefully against a stopped host"
+    )
+
+
+def test_host_stopped_connect_info_reports_a_retryable_failure(host_cycle: HostCycleObservations) -> None:
+    """A stopped host is reported to the proxy as *retryable* (exit 75), not permanent.
+
+    `connect-info`'s exit code is a verdict the running proxy acts on: 75 (EX_TEMPFAIL) means
+    "keep serving on the last-good credential and try again", anything else non-zero means "give
+    up and shut down". A stopped host is recoverable — `jd host start` fixes it and the proxy
+    self-heals on its next refresh, with the idle timeout bounding it if nobody ever does — so it
+    must not be the code that kills a proxy.
+
+    This pins a classification that is otherwise implicit: a stopped host raises
+    ``IncompatibleHostStateError``, which is simply absent from the CLI's permanent list, and the
+    fail-safe default sends everything unlisted to 75. Without this test, adding that class to the
+    permanent list (or reclassifying by accident) would silently start killing proxies whenever a
+    host stops, and no unit test would notice — they all use synthetic exceptions.
+    """
+    assert host_cycle.stopped_connect_info.exit_code == RETRYABLE_EXIT_CODE, (
+        f"Expected exit {RETRYABLE_EXIT_CODE} (retryable) from `jd proxy connect-info` against a "
+        f"stopped host, got {host_cycle.stopped_connect_info.exit_code}"
     )
 
 
