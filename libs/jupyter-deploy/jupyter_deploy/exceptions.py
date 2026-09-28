@@ -400,6 +400,31 @@ class ProviderPermissionError(InstructionError, RuntimeError):
             super().__init__(f"Permission error for {provider_name.value} operation")
 
 
+class TransientProviderError(InstructionError, RuntimeError):
+    """Raised when a provider call fails for a reason that may succeed on retry.
+
+    Network blips, throttling and provider-side 5xx responses, as opposed to a permanent fault
+    such as expired credentials or a missing resource. The client proxy decides whether to keep
+    running from the exit code of ``jd proxy connect-info``, and this error type is what that code
+    is derived from: raising it makes the command exit ``RETRYABLE_EXIT_CODE``, on which the proxy
+    keeps serving with its last-good credential and retries, rather than shutting down.
+
+    Attributes:
+        provider_name: Cloud provider type
+        operation: The operation that was attempted (e.g., 'ec2:DescribeInstances')
+        original_message: Original error message from the provider SDK
+    """
+
+    def __init__(self, provider_name: ProviderType, operation: str | None, original_message: str) -> None:
+        self.provider_name = provider_name
+        self.operation = operation
+        self.original_message = original_message
+        if operation:
+            super().__init__(f"Transient {provider_name.value} error for operation: {operation}")
+        else:
+            super().__init__(f"Transient {provider_name.value} error")
+
+
 class UnsupportedProviderRegionError(JupyterDeployError, NotImplementedError):
     """Raised when the provider region or partition is not supported.
 
