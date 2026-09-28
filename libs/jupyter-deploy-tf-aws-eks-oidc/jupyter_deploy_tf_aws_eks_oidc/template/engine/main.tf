@@ -8,9 +8,11 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = ">= 2.30"
     }
+    # 3.0+, not 2.14: the `kubernetes`/`exec` and `registries` provider attributes and the
+    # `set = [...]` list on helm_release below are all v3 syntax, which v2 cannot parse.
     helm = {
       source  = "hashicorp/helm"
-      version = ">= 2.14"
+      version = ">= 3.0"
     }
     random = {
       source  = "hashicorp/random"
@@ -31,6 +33,26 @@ provider "aws" {
   region = var.region
 }
 
+# The ecr-public API is only served from us-east-1, whatever var.region is. Used solely to mint the
+# ECR Public pull token for the helm provider below.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+}
+
+# Authenticates the Karpenter chart pull from oci://public.ecr.aws (platform_karpenter.tf), the only
+# public.ecr.aws chart source in this template. Anonymous pulls share a 500 GB/month non-adjustable
+# ECR Public quota keyed on source IP, which CI runners exhaust for reasons unrelated to us -- a plan
+# then dies on `429 toomanyrequests: Data limit exceeded`. Authenticating moves us to a per-account
+# quota and 10 pulls/s instead of 1. See issue #411.
+#
+# The helm provider re-fetches the chart to render a diff, so this is on the path of every plan, not
+# just an apply. Being a data source, the 12h token is re-read each run and cannot go stale -- which
+# is the failure the upstream Karpenter docs work around by telling you to `helm registry logout`.
+data "aws_ecrpublic_authorization_token" "public_ecr" {
+  provider = aws.us_east_1
+}
+
 provider "kubernetes" {
   host                   = module.eks_cluster.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks_cluster.cluster_ca_certificate)
@@ -42,6 +64,12 @@ provider "kubernetes" {
 }
 
 provider "helm" {
+  registries = [{
+    url      = "oci://public.ecr.aws"
+    username = data.aws_ecrpublic_authorization_token.public_ecr.user_name
+    password = data.aws_ecrpublic_authorization_token.public_ecr.password
+  }]
+
   kubernetes = {
     host                   = module.eks_cluster.cluster_endpoint
     cluster_ca_certificate = base64decode(module.eks_cluster.cluster_ca_certificate)
