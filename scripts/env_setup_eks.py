@@ -40,13 +40,11 @@ ENV_EXAMPLE = Path("libs/jupyter-deploy-tf-aws-eks-oidc/tests/e2e/configurations
 PROJECT_VAR_MAP = {
     "domain": "JD_E2E_VAR_DOMAIN",
     "subdomain": "JD_E2E_VAR_SUBDOMAIN",
-    "letsencrypt_email": "JD_E2E_VAR_EMAIL",
 }
 
 OPTION_MAP = {
     "domain": "JD_E2E_VAR_DOMAIN",
     "subdomain": "JD_E2E_VAR_SUBDOMAIN",
-    "email": "JD_E2E_VAR_EMAIL",
     "allowed-teams": "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
     "admin-roles": "JD_E2E_VAR_ADMIN_ROLE_NAMES",
     "user": "JD_E2E_USER",
@@ -123,18 +121,9 @@ def infer_deployment_vars(ci_dir: str, oauth_app_num: str) -> dict[str, str]:
     subdomain = parts[0]
     domain = parts[1]
 
-    result = subprocess.run(
-        ["uv", "run", "jd", "show", "-v", "github_bot_account_email", "--text", "-p", ci_dir],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    bot_email = result.stdout.strip()
-
     return {
         "JD_E2E_VAR_DOMAIN": domain,
         "JD_E2E_VAR_SUBDOMAIN": subdomain,
-        "JD_E2E_VAR_EMAIL": bot_email,
     }
 
 
