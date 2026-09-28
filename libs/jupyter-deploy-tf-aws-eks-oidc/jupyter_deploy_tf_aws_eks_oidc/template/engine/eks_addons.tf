@@ -136,14 +136,6 @@ resource "aws_eks_addon" "cert_manager" {
   depends_on = [aws_eks_addon.pod_identity_agent, time_sleep.wait_for_nodes]
 }
 
-# cert-manager addon doesn't support inline pod_identity_association; use a standalone resource.
-resource "aws_eks_pod_identity_association" "cert_manager" {
-  cluster_name    = module.eks_cluster.cluster_name
-  namespace       = "cert-manager"
-  service_account = "cert-manager"
-  role_arn        = module.cert_manager_role.role_arn
-}
-
 resource "aws_eks_addon" "external_dns" {
   count        = local.enable_external_dns ? 1 : 0
   cluster_name = module.eks_cluster.cluster_name

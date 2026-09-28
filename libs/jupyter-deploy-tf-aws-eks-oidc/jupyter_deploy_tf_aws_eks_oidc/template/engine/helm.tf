@@ -11,7 +11,6 @@ resource "random_password" "dex_client_secret" {
 locals {
   traefik_crds_repo   = "https://traefik.github.io/charts"
   enable_external_dns = true
-  letsencrypt_staging = false
 
   oauth_teams_parsed = [
     for entry in var.oauth_allowed_teams : {
@@ -103,13 +102,23 @@ resource "helm_release" "workspace_router" {
         name  = "domain"
         value = local.full_domain
       },
+      # Public TLS terminates at the NLB with this ACM certificate; the NLB then
+      # re-encrypts to Traefik, which serves a certificate from the private CA the
+      # chart mints. Read through aws_acm_certificate_validation (not the certificate
+      # resource) so the release is ordered after ACM has actually issued it — a
+      # PENDING_VALIDATION certificate cannot be attached to a listener.
       {
-        name  = "certManager.email"
-        value = var.letsencrypt_email
+        name  = "tls.acm.certificateArn"
+        value = aws_acm_certificate_validation.public.certificate_arn
       },
+      # NLB targets are node instances on the Service NodePort, not pods, so without
+      # this EVERY node joins the target group — including workspace nodes that never
+      # run Traefik, which then forward each request through kube-proxy (and possibly
+      # across AZs). The value MUST match the effective Traefik node selector below,
+      # or the chart refuses to render.
       {
-        name  = "certManager.useStaging"
-        value = tostring(local.letsencrypt_staging)
+        name  = "traefik.targetNodeLabels.jupyter-deploy/role"
+        value = "routing"
       },
       {
         name  = "github.clientId"

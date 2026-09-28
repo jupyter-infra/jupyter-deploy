@@ -32,25 +32,10 @@ data "aws_iam_policy_document" "pod_identity_trust" {
 
 # --- Custom policies ---
 
-module "cert_manager_policy" {
-  source      = "./modules/iam_policy"
-  policy_name = "${local.resource_name_prefix}-cert-manager-route53"
-  statements = [
-    {
-      actions   = ["route53:GetChange"]
-      resources = ["arn:${data.aws_partition.current.partition}:route53:::change/*"]
-    },
-    {
-      actions   = ["route53:ChangeResourceRecordSets", "route53:ListResourceRecordSets"]
-      resources = [data.aws_route53_zone.domain.arn]
-    },
-    {
-      actions   = ["route53:ListHostedZonesByName"]
-      resources = ["*"]
-    },
-  ]
-  combined_tags = local.combined_tags
-}
+# NOTE: cert-manager deliberately has NO IAM role here. It does not require Route53
+# policy because it does not perform DNS challenge; the public TLS comes from ACM
+# (acm.tf) and cert-manager only issues in-cluster certificates: the operator's
+# webhook certificate and the router chart's private CA.
 
 module "external_dns_policy" {
   count       = local.enable_external_dns ? 1 : 0
@@ -119,14 +104,6 @@ module "ebs_csi_role" {
   role_name          = "${local.resource_name_prefix}-ebs-csi"
   assume_role_policy = data.aws_iam_policy_document.pod_identity_trust.json
   policy_arns        = ["arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"]
-  combined_tags      = local.combined_tags
-}
-
-module "cert_manager_role" {
-  source             = "./modules/iam_role"
-  role_name          = "${local.resource_name_prefix}-cert-manager"
-  assume_role_policy = data.aws_iam_policy_document.pod_identity_trust.json
-  policy_arns        = [module.cert_manager_policy.policy_arn]
   combined_tags      = local.combined_tags
 }
 
