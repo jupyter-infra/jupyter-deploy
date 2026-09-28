@@ -92,10 +92,10 @@ The template provides two variable presets:
 
 | Name | Version |
 |---|---|
-| terraform | >= 1.6 |
-| aws | >= 5.0 |
-| kubernetes | >= 2.0 |
-| helm | >= 2.0 |
+| terraform | >= 1.5.7 |
+| aws | >= 6.0 |
+| kubernetes | >= 2.30 |
+| helm | >= 3.0 |
 
 ## Providers
 

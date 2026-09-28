@@ -1,8 +1,10 @@
 terraform {
   required_providers {
     aws = {
+      # 6.0+, not 5.0: the per-resource `region` attribute used by the ECR Public token below only
+      # exists in v6, so a mirror pinned to 5.x must fail on the version, not on an unknown attribute.
       source  = "hashicorp/aws"
-      version = ">= 5.0"
+      version = ">= 6.0"
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
@@ -33,13 +35,6 @@ provider "aws" {
   region = var.region
 }
 
-# The ecr-public API is served only from us-east-1 and us-west-2, whatever var.region is. Used solely
-# to mint the ECR Public pull token for the helm provider below.
-provider "aws" {
-  alias  = "us_east_1"
-  region = "us-east-1"
-}
-
 # Authenticates the Karpenter chart pull from oci://public.ecr.aws (platform_karpenter.tf), the only
 # public.ecr.aws chart source in this template. Anonymous pulls share a 500 GB/month non-adjustable
 # ECR Public quota keyed on source IP, which CI runners exhaust for reasons unrelated to us -- a plan
@@ -50,13 +45,15 @@ provider "aws" {
 # just an apply. Being a data source, the 12h token is re-read each run and cannot go stale -- which
 # is the failure the upstream Karpenter docs work around by telling you to `helm registry logout`.
 #
-# Commercial partition only: ECR Public has no endpoint in aws-us-gov or aws-cn, and a caller there
-# cannot sign against a commercial one, so requesting a token would fail the plan outright. Those
-# partitions keep the anonymous pull the template used before, hence the count rather than a
-# hardcoded token.
+# Commercial partition only: ECR Public is served from us-east-1 and us-west-2 alone, and a caller in
+# aws-us-gov or aws-cn cannot sign against either, so those partitions skip the token and keep the
+# anonymous pull the template used before. `region` here rather than a second aliased provider -- an
+# aliased provider is configured whenever anything references it, so it would validate credentials
+# against us-east-1 STS on every run even at count = 0, defeating the guard in the partitions it
+# exists to protect.
 data "aws_ecrpublic_authorization_token" "public_ecr" {
-  count    = data.aws_partition.current.partition == "aws" ? 1 : 0
-  provider = aws.us_east_1
+  count  = data.aws_partition.current.partition == "aws" ? 1 : 0
+  region = "us-east-1"
 }
 
 provider "kubernetes" {
