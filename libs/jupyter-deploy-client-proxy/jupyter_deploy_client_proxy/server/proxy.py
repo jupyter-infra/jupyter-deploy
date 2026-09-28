@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 
 import aiohttp
 from aiohttp import web
 
 from jupyter_deploy_client_proxy.constants import (
+    REFRESH_FAILED_EXIT_CODE,
     UPSTREAM_SOCK_CONNECT_TIMEOUT_SECONDS,
     UPSTREAM_SOCK_READ_TIMEOUT_SECONDS,
 )
@@ -64,12 +66,38 @@ class JupyterDeployClientProxy:
         self._runner: web.AppRunner | None = None
         self._site: web.TCPSite | None = None
         self._refresh_task: asyncio.Task[None] | None = None
+        self._idle_task: asyncio.Task[None] | None = None
         self._port: int | None = None
+        # Idle tracking. `_last_activity` is stamped by client traffic only (never by a credential
+        # refresh); `_open_ws` counts live WebSocket relays, which hold the proxy up even while no
+        # frames flow — a kernel can run silently for hours.
+        self._last_activity = time.monotonic()
+        self._open_ws = 0
+        # Set when the proxy decides to stop itself (refresh permanently broken, or idle): the
+        # runner awaits it alongside the OS shutdown signals and then calls stop() as usual, so
+        # self-shutdown and Ctrl-C share one teardown path.
+        self._shutdown_event = asyncio.Event()
+        self._shutdown_exit_code = 0
 
     @property
     def state(self) -> ProxyState:
         """The proxy's current lifecycle state."""
         return self._state
+
+    @property
+    def shutdown_requested(self) -> asyncio.Event:
+        """Set once the proxy has asked to be stopped; the runner waits on it."""
+        return self._shutdown_event
+
+    @property
+    def shutdown_exit_code(self) -> int:
+        """Exit code for a self-requested shutdown (0 unless the reason warrants otherwise)."""
+        return self._shutdown_exit_code
+
+    def _request_shutdown(self, exit_code: int = 0) -> None:
+        """Ask the runner to stop the proxy, reporting ``exit_code`` to the parent process."""
+        self._shutdown_exit_code = exit_code
+        self._shutdown_event.set()
 
     @property
     def port(self) -> int:
@@ -107,6 +135,11 @@ class JupyterDeployClientProxy:
             self._port = int(addresses[0][1])
             self._logger.info(f"listening on http://{self._config.listen_host}:{self._port}")
             self._refresh_task = asyncio.create_task(self._refresh_loop())
+            # The clock starts at startup, not at first request: a proxy nobody ever connects to
+            # is exactly as much of a leak as one that went quiet.
+            self._last_activity = time.monotonic()
+            if self._config.idle_timeout_seconds > 0:
+                self._idle_task = asyncio.create_task(self._idle_loop())
         except Exception:
             self._state = ProxyState.FAILED
             await self.write_status_best_effort()
@@ -116,12 +149,14 @@ class JupyterDeployClientProxy:
         return self._port
 
     async def stop(self) -> None:
-        """Cancel the refresh loop, tear down the listener, close the upstream session."""
-        if self._refresh_task is not None:
-            self._refresh_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._refresh_task
-            self._refresh_task = None
+        """Cancel the background loops, tear down the listener, close the upstream session."""
+        for task in (self._refresh_task, self._idle_task):
+            if task is not None:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+        self._refresh_task = None
+        self._idle_task = None
         if self._runner is not None:
             await self._runner.cleanup()
             self._runner = None
@@ -132,10 +167,17 @@ class JupyterDeployClientProxy:
         # absence is the "stopped" signal to `jd proxy status` (a cheap existence check
         # across a run history) and closes the recycled-PID window. Best-effort — a failed
         # delete is logged and swallowed so it never masks the real shutdown.
-        try:
-            await delete_proxy_status(self._config)
-        except OSError as e:
-            self._logger.error(f"failed to delete status file: {e}")
+        #
+        # FAILED is the exception: the file is left behind so a reader can still say *why* the
+        # proxy is gone. That does not resurrect it — a reader treats a terminal state as
+        # not-running regardless of whether the recorded PID is alive.
+        if self._state is ProxyState.FAILED:
+            self._logger.info("keeping status file to report the failure")
+        else:
+            try:
+                await delete_proxy_status(self._config)
+            except OSError as e:
+                self._logger.error(f"failed to delete status file: {e}")
         self._logger.info("proxy stopped")
         await self._logger.close()
 
@@ -217,11 +259,14 @@ class JupyterDeployClientProxy:
                 bundle = await self._fetch_bundle(self._config.refresh_max_attempts)
                 await self._apply_bundle(bundle)
             except NotRetryableTokenCommandError as e:
-                # Permanent (missing binary, bad bundle shape): retrying cannot help, and DEGRADED
-                # would promise a self-heal that never comes. Mark FAILED and stop the loop
-                self._logger.error(f"refresh permanently broken, stopping refresh: {e}")
+                # Permanent (expired credentials, missing binary, bad bundle shape): retrying cannot
+                # help, and DEGRADED would promise a self-heal that never comes. Mark FAILED and
+                # exit — a proxy that cannot mint a credential serves nothing, so staying alive
+                # would only leave a listener the user can no longer see behind a dead session.
+                self._logger.error(f"refresh permanently broken, shutting down: {e}")
                 self._state = ProxyState.FAILED
                 await self.write_status_best_effort()
+                self._request_shutdown(REFRESH_FAILED_EXIT_CODE)
                 break
             except TokenCommandError:
                 # Transient (timeout, EX_TEMPFAIL, malformed output): already logged at error; keep
@@ -232,15 +277,39 @@ class JupyterDeployClientProxy:
                 continue
             except Exception as e:
                 # An unexpected crash (not a token-command failure): the refresh machinery is
-                # dead and won't self-heal — mark FAILED and stop the loop. (CancelledError is a
+                # dead and won't self-heal — mark FAILED and exit, as above. (CancelledError is a
                 # BaseException, so a stop()-driven cancel is not caught here.)
-                self._logger.error(f"refresh loop crashed, stopping refresh: {e}")
+                self._logger.error(f"refresh loop crashed, shutting down: {e}")
                 self._state = ProxyState.FAILED
                 await self.write_status_best_effort()
+                self._request_shutdown(REFRESH_FAILED_EXIT_CODE)
                 break
             self._state = ProxyState.RUNNING
             await self.write_status_best_effort()
             self._logger.info(f"credential refreshed: {get_bundle_summary(bundle)}")
+
+    async def _idle_loop(self) -> None:
+        # Sleeps exactly as long as the current deadline allows, then re-checks: traffic during the
+        # sleep simply moves the deadline and we sleep again. That costs ~one wake per idle window
+        # instead of a fixed tick, and needs no coordination with the request path beyond reading
+        # the two counters.
+        timeout = self._config.idle_timeout_seconds
+        while True:
+            idle_for = time.monotonic() - self._last_activity
+            remaining = timeout - idle_for
+            if remaining > 0:
+                await asyncio.sleep(remaining)
+                continue
+            if self._open_ws > 0:
+                # A live WebSocket means someone is still connected even if nothing is flowing
+                # (an idle notebook tab, a kernel computing silently). Re-check after a full
+                # window rather than busy-looping on the open socket.
+                self._logger.debug(f"idle for {idle_for:.0f}s but {self._open_ws} websocket(s) open")
+                await asyncio.sleep(timeout)
+                continue
+            self._logger.info(f"no client activity for {idle_for:.0f}s, shutting down")
+            self._request_shutdown()
+            return
 
     async def _handle(self, request: web.Request) -> web.StreamResponse:
         # Enforce same-origin at the proxy BEFORE injecting the credential / rewriting Origin: only
@@ -253,6 +322,9 @@ class JupyterDeployClientProxy:
                 f"host={request.headers.get('Host')!r}"
             )
             return web.Response(status=403, text="forbidden")
+        # Count only requests that cleared the gate, so a hostile page hammering the listener
+        # cannot hold the proxy open past its idle timeout.
+        self._last_activity = time.monotonic()
         if request.headers.get("Upgrade", "").lower() == "websocket":
             return await self._relay_ws(request)
         return await self._forward_http(request)
@@ -317,12 +389,18 @@ class JupyterDeployClientProxy:
             request.headers, self._bundle.headers, self._bundle.host, self._bundle.port
         )
         self._logger.debug(f"ws open: {request.path}")
+        # Held for the whole relay so the idle watchdog sees an open connection as activity even
+        # when no frames flow; the finally keeps the count honest on every exit path.
+        self._open_ws += 1
         try:
             async with self._session.ws_connect(url, headers=headers, protocols=client_protocols) as upstream:
                 await self._pipe_ws(downstream, upstream)
         except aiohttp.ClientError as e:
             self._logger.warning(f"ws upstream error for {request.path}: {e}")
             await downstream.close()
+        finally:
+            self._open_ws -= 1
+            self._last_activity = time.monotonic()
         self._logger.debug(f"ws closed: {request.path}")
         return downstream
 

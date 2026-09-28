@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from jupyter_deploy_client_proxy.constants import (
     DEFAULT_BASE_DELAY_SECONDS,
+    DEFAULT_IDLE_TIMEOUT_SECONDS,
     DEFAULT_LISTEN_HOST,
     DEFAULT_LOG_BACKUP_COUNT,
     DEFAULT_LOG_MAX_BYTES,
@@ -43,6 +44,10 @@ class JupyterDeployClientProxyConfig(BaseModel):
         listen_host: loopback host to bind (kept on loopback by design — not a CLI flag).
         listen_port: loopback port to bind (0 = ephemeral).
         refresh_margin_seconds: re-exec the token command this long before ``expires_at``.
+        idle_timeout_seconds: shut down after this long with no client traffic; 0 never shuts down.
+            A live WebSocket counts as traffic even while no frames flow, so an open connection
+            always holds the proxy up. Credential refreshes do not count — they are the proxy's own
+            activity, and counting them would keep it alive forever.
         token_command_timeout_seconds: kill the token command if it runs longer than this.
         ca_cert_override: pin this CA PEM instead of the bundle's ``ca_cert`` (no-cloud/static case).
         backoff_base_delay_seconds: base delay for reconnect/refresh backoff.
@@ -60,6 +65,7 @@ class JupyterDeployClientProxyConfig(BaseModel):
     listen_host: str = DEFAULT_LISTEN_HOST
     listen_port: int = Field(default=0, ge=0, le=65535)
     refresh_margin_seconds: float = Field(default=DEFAULT_REFRESH_MARGIN_SECONDS, ge=0)
+    idle_timeout_seconds: float = Field(default=DEFAULT_IDLE_TIMEOUT_SECONDS, ge=0)
     token_command_timeout_seconds: float = Field(default=DEFAULT_TOKEN_COMMAND_TIMEOUT_SECONDS, gt=0)
     ca_cert_override: str | None = None
     backoff_base_delay_seconds: float = Field(default=DEFAULT_BASE_DELAY_SECONDS, gt=0)

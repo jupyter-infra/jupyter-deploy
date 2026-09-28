@@ -102,16 +102,18 @@ class TestWriteStatusBestEffort(unittest.IsolatedAsyncioTestCase):
         await proxy.stop()  # must not raise
         self.assertFalse((Path(self._tmp.name) / "logs" / "status.json").exists())
 
-    async def test_stop_deletes_status_file_even_when_failed(self) -> None:
-        # An exiting process cleans up regardless of state; a live-but-FAILED proxy keeps its
-        # file only because stop() has not run yet.
+    async def test_stop_keeps_status_file_when_failed(self) -> None:
+        # FAILED is the one state that survives teardown: the proxy exits when it can no longer
+        # refresh, and the file is the only thing left to tell a reader why it is gone. Readers
+        # treat a terminal state as not-running, so keeping it cannot resurrect the proxy.
         proxy = self._proxy()
         proxy._state = ProxyState.FAILED
         await proxy.write_status_best_effort()
         status_path = Path(self._tmp.name) / "logs" / "status.json"
         self.assertTrue(status_path.exists())
         await proxy.stop()
-        self.assertFalse(status_path.exists())
+        self.assertTrue(status_path.exists())
+        self.assertEqual(self._status()["state"], "failed")
 
     async def test_start_failure_marks_failed(self) -> None:
         # `false` exits non-zero (not EX_TEMPFAIL) → non-retryable → start() raises.

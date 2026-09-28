@@ -16,6 +16,12 @@ DEFAULT_REFRESH_MARGIN_SECONDS = 15.0
 MIN_REFRESH_SLEEP_SECONDS = 1.0
 REFRESH_LIFETIME_FRACTION = 0.5
 
+# Idle auto-shutdown: stop the process after this long with no client traffic, so a proxy started
+# in the background cannot outlive the session that wanted it. 0 disables the watchdog, which is
+# what `jd open` passes when it runs the proxy in the foreground — there the terminal is the
+# user's affordance for ending it, so the proxy must not end itself.
+DEFAULT_IDLE_TIMEOUT_SECONDS = 7200.0
+
 # Reconnect backoff + retries.
 DEFAULT_BASE_DELAY_SECONDS = 0.5
 DEFAULT_MAX_DELAY_SECONDS = 30.0
@@ -28,6 +34,12 @@ DEFAULT_REFRESH_MAX_ATTEMPTS = 5
 # Token-command exit code that signals a transient/retryable failure (sysexits EX_TEMPFAIL).
 # Any other non-zero exit is treated as permanent (non-retryable).
 RETRYABLE_EXIT_CODE = 75
+
+# Exit code the proxy itself uses when it stops because refreshing the credential became
+# permanently impossible (sysexits EX_CONFIG: the token command, or what it needs, is broken).
+# Distinct from 0 (clean stop, including idle shutdown), 1 (never started) and 130 (Ctrl-C), so a
+# supervising `jd` can tell the user why the process is gone.
+REFRESH_FAILED_EXIT_CODE = 78
 
 # TLS: offer only HTTP/1.1 on the upstream leg (deliberate — see design notes).
 ALPN_PROTOCOLS = ["http/1.1"]
