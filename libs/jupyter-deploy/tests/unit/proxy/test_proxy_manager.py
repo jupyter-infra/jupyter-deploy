@@ -17,6 +17,8 @@ from jupyter_deploy.exceptions import (
 )
 from jupyter_deploy.handlers.payloads import ProxyStatus
 from jupyter_deploy.proxy.proxy_manager import (
+    DEFAULT_DETACHED_IDLE_TIMEOUT_SECONDS,
+    PROXY_REFRESH_FAILED_EXIT_CODE,
     ProxyManager,
     build_connect_info_token_command,
     resolve_console_script,
@@ -617,3 +619,244 @@ class TestStatus(_ManagerTestCase):
             manager = self._manager_rooted_at(tmp)
             with self.assertRaises(NoProxyFoundError):
                 manager.status()
+
+
+class TestIdleTimeoutArgv(_ManagerTestCase):
+    """What idle timeout the launched proxy is given, per launch mode.
+
+    The rule the whole feature rests on: only a proxy nobody can see should be able to end itself.
+    Detached is invisible, so it gets a timeout; attached is held by a terminal the user is looking
+    at, so it gets none.
+    """
+
+    def _launch_argv(self, manager: ProxyManager, detached: bool) -> list[str]:
+        with (
+            patch.object(manager, "_latest_running", return_value=None),
+            patch("jupyter_deploy.proxy.proxy_manager.subprocess.Popen") as mock_popen,
+            patch.object(manager, "_wait_for_listening", return_value=Mock()),
+        ):
+            manager.start(detached=detached)
+        argv: list[str] = mock_popen.call_args[0][0]
+        return argv
+
+    def _idle_timeout_arg(self, manager: ProxyManager, detached: bool) -> str:
+        argv = self._launch_argv(manager, detached)
+        return argv[argv.index("--idle-timeout-seconds") + 1]
+
+    def test_detached_gets_the_default_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self.assertEqual(
+                float(self._idle_timeout_arg(manager, detached=True)), DEFAULT_DETACHED_IDLE_TIMEOUT_SECONDS
+            )
+
+    def test_attached_disables_the_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self.assertEqual(float(self._idle_timeout_arg(manager, detached=False)), 0.0)
+
+    def test_detached_honours_an_explicit_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = ProxyManager(
+                project_path=Path(tmp),
+                token_command=_TOKEN_COMMAND,
+                display_manager=NullDisplay(),
+                idle_timeout_seconds=42.0,
+            )
+            self.assertEqual(float(self._idle_timeout_arg(manager, detached=True)), 42.0)
+
+    def test_explicit_zero_disables_it_for_a_detached_proxy(self) -> None:
+        # `jd proxy start --idle-timeout-seconds 0`: the user opting out of auto-shutdown.
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = ProxyManager(
+                project_path=Path(tmp),
+                token_command=_TOKEN_COMMAND,
+                display_manager=NullDisplay(),
+                idle_timeout_seconds=0.0,
+            )
+            self.assertEqual(float(self._idle_timeout_arg(manager, detached=True)), 0.0)
+
+    def test_attached_ignores_an_explicit_timeout(self) -> None:
+        # Defence in depth: the CLI rejects the flag for an attached proxy, so reaching the manager
+        # with one means a caller bypassed that — still must not arm a timer under a live terminal.
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = ProxyManager(
+                project_path=Path(tmp),
+                token_command=_TOKEN_COMMAND,
+                display_manager=NullDisplay(),
+                idle_timeout_seconds=42.0,
+            )
+            self.assertEqual(float(self._idle_timeout_arg(manager, detached=False)), 0.0)
+
+
+class TestForegroundRefreshFailure(_ManagerTestCase):
+    def test_warns_when_proxy_stopped_over_credentials(self) -> None:
+        # The proxy exits this way when it can no longer refresh (usually expired credentials).
+        # From the user's side an attached `jd open` simply returned, so say why.
+        display = Mock()
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = ProxyManager(project_path=Path(tmp), token_command=_TOKEN_COMMAND, display_manager=display)
+            proc = Mock()
+            proc.returncode = PROXY_REFRESH_FAILED_EXIT_CODE
+            manager._foreground_proc = proc
+
+            self.assertEqual(manager.wait_foreground(), PROXY_REFRESH_FAILED_EXIT_CODE)
+
+            display.warning.assert_called_once()
+            self.assertIn("credential", display.warning.call_args.args[0].lower())
+
+    def test_clean_exit_warns_nothing(self) -> None:
+        display = Mock()
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = ProxyManager(project_path=Path(tmp), token_command=_TOKEN_COMMAND, display_manager=display)
+            proc = Mock()
+            proc.returncode = 0
+            manager._foreground_proc = proc
+
+            self.assertEqual(manager.wait_foreground(), 0)
+            display.warning.assert_not_called()
+
+
+class TestPruneInstanceDirs(_ManagerTestCase):
+    """Old instance directories are reclaimed on launch — but never a live proxy's.
+
+    History logs are inert files; an instance directory can belong to a running process that is
+    writing logs and publishing status.json into it. Removing that one would break its logging and
+    hide it from _latest_running, leaving a proxy the CLI can neither find nor stop — so the
+    "skip anything alive" cases below are the ones that matter.
+    """
+
+    def _make_instances(self, manager: ProxyManager, count: int, start: int = 0) -> list[Path]:
+        """Create `count` instance dirs with sortable timestamps, each holding a log file."""
+        dirs = []
+        for i in range(start, start + count):
+            instance_dir = manager._target_dir / f"20260101-0000{i:02d}.000"
+            instance_dir.mkdir(parents=True, exist_ok=True)
+            (instance_dir / "0000.log").write_text("log line\n")
+            dirs.append(instance_dir)
+        return dirs
+
+    def test_keeps_everything_below_the_cap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self._make_instances(manager, 5)
+
+            self.assertEqual(manager._prune_instance_dirs(keep=10), [])
+            self.assertEqual(len(manager._instance_dirs()), 5)
+
+    def test_removes_oldest_beyond_the_cap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            created = self._make_instances(manager, 8)
+
+            removed = manager._prune_instance_dirs(keep=3)
+
+            # The three newest survive; everything older is gone, directory contents included.
+            self.assertEqual(removed, created[:5])
+            self.assertEqual(manager._instance_dirs(), created[5:])
+            self.assertFalse(created[0].exists())
+
+    def test_never_removes_a_live_proxys_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self._make_instances(manager, 4)
+            # The oldest dir belongs to a proxy that is still running: past the cap, but deleting it
+            # would strand a live process the CLI could no longer see.
+            live = self._write_instance(
+                manager,
+                "20260101-000000.000",
+                {"state": "running", "pid": 4242, "port": 51000, "process_created_at": 1.0},
+            )
+
+            with patch("jupyter_deploy.proxy.proxy_manager.cmd_utils.is_pid_alive", return_value=True):
+                removed = manager._prune_instance_dirs(keep=1)
+
+            self.assertNotIn(live, removed)
+            self.assertTrue(live.exists())
+
+    def test_removes_directory_of_a_dead_proxy_that_left_a_status_file(self) -> None:
+        # SIGKILL leaves a status.json claiming "running" behind a dead PID; that is stale, not live.
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self._make_instances(manager, 3, start=5)
+            dead = self._write_instance(
+                manager,
+                "20260101-000000.000",
+                {"state": "running", "pid": 4242, "port": 51000, "process_created_at": 1.0},
+            )
+
+            with patch("jupyter_deploy.proxy.proxy_manager.cmd_utils.is_pid_alive", return_value=False):
+                removed = manager._prune_instance_dirs(keep=1)
+
+            self.assertIn(dead, removed)
+            self.assertFalse(dead.exists())
+
+    def test_keeps_a_directory_whose_status_cannot_be_read(self) -> None:
+        # No verdict available → no deletion. Guessing risks removing a live proxy's tree.
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            created = self._make_instances(manager, 4)
+
+            with patch(
+                "jupyter_deploy.proxy.proxy_manager.proxy_utils.read_instance_status",
+                side_effect=PermissionError("locked"),
+            ):
+                removed = manager._prune_instance_dirs(keep=1)
+
+            self.assertEqual(removed, [])
+            self.assertEqual(len(manager._instance_dirs()), len(created))
+
+    def test_failure_to_remove_warns_and_continues(self) -> None:
+        # Housekeeping must not abort a launch: report the directory and move on to the next.
+        display = Mock()
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = ProxyManager(project_path=Path(tmp), token_command=_TOKEN_COMMAND, display_manager=display)
+            self._make_instances(manager, 4)
+
+            with patch("jupyter_deploy.proxy.proxy_manager.shutil.rmtree", side_effect=OSError("device busy")):
+                removed = manager._prune_instance_dirs(keep=1)
+
+            self.assertEqual(removed, [])
+            self.assertEqual(display.warning.call_count, 3)
+
+    def test_no_target_dir_is_not_an_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self.assertEqual(manager._prune_instance_dirs(keep=1), [])
+
+
+class TestLaunchPrunes(_ManagerTestCase):
+    def test_launch_prunes_before_creating_the_new_instance(self) -> None:
+        # Pruning first means the count settles at the cap rather than the cap plus one, and the
+        # run being launched is never a candidate for its own pruning.
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            with (
+                patch.object(manager, "_latest_running", return_value=None),
+                patch("jupyter_deploy.proxy.proxy_manager.subprocess.Popen", return_value=Mock()),
+                patch.object(manager, "_wait_for_listening", return_value=Mock()),
+                patch.object(manager, "_prune_instance_dirs", return_value=[]) as mock_prune,
+            ):
+                manager.start(detached=True)
+
+            mock_prune.assert_called_once_with()
+
+    def test_repeated_launches_stay_at_the_cap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            with (
+                patch.object(manager, "_latest_running", return_value=None),
+                patch("jupyter_deploy.proxy.proxy_manager.subprocess.Popen", return_value=Mock()),
+                patch.object(manager, "_wait_for_listening", return_value=Mock()),
+                patch("jupyter_deploy.proxy.proxy_manager.MAX_PROXY_INSTANCES_KEPT", 3),
+            ):
+                for i in range(6):
+                    # Distinct timestamps: real launches are seconds apart, the test is not.
+                    with patch(
+                        "jupyter_deploy.proxy.proxy_manager._now_timestamp",
+                        return_value=f"20260101-0000{i:02d}.000",
+                    ):
+                        manager.start(detached=True)
+
+            # 3 kept from before this launch, plus the one just created.
+            self.assertEqual(len(manager._instance_dirs()), 4)

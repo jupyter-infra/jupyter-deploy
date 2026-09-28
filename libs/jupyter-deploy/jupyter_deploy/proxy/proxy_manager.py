@@ -17,7 +17,8 @@ A *target* identifies what the proxy fronts: ``server/default`` for a single-app
 extensible to ``server/<name>`` or ``component/<name>`` for multi-target templates. A manager
 is bound to one target; at most one proxy runs per target — starting a new one replaces any
 live proxy for that target. Each start gets a fresh timestamped directory, so logs accumulate
-across restarts while ``status``/``show`` report the latest *running* instance.
+across restarts while ``status``/``show`` report the latest *running* instance; each launch prunes
+all but the ``MAX_PROXY_INSTANCES_KEPT`` newest (never a live one).
 """
 
 from __future__ import annotations
@@ -64,6 +65,29 @@ CLI_CONSOLE_SCRIPT = "jupyter-deploy"
 # Default target for single-app templates (e.g. aws:ec2:jupyterlab).
 DEFAULT_TARGET_KIND = "server"
 DEFAULT_TARGET_NAME = "default"
+
+# Idle timeout handed to a detached proxy: without a terminal holding it, an abandoned proxy is
+# invisible, so it stops itself once nothing has talked to it for this long. 2 hours is long enough
+# that a user stepping away from an open notebook (whose live WebSocket counts as activity anyway)
+# comes back to a working tunnel.
+DEFAULT_DETACHED_IDLE_TIMEOUT_SECONDS = 7200.0
+
+# Idle timeout handed to an attached proxy: none. `jd open` in the foreground owns the lifecycle,
+# and its terminal is the user's affordance for ending it — a proxy that outlives its visible
+# parent is the leak worth closing, one that dies under a watching user is a bug.
+ATTACHED_IDLE_TIMEOUT_SECONDS = 0.0
+
+# How many past proxy instance directories (logs + status file) to keep per target. Each launch
+# creates one, so this bounds both the disk a long-lived project spends on proxy logs and the
+# directory scan every proxy command performs. Higher than the 20 command history keeps per command
+# because a proxy starts far more often than `jd up` runs — one per `jd open` — so the same number
+# of entries would cover a much shorter stretch of history.
+MAX_PROXY_INSTANCES_KEPT = 50
+
+# Exit code the client proxy uses when it stops because it can no longer refresh its credential
+# (its REFRESH_FAILED_EXIT_CODE). Duplicated rather than imported: `jd` never imports the proxy
+# package, it only shells out to its console script.
+PROXY_REFRESH_FAILED_EXIT_CODE = 78
 
 # How long to wait for a launched proxy to bind + publish its port.
 _LISTENING_TIMEOUT_SECONDS = 10.0
@@ -129,6 +153,7 @@ class ProxyManager:
         display_manager: DisplayManager,
         target_kind: str = DEFAULT_TARGET_KIND,
         target_name: str = DEFAULT_TARGET_NAME,
+        idle_timeout_seconds: float | None = None,
     ) -> None:
         """Bind the manager to one project + target.
 
@@ -137,12 +162,15 @@ class ProxyManager:
             token_command: Shell-safe command the proxy re-execs to (re)mint its bundle.
             display_manager: Sink for readiness/warning messages.
             target_kind, target_name: The target this manager fronts (default ``server/default``).
+            idle_timeout_seconds: Idle auto-shutdown for a *detached* proxy; None takes the
+                default. Ignored when launching attached — see :meth:`_resolve_idle_timeout`.
         """
         self._project_path = project_path
         self._token_command = token_command
         self._display = display_manager
         self._target_kind = target_kind
         self._target_name = target_name
+        self._idle_timeout_seconds = idle_timeout_seconds
         # Set when start() launches a proxy in the foreground; wait_foreground() blocks on it.
         self._foreground_proc: subprocess.Popen | None = None
 
@@ -153,6 +181,7 @@ class ProxyManager:
         display_manager: DisplayManager,
         target_kind: str = DEFAULT_TARGET_KIND,
         target_name: str = DEFAULT_TARGET_NAME,
+        idle_timeout_seconds: float | None = None,
     ) -> ProxyManager:
         """Build a manager for a project, deriving the ``connect-info`` token command from its path.
 
@@ -165,6 +194,7 @@ class ProxyManager:
             display_manager=display_manager,
             target_kind=target_kind,
             target_name=target_name,
+            idle_timeout_seconds=idle_timeout_seconds,
         )
 
     # ------------------------------------------------------------------ runtime layout
@@ -185,6 +215,49 @@ class ProxyManager:
         if not target_dir.is_dir():
             return []
         return sorted((d for d in target_dir.iterdir() if d.is_dir()), key=lambda p: p.name)
+
+    def _prune_instance_dirs(self, keep: int | None = None) -> list[Path]:
+        """Delete all but the ``keep`` newest instance directories; return the ones removed.
+
+        ``keep`` defaults to :data:`MAX_PROXY_INSTANCES_KEPT`, resolved here rather than as a
+        default argument value — a default would bind the constant at import time, so the name
+        would stop being the single source of truth.
+
+        Every launch gets a fresh timestamped directory, so without this a project accumulates one
+        tree per ``jd open`` forever — each holding rotated logs up to the proxy's own size cap. It
+        also keeps the directory scan every proxy command performs (see :meth:`_instance_dirs`)
+        bounded, rather than growing a status-file read per run ever made.
+
+        Mirrors how command history prunes its logs (``CommandHistoryHandler.clear_logs``), with one
+        difference that matters: a history log is an inert file, but an instance directory can
+        belong to a **live** proxy that is writing to it and publishing ``status.json`` there.
+        Removing that would break its logging and hide it from :meth:`_latest_running`, leaving a
+        proxy the CLI can no longer find or stop. So anything whose recorded process is still alive
+        is kept regardless of age, as is any directory we cannot read a verdict for.
+
+        Best-effort throughout: housekeeping must never be the reason a launch fails.
+        """
+        keep = MAX_PROXY_INSTANCES_KEPT if keep is None else keep
+        removed: list[Path] = []
+        candidates = self._instance_dirs()
+        if len(candidates) <= keep:
+            return removed
+        # Oldest first, leaving the `keep` newest untouched.
+        for instance_dir in candidates[: len(candidates) - keep]:
+            try:
+                status = proxy_utils.read_instance_status(instance_dir)
+            except OSError:
+                # Unreadable status file — no verdict, so leave the directory alone.
+                continue
+            if status is not None and status.alive:
+                continue
+            try:
+                shutil.rmtree(instance_dir)
+            except OSError as e:
+                self._display.warning(f"Could not remove old proxy logs at {instance_dir}: {e}")
+                continue
+            removed.append(instance_dir)
+        return removed
 
     def _latest_running(self) -> ProxyStatus | None:
         """Return the newest *confirmed* running proxy for the target, or None.
@@ -217,7 +290,20 @@ class ProxyManager:
                 f"untouched — remove its directory manually if stale: {status.log_dir}"
             )
 
-    def _proxy_argv(self, instance_dir: Path) -> list[str]:
+    def _resolve_idle_timeout(self, detached: bool) -> float:
+        """Return the idle auto-shutdown the proxy should run with, in seconds (0 disables it).
+
+        Attached always disables it: ``jd open`` in the foreground owns the lifecycle, so the proxy
+        must not outlive — or predecease — the terminal the user is watching. Detached takes the
+        caller's value, else the default, because nothing else will ever reap it.
+        """
+        if not detached:
+            return ATTACHED_IDLE_TIMEOUT_SECONDS
+        if self._idle_timeout_seconds is not None:
+            return self._idle_timeout_seconds
+        return DEFAULT_DETACHED_IDLE_TIMEOUT_SECONDS
+
+    def _proxy_argv(self, instance_dir: Path, detached: bool) -> list[str]:
         """Build the client-proxy invocation for the given instance directory."""
         return [
             resolve_console_script(PROXY_CONSOLE_SCRIPT),
@@ -225,6 +311,8 @@ class ProxyManager:
             self._token_command,
             "--listen-port",
             "0",  # OS-assigned free port, read back from status.json once bound
+            "--idle-timeout-seconds",
+            str(self._resolve_idle_timeout(detached)),
             "--log-dir",
             str(instance_dir),
         ]
@@ -239,6 +327,9 @@ class ProxyManager:
             ProxyNotInstalledError: If the client-proxy console script is not installed.
             ProxyStartError: If the proxy exits early or never starts listening.
         """
+        # Prune before creating this run's directory, so the new one is never a pruning candidate
+        # and the count settles at the cap rather than the cap plus one.
+        self._prune_instance_dirs()
         instance_dir = self._target_dir / _now_timestamp()
         instance_dir.mkdir(parents=True, exist_ok=True)
         # Always discard the proxy's stdio (it logs under --log-dir) so its own startup chatter
@@ -253,7 +344,7 @@ class ProxyManager:
             popen_kwargs["start_new_session"] = True
         self._display.set_status("Starting the local proxy …")
         try:
-            proc = subprocess.Popen(self._proxy_argv(instance_dir), **popen_kwargs)
+            proc = subprocess.Popen(self._proxy_argv(instance_dir, detached), **popen_kwargs)
         except FileNotFoundError as e:
             raise ProxyNotInstalledError(PROXY_CONSOLE_SCRIPT) from e
 
@@ -370,6 +461,11 @@ class ProxyManager:
 
         No-op when the proxy was started detached. Ctrl-C reaches the proxy too (shared process
         group) and triggers its own graceful shutdown, so we simply wait for it to finish.
+
+        A proxy can also end itself: when refreshing the credential becomes permanently impossible
+        (most often the caller's cloud credentials expired mid-session) it exits
+        ``PROXY_REFRESH_FAILED_EXIT_CODE`` rather than holding a tunnel that can no longer serve
+        anything. Report that, since from the user's side the terminal simply returned.
         """
         proc = self._foreground_proc
         if proc is None:
@@ -379,7 +475,13 @@ class ProxyManager:
         except KeyboardInterrupt:
             with contextlib.suppress(subprocess.TimeoutExpired, KeyboardInterrupt):
                 proc.wait(timeout=10)
-        return proc.returncode if proc.returncode is not None else 0
+        retcode = proc.returncode if proc.returncode is not None else 0
+        if retcode == PROXY_REFRESH_FAILED_EXIT_CODE:
+            self._display.warning(
+                "The local proxy stopped because it could no longer refresh its credentials "
+                "(they may have expired). Refresh them, then run the command again."
+            )
+        return retcode
 
     def _wait_for_app(self, url: str) -> bool:
         """Poll ``url`` until the app answers through the proxy; return True if it did.
