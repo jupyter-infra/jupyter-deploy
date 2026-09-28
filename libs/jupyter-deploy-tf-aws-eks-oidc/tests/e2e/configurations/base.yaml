@@ -2,7 +2,6 @@ schema_version: 2
 required:
   domain: "${JD_E2E_VAR_DOMAIN}"
   subdomain: "${JD_E2E_VAR_SUBDOMAIN}"
-  letsencrypt_email: "${JD_E2E_VAR_EMAIL}"
   oauth_app_client_id: "${JD_E2E_VAR_OAUTH_APP_CLIENT_ID}"
   oauth_allowed_teams: ${JD_E2E_VAR_OAUTH_ALLOWED_TEAMS}
 required_sensitive:

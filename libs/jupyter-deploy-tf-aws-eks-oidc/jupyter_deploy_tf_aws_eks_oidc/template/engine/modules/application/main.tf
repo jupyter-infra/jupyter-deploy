@@ -72,6 +72,7 @@ resource "null_resource" "build_trigger" {
 
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
+    quiet       = true
     command     = <<-EOT
       set -euo pipefail
 

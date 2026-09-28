@@ -14,7 +14,6 @@ from pytest_jupyter_deploy.undeployed_project import undeployed_project
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
-        "JD_E2E_VAR_EMAIL",
         "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
         "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
         "JD_E2E_VAR_SUBDOMAIN",
@@ -34,7 +33,6 @@ def test_project_is_configurable(e2e_deployment: EndToEndDeployment) -> None:
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
-        "JD_E2E_VAR_EMAIL",
         "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
         "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
         "JD_E2E_VAR_SUBDOMAIN",
@@ -61,7 +59,6 @@ def test_gitignore_generated_after_init(e2e_deployment: EndToEndDeployment) -> N
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
-        "JD_E2E_VAR_EMAIL",
         "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
         "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
         "JD_E2E_VAR_SUBDOMAIN",
@@ -88,7 +85,6 @@ def test_agent_md_generated_after_init(e2e_deployment: EndToEndDeployment) -> No
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
-        "JD_E2E_VAR_EMAIL",
         "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
         "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
         "JD_E2E_VAR_SUBDOMAIN",
@@ -116,7 +112,6 @@ def test_troubleshoot_md_generated_after_init(e2e_deployment: EndToEndDeployment
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
-        "JD_E2E_VAR_EMAIL",
         "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
         "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
         "JD_E2E_VAR_SUBDOMAIN",
@@ -146,7 +141,6 @@ def test_store_config_written_after_config(e2e_deployment: EndToEndDeployment) -
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
-        "JD_E2E_VAR_EMAIL",
         "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
         "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
         "JD_E2E_VAR_SUBDOMAIN",
@@ -197,7 +191,6 @@ def test_config_error_recovery_invalid_admin_role(e2e_deployment: EndToEndDeploy
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
-        "JD_E2E_VAR_EMAIL",
         "JD_E2E_VAR_OAUTH_APP_CLIENT_ID",
         "JD_E2E_VAR_OAUTH_ALLOWED_TEAMS",
         "JD_E2E_VAR_SUBDOMAIN",

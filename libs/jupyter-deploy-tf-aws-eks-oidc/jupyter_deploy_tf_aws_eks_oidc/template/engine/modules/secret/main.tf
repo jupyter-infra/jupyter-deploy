@@ -9,8 +9,13 @@ resource "null_resource" "store_secret" {
     secret_arn = aws_secretsmanager_secret.this.arn
   }
 
+  # quiet: the command interpolates the secret VALUE, so the provisioner's own
+  # command echo must never reach the apply log (which `jd history` keeps and
+  # `jd up` pushes to the remote store).
   provisioner "local-exec" {
-    command = <<-EOT
+    interpreter = ["/bin/bash", "-c"]
+    quiet       = true
+    command     = <<-EOT
       aws secretsmanager put-secret-value \
         --secret-id ${aws_secretsmanager_secret.this.arn} \
         --secret-string "${var.secret_value}" \

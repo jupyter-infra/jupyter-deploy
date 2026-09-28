@@ -77,15 +77,6 @@ variable "subdomain" {
   }
 }
 
-variable "letsencrypt_email" {
-  description = <<-EOT
-    The email that Let's Encrypt will use to deliver notices about TLS certificates.
-
-    Example: yourname@example.com
-  EOT
-  type        = string
-}
-
 variable "oauth_app_client_id" {
   description = <<-EOT
     Client ID of the GitHub OAuth app that controls access to workspaces.

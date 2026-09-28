@@ -27,6 +27,7 @@ resource "null_resource" "destroy_workspaces" {
   provisioner "local-exec" {
     when        = destroy
     interpreter = ["/bin/bash", "-c"]
+    quiet       = true
     command     = self.triggers.script
   }
 
@@ -354,6 +355,7 @@ resource "null_resource" "repair_access_strategy" {
 
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
+    quiet       = true
     command     = self.triggers.script
   }
 
@@ -387,6 +389,7 @@ resource "null_resource" "repair_workspace_template" {
 
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
+    quiet       = true
     command     = self.triggers.script
   }
 
@@ -424,6 +427,7 @@ resource "null_resource" "repair_pool_workspace_template" {
 
   provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
+    quiet       = true
     command     = self.triggers.script
   }
 

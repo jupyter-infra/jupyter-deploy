@@ -2,11 +2,17 @@
 
 ## Networking
 
-The template creates a VPC with public and private subnets across two availability zones. EKS nodes run in private subnets; the Network Load Balancer (NLB) sits in public subnets and forwards TCP/443 to Traefik pods.
+The template creates a VPC with public and private subnets across two availability zones. EKS nodes run in private subnets; the Network Load Balancer (NLB) sits in public subnets and forwards HTTPS/443 to Traefik pods.
 
 Amazon Route 53 manages DNS. The template references a Hosted Zone for your domain (which must already exist) and relies on external-dns to create DNS records pointing your subdomain to the NLB.
 
-cert-manager obtains TLS certificates from Let's Encrypt using the DNS-01 challenge via Route 53.
+## TLS
+
+Public TLS terminates at the NLB with an AWS Certificate Manager (ACM) certificate that the template requests for `<subdomain>.<domain>` and validates via DNS against your hosted zone. No email address and no external certificate authority are involved, and there is no issuance rate limit on redeploying the same subdomain.
+
+The NLB then **re-encrypts** to Traefik, so nothing crosses the VPC in plaintext. Traefik presents a certificate issued by a private CA that cert-manager mints inside the cluster; the NLB does not verify it, so it needs no public trust. cert-manager therefore makes no AWS API calls and holds no IAM role.
+
+The NLB registers only nodes labeled `jupyter-deploy/role=routing` as targets, matching where Traefik runs.
 
 ## Compute
 
@@ -49,7 +55,7 @@ The template creates several IAM roles:
 
 - **Cluster role** — Used by the EKS control plane.
 - **Node roles** — One per node group, with managed policies for ECR pull, EKS worker nodes, and CNI.
-- **Pod identity associations** — cert-manager and external-dns use EKS Pod Identity for Route 53 and DNS access.
+- **Pod identity associations** — external-dns uses EKS Pod Identity for Route 53 access.
 - **Admin access entries** — The caller's IAM principal is always authorized; roles in `admin_role_names` and users in `admin_user_names` get cluster admin permissions and workspace admin group membership.
 
 ## Helm charts
@@ -130,7 +136,6 @@ The template provides two variable presets:
 | kubernetes_version | `string` | `1.36` | Kubernetes version for the EKS cluster |
 | domain | `string` | Required | Domain name for workspace URLs (must have a Route 53 hosted zone) |
 | subdomain | `string` | Required | Subdomain prefix for workspace URLs |
-| letsencrypt_email | `string` | Required | Email for Let's Encrypt certificate expiration notices |
 | oauth_app_client_id | `string` | Required | Client ID of the GitHub OAuth app |
 | oauth_app_client_secret | `string` | Required | Client secret of the GitHub OAuth app |
 | oauth_allowed_teams | `list(string)` | Required | GitHub teams to allow access, in `org:team` format |
