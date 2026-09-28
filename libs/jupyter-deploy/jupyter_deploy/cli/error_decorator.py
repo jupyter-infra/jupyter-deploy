@@ -9,6 +9,7 @@ import typer
 from rich.console import Console
 from rich.markup import escape
 
+from jupyter_deploy.constants import RETRYABLE_EXIT_CODE
 from jupyter_deploy.exceptions import (
     BackupsNotReadyError,
     CommandNotImplementedError,
@@ -62,6 +63,7 @@ from jupyter_deploy.exceptions import (
     ResourcePollTimeoutError,
     SupervisedExecutionError,
     ToolRequiredError,
+    TransientProviderError,
     UnreachableHostError,
     UnsupportedProviderRegionError,
     UrlNotAvailableError,
@@ -506,3 +508,74 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         raise typer.Exit(code=1) from None
 
     # Let all other exceptions bubble up naturally - they will be caught by Typer's default handler
+
+
+# Failures that leave `jd proxy connect-info` permanently unable to emit a bundle: expired or
+# denied credentials, a project that is not deployed, a template that cannot serve the command.
+# Retrying any of these produces the same error, so the client proxy should stop rather than keep
+# re-execing the command.
+#
+# This list is deliberately the ONLY path to a permanent verdict: anything absent from it —
+# an AWS error code we have not classified, a network failure, an exception class added to this
+# codebase later — is reported as retryable, so a transient fault can never terminate a running
+# proxy. Adding a class here means asserting that a retry cannot possibly help.
+PERMANENT_CONNECT_INFO_ERRORS = (
+    CommandNotImplementedError,
+    InstructionNotFoundError,
+    InvalidInstructionArgumentError,
+    InvalidInstructionResultError,
+    InvalidManifestError,
+    InvalidProjectPathError,
+    InvalidProviderCredentialsError,
+    ManifestNotFoundError,
+    ManifestValueNotDeclaredError,
+    OutputNotFoundError,
+    ProjectOutputsNotAvailableError,
+    ProviderPermissionError,
+    ReadManifestError,
+    RequiredOutputNotFoundError,
+    RequiredOutputTypeError,
+    ResourceNotFoundError,
+)
+
+
+@contextmanager
+def handle_connect_info_errors(console: Console) -> Generator[None, None, None]:
+    """Handle errors for ``jd proxy connect-info``, distinguishing transient from permanent.
+
+    The caller of this command is the client proxy, not a human: it re-execs the command every
+    time the credential nears expiry, and reads the exit code to decide whether to keep serving.
+    So a failure here needs a verdict, not only a message:
+
+    - permanent (:data:`PERMANENT_CONNECT_INFO_ERRORS`) -> exit 1, with the same operator-facing
+      message any other command would print, since a human debugging this runs the command
+      directly. The proxy treats it as fatal and shuts down.
+    - anything else -> exit :data:`RETRYABLE_EXIT_CODE`, so the proxy keeps serving on its
+      last-good credential and retries. Defaulting the unknown case here (rather than to 1) is
+      what keeps a network blip or an unclassified AWS error from killing a working proxy.
+
+    Args:
+        console: Rich Console instance for formatted output (stderr for this command).
+
+    Yields:
+        None
+    """
+    try:
+        yield
+    except typer.Exit:
+        # Already carries its own verdict (including the permanent path below) — never reclassify.
+        raise
+    except PERMANENT_CONNECT_INFO_ERRORS:
+        # Re-raise inside the shared handler so the message and hints match every other command.
+        with handle_cli_errors(console):
+            raise
+    except TransientProviderError as e:
+        # The one positively-identified transient case; the generic branch below catches the rest.
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.print(e.original_message, style="dim")
+        console.print("The local proxy will retry.", style="dim")
+        raise typer.Exit(code=RETRYABLE_EXIT_CODE) from None
+    except Exception as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.print("This may be transient; the local proxy will retry.", style="dim")
+        raise typer.Exit(code=RETRYABLE_EXIT_CODE) from None

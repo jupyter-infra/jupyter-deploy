@@ -12,15 +12,25 @@ import typer
 from rich.console import Console
 from typer.testing import CliRunner
 
-from jupyter_deploy.cli.error_decorator import handle_cli_errors, unsupported_command_message
+from jupyter_deploy.cli.error_decorator import (
+    handle_cli_errors,
+    handle_connect_info_errors,
+    unsupported_command_message,
+)
+from jupyter_deploy.constants import RETRYABLE_EXIT_CODE
+from jupyter_deploy.enum import ProviderType
 from jupyter_deploy.exceptions import (
     CommandNotImplementedError,
+    InvalidProviderCredentialsError,
+    JupyterDeployError,
     ManifestValueNotDeclaredError,
     OptionalParameterNotSupportedError,
     ProjectOutputsNotAvailableError,
+    ProviderPermissionError,
     RequiredOutputNotFoundError,
     RequiredOutputTypeError,
     ResourceNameRequiredError,
+    TransientProviderError,
 )
 
 
@@ -162,3 +172,108 @@ class TestResourceNameRequired(unittest.TestCase):
 
         # The message names the flag; a hint repeating it told the user the same thing twice.
         self.assertEqual(output.count("--name"), 1, f"Expected --name once, got: {output}")
+
+
+def _connect_info_exit_code(error: Exception) -> int:
+    """Return the exit code `jd proxy connect-info` reports for the given failure."""
+    app = typer.Typer()
+
+    @app.command()
+    def connect_info() -> None:
+        with handle_connect_info_errors(Console(width=200)):
+            raise error
+
+    return CliRunner().invoke(app, []).exit_code
+
+
+class TestConnectInfoErrorClassification(unittest.TestCase):
+    """The verdict `jd proxy connect-info` hands the client proxy, via its exit code.
+
+    The proxy re-execs this command to refresh its credential and reads the exit code to decide
+    whether to keep serving: RETRYABLE_EXIT_CODE means "keep the tunnel up and try again", anything
+    else non-zero means "give up and shut down". Misclassifying a transient fault as permanent
+    therefore kills a working proxy, so the default has to be retryable.
+    """
+
+    def test_expired_credentials_are_permanent(self) -> None:
+        # The case that makes self-shutdown worth having: creds expired overnight, no retry helps.
+        code = _connect_info_exit_code(InvalidProviderCredentialsError(ProviderType.AWS, "ExpiredToken"))
+
+        self.assertEqual(code, 1)
+
+    def test_denied_permission_is_permanent(self) -> None:
+        code = _connect_info_exit_code(ProviderPermissionError(ProviderType.AWS, "sts:GetCallerIdentity", "denied"))
+
+        self.assertEqual(code, 1)
+
+    def test_undeployed_project_is_permanent(self) -> None:
+        code = _connect_info_exit_code(ProjectOutputsNotAvailableError("no outputs"))
+
+        self.assertEqual(code, 1)
+
+    def test_template_without_the_command_is_permanent(self) -> None:
+        code = _connect_info_exit_code(CommandNotImplementedError("proxy.connect-info"))
+
+        self.assertEqual(code, 1)
+
+    def test_transient_provider_error_is_retryable(self) -> None:
+        code = _connect_info_exit_code(TransientProviderError(ProviderType.AWS, "ec2:DescribeInstances", "throttled"))
+
+        self.assertEqual(code, RETRYABLE_EXIT_CODE)
+
+    def test_network_failure_is_retryable(self) -> None:
+        code = _connect_info_exit_code(ConnectionResetError("connection reset by peer"))
+
+        self.assertEqual(code, RETRYABLE_EXIT_CODE)
+
+    def test_unclassified_error_defaults_to_retryable(self) -> None:
+        # The default this whole classification rests on: an error nobody has classified must not be
+        # allowed to take a running proxy down with it. Adding a class to
+        # PERMANENT_CONNECT_INFO_ERRORS is the only way to reach exit 1.
+        code = _connect_info_exit_code(RuntimeError("something nobody anticipated"))
+
+        self.assertEqual(code, RETRYABLE_EXIT_CODE)
+
+    def test_unlisted_jupyter_deploy_error_defaults_to_retryable(self) -> None:
+        # Being one of our own exceptions is not enough to be treated as permanent — a class added
+        # later inherits the safe verdict rather than silently gaining the power to kill a proxy.
+        code = _connect_info_exit_code(JupyterDeployError("a newly added failure"))
+
+        self.assertEqual(code, RETRYABLE_EXIT_CODE)
+
+    def test_permanent_error_keeps_its_operator_facing_message(self) -> None:
+        # A human debugging this runs the command directly, so the permanent path must still read
+        # like every other command's error rather than a bare stack trace.
+        app = typer.Typer()
+
+        @app.command()
+        def connect_info() -> None:
+            with handle_connect_info_errors(Console(width=200)):
+                raise CommandNotImplementedError("proxy.connect-info")
+
+        result = CliRunner().invoke(app, [])
+
+        self.assertIn("proxy.connect-info", result.output)
+
+    def test_retryable_error_says_it_will_be_retried(self) -> None:
+        app = typer.Typer()
+
+        @app.command()
+        def connect_info() -> None:
+            with handle_connect_info_errors(Console(width=200)):
+                raise TransientProviderError(ProviderType.AWS, "ec2:DescribeInstances", "Rate exceeded")
+
+        result = CliRunner().invoke(app, [])
+
+        self.assertIn("Rate exceeded", result.output)
+        self.assertIn("retry", result.output)
+
+    def test_success_is_left_alone(self) -> None:
+        app = typer.Typer()
+
+        @app.command()
+        def connect_info() -> None:
+            with handle_connect_info_errors(Console(width=200)):
+                pass
+
+        self.assertEqual(CliRunner().invoke(app, []).exit_code, 0)
