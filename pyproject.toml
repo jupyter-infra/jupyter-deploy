@@ -1,6 +1,6 @@
 [project]
 name = "jupyter-deploy-monorepo"
-version = "0.7.2"
+version = "0.7.3"
 description = "Monorepo for Jupyter deploy packages"
 readme = "README.md"
 authors = [

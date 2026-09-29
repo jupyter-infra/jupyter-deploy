@@ -956,7 +956,7 @@ wheels = [
 
 [[package]]
 name = "jupyter-deploy"
-version = "0.7.2"
+version = "0.7.3"
 source = { editable = "libs/jupyter-deploy" }
 dependencies = [
     { name = "certifi" },
@@ -1097,7 +1097,7 @@ dev = [
 
 [[package]]
 name = "jupyter-deploy-monorepo"
-version = "0.7.2"
+version = "0.7.3"
 source = { virtual = "." }
 dependencies = [
     { name = "jupyter-deploy", extra = ["aws", "k8s"] },
