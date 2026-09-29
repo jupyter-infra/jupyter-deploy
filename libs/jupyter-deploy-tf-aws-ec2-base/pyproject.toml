@@ -6,7 +6,8 @@ readme = "README.md"
 authors = [
     { name = "Jonathan Guinegagne", email = "jggg@amazon.com" },
     { name = "Michael Chin", email = "chnmch@amazon.com" },
-    { name = "Brian Granger", email = "brgrange@amazon.com" },
+    { name = "Brian Granger", email = "ellisonbg@gmail.com" },
+    { name = "Andrii Ieroshenko", email = "aieroshe@amazon.com" },
 ]
 requires-python = ">=3.12"
 dependencies = [

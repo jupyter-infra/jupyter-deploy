@@ -8,7 +8,8 @@ license = { file = "LICENSE" }
 authors = [
     { name = "Jonathan Guinegagne", email = "jggg@amazon.com" },
     { name = "Michael Chin", email = "chnmch@amazon.com" },
-    { name = "Brian Granger", email = "brgrange@amazon.com" }
+    { name = "Brian Granger", email = "ellisonbg@gmail.com" },
+    { name = "Andrii Ieroshenko", email = "aieroshe@amazon.com" }
 ]
 classifiers = [
     "Framework :: Pytest",
