@@ -54,3 +54,7 @@ streaming counts on every chunk**, so a long transfer is never cut off mid-fligh
 Credential refreshes do not count — they are the proxy's own traffic.
 
 Part of the [jupyter-deploy](https://github.com/jupyter-infra/jupyter-deploy) project.
+
+## License
+
+The `jupyter-deploy-client-proxy` package is licensed under the [MIT License](https://github.com/jupyter-infra/jupyter-deploy/blob/main/libs/jupyter-deploy-client-proxy/LICENSE).
