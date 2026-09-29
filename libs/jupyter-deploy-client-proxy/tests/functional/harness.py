@@ -5,6 +5,7 @@ deployed Traefik+JupyterLab; a `cat <bundle.json>` (or a small counter script) s
 for `jd proxy connect-info`. Not a test module.
 """
 
+import asyncio
 import json
 import os
 import shlex
@@ -55,6 +56,19 @@ class SelfSignedOrigin:
                 else:
                     break
             return ws
+        if request.path == "/slow-stream":
+            # Streams `chunks` bodies with `delay` between them, so a test can hold one response
+            # open across more than an idle window and assert the proxy counts streaming progress
+            # as activity rather than reaping the transfer mid-flight.
+            chunks = int(request.query.get("chunks", 5))
+            delay = float(request.query.get("delay", 0.1))
+            streamed = web.StreamResponse()
+            await streamed.prepare(request)
+            for _ in range(chunks):
+                await streamed.write(b"x" * 16)
+                await asyncio.sleep(delay)
+            await streamed.write_eof()
+            return streamed
         if request.path == "/multi-set-cookie":
             # Emit two Set-Cookie lines (as Jupyter does: `_xsrf` + `username-*`) so a test can
             # assert the proxy relays repeated response headers instead of collapsing them.

@@ -60,6 +60,27 @@ class TestIdleShutdown(OriginTestCase):
 
         await asyncio.wait_for(self.proxy.shutdown_requested.wait(), timeout=10)
 
+    async def test_streaming_response_defers_shutdown(self) -> None:
+        # `_handle` stamps activity when a request *starts*, so a response streaming for longer than
+        # the idle window would be reaped mid-transfer unless each chunk counts too. At the 2h
+        # default nothing streams that long, but the exposure grows as the timeout is tuned down —
+        # which is what the flag is for, and what this suite itself does.
+        port = await self._start()
+        assert self.proxy is not None
+
+        chunk_delay = 0.05
+        chunks = int(_IDLE_TIMEOUT_SECONDS / chunk_delay * 3)  # spans ~3 idle windows
+        url = f"http://127.0.0.1:{port}/slow-stream?chunks={chunks}&delay={chunk_delay}"
+        async with aiohttp.ClientSession() as session, session.get(url) as response:
+            body = await response.read()
+
+        self.assertEqual(len(body), chunks * 16, "the stream was truncated")
+        self.assertFalse(
+            self.proxy.shutdown_requested.is_set(),
+            f"The proxy asked to shut down while streaming a response for "
+            f"{chunks * chunk_delay:.1f}s with an idle timeout of {_IDLE_TIMEOUT_SECONDS}s",
+        )
+
     async def test_open_websocket_holds_it_open_without_traffic(self) -> None:
         # The case a request-only timer would get wrong: a kernel running a long silent computation
         # sends nothing for minutes, but pulling its tunnel would lose the session.

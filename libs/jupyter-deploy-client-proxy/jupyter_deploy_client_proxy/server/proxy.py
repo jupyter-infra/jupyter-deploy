@@ -352,6 +352,14 @@ class JupyterDeployClientProxy:
                 )
                 await response.prepare(request)
                 async for chunk in upstream.content.iter_any():
+                    # Every chunk is activity: `_handle` stamped only when the request *started*, so
+                    # a response streaming for longer than the idle window (a large notebook or
+                    # /api/contents transfer, an SSE stream) would otherwise be reaped mid-flight.
+                    # At the 2h default nothing streams that long, but the exposure grows as the
+                    # timeout is tuned down, which is what the flag is for. Deliberately counts
+                    # progress rather than being in-flight: a response stalled past the window is
+                    # not activity, and the upstream sock_read timeout ends it anyway.
+                    self._last_activity = time.monotonic()
                     await response.write(chunk)
                 await response.write_eof()
                 return response

@@ -41,14 +41,16 @@ The proxy ends its own process in two cases, so a background one cannot outlive 
 session:
 
 - **the credential can no longer be refreshed** (the token command failed permanently)
-  — exits `78`, leaving `status.json` behind to record why;
+  — exits `78`, leaving `status.json` behind as the record that it failed rather than
+  stopped; the reason is in the `NNNN.log` files beside it;
 - **no client activity for `--idle-timeout-seconds`** (default 7200, two hours) — exits
   `0` and removes `status.json`, like any clean stop. Pass `0` to disable, which is
   what `jd open` does when it runs the proxy in the foreground: there the terminal
   governs the lifetime.
 
 Activity means traffic from a client. **An open WebSocket counts even while no frames
-flow**, so a kernel computing silently for hours keeps its tunnel. Credential refreshes
-do not count — they are the proxy's own traffic.
+flow**, so a kernel computing silently for hours keeps its tunnel, and **a response still
+streaming counts on every chunk**, so a long transfer is never cut off mid-flight.
+Credential refreshes do not count — they are the proxy's own traffic.
 
 Part of the [jupyter-deploy](https://github.com/jupyter-infra/jupyter-deploy) project.
