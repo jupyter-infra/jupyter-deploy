@@ -128,10 +128,15 @@ The engine directory has three tiers — keep them separate:
 All variables MUST be defined in `variables.tf`. Default values MUST be in `presets/defaults-all.tfvars`. No `variable` blocks elsewhere.
 
 All `local-exec` provisioners MUST set `interpreter = ["/bin/bash", "-c"]` — Terraform defaults to `/bin/sh`.
-With `bootstrap_cluster_creator_admin_permissions = false`, the caller's IAM role MUST be listed in `admin_role_names` to retain cluster access. A `check` block validates this at plan time.
+With `bootstrap_cluster_creator_admin_permissions = false`, only principals with an access entry get cluster admin. The template merges the caller of the current apply into that set automatically (`local.caller_role_name` in `main.tf`), so list every role that may later run `jd config`/`jd up` in `admin_role_names` — a caller switch is what produces `Forbidden`.
 Destroy order is load-bearing and enforced via `depends_on` (see `eks_addons.tf`/`iam_role`/`vpc` comments): VPC+roles → DaemonSet addons (CNI/kube-proxy) → node groups → Deployment addons (coredns/ebs-csi/…) → Helm releases → workspaces, so the operator stays alive through Helm uninstalls.
 
 Do NOT bump the `version` in the local charts' `Chart.yaml` (`charts/*/Chart.yaml`) when editing chart contents. Only bump versions with the versioning script.
+
+Do NOT bump the `workspace_app_*_image_build` defaults (e.g. `workspace_app_jupyterlab_image_build`)
+when editing files under `applications/`. That tag belongs to the deployer: it exists so they can
+rebuild and re-tag their own image after deploying the template. Changing the source files is enough
+to retrigger CodeBuild on the next `jd up`; deployers who need a new tag increment it themselves.
 
 ## CI infrastructure template package
 Code: `./libs/jupyter-infra-tf-aws-iam-ci`

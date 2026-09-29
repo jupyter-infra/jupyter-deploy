@@ -115,8 +115,9 @@ leftover NLB tagged with the cluster name and delete it with
 
 ## Orphaned AWS resources after an incomplete destroy
 
-Some AWS resources are created by in-cluster controllers (AWS Load Balancer Controller,
-external-dns), not by Terraform, so they are **not** in the Terraform state.
+In-cluster controllers create some AWS resources — Kubernetes' in-tree service controller
+provisions the NLB behind the Traefik Service, and external-dns writes the Route 53 records —
+so Terraform never holds them in its state.
 They also may not carry the `DeploymentId` tag, so a tag search alone can miss them.
 Check for and remove the following resources:
 - Network Load Balancers still referencing the (now-deleted) cluster VPC
@@ -129,13 +130,16 @@ those must be left alone.
 
 ## `kubectl` / `jd cluster login` returns Forbidden
 
-The cluster is created with `bootstrap_cluster_creator_admin_permissions = false`, so
-only IAM roles listed in `admin_role_names` receive cluster admin access. A `check`
-block validates at plan time that the caller's role is included.
+The cluster is created with `bootstrap_cluster_creator_admin_permissions = false`, so only
+the IAM principals the template grants an access entry receive cluster admin access. The
+template merges whoever runs the apply into that set automatically (see `local.caller_role_name`
+in `engine/main.tf`), so the caller that deployed the cluster always keeps access — you do not
+have to list it.
 
-If you assume a different IAM role than the one used to deploy, add its name to
-`admin_role_names`, then re-run `jd config` and `jd up` (pass each role name as a
-separate flag):
+That auto-merge only covers the caller of the run that created the access entries. Assume a
+different IAM role later and `kubectl` returns `Forbidden`, because nothing granted that role an
+entry. Add its name to `admin_role_names`, then re-run `jd config` and `jd up` (pass each role
+name as a separate flag):
 
 ```bash
 jd config --admin-role-names Admin --admin-role-names MyOtherRole

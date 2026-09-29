@@ -138,6 +138,13 @@ Each workspace application is wired via the `application` module in `application
 
 Applications are gated by a `_use` boolean variable (e.g. `workspace_app_jupyterlab_use`).
 
+Editing a file under `./applications/` changes the module's source hash, which triggers a CodeBuild
+rebuild on the next `jd up`. To make that rebuild actually reach workspaces, also increment the build
+tag variable (e.g. `workspace_app_jupyterlab_image_build`): the rebuild otherwise re-pushes the same
+tag, which nodes with a cached layer do not re-pull. A new tag reaches NEW workspaces only —
+`Workspace.spec.image` is pinned at creation time, so existing workspaces keep the image they were
+created with until that field is patched or the workspace is recreated.
+
 ### Charts directory
 
 `./charts/` contains local Helm charts:
@@ -171,7 +178,8 @@ and triggers on domain, cluster name, or router chart version/revision changes.
 ### Core platform daemonset and operators
 
 - core daemonset: `vpc-cni` and `kube-proxy` EKS add-ons (`eks_addons.tf`).
-- autoscaling: cluster-autoscaler scales both node groups on pending pods (`platform_cluster_autoscaler.tf`).
+- autoscaling: cluster-autoscaler scales the `platform` node group on pending pods
+  (`platform_cluster_autoscaler.tf`); Karpenter provisions every other pool.
 - logging: optional Fluent Bit DaemonSet ships pod logs to CloudWatch (`platform_logging.tf`, `var.enable_component_logging`).
 
 ### Destroy-time workspace cleanup
