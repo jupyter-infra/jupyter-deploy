@@ -30,6 +30,26 @@ class TestAwsErrorContextManager(unittest.TestCase):
         with self.assertRaises(InvalidProviderCredentialsError), aws_error_context_manager():
             raise botocore.exceptions.PartialCredentialsError(provider="test", cred_var="key")
 
+    def test_expired_sso_session_raises_invalid_provider_credentials(self) -> None:
+        # Resolving credentials failed before signing, so retrying cannot help — the caller has to
+        # re-authenticate. Left unclassified these exit 75 and a running proxy retries an expired
+        # session until its idle timeout instead of stopping.
+        with self.assertRaises(InvalidProviderCredentialsError), aws_error_context_manager():
+            raise botocore.exceptions.UnauthorizedSSOTokenError()
+
+    def test_sso_token_load_error_raises_invalid_provider_credentials(self) -> None:
+        # Also an SSOError subclass: catching the base covers both without naming each leaf.
+        with self.assertRaises(InvalidProviderCredentialsError), aws_error_context_manager():
+            raise botocore.exceptions.SSOTokenLoadError(error_msg="no cached token")
+
+    def test_token_retrieval_error_raises_invalid_provider_credentials(self) -> None:
+        with self.assertRaises(InvalidProviderCredentialsError), aws_error_context_manager():
+            raise botocore.exceptions.TokenRetrievalError(provider="sso", error_msg="expired")
+
+    def test_credential_process_failure_raises_invalid_provider_credentials(self) -> None:
+        with self.assertRaises(InvalidProviderCredentialsError), aws_error_context_manager():
+            raise botocore.exceptions.CredentialRetrievalError(provider="custom-process", error_msg="exit 1")
+
     def test_access_denied_raises_provider_permission_error(self) -> None:
         with self.assertRaises(ProviderPermissionError), aws_error_context_manager():
             raise _client_error("AccessDenied")

@@ -97,12 +97,18 @@ def aws_error_context_manager() -> Generator[None, None, None]:
     """Catch botocore exceptions and re-raise as jupyter-deploy provider errors."""
     try:
         yield
-    except botocore.exceptions.NoCredentialsError as e:
-        raise InvalidProviderCredentialsError(
-            provider_name=ProviderType.AWS,
-            original_message=str(e),
-        ) from e
-    except botocore.exceptions.PartialCredentialsError as e:
+    except (
+        botocore.exceptions.NoCredentialsError,
+        botocore.exceptions.PartialCredentialsError,
+        # Resolving credentials failed before any request was signed: an expired SSO session
+        # (SSOError covers UnauthorizedSSOTokenError and SSOTokenLoadError), an expired bearer
+        # token, or a `credential_process` that failed. All need the caller to re-authenticate, so
+        # they must be permanent — left unclassified they exit RETRYABLE_EXIT_CODE and the client
+        # proxy retries an expired session until its idle timeout instead of stopping.
+        botocore.exceptions.SSOError,
+        botocore.exceptions.TokenRetrievalError,
+        botocore.exceptions.CredentialRetrievalError,
+    ) as e:
         raise InvalidProviderCredentialsError(
             provider_name=ProviderType.AWS,
             original_message=str(e),
