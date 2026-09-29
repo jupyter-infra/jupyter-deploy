@@ -21,7 +21,7 @@ what their team membership and RBAC permissions allow.
 
 ## How it fits in
 
-The Web UI is one of the platform components running on the components node group,
+The Web UI is one of the platform components running on the platform node group,
 alongside Traefik, Dex, OAuth2 Proxy, and Authmiddleware (see
 [Architecture](architecture.md)). Requests to it flow through the Network Load
 Balancer to Traefik, which routes them to the `web-app` pods. On an unauthenticated

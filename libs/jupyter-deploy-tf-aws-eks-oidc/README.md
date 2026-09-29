@@ -181,7 +181,7 @@ The platform layer handles routing, authentication, and workspace lifecycle:
 
 Authentication uses a two-path model:
 
-**Browser access** — Unauthenticated requests are redirected through OAuth2 Proxy → Dex → GitHub. After authentication, Authmiddleware issues a JWT session cookie. Authmiddleware validates subsequent requests by checking the JWT directly.
+**Browser access** — OAuth2 Proxy redirects unauthenticated requests through Dex to GitHub. After authentication, Authmiddleware issues a JWT session cookie. Authmiddleware validates subsequent requests by checking the JWT directly.
 
 **CLI access** — `jd cluster login` configures kubeconfig with an EKS exec-based auth provider using AWS IAM credentials, bypassing the OIDC flow entirely.
 
@@ -189,11 +189,12 @@ Authentication uses a two-path model:
 
 ### Compute
 
-Role-based managed node groups with `jupyter-deploy/role` Kubernetes labels:
-- **components** — Platform infrastructure pods (operator, router, cert-manager, external-dns)
-- **workspaces** — User workspace pods
+Three kinds of node pool, each dedicated to a different job and each with its own autoscaling policy:
+- **platform** — EKS managed node group for the control-plane pods (operator, Karpenter, KEDA, cert-manager, external-dns); the Cluster Autoscaler sizes it
+- **routing** — Karpenter pool for the ingress and auth tier (Traefik, Dex, OAuth2 Proxy, Authmiddleware, web UI); always on, and grows with the KEDA-scaled routing pods
+- **workspace pools** — Karpenter pools for user workspace pods, one per `workspace_nodepools` entry plus an optional GPU pool; these scale to zero
 
-AMI type is auto-detected from the instance family (CPU, GPU, Neuron; x86_64 or arm64).
+A single `jupyter-deploy/role` Kubernetes label drives pod placement: every node carries it, and every pod selects its tier through a matching `nodeSelector`. The Karpenter pools carry the role as a taint as well, so a pod without the matching toleration can never land on them; the platform node group stays untainted. The platform node group auto-detects its AMI type from the instance family (CPU, GPU, Neuron; x86_64 or arm64).
 
 ### Storage
 
@@ -213,15 +214,15 @@ Amazon Route 53 manages DNS. The template references a Hosted Zone for your doma
 
 ### TLS
 
-Public TLS terminates at the NLB with an AWS Certificate Manager (ACM) certificate that the template requests for `<subdomain>.<domain>` and validates via DNS against your hosted zone. No email address and no external certificate authority are involved, and there is no issuance rate limit on redeploying the same subdomain.
+Public TLS terminates at the NLB with an AWS Certificate Manager (ACM) certificate that the template requests for `<subdomain>.<domain>` and validates via DNS against your hosted zone.
 
-The NLB then **re-encrypts** to Traefik, so nothing crosses the VPC in plaintext. Traefik presents a certificate issued by a private CA that cert-manager mints inside the cluster; the NLB does not verify it, so it needs no public trust. cert-manager therefore makes no AWS API calls and holds no IAM role.
+The NLB then **re-encrypts** to Traefik, so nothing crosses the VPC in plaintext. Traefik presents a certificate from a private CA that cert-manager mints inside the cluster; the NLB does not verify it, so it needs no public trust. cert-manager therefore makes no AWS API calls and holds no IAM role.
 
 The NLB registers only nodes labeled `jupyter-deploy/role=routing` as targets, matching where Traefik runs.
 
 ### Compute
 
-The template creates EKS managed node groups with role-based scheduling. Each node group auto-detects the appropriate EKS-optimized AMI type for its instance type.
+The template creates a single `platform` EKS managed node group for control-plane-only pods, and Karpenter NodePools for the routing and workspace tiers. The managed node group auto-detects the appropriate EKS-optimized AMI type for its instance type; Karpenter nodes use the `al2023@latest` AMI alias.
 
 ### Application Images
 
@@ -233,10 +234,10 @@ The template creates infrastructure for building custom workspace images:
 ### IAM
 
 The template creates several IAM roles:
-- **Cluster role** — Used by the EKS control plane
+- **Cluster role** — The EKS control plane assumes this role
 - **Node roles** — One per node group, with managed policies for ECR pull, EKS worker nodes, and CNI
 - **Pod identity associations** — external-dns uses EKS Pod Identity for Route 53 access
-- **Admin access entries** — The caller's IAM principal is always authorized automatically. Roles in `admin_role_names` and users in `admin_user_names` get cluster admin and workspace admin permissions. For stable state across caller switches, list every role/user that may run `jd config` or `jd up`
+- **Admin access entries** — The template always authorizes the caller's IAM principal. Roles in `admin_role_names` and users in `admin_user_names` get cluster admin and workspace admin permissions. For stable state across caller switches, list every role/user that may run `jd config` or `jd up`
 
 ### Helm charts
 
@@ -251,13 +252,13 @@ The template creates several IAM roles:
 | cluster-autoscaler | `kube-system` | Autoscaler for the platform managed node group |
 | prometheus | `monitoring` | Metrics server (scaling source for KEDA) |
 | aws-for-fluent-bit | `kube-system` | Pod log shipping to CloudWatch (optional, `enable_component_logging`) |
-| nvidia-device-plugin | `kube-system` | Registers GPU capacity on GPU pool nodes (optional, installed when a pool entry sets `accelerator = "nvidia"`) |
+| nvidia-device-plugin | `kube-system` | Registers GPU capacity on GPU pool nodes (optional; a pool entry setting `accelerator = "nvidia"` pulls it in) |
 | github-rbac (local) | Shared namespace | Namespace-scoped RBAC for the `oauth_allowed_teams` GitHub teams |
 | workspace-defaults (local) | Shared namespace | Default `WorkspaceTemplate` and workspace-ingress NetworkPolicies |
 
 ### RBAC
 
-The template deploys a `github-rbac` local chart that creates namespace-scoped Role and RoleBinding resources. Each namespace in `workspace_rbac_namespaces` gets a Role granting workspace CRUD permissions, bound to the GitHub teams in `oauth_allowed_teams`. Those teams also get a read-only (`get`/`list`) Role in `workspace_shared_namespace` for discovering shared `WorkspaceTemplate` and `WorkspaceAccessStrategy` resources.
+The template deploys a `github-rbac` local chart that creates namespace-scoped Role and RoleBinding resources. Each namespace in `workspace_rbac_namespaces` gets a Role granting workspace CRUD permissions, which a RoleBinding ties to the GitHub teams in `oauth_allowed_teams`. Those teams also get a read-only (`get`/`list`) Role in `workspace_shared_namespace` for discovering shared `WorkspaceTemplate` and `WorkspaceAccessStrategy` resources.
 
 ### Presets
 
@@ -277,7 +278,17 @@ The template provides two variable presets:
 | oauth_app_client_id | `string` | Required | Client ID of the GitHub OAuth app |
 | oauth_app_client_secret | `string` | Required | Client secret of the GitHub OAuth app |
 | oauth_allowed_teams | `list(string)` | Required | GitHub teams to allow access, in `org:team` format |
-| node_groups | `list(map(string))` | See preset | EKS managed node groups (name, role, instance_type, disk_size_gb, sizing) |
+| platform_instance_types | `list(string)` | `["m5.large"]` | Instance types for the `platform` managed node group |
+| platform_disk_size_gb | `number` | `50` | Root volume size for `platform` nodes |
+| platform_min_size | `number` | `2` | Minimum size of the `platform` node group (one node per AZ) |
+| platform_max_size | `number` | `3` | Maximum size of the `platform` node group |
+| routing_instance_categories | `list(string)` | `["c", "m"]` | Instance categories Karpenter may pick for routing nodes |
+| routing_instance_generation_min | `string` | `6` | Minimum instance generation for routing nodes |
+| routing_disk_size_gb | `number` | `50` | Root volume size for routing nodes |
+| routing_max_cpu | `string` | `32` | Ceiling on total vCPU of the routing pool |
+| routing_max_memory | `string` | `128Gi` | Ceiling on total memory of the routing pool |
+| workspace_nodepools | `list(map(string))` | one `workspace-cpu` pool | Karpenter workspace pools, each with its own instance families and CPU/memory ceilings |
+| node_expire_after | `string` | `504h` | Maximum node lifetime before Karpenter recycles it |
 | workspace_rbac_namespaces | `list(string)` | `["default"]` | Namespaces where teams get workspace permissions |
 | admin_role_names | `list(string)` | `[]` | IAM role names to grant cluster and workspace admin (list all callers for stable state) |
 | admin_user_names | `list(string)` | `[]` | IAM user names to grant cluster and workspace admin (list all callers for stable state) |
@@ -301,9 +312,9 @@ The template provides two variable presets:
 | workspace_app_jupyterlab_app_type | `string` | `jupyterlab` | Application type identifier for the workspace template |
 | workspace_app_jupyterlab_image_name | `string` | See preset | ECR repository name for the JupyterLab image |
 | workspace_app_jupyterlab_image_build | `string` | `v1` | Build tag (increment to trigger rebuild) |
-| workspace_templates | `list(map(string))` | `[]` | Named workspace template configs offered as cards by pool entries via their `templates` key |
-| enable_default_gpu_pool | `bool` | `false` | Append the built-in `workspace-gpu` entry and its `jupyterlab-gpu` template config; a plan-time error when combined with your own accelerator entries |
-| nvidia_device_plugin_version | `string` | `0.19.3` | Version of the NVIDIA device plugin chart (installed when any pool entry sets `accelerator = "nvidia"`) |
+| workspace_templates | `list(map(string))` | `[]` | Named workspace template configs that pool entries offer as cards via their `templates` key |
+| enable_default_gpu_pool | `bool` | `false` | Append the built-in `workspace-gpu` entry and its `jupyterlab-gpu` template config; combining it with your own accelerator entries raises a plan-time error |
+| nvidia_device_plugin_version | `string` | `0.20.1` | Version of the NVIDIA device plugin chart (the template installs it when any pool entry sets `accelerator = "nvidia"`) |
 
 ## Outputs
 
@@ -314,7 +325,7 @@ The template provides two variable presets:
 | `platform_mng_names` | Names of the EKS managed node groups |
 | `cluster_arn` | ARN of the EKS cluster |
 | `cluster_ca_certificate` | Base64-encoded CA certificate for the EKS cluster |
-| `region` | AWS region where the cluster is deployed |
+| `region` | AWS region hosting the cluster |
 | `deployment_id` | Unique deployment identifier |
 | `vpc_id` | ID of the VPC hosting the EKS cluster |
 | `workspace_operator_namespace` | Kubernetes namespace for the workspace operator controller |
