@@ -26,7 +26,7 @@ resource "random_id" "postfix" {
 
 locals {
   template_name    = "tf-aws-ec2-jupyterlab"
-  template_version = "0.1.0"
+  template_version = "0.1.1"
 
   default_tags = {
     Source       = "jupyter-deploy"

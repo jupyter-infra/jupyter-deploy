@@ -1,6 +1,6 @@
 [project]
 name = "jupyter-deploy-tf-aws-ec2-jupyterlab"
-version = "0.1.0"
+version = "0.1.1"
 description = "Terraform template to deploy a single-user JupyterLab on an AWS EC2 instance, accessed via a local proxy with AWS-identity auth."
 readme = "README.md"
 authors = [
