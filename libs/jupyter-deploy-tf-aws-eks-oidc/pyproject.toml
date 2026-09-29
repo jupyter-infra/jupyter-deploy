@@ -1,10 +1,13 @@
 [project]
 name = "jupyter-deploy-tf-aws-eks-oidc"
-version = "0.3.0"
+version = "0.4.0"
 description = "OIDC terraform template to deploy JupyterLab workspaces on AWS EKS with GitHub authentication."
 readme = "README.md"
 authors = [
     { name = "Jonathan Guinegagne", email = "jggg@amazon.com" },
+    { name = "Gaurav Bhanderi", email = "bgrv@amazon.com" },
+    { name = "Michael Chin", email = "chnmch@amazon.com" },
+    { name = "Andrii Ieroshenko", email = "aieroshe@amazon.com" },
 ]
 requires-python = ">=3.12"
 dependencies = [
