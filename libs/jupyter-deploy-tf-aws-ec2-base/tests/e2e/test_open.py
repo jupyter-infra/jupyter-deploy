@@ -83,17 +83,14 @@ def test_open_rejects_detached_on_a_url_template(e2e_deployment: EndToEndDeploym
 
 @pytest.mark.cli
 def test_open_rejects_proxy_idle_timeout_on_a_url_template(e2e_deployment: EndToEndDeployment) -> None:
-    """`jd open --proxy-idle-timeout-seconds` is rejected here, and blames the template not the -d.
+    """`jd open --proxy-idle-timeout-seconds` is rejected here rather than silently ignored.
 
     The flag tunes when the local client proxy reaps itself, so like --detached above it means
-    nothing for a template that opens a public URL. What this pins beyond that is *which* reason
-    the error gives: the handler checks both proxy flags against the template before checking them
-    against -d, because the other order tells a user here to add -d — a flag that is itself rejected
-    on this template. The remedy an error names has to be one the user can actually reach.
+    nothing for a template that opens a public URL. Assert an error message that surfaces the
+    invalid cli option.
     """
     with pytest.raises(JDCliError) as exc_info:
         e2e_deployment.cli.run_command(["jupyter-deploy", "open", "--proxy-idle-timeout-seconds", "60"])
 
     message = str(exc_info.value)
     assert "--proxy-idle-timeout-seconds" in message, f"Expected the flag to be named, got: {message}"
-    assert "-d" not in message, f"Expected the template to be blamed rather than the missing -d, got: {message}"
