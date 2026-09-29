@@ -8,6 +8,8 @@ dependency the package uses but never declares keeps resolving from the workspac
 only surfaces in that package's release workflow.
 
 The source of truth here is the filesystem: `libs/*/pyproject.toml`.
+
+Also guards the constants two packages must agree on by value because neither imports the other.
 """
 
 import importlib.util
@@ -15,6 +17,10 @@ import re
 import tomllib
 import unittest
 from pathlib import Path
+
+from jupyter_deploy import constants as jd_constants
+from jupyter_deploy.proxy import proxy_manager
+from jupyter_deploy_client_proxy import constants as proxy_constants
 
 REPO_ROOT = Path(__file__).parent.parent.parent
 ROOT_PYPROJECT = REPO_ROOT / "pyproject.toml"
@@ -150,3 +156,28 @@ class TestReadmePackageList(unittest.TestCase):
         readme = (REPO_ROOT / "README.md").read_text()
         for package in sorted(declared_packages()):
             self.assertIn(f"(./{package}/README.md)", readme, f"README.md does not link {package}")
+
+
+class TestProxyExitCodeContract(unittest.TestCase):
+    """`jd` and the client proxy agree on the exit codes they exchange.
+
+    Two numbers cross the process boundary between them: `75`, which `jd proxy connect-info` exits
+    to tell a running proxy its failure was transient, and `78`, which the proxy exits to tell `jd`
+    it stopped because refreshing the credential became impossible. Each side names them itself,
+    because `jd` never imports the proxy package — it shells out to the console script.
+
+    Nothing else fails if one side is changed alone, and both failures are quiet: a renumbered `75`
+    turns every transient AWS error into a proxy shutdown, and a renumbered `78` turns an expired
+    credential into a bare non-zero exit with no explanation for the user.
+    """
+
+    def test_retryable_exit_code_agrees(self) -> None:
+        self.assertEqual(jd_constants.RETRYABLE_EXIT_CODE, proxy_constants.RETRYABLE_EXIT_CODE)
+
+    def test_refresh_failed_exit_code_agrees(self) -> None:
+        self.assertEqual(proxy_manager.PROXY_REFRESH_FAILED_EXIT_CODE, proxy_constants.REFRESH_FAILED_EXIT_CODE)
+
+    def test_the_two_codes_are_distinct(self) -> None:
+        # `jd` reads the proxy's exit code to tell a failed refresh from other exits; sharing a
+        # number with the retryable signal would make those indistinguishable.
+        self.assertNotEqual(proxy_constants.RETRYABLE_EXIT_CODE, proxy_constants.REFRESH_FAILED_EXIT_CODE)
