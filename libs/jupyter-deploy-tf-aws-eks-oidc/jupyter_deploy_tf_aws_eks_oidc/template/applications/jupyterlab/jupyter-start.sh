@@ -4,9 +4,9 @@ set -e
 BASE_URL="${JUPYTER_BASE_URL:-/}"
 
 echo "Setting up uv environment..."
-cp /opt/uv/jupyter/pyproject.toml /home/jovyan/
-cp /opt/uv/jupyter/uv.lock /home/jovyan/
-
+# Seed the manifests ONLY when the home volume has none. Copying them
+# unconditionally would overwrite the user's own dependencies on every restart,
+# and the `uv sync --locked` below would then prune them out of .venv.
 if [ ! -f "/home/jovyan/pyproject.toml" ] || [ ! -f "/home/jovyan/uv.lock" ]; then
     echo "Did not find uv environment files in /home/jovyan."
     cp /opt/uv/jupyter/pyproject.toml /home/jovyan/
