@@ -4,7 +4,7 @@ resource "time_sleep" "wait_for_nodes" {
 }
 
 locals {
-  # Pin add-on CONTROLLER Deployments to the components node group, alongside the
+  # Pin add-on CONTROLLER Deployments to the platform node group, alongside the
   # operator and router (helm.tf). This template has no node taints, so scheduling is
   # by nodeSelector on the jupyter-deploy/role label — unlike inference-clusters, which
   # tolerates a system-NG taint. DaemonSet parts of an addon (vpc-cni, kube-proxy, the
@@ -80,7 +80,7 @@ resource "aws_eks_addon" "coredns" {
   addon_name   = "coredns"
   tags         = local.combined_tags
 
-  # coredns is a Deployment — pin it to the components node group.
+  # coredns is a Deployment — pin it to the platform node group.
   configuration_values = jsonencode({
     nodeSelector = local.components_node_selector
   })
@@ -99,7 +99,7 @@ resource "aws_eks_addon" "ebs_csi_driver" {
   addon_name   = "aws-ebs-csi-driver"
   tags         = local.combined_tags
 
-  # Pin the controller Deployment to the components node group. The node plugin is a
+  # Pin the controller Deployment to the platform node group. The node plugin is a
   # DaemonSet and is deliberately left to run on every node (workspaces included) —
   # it must be present wherever a workspace EBS volume is mounted.
   configuration_values = jsonencode({
@@ -122,7 +122,7 @@ resource "aws_eks_addon" "cert_manager" {
   tags         = local.combined_tags
 
   # cert-manager ships three Deployments (controller + webhook + cainjector), each with
-  # its own nodeSelector — pin all of them to the components node group.
+  # its own nodeSelector — pin all of them to the platform node group.
   configuration_values = jsonencode({
     nodeSelector = local.components_node_selector
     webhook = {
@@ -144,7 +144,7 @@ resource "aws_eks_addon" "external_dns" {
 
   # Stable owner ID tied to the subdomain — a new deployment on the same subdomain
   # takes ownership of existing DNS records instead of conflicting with them.
-  # external-dns is a Deployment — pin it to the components node group.
+  # external-dns is a Deployment — pin it to the platform node group.
   configuration_values = jsonencode({
     txtOwnerId    = local.full_domain
     domainFilters = [var.domain]

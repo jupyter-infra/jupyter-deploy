@@ -1,14 +1,15 @@
 # === Cluster Autoscaler ===
 #
-# Scales ALL managed node groups (components AND workspaces) within their min/max on
-# Pending pods. Motivation: admins may add pods to the components MNG, which must then
-# grow; the workspaces MNG also autoscales but keeps min_size=2 so a node always exists
-# per AZ (the #300 EBS-AZ-stranding mitigation). Karpenter (#302) will later supersede
-# workspace-node provisioning, but the components MNG stays on Cluster Autoscaler.
+# Scales the `platform` managed node group within platform_min_size/platform_max_size on
+# Pending pods. That is the only node group left — Karpenter provisions the routing and
+# workspace pools — but the platform MNG stays on Cluster Autoscaler: admins may add pods
+# to it, which must then grow it, and min_size=2 keeps a node per AZ so EBS volumes are
+# not stranded (the #300 mitigation).
 #
-# This template has no node taints, so the CA controller is pinned to the components
-# node group via nodeSelector (jupyter-deploy/role=components), NOT a toleration. Nodes
-# have NAT egress, so the image pulls from registry.k8s.io directly (no ECR repin).
+# The platform node group carries no taint, so the CA controller is pinned to it by
+# nodeSelector (jupyter-deploy/role=platform), NOT a toleration — the Karpenter pools are
+# tainted with the same label and would reject it. Nodes have NAT egress, so the image
+# pulls from registry.k8s.io directly (no ECR repin).
 
 locals {
   cluster_autoscaler_namespace       = "kube-system"
@@ -29,7 +30,7 @@ locals {
 # CA auto-discovery (--node-group-auto-discovery=asg:tag=...) reads ASG tags. EKS does
 # tag the MNG's ASG for CA, but we attach the tags EXPLICITLY to each node group's ASG
 # so discovery does not depend on that implicit behavior (and to scope the write-IAM
-# condition below to exactly these ASGs). One pair of tags per node group.
+# condition below to exactly these ASGs). One pair of tags for the platform node group.
 resource "aws_autoscaling_group_tag" "ca_enabled" {
   autoscaling_group_name = aws_eks_node_group.platform.resources[0].autoscaling_groups[0].name
   tag {
@@ -164,7 +165,7 @@ resource "helm_release" "cluster_autoscaler" {
       name  = "extraArgs.balance-similar-node-groups"
       value = "true"
     },
-    # Components node-group placement (no taints in this template, so nodeSelector only).
+    # Platform node-group placement (that group is untainted, so nodeSelector only).
     {
       name  = "nodeSelector.jupyter-deploy/role"
       value = "platform"
