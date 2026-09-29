@@ -102,9 +102,8 @@ until `e2e-reap-stale.yml` destroys it — that is deliberate, and is why the re
 Lessons from coordinated plugin/CLI/template releases — read before releasing:
 
 - **Release order for coupled changes: plugin → proxy → CLI → templates.** The CLI's `[proxy]`
-  extra pins `jupyter-deploy-client-proxy>=0.1.0`; publish the proxy (a final, non-pre-release
-  version) **before** a CLI release so the CLI's `[proxy]` extra resolves from prod PyPI. (Note a
-  pre-release like `0.1.0rc1` does NOT satisfy `>=0.1.0` — a final version is required.) A template's
+  extra pins `jupyter-deploy-client-proxy>=0.1.1`; publish the proxy (a final, non-pre-release
+  version) **before** a CLI release so the CLI's `[proxy]` extra resolves from prod PyPI. A template's
   `manifest.yaml` can require CLI features (e.g. new component/health command schema);
   the eks-oidc release gate installs the CLI *unpinned from prod PyPI*, so the CLI must
   be published **first** or the gate's deploy fails at `jd config` with a manifest schema
