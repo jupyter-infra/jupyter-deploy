@@ -85,7 +85,8 @@ def run(
         float,
         typer.Option(
             "--idle-timeout-seconds",
-            help="Shut down after this long with no client traffic (0 = never). An open WebSocket counts as traffic.",
+            min=0,
+            help="Max idle time before shutting down (0 = never, default = 2 hours); live connections count.",
         ),
     ] = DEFAULT_IDLE_TIMEOUT_SECONDS,
     log_dir: Annotated[

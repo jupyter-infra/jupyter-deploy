@@ -62,7 +62,8 @@ def start(
         float | None,
         typer.Option(
             "--idle-timeout-seconds",
-            help="Stop the proxy after this long with no activity (0 = never). Default: 7200.",
+            min=0,
+            help="Max idle time before stopping the proxy (0 = never, default = 2 hours).",
         ),
     ] = None,
 ) -> None:

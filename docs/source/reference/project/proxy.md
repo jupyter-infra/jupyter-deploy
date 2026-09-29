@@ -69,7 +69,7 @@ $ jd proxy start [OPTIONS]
 **Options**:
 
 * `-p, --path <path>`: Directory of the project to launch the proxy for.
-* `--idle-timeout-seconds <float>`: Stop the proxy after this long with no activity (0 = never). Default: 7200.
+* `--idle-timeout-seconds <float range>`: Max idle time before stopping the proxy (0 = never, default = 2 hours).  [x>=0]
 * `--help`: Show this message and exit.
 
 ## `proxy open`
