@@ -55,7 +55,7 @@ k8s = [
 # Local proxy for the aws:ec2:jupyterlab template. `jd` shells out to the
 # `jupyter-deploy-client-proxy` console script; it is never imported.
 proxy = [
-    "jupyter-deploy-client-proxy>=0.1.0",
+    "jupyter-deploy-client-proxy>=0.1.1",
 ]
 
 [tool.uv.sources]
