@@ -24,8 +24,8 @@ $ jd init [OPTIONS] [path]
 **Options**:
 
 * `-E, --engine <terraform>`: Infrastructure as code software to manage your resources.  [default: terraform]
-* `-P, --provider <aws>`: Cloud provider where your resources will be provisioned.  [default: aws]
-* `-I, --infrastructure <ec2|eks|iam>`: Infrastructure service that your cloud provider will use to provision your resources.  [default: ec2]
+* `-P, --provider <aws>`: Cloud provider of the template named by --template <template-name>. Defaults to aws.
+* `-I, --infrastructure <ec2|eks|iam>`: Infrastructure service of the template named by --template <template-name>. Defaults to ec2.
 * `-T, --template <str>`: Name of the infrastructure as code template. Pass a base name (e.g. base) or a full name (e.g. aws:ec2:jupyterlab). Defaults to your default-template preference.
 * `-o, --overwrite`: Overwrite the project directory instead of failing when the directory is not empty.
 * `--restore-project <str>`: Restore a project from the remote store instead of creating a new one. Pass the project ID to restore.

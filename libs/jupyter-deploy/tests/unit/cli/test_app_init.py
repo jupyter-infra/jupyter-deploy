@@ -13,6 +13,7 @@ from jupyter_deploy.exceptions import (
     StoreTypeNotSpecifiedError,
     TemplateNotFoundError,
 )
+from jupyter_deploy.infrastructure.enum import AWSInfrastructureType
 
 _INIT_HANDLER = "jupyter_deploy.cli.app.InitHandler"
 
@@ -45,8 +46,8 @@ class TestInitCommand(unittest.TestCase):
         mock_handler_cls.assert_called_once_with(
             project_dir=Path("."),
             engine=EngineType.TERRAFORM,
-            provider="aws",
-            infrastructure="ec2",
+            provider=None,
+            infrastructure=None,
             template=None,
             display_manager=ANY,
         )
@@ -398,3 +399,70 @@ class TestInitTemplateNotInstalled(unittest.TestCase):
 
         self.assertIn("No template is installed", result.output)
         self.assertNotIn("jd preferences set", result.output)
+
+
+class TestInitTemplateQualifiers(unittest.TestCase):
+    """`--provider` / `--infrastructure` only name segments of a base-name `--template`."""
+
+    def get_mock_project(self) -> Mock:
+        mock_project = Mock()
+        mock_project.may_export_to_project_path = Mock(return_value=True)
+        mock_project.setup = Mock()
+        mock_project.template_name = "aws:eks:oidc"
+        mock_project.template_source = TemplateSource.ARGUMENT
+        return mock_project
+
+    @patch(_INIT_HANDLER)
+    def test_qualifies_a_base_name(self, mock_handler_cls: Mock) -> None:
+        mock_handler_cls.return_value = self.get_mock_project()
+
+        result = CliRunner().invoke(app_runner.app, ["init", ".", "-I", "eks", "-T", "oidc"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertEqual(mock_handler_cls.call_args.kwargs["infrastructure"], AWSInfrastructureType.EKS)
+        self.assertEqual(mock_handler_cls.call_args.kwargs["template"], "oidc")
+
+    @patch(_INIT_HANDLER)
+    def test_omitted_flags_are_forwarded_unresolved(self, mock_handler_cls: Mock) -> None:
+        """The CLI reports what the user typed; the handler owns the default."""
+        mock_handler_cls.return_value = self.get_mock_project()
+
+        result = CliRunner().invoke(app_runner.app, ["init", ".", "-T", "base"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIsNone(mock_handler_cls.call_args.kwargs["provider"])
+        self.assertIsNone(mock_handler_cls.call_args.kwargs["infrastructure"])
+
+    @patch(_INIT_HANDLER)
+    def test_refuses_infrastructure_with_no_template(self, mock_handler_cls: Mock) -> None:
+        """`jd init . -I eks` used to scaffold an ec2 template, silently dropping the flag."""
+        result = CliRunner().invoke(app_runner.app, ["init", ".", "-I", "eks"])
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("--infrastructure cannot be applied", result.output)
+        mock_handler_cls.assert_not_called()
+
+    @patch(_INIT_HANDLER)
+    def test_refuses_provider_with_no_template(self, mock_handler_cls: Mock) -> None:
+        result = CliRunner().invoke(app_runner.app, ["init", ".", "-P", "aws"])
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("--provider cannot be applied", result.output)
+        mock_handler_cls.assert_not_called()
+
+    @patch(_INIT_HANDLER)
+    def test_names_both_flags_when_both_are_unusable(self, mock_handler_cls: Mock) -> None:
+        result = CliRunner().invoke(app_runner.app, ["init", ".", "-P", "aws", "-I", "eks"])
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("--provider and --infrastructure cannot be applied", result.output)
+
+    @patch(_INIT_HANDLER)
+    def test_refuses_a_qualifier_next_to_a_full_template_name(self, mock_handler_cls: Mock) -> None:
+        result = CliRunner().invoke(app_runner.app, ["init", ".", "-T", "aws:ec2:base", "-I", "eks"])
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        # The rendered reason wraps, so match its parts rather than one line.
+        self.assertIn("--infrastructure cannot be applied", result.output)
+        self.assertIn("aws:ec2:base", result.output)
+        mock_handler_cls.assert_not_called()

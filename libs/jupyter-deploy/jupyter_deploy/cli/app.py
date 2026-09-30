@@ -48,7 +48,7 @@ from jupyter_deploy.handlers.project.down_handler import DownHandler
 from jupyter_deploy.handlers.project.open_handler import OpenHandler
 from jupyter_deploy.handlers.project.show_handler import ShowHandler
 from jupyter_deploy.handlers.project.up_handler import UpHandler
-from jupyter_deploy.infrastructure.enum import AWSInfrastructureType, InfrastructureType
+from jupyter_deploy.infrastructure.enum import InfrastructureType
 from jupyter_deploy.manifest import JupyterDeployManifest
 from jupyter_deploy.provider.enum import ProviderType
 
@@ -118,16 +118,21 @@ def init(
         EngineType, typer.Option("--engine", "-E", help="Infrastructure as code software to manage your resources.")
     ] = EngineType.TERRAFORM,
     provider: Annotated[
-        ProviderType, typer.Option("--provider", "-P", help="Cloud provider where your resources will be provisioned.")
-    ] = ProviderType.AWS,
+        ProviderType | None,
+        typer.Option(
+            "--provider",
+            "-P",
+            help="Cloud provider of the template named by --template <template-name>. Defaults to aws.",
+        ),
+    ] = None,
     infrastructure: Annotated[
-        InfrastructureType,
+        InfrastructureType | None,
         typer.Option(
             "--infrastructure",
             "-I",
-            help="Infrastructure service that your cloud provider will use to provision your resources.",
+            help="Infrastructure service of the template named by --template <template-name>. Defaults to ec2.",
         ),
-    ] = AWSInfrastructureType.EC2,
+    ] = None,
     template: Annotated[
         str | None,
         typer.Option(
@@ -189,15 +194,55 @@ def init(
             _init_from_template(console, path, engine, provider, infrastructure, template, overwrite)
 
 
+def _reject_unusable_template_qualifiers(
+    provider: ProviderType | None,
+    infrastructure: InfrastructureType | None,
+    template: str | None,
+) -> None:
+    """Refuse --provider / --infrastructure when they cannot qualify anything.
+
+    They only name the first two segments of a base-name --template, so on their own they select
+    nothing, and next to a full name they are overridden. Either way the flag the user typed would
+    be dropped -- `jd init . -I eks` would silently scaffold an ec2 template.
+
+    Raises:
+        typer.Exit: If either flag was passed with no base-name --template to qualify.
+    """
+    passed = [
+        flag for flag, value in (("--provider", provider), ("--infrastructure", infrastructure)) if value is not None
+    ]
+    if not passed:
+        return
+
+    is_full_name = template is not None and ":" in template
+    if template is not None and not is_full_name:
+        return
+
+    err_console = Console(stderr=True)
+    reason = f"the template name '{template}' already names them" if is_full_name else "no template was named"
+    err_console.print(f":x: {' and '.join(passed)} cannot be applied: {reason}.", style="bold red")
+    err_console.line()
+    err_console.print(
+        ":bulb: Name a template to qualify, for example: [bold cyan]jd init PATH "
+        "--provider aws --infrastructure ec2 --template jupyterlab[/]"
+    )
+    err_console.print(
+        ":bulb: Or pass a full template name on its own: [bold cyan]jd init PATH -T aws:ec2:jupyterlab[/]"
+    )
+    raise typer.Exit(code=1)
+
+
 def _init_from_template(
     console: Console,
     path: Path,
     engine: EngineType,
-    provider: ProviderType,
-    infrastructure: InfrastructureType,
+    provider: ProviderType | None,
+    infrastructure: InfrastructureType | None,
     template: str | None,
     overwrite: bool,
 ) -> None:
+    _reject_unusable_template_qualifiers(provider, infrastructure, template)
+
     project = InitHandler(
         project_dir=path,
         engine=engine,

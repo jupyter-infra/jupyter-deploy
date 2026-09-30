@@ -223,9 +223,10 @@ Four variants, each installing a different dependency set and running a matching
 - **aws-k8s** — `jupyter-deploy[aws,k8s]` + base template; runs the aws AND k8s installation tests
 
 **Gotcha:** the aws and aws-k8s variants install the base template but NOT the default one, so a bare
-`jd init` inside them fails with `TemplateNotFoundError`. No smoke test runs `jd init`, so nothing goes
-red — meaning CI cannot currently catch a default-template regression. Add the jupyterlab template to
-`.github/e2e-cli/pyproject.aws*.toml` before relying on those variants for it.
+`jd init` inside them fails with `TemplateNotFoundError`. That is asserted rather than accidental:
+`test_aws_installation.py` runs `jd init` and expects the error, `test_proxy_installation.py` runs it in
+the aws-proxy track -- the only one installing the default template -- and expects a scaffolded project.
+Both skip or invert if a variant's install set changes, so keep the install sets and those tests in step.
 - **aws-proxy** — `jupyter-deploy[aws,proxy]` (client proxy resolved from prod PyPI); runs the aws AND proxy installation tests (proxy package present + its console script resolves)
 
 Examples:

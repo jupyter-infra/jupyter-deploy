@@ -492,3 +492,29 @@ class TestSuggestTemplatePackage(unittest.TestCase):
 
     def test_returns_none_for_a_name_that_is_not_three_segments(self) -> None:
         self.assertIsNone(_suggest_template_package("terraform", "jupyterlab"))
+
+
+class TestInitHandlerCoordinateDefaults(unittest.TestCase):
+    """The handler owns the provider and infrastructure defaults, so callers can forward None."""
+
+    def setUp(self) -> None:
+        patcher = patch(_RETRIEVE_PREFERENCES, return_value=JupyterDeployPreferencesV1())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
+    def test_defaults_to_aws_ec2(self, mock_find_template_path: MagicMock) -> None:
+        handler = InitHandler(project_dir=Path("/test/dir"), template="base")
+
+        self.assertEqual(handler.template_name, "aws:ec2:base")
+
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
+    def test_honors_the_given_coordinates(self, mock_find_template_path: MagicMock) -> None:
+        handler = InitHandler(
+            project_dir=Path("/test/dir"),
+            provider=ProviderType.AWS,
+            infrastructure=AWSInfrastructureType.EKS,
+            template="oidc",
+        )
+
+        self.assertEqual(handler.template_name, "aws:eks:oidc")

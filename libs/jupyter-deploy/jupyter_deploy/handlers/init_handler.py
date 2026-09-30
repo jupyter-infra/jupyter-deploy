@@ -39,8 +39,8 @@ class InitHandler:
         self,
         project_dir: Path | None,
         engine: EngineType = EngineType.TERRAFORM,
-        provider: ProviderType = ProviderType.AWS,
-        infrastructure: InfrastructureType = AWSInfrastructureType.EC2,
+        provider: ProviderType | None = None,
+        infrastructure: InfrastructureType | None = None,
         template: str | None = None,
         display_manager: DisplayManager | None = None,
     ) -> None:
@@ -51,6 +51,9 @@ class InitHandler:
         such as `base` is composed with them. Passing None resolves the template from the user's
         preferences, then from the built-in default -- `template_source` records what settled it, so
         that a caller can report back a template the user never typed.
+
+        The provider and infrastructure default here rather than in the signature, so that a caller
+        can forward what its user did or did not pass without having to know the default itself.
 
         Raises:
             InvalidTemplateNameError: If an explicit or preferred full template name is malformed.
@@ -68,8 +71,8 @@ class InitHandler:
         preferences_handler = PreferencesHandler(display_manager=display_manager or NullDisplay())
         self.template_name, self.template_source = preferences_handler.resolve_template(
             template=template,
-            provider=provider,
-            infrastructure=infrastructure,
+            provider=provider or ProviderType.AWS,
+            infrastructure=infrastructure or AWSInfrastructureType.EC2,
         )
 
         self.source_path = self._find_template_path(self.template_name)
