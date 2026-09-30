@@ -268,3 +268,30 @@ class ProviderType(str, Enum):
             if member.value.lower() == value_lower:
                 return member
         raise ValueError(f"Unknown provider type: {value}")
+
+
+class PreferenceName(str, Enum):
+    """Names of the settable preferences, as they appear in the preferences file."""
+
+    DEFAULT_TEMPLATE = "default-template"
+    DEFAULT_STORE_TYPE = "default-store-type"
+
+
+class PreferenceSource(str, Enum):
+    """Where the effective value of a preference came from."""
+
+    PREFERENCES = "preferences"
+    BUILT_IN = "built-in"
+    UNSET = "unset"
+
+
+class TemplateSource(str, Enum):
+    """What decided the template a command is about to use.
+
+    Kept apart from PreferenceSource, which describes a stored preference: a template can also come
+    from an argument, and a preference is never UNSET at the point a template has been resolved.
+    """
+
+    ARGUMENT = "argument"
+    PREFERENCES = "preferences"
+    BUILT_IN = "built-in"

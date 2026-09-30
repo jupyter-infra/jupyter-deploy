@@ -885,6 +885,18 @@ class InvalidStoreTypeError(JupyterDeployError, ValueError):
         super().__init__(f"Invalid store type: '{store_type}'")
 
 
+class StoreTypeNotSpecifiedError(JupyterDeployError, ValueError):
+    """Raised when a command needs a store type, none was passed, and none is preferred.
+
+    Attributes:
+        valid_store_types: List of valid store type values
+    """
+
+    def __init__(self, valid_store_types: list[str]) -> None:
+        self.valid_store_types = valid_store_types
+        super().__init__("No store type specified.")
+
+
 class ProjectStoreNotFoundError(JupyterDeployError, RuntimeError):
     """Raised when no project store is found.
 
@@ -951,3 +963,57 @@ class ProjectIdNotAvailableError(JupyterDeployError, RuntimeError):
     def __init__(self, message: str, hint: str | None = None) -> None:
         self.hint = hint
         super().__init__(message)
+
+
+# ============================================================================
+# Preferences errors
+# ============================================================================
+
+
+class TemplateNotFoundError(JupyterDeployError, ValueError):
+    """Raised when no installed package provides the requested template.
+
+    Attributes:
+        template_name: The full name that was requested
+        engine: The engine the lookup was scoped to
+        installed: Full names of the templates installed for that engine
+        suggested_package: Distribution that conventionally provides the template, if one is known
+    """
+
+    def __init__(
+        self,
+        template_name: str,
+        engine: str,
+        installed: list[str],
+        suggested_package: str | None = None,
+    ) -> None:
+        self.template_name = template_name
+        self.engine = engine
+        self.installed = installed
+        self.suggested_package = suggested_package
+        super().__init__(f"Template '{template_name}' is not installed for engine '{engine}'.")
+
+
+class InvalidTemplateNameError(JupyterDeployError, ValueError):
+    """Raised when a full template name is not of the form <provider>:<infrastructure>:<template>.
+
+    Attributes:
+        template_name: The invalid template name
+    """
+
+    def __init__(self, template_name: str) -> None:
+        self.template_name = template_name
+        super().__init__(f"Invalid template name: '{template_name}'")
+
+
+class ReadPreferencesError(JupyterDeployError, RuntimeError):
+    """Raised when the preferences file exists but cannot be read or parsed.
+
+    Attributes:
+        file_path: Path of the preferences file
+    """
+
+    def __init__(self, file_path: str, error_msg: str) -> None:
+        self.file_path = file_path
+        self.error_msg = error_msg
+        super().__init__(f"Cannot read the preferences file at '{file_path}'.")
