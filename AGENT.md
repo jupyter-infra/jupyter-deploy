@@ -72,9 +72,10 @@ not the cloud host. Two boundary invariants define this package:
 Its functional suite is a separate track — see "Running the client-proxy functional tests" below.
 
 ## Base template package
-Code: `./libs/jupyter-deploy-tf-ec2-base`
+Code: `./libs/jupyter-deploy-tf-aws-ec2-base`
 
-Primary template used by the CLI, referred to as "base template".
+Multi-user JupyterLab on EC2 behind a public URL on your own domain, referred to as "base template".
+It was the default `jd init` template until v0.8.0, when the EC2 JupyterLab template replaced it.
 - infrastructure-as-code engine: `terraform`
 - cloud provider: `aws`
 - identity provider: `github`
@@ -93,6 +94,10 @@ Code: `./libs/jupyter-deploy-tf-aws-ec2-jupyterlab`
 Single-user JupyterLab on a remote EC2 instance, reached from the user's laptop through the local
 client proxy over pinned self-signed TLS and authorized by the caller's AWS identity. AWS
 credentials are the only prerequisite — no domain, Route53, ACM, or OAuth app; no public URL, no EIP.
+
+**Default `jd init` template since v0.8.0** (`constants.DEFAULT_TEMPLATE`), replacing the base
+template. A user overrides it per project with `--template`, or for good with
+`jd preferences set --default-template`.
 - infrastructure-as-code engine: `terraform`
 - cloud provider: `aws`
 - identity provider: none — access is gated by AWS IAM identity (`auth_arn_allowlist`)
@@ -216,6 +221,11 @@ Four variants, each installing a different dependency set and running a matching
 - **bare** — CLI only; tests validate that `boto3` is NOT installed
 - **aws** — `jupyter-deploy[aws]` + base template; runs the aws installation tests
 - **aws-k8s** — `jupyter-deploy[aws,k8s]` + base template; runs the aws AND k8s installation tests
+
+**Gotcha:** the aws and aws-k8s variants install the base template but NOT the default one, so a bare
+`jd init` inside them fails with `TemplateNotFoundError`. No smoke test runs `jd init`, so nothing goes
+red — meaning CI cannot currently catch a default-template regression. Add the jupyterlab template to
+`.github/e2e-cli/pyproject.aws*.toml` before relying on those variants for it.
 - **aws-proxy** — `jupyter-deploy[aws,proxy]` (client proxy resolved from prod PyPI); runs the aws AND proxy installation tests (proxy package present + its console script resolves)
 
 Examples:

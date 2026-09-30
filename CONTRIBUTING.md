@@ -78,7 +78,7 @@ roborev refine      # iterate: review, fix, repeat
 
 Local review is optional; CI reviews every PR regardless.
 
-## Work on the base template
+## Work on a deployment template
 
 ### Prerequisites
 - install [aws-cli](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
