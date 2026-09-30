@@ -30,7 +30,7 @@ $ jd projects list [OPTIONS]
 
 **Options**:
 
-* `--store-type <s3-only|s3-ddb>`: Type of the remote store.  [required]
+* `--store-type <s3-only|s3-ddb>`: Type of the remote store. Defaults to your default-store-type preference.
 * `--store-id <str>`: ID of a specific store to query.
 * `-n <int range>`: Maximum number of projects to display.  [default: 20; x>=1]
 * `-s, --skip <int range>`: Number of projects to skip.  [default: 0; x>=0]
@@ -53,7 +53,7 @@ $ jd projects show [OPTIONS] {project_id}
 
 **Options**:
 
-* `--store-type <s3-only|s3-ddb>`: Type of the remote store.  [required]
+* `--store-type <s3-only|s3-ddb>`: Type of the remote store. Defaults to your default-store-type preference.
 * `--store-id <str>`: ID of a specific store to query.
 * `--text`: Output plain text without Rich markup.
 * `--help`: Show this message and exit.
@@ -74,7 +74,7 @@ $ jd projects delete [OPTIONS] {project_id}
 
 **Options**:
 
-* `--store-type <s3-only|s3-ddb>`: Type of the remote store.  [required]
+* `--store-type <s3-only|s3-ddb>`: Type of the remote store. Defaults to your default-store-type preference.
 * `--store-id <str>`: ID of a specific store to query.
 * `-y, --answer-yes`: Skip confirmation prompt.
 * `--help`: Show this message and exit.

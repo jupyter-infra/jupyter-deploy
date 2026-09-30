@@ -66,4 +66,5 @@ reference/project-commands
 reference/resource-commands
 reference/access-commands
 reference/store-commands
+reference/setup-commands
 ```

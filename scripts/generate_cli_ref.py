@@ -51,6 +51,14 @@ COMMAND_GROUPS = {
         ),
         "commands": ["projects"],
     },
+    "setup": {
+        "title": "Setup Commands",
+        "description": (
+            "Setup commands configure the CLI rather than any one project."
+            " Preferences set the defaults that other commands fall back to."
+        ),
+        "commands": ["preferences"],
+    },
     "general": {
         "title": "General",
         "description": "",
