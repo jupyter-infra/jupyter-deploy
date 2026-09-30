@@ -6,7 +6,11 @@ from typer.testing import CliRunner
 
 from jupyter_deploy.cli.app import runner as app_runner
 from jupyter_deploy.enum import StoreType
-from jupyter_deploy.exceptions import ProjectNotFoundInStoreError, ProjectStoreNotFoundError
+from jupyter_deploy.exceptions import (
+    ProjectNotFoundInStoreError,
+    ProjectStoreNotFoundError,
+    StoreTypeNotSpecifiedError,
+)
 from jupyter_deploy.provider.store.store_manager import ProjectDetails, ProjectSummary
 
 _HANDLER = "jupyter_deploy.cli.projects_app.ProjectsHandler"
@@ -135,11 +139,27 @@ class TestProjectsListCommand(unittest.TestCase):
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("No store found", result.output)
 
-    def test_list_projects_missing_store_type(self) -> None:
+    @patch(_HANDLER)
+    def test_list_projects_forwards_no_store_type_for_the_handler_to_resolve(self, mock_handler_cls: Mock) -> None:
+        mock_handler_cls.return_value = _mock_handler_with_projects([])
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["projects", "list"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIsNone(mock_handler_cls.call_args.kwargs["store_type"])
+
+    @patch(_HANDLER)
+    def test_list_projects_reports_an_unresolved_store_type(self, mock_handler_cls: Mock) -> None:
+        mock_handler_cls.side_effect = StoreTypeNotSpecifiedError(["s3-only", "s3-ddb"])
+
         runner = CliRunner()
         result = runner.invoke(app_runner.app, ["projects", "list"])
 
         self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("No store type specified", result.output)
+        self.assertIn("s3-only", result.output)
+        self.assertIn("jd preferences set --default-store-type", result.output)
 
 
 class TestProjectsShowCommand(unittest.TestCase):
@@ -287,3 +307,27 @@ class TestProjectsDeleteCommand(unittest.TestCase):
         result = runner.invoke(app_runner.app, ["projects", "delete", "tpl-abc123", "--store-type", "s3-only", "-y"])
 
         self.assertNotEqual(result.exit_code, 0)
+
+    @patch(_HANDLER)
+    def test_delete_project_forwards_no_store_type_for_the_handler_to_resolve(self, mock_handler_cls: Mock) -> None:
+        mock_handler = Mock()
+        type(mock_handler).store_id = PropertyMock(return_value="jd-bucket-abc")
+        mock_handler_cls.return_value = mock_handler
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["projects", "delete", "tpl-abc123", "-y"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIsNone(mock_handler_cls.call_args.kwargs["store_type"])
+
+    @patch(_HANDLER)
+    def test_delete_project_refuses_before_prompting_when_no_store_type(self, mock_handler_cls: Mock) -> None:
+        """Nobody should confirm a deletion only to be told afterwards that no store was resolved."""
+        mock_handler_cls.side_effect = StoreTypeNotSpecifiedError(["s3-only", "s3-ddb"])
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["projects", "delete", "tpl-abc123"], input="y\n")
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("No store type specified", result.output)
+        self.assertNotIn("permanently delete", result.output)

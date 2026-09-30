@@ -16,13 +16,15 @@ projects_app = typer.Typer(
     no_args_is_help=True,
 )
 
+STORE_TYPE_HELP = "Type of the remote store. Defaults to your default-store-type preference."
+
 
 @projects_app.command("list")
 def list_projects(
     store_type: Annotated[
-        StoreType,
-        typer.Option("--store-type", help="Type of the remote store."),
-    ],
+        StoreType | None,
+        typer.Option("--store-type", help=STORE_TYPE_HELP),
+    ] = None,
     store_id: Annotated[
         str | None,
         typer.Option("--store-id", help="ID of a specific store to query."),
@@ -88,9 +90,9 @@ def show_project(
         typer.Argument(help="ID of the project to show."),
     ],
     store_type: Annotated[
-        StoreType,
-        typer.Option("--store-type", help="Type of the remote store."),
-    ],
+        StoreType | None,
+        typer.Option("--store-type", help=STORE_TYPE_HELP),
+    ] = None,
     store_id: Annotated[
         str | None,
         typer.Option("--store-id", help="ID of a specific store to query."),
@@ -151,9 +153,9 @@ def delete_project(
         typer.Argument(help="ID of the project to delete."),
     ],
     store_type: Annotated[
-        StoreType,
-        typer.Option("--store-type", help="Type of the remote store."),
-    ],
+        StoreType | None,
+        typer.Option("--store-type", help=STORE_TYPE_HELP),
+    ] = None,
     store_id: Annotated[
         str | None,
         typer.Option("--store-id", help="ID of a specific store to query."),
@@ -166,6 +168,11 @@ def delete_project(
     """Delete all the project data from a remote store."""
     console = Console()
     with handle_cli_errors(console):
+        # Build the handler BEFORE prompting: it resolves the store type, and nobody should confirm
+        # a deletion only to be told afterwards that no store was resolved to delete from.
+        display_manager = SimpleDisplayManager(console=console, pass_through=False)
+        handler = ProjectsHandler(display_manager=display_manager, store_type=store_type, store_id=store_id)
+
         if not answer_yes:
             console.print(
                 f":warning: This will permanently delete all remote data for project '{project_id}'.",
@@ -175,9 +182,6 @@ def delete_project(
             if not confirmed:
                 console.print("Aborted.")
                 return
-
-        display_manager = SimpleDisplayManager(console=console, pass_through=False)
-        handler = ProjectsHandler(display_manager=display_manager, store_type=store_type, store_id=store_id)
 
         with display_manager.spinner(f"Deleting project '{project_id}'..."):
             handler.delete_project(project_id)
