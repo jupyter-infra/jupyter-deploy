@@ -561,7 +561,7 @@ ci-deploy-base oauth_app_num ci_dir="sandbox-ci" project_dir="sandbox-base":
         exit 1
     fi
     mkdir -p {{project_dir}}
-    uv run jd init {{project_dir}}
+    uv run jd init {{project_dir}} --engine terraform --provider aws --infrastructure ec2 --template base
     uv run python scripts/config_base_from_ci.py {{project_dir}} {{ci_dir}} {{oauth_app_num}}
     uv run jd up -y -p {{project_dir}}
 
