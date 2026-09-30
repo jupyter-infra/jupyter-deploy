@@ -33,6 +33,7 @@ from jupyter_deploy.exceptions import (
     InvalidProviderCredentialsError,
     InvalidServiceError,
     InvalidStoreTypeError,
+    InvalidTemplateNameError,
     InvalidVariablesDotYamlError,
     JupyterDeployError,
     LogCleanupError,
@@ -56,12 +57,15 @@ from jupyter_deploy.exceptions import (
     ProxyStartError,
     ReadConfigurationError,
     ReadManifestError,
+    ReadPreferencesError,
     RequiredOutputNotFoundError,
     RequiredOutputTypeError,
     ResourceNameRequiredError,
     ResourceNotFoundError,
     ResourcePollTimeoutError,
+    StoreTypeNotSpecifiedError,
     SupervisedExecutionError,
+    TemplateNotFoundError,
     ToolRequiredError,
     TransientProviderError,
     UnreachableHostError,
@@ -252,6 +256,15 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         console.print(f"Available store types: {', '.join(e.valid_store_types)}")
         raise typer.Exit(code=1) from None
 
+    except StoreTypeNotSpecifiedError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        console.print(f":bulb: Pass [bold cyan]--store-type[/] with one of: {', '.join(e.valid_store_types)}")
+        console.print(
+            ":bulb: Or set a default value with: [bold cyan]jd preferences set --default-store-type STORE-TYPE[/]"
+        )
+        raise typer.Exit(code=1) from None
+
     except (UnreachableHostError, IncompatibleHostStateError) as e:
         console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
@@ -281,6 +294,35 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(":bulb: Review your variables.yaml file for syntax errors", style="dim")
+        raise typer.Exit(code=1) from None
+
+    except TemplateNotFoundError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        if e.installed:
+            console.print(f"Installed templates: {', '.join(e.installed)}", highlight=False)
+        else:
+            console.print("No template is installed.")
+        if e.suggested_package:
+            console.print(f":bulb: To install it, run: [bold cyan]uv add {e.suggested_package}[/]")
+        if e.installed:
+            console.print(
+                ":bulb: To default to a template you have, run: "
+                f"[bold cyan]jd preferences set --default-template {e.installed[0]}[/]"
+            )
+        raise typer.Exit(code=1) from None
+
+    except InvalidTemplateNameError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        console.print("A full template name looks like: [bold cyan]aws:ec2:jupyterlab[/]", highlight=False)
+        raise typer.Exit(code=1) from None
+
+    except ReadPreferencesError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.print(f"  Details: {e.error_msg}", style="dim")
+        console.line()
+        console.print(":bulb: To restore built-in settings, run: [bold cyan]jd preferences unset --all[/]")
         raise typer.Exit(code=1) from None
 
     except LogNotFoundError as e:
