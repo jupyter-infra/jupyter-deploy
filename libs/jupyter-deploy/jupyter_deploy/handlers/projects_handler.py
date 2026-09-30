@@ -1,5 +1,7 @@
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.enum import StoreType
+from jupyter_deploy.exceptions import StoreTypeNotSpecifiedError
+from jupyter_deploy.handlers.preferences_handler import PreferencesHandler
 from jupyter_deploy.provider.store.store_manager import ProjectDetails, ProjectSummary
 from jupyter_deploy.provider.store.store_manager_factory import StoreManagerFactory
 
@@ -11,9 +13,25 @@ class ProjectsHandler:
     extend BaseProjectHandler.
     """
 
-    def __init__(self, display_manager: DisplayManager, store_type: StoreType, store_id: str | None = None) -> None:
+    def __init__(
+        self,
+        display_manager: DisplayManager,
+        store_type: StoreType | None = None,
+        store_id: str | None = None,
+    ) -> None:
+        """Create the handler for a store, falling back to the preferred store type.
+
+        Raises:
+            StoreTypeNotSpecifiedError: If no store type was passed and none is preferred.
+            InvalidStoreTypeError: If the preferred store type is not recognized.
+        """
         self.display_manager = display_manager
-        self._store_manager = StoreManagerFactory.get_manager(store_type=store_type, store_id=store_id)
+        self.store_type = PreferencesHandler(display_manager=display_manager).resolve_store_type(store_type)
+
+        if self.store_type is None:
+            raise StoreTypeNotSpecifiedError([t.value for t in StoreType])
+
+        self._store_manager = StoreManagerFactory.get_manager(store_type=self.store_type, store_id=store_id)
 
     @property
     def store_id(self) -> str:

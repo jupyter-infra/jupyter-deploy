@@ -3,9 +3,16 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 
 from jupyter_deploy.enum import StoreType
-from jupyter_deploy.exceptions import ProjectNotFoundInStoreError
+from jupyter_deploy.exceptions import (
+    InvalidStoreTypeError,
+    ProjectNotFoundInStoreError,
+    StoreTypeNotSpecifiedError,
+)
 from jupyter_deploy.handlers.projects_handler import ProjectsHandler
+from jupyter_deploy.preferences import JupyterDeployPreferencesV1
 from jupyter_deploy.provider.store.store_manager import ProjectDetails, ProjectSummary, StoreInfo
+
+_RETRIEVE_PREFERENCES = "jupyter_deploy.handlers.preferences_handler.retrieve_preferences"
 
 
 class TestProjectsHandler(unittest.TestCase):
@@ -98,3 +105,58 @@ class TestProjectsHandler(unittest.TestCase):
 
         self.assertEqual(handler.store_id, "jd-bucket-abc")
         mock_store_manager.resolve_store.assert_called_once()
+
+
+class TestProjectsHandlerStoreTypeResolution(unittest.TestCase):
+    """The handler resolves the store type so that every consumer gets the same fallback."""
+
+    def setUp(self) -> None:
+        self.mock_display = Mock()
+
+    @patch(_RETRIEVE_PREFERENCES)
+    @patch("jupyter_deploy.handlers.projects_handler.StoreManagerFactory")
+    def test_uses_the_given_store_type(self, mock_factory: Mock, mock_prefs: Mock) -> None:
+        ProjectsHandler(display_manager=self.mock_display, store_type=StoreType.S3_ONLY)
+
+        mock_factory.get_manager.assert_called_once_with(store_type=StoreType.S3_ONLY, store_id=None)
+        mock_prefs.assert_not_called()
+
+    @patch(_RETRIEVE_PREFERENCES)
+    @patch("jupyter_deploy.handlers.projects_handler.StoreManagerFactory")
+    def test_falls_back_to_the_preferred_store_type(self, mock_factory: Mock, mock_prefs: Mock) -> None:
+        mock_prefs.return_value = JupyterDeployPreferencesV1(default_store_type="s3-ddb")
+
+        handler = ProjectsHandler(display_manager=self.mock_display)
+
+        self.assertEqual(handler.store_type, StoreType.S3_DDB)
+        mock_factory.get_manager.assert_called_once_with(store_type=StoreType.S3_DDB, store_id=None)
+
+    @patch(_RETRIEVE_PREFERENCES)
+    @patch("jupyter_deploy.handlers.projects_handler.StoreManagerFactory")
+    def test_given_store_type_beats_the_preference(self, mock_factory: Mock, mock_prefs: Mock) -> None:
+        mock_prefs.return_value = JupyterDeployPreferencesV1(default_store_type="s3-ddb")
+
+        ProjectsHandler(display_manager=self.mock_display, store_type=StoreType.S3_ONLY)
+
+        mock_factory.get_manager.assert_called_once_with(store_type=StoreType.S3_ONLY, store_id=None)
+
+    @patch(_RETRIEVE_PREFERENCES)
+    @patch("jupyter_deploy.handlers.projects_handler.StoreManagerFactory")
+    def test_raises_when_neither_is_available(self, mock_factory: Mock, mock_prefs: Mock) -> None:
+        mock_prefs.return_value = JupyterDeployPreferencesV1()
+
+        with self.assertRaises(StoreTypeNotSpecifiedError) as ctx:
+            ProjectsHandler(display_manager=self.mock_display)
+
+        self.assertEqual(ctx.exception.valid_store_types, ["s3-only", "s3-ddb"])
+        mock_factory.get_manager.assert_not_called()
+
+    @patch(_RETRIEVE_PREFERENCES)
+    @patch("jupyter_deploy.handlers.projects_handler.StoreManagerFactory")
+    def test_raises_on_an_unrecognized_preference(self, mock_factory: Mock, mock_prefs: Mock) -> None:
+        mock_prefs.return_value = JupyterDeployPreferencesV1(default_store_type="dynamodb")
+
+        with self.assertRaises(InvalidStoreTypeError):
+            ProjectsHandler(display_manager=self.mock_display)
+
+        mock_factory.get_manager.assert_not_called()
