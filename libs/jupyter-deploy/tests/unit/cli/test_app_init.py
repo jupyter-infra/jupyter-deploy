@@ -1,12 +1,18 @@
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
 from typer.testing import CliRunner
 
 from jupyter_deploy.cli.app import runner as app_runner
 from jupyter_deploy.engine.enum import EngineType
-from jupyter_deploy.exceptions import ProjectStoreNotFoundError
+from jupyter_deploy.enum import TemplateSource
+from jupyter_deploy.exceptions import (
+    InvalidTemplateNameError,
+    ProjectStoreNotFoundError,
+    StoreTypeNotSpecifiedError,
+    TemplateNotFoundError,
+)
 
 _INIT_HANDLER = "jupyter_deploy.cli.app.InitHandler"
 
@@ -41,7 +47,8 @@ class TestInitCommand(unittest.TestCase):
             engine=EngineType.TERRAFORM,
             provider="aws",
             infrastructure="ec2",
-            template="base",
+            template=None,
+            display_manager=ANY,
         )
 
     @patch(_INIT_HANDLER)
@@ -73,6 +80,7 @@ class TestInitCommand(unittest.TestCase):
             provider="aws",
             infrastructure="ec2",
             template="other-template",
+            display_manager=ANY,
         )
 
     @patch(_INIT_HANDLER)
@@ -93,6 +101,7 @@ class TestInitCommand(unittest.TestCase):
             provider="aws",
             infrastructure="ec2",
             template="a-template",
+            display_manager=ANY,
         )
 
     @patch(_INIT_HANDLER)
@@ -174,6 +183,88 @@ class TestInitCommand(unittest.TestCase):
         mock_subprocess_run.assert_called_once_with(["jupyter", "deploy", "init", "--help"])
 
 
+class TestInitResolvedTemplateNotice(unittest.TestCase):
+    """The handler resolves the template; the CLI reports back any template the user never typed."""
+
+    def get_mock_project(self, source: TemplateSource, template_name: str = "aws:ec2:jupyterlab") -> Mock:
+        mock_project = Mock()
+        mock_project.may_export_to_project_path = Mock(return_value=True)
+        mock_project.setup = Mock()
+        mock_project.template_name = template_name
+        mock_project.template_source = source
+        return mock_project
+
+    @patch(_INIT_HANDLER)
+    def test_notifies_when_the_built_in_default_settled_the_template(self, mock_handler_cls: Mock) -> None:
+        mock_handler_cls.return_value = self.get_mock_project(TemplateSource.BUILT_IN)
+
+        result = CliRunner().invoke(app_runner.app, ["init", "."])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("No template specified", result.output)
+        self.assertIn("aws:ec2:jupyterlab", result.output)
+        self.assertIn("aws:ec2:base", result.output)
+
+    @patch(_INIT_HANDLER)
+    def test_states_the_template_used_without_making_it_a_hint(self, mock_handler_cls: Mock) -> None:
+        """Which template was used is a statement; only the line offering a command is a hint."""
+        mock_handler_cls.return_value = self.get_mock_project(TemplateSource.BUILT_IN)
+
+        result = CliRunner().invoke(app_runner.app, ["init", "."])
+
+        stated = next(line for line in result.output.splitlines() if "No template specified" in line)
+        self.assertNotIn("💡", stated)
+
+    @patch(_INIT_HANDLER)
+    def test_points_at_the_preference_flag_rather_than_a_template_to_copy(self, mock_handler_cls: Mock) -> None:
+        mock_handler_cls.return_value = self.get_mock_project(TemplateSource.BUILT_IN)
+
+        result = CliRunner().invoke(app_runner.app, ["init", "."])
+
+        self.assertIn("To set a different template as default", result.output)
+        self.assertIn("jd preferences set", result.output)
+        self.assertIn("--default-template", result.output)
+
+    @patch(_INIT_HANDLER)
+    def test_stays_quiet_when_an_argument_settled_the_template(self, mock_handler_cls: Mock) -> None:
+        mock_handler_cls.return_value = self.get_mock_project(TemplateSource.ARGUMENT)
+
+        result = CliRunner().invoke(app_runner.app, ["init", ".", "--template", "aws:ec2:jupyterlab"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertNotIn("No template specified", result.output)
+
+    @patch(_INIT_HANDLER)
+    def test_reports_a_template_that_came_from_a_preference(self, mock_handler_cls: Mock) -> None:
+        mock_handler_cls.return_value = self.get_mock_project(TemplateSource.PREFERENCES, "aws:ec2:base")
+
+        result = CliRunner().invoke(app_runner.app, ["init", "."])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("No template specified", result.output)
+        self.assertIn("aws:ec2:base", result.output)
+        self.assertIn("from your preferences", result.output)
+
+    @patch(_INIT_HANDLER)
+    def test_a_preference_gets_one_line_without_the_built_in_notice(self, mock_handler_cls: Mock) -> None:
+        """Somebody who set the preference needs no telling how to set it, nor what it replaced."""
+        mock_handler_cls.return_value = self.get_mock_project(TemplateSource.PREFERENCES, "aws:ec2:base")
+
+        result = CliRunner().invoke(app_runner.app, ["init", "."])
+
+        self.assertNotIn("To set a different template as default", result.output)
+        self.assertNotIn("built-in default template changed", result.output)
+
+    @patch(_INIT_HANDLER)
+    def test_reports_a_malformed_template_name(self, mock_handler_cls: Mock) -> None:
+        mock_handler_cls.side_effect = InvalidTemplateNameError("ec2:base")
+
+        result = CliRunner().invoke(app_runner.app, ["init", "."])
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("Invalid template name", result.output)
+
+
 class TestInitRestoreCommand(unittest.TestCase):
     @patch(_INIT_HANDLER)
     def test_restore_from_calls_handler(self, mock_handler_cls: Mock) -> None:
@@ -225,15 +316,26 @@ class TestInitRestoreCommand(unittest.TestCase):
 
         self.assertNotEqual(result.exit_code, 0)
 
-    def test_restore_from_without_store_type_fails(self) -> None:
+    @patch(_INIT_HANDLER)
+    def test_restore_forwards_no_store_type_for_the_handler_to_resolve(self, mock_handler_cls: Mock) -> None:
+        mock_handler_cls.restore.return_value = Path("/tmp/restored").resolve()
+
         runner = CliRunner()
-        result = runner.invoke(
-            app_runner.app,
-            ["init", "/tmp/restored", "--restore-project", "tpl-abc123"],
-        )
+        result = runner.invoke(app_runner.app, ["init", "/tmp/restored", "--restore-project", "tpl-abc123"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIsNone(mock_handler_cls.restore.call_args.kwargs["store_type"])
+
+    @patch(_INIT_HANDLER)
+    def test_restore_reports_an_unresolved_store_type(self, mock_handler_cls: Mock) -> None:
+        mock_handler_cls.restore.side_effect = StoreTypeNotSpecifiedError(["s3-only", "s3-ddb"])
+
+        runner = CliRunner()
+        result = runner.invoke(app_runner.app, ["init", "/tmp/restored", "--restore-project", "tpl-abc123"])
 
         self.assertNotEqual(result.exit_code, 0)
-        self.assertIn("--store-type is required with --restore-project", result.output)
+        self.assertIn("No store type specified", result.output)
+        self.assertIn("jd preferences set --default-store-type", result.output)
 
     @patch(_INIT_HANDLER)
     def test_restore_from_store_not_found(self, mock_handler_cls: Mock) -> None:
@@ -247,3 +349,52 @@ class TestInitRestoreCommand(unittest.TestCase):
 
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("No store found", result.output)
+
+
+class TestInitTemplateNotInstalled(unittest.TestCase):
+    """The upgrade path: whoever has only the previous default installed must be told what to do."""
+
+    @patch(_INIT_HANDLER)
+    def test_names_the_package_to_install(self, mock_handler_cls: Mock) -> None:
+        mock_handler_cls.side_effect = TemplateNotFoundError(
+            template_name="aws:ec2:jupyterlab",
+            engine="terraform",
+            installed=["aws:ec2:base"],
+            suggested_package="jupyter-deploy-tf-aws-ec2-jupyterlab",
+        )
+
+        result = CliRunner().invoke(app_runner.app, ["init", "."])
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("is not installed", result.output)
+        self.assertIn("uv add jupyter-deploy-tf-aws-ec2-jupyterlab", result.output)
+
+    @patch(_INIT_HANDLER)
+    def test_offers_an_installed_template_as_the_default(self, mock_handler_cls: Mock) -> None:
+        mock_handler_cls.side_effect = TemplateNotFoundError(
+            template_name="aws:ec2:jupyterlab",
+            engine="terraform",
+            installed=["aws:ec2:base"],
+            suggested_package="jupyter-deploy-tf-aws-ec2-jupyterlab",
+        )
+
+        result = CliRunner().invoke(app_runner.app, ["init", "."])
+
+        self.assertIn("Installed templates: aws:ec2:base", result.output)
+        # The rendered command wraps, so match its parts rather than one line.
+        self.assertIn("jd preferences set --default-template", result.output)
+        self.assertIn("To default to a template you have", result.output)
+
+    @patch(_INIT_HANDLER)
+    def test_offers_no_default_when_nothing_is_installed(self, mock_handler_cls: Mock) -> None:
+        mock_handler_cls.side_effect = TemplateNotFoundError(
+            template_name="aws:ec2:jupyterlab",
+            engine="terraform",
+            installed=[],
+            suggested_package="jupyter-deploy-tf-aws-ec2-jupyterlab",
+        )
+
+        result = CliRunner().invoke(app_runner.app, ["init", "."])
+
+        self.assertIn("No template is installed", result.output)
+        self.assertNotIn("jd preferences set", result.output)

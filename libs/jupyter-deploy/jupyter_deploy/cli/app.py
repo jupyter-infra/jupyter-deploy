@@ -9,7 +9,7 @@ from jupyter_core.application import JupyterApp
 from rich.console import Console
 from rich.table import Table
 
-from jupyter_deploy import cmd_utils
+from jupyter_deploy import cmd_utils, constants
 from jupyter_deploy.cli.cluster_app import cluster_app
 from jupyter_deploy.cli.component_app import component_app
 from jupyter_deploy.cli.error_decorator import handle_cli_errors
@@ -19,6 +19,7 @@ from jupyter_deploy.cli.host_app import host_app
 from jupyter_deploy.cli.image_app import image_app
 from jupyter_deploy.cli.organization_app import organization_app
 from jupyter_deploy.cli.pool_app import pool_app
+from jupyter_deploy.cli.preferences_app import preferences_app
 from jupyter_deploy.cli.progress_display import ProgressDisplayManager
 from jupyter_deploy.cli.projects_app import projects_app
 from jupyter_deploy.cli.proxy_app import proxy_app
@@ -31,7 +32,7 @@ from jupyter_deploy.cli.volume_app import volume_app
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
-from jupyter_deploy.enum import StoreType
+from jupyter_deploy.enum import StoreType, TemplateSource
 from jupyter_deploy.exceptions import (
     LocalStateNotPersistedError,
     LogCleanupError,
@@ -82,6 +83,7 @@ class JupyterDeployCliRunner:
         self.app.add_typer(history_app, name="history")
         self.app.add_typer(projects_app, name="projects")
         self.app.add_typer(proxy_app, name="proxy")
+        self.app.add_typer(preferences_app, name="preferences")
 
     def _setup_basic_commands(self) -> None:
         """Register the basic commands."""
@@ -127,8 +129,14 @@ def init(
         ),
     ] = AWSInfrastructureType.EC2,
     template: Annotated[
-        str, typer.Option("--template", "-T", help="Base name of the infrastrucuture as code template (e.g., base)")
-    ] = "base",
+        str | None,
+        typer.Option(
+            "--template",
+            "-T",
+            help="Name of the infrastructure as code template. Pass a base name (e.g. base) "
+            "or a full name (e.g. aws:ec2:jupyterlab). Defaults to your default-template preference.",
+        ),
+    ] = None,
     overwrite: Annotated[
         bool,
         typer.Option(
@@ -147,7 +155,10 @@ def init(
     ] = None,
     restore_store_type: Annotated[
         StoreType | None,
-        typer.Option("--store-type", help="Type of the remote store (required with --restore-project)."),
+        typer.Option(
+            "--store-type",
+            help="Type of the remote store to restore from. Defaults to your default-store-type preference.",
+        ),
     ] = None,
     restore_store_id: Annotated[
         str | None,
@@ -184,7 +195,7 @@ def _init_from_template(
     engine: EngineType,
     provider: ProviderType,
     infrastructure: InfrastructureType,
-    template: str,
+    template: str | None,
     overwrite: bool,
 ) -> None:
     project = InitHandler(
@@ -193,7 +204,10 @@ def _init_from_template(
         provider=provider,
         infrastructure=infrastructure,
         template=template,
+        display_manager=SimpleDisplayManager(console=console),
     )
+
+    _notify_resolved_template(console, project.template_name, project.template_source)
 
     if not project.may_export_to_project_path():
         if not overwrite:
@@ -237,6 +251,46 @@ def _init_from_template(
     console.line()
 
 
+def _notify_resolved_template(console: Console, resolved_template: str, source: TemplateSource) -> None:
+    """Report a template the user never typed, so that it is never discovered after the fact.
+
+    Says nothing when an argument settled it. A preference gets one line naming where it came from,
+    since a preference set long ago is easy to forget. The built-in default gets the full notice,
+    because it also changed: it used to be the base template.
+    """
+    if source == TemplateSource.ARGUMENT:
+        return
+
+    console.line()
+    console.print(
+        f":mag: No template specified, using [bold cyan]{resolved_template}[/]"
+        f"{' (from your preferences)' if source == TemplateSource.PREFERENCES else ''}",
+        highlight=False,
+    )
+
+    if source == TemplateSource.PREFERENCES:
+        console.line()
+        return
+
+    console.print(
+        ":bulb: To set a different template as default, run: "
+        "[bold cyan]jd preferences set --default-template TEMPLATE-NAME[/]",
+        highlight=False,
+    )
+    # Transitional, on its own line so that retiring it at 1.0 deletes a statement rather than
+    # editing one. See constants.PREVIOUS_DEFAULT_TEMPLATE.
+    # Uniformly dim: an inline [bold cyan] here would emit bold AND dim at once, which terminals
+    # render inconsistently, and the line is an aside that wants no emphasis of its own.
+    console.print(
+        f":speech_balloon: The built-in default template changed with "
+        f"{constants.PREVIOUS_DEFAULT_TEMPLATE_CHANGED_IN} (previously "
+        f"{constants.PREVIOUS_DEFAULT_TEMPLATE}).",
+        style="dim",
+        highlight=False,
+    )
+    console.line()
+
+
 def _init_from_store(
     console: Console,
     path: Path,
@@ -244,10 +298,6 @@ def _init_from_store(
     store_type: StoreType | None,
     store_id: str | None,
 ) -> None:
-    if not store_type:
-        console.print(":x: --store-type is required with --restore-project.", style="bold red")
-        raise typer.Exit(code=1)
-
     display_manager = SimpleDisplayManager(console=console, pass_through=False)
 
     with display_manager.spinner(f"Restoring project '{project_id}'..."):
