@@ -63,7 +63,10 @@ jupyter-deploy init .
 jupyter-deploy init --help
 
 # For example, the AWS EC2 base template
-jupyter-deploy init -E terraform -P aws -I ec2 -T base . 
+jupyter-deploy init -E terraform -P aws -I ec2 -T base .
+
+# To set the base templat as your default template, use
+jupyter-deploy preferences set --default-template aws:ec2:base
 ```
 
 ### Configure your project
