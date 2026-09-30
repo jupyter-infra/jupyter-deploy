@@ -8,12 +8,17 @@
 # NOT sourced from the workspace or `extra` — it resolves from prod PyPI, exactly as a user's
 # `pip install jupyter-deploy[aws,proxy]` would. That is the whole point of this track: prove the
 # [proxy] extra resolves against a published proxy and its console script installs correctly.
+#
+# The jupyterlab template IS installed here, unlike the other tracks: the [proxy] extra exists only
+# to serve that template, and it is the default `jd init` template — so this track is the one that
+# proves a bare `jd init` resolves its default and scaffolds a project.
 [project]
 name = "e2e-cli-release-aws-proxy"
 version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
     "jupyter-deploy[aws,proxy]=={{PKG_VERSION}}",
+    "jupyter-deploy-tf-aws-ec2-jupyterlab",
     "pytest-jupyter-deploy[ui]",
     "pytest-cov",
 ]
@@ -27,3 +32,4 @@ explicit = true
 [tool.uv.sources]
 jupyter-deploy = { index = "extra" }
 pytest-jupyter-deploy = { path = "libs/pytest-jupyter-deploy", editable = true }
+jupyter-deploy-tf-aws-ec2-jupyterlab = { path = "libs/jupyter-deploy-tf-aws-ec2-jupyterlab", editable = true }

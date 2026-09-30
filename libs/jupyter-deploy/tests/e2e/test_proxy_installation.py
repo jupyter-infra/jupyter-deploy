@@ -8,8 +8,10 @@ interpreter, then PATH). The positive counterpart to ``test_bare_installation`` 
 asserts the proxy is ABSENT without the extra.
 """
 
+import os
 import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -43,3 +45,49 @@ class TestProxyInstallation(unittest.TestCase):
             timeout=30,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class TestDefaultTemplateInit(unittest.TestCase):
+    """`jd init` with no flags must resolve its default template and scaffold a project.
+
+    This track is the only one that installs the default template, so it is the only place the
+    happy path can be asserted. `jd init` writes files and makes no cloud call, which is what
+    keeps it a smoke test. HOME is relocated per test: the default template also comes from a
+    preferences file under the home directory, and these tests are about the built-in default.
+    """
+
+    def test_init_with_no_flags_scaffolds_the_default_template(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            project_dir = Path(tmp_dir) / "project"
+            project_dir.mkdir()
+
+            result = subprocess.run(
+                ["jd", "init", str(project_dir)],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env={**os.environ, "HOME": tmp_dir},
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            manifest = project_dir / "manifest.yaml"
+            self.assertTrue(manifest.exists(), f"no manifest in {list(project_dir.iterdir())}")
+            self.assertIn("tf-aws-ec2-jupyterlab", manifest.read_text())
+
+    def test_init_reports_which_template_it_chose(self) -> None:
+        # The user typed no template, so the CLI has to say which one it used -- otherwise the
+        # choice is only discoverable by reading the scaffolded files.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            project_dir = Path(tmp_dir) / "project"
+            project_dir.mkdir()
+
+            result = subprocess.run(
+                ["jd", "init", str(project_dir)],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env={**os.environ, "HOME": tmp_dir},
+            )
+
+            self.assertIn("No template specified", result.stdout)
+            self.assertIn("aws:ec2:jupyterlab", result.stdout)

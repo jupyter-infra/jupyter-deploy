@@ -83,6 +83,7 @@ RUN if [ "$INSTALL_MODE" = "pypi" ]; then \
         # Strip workspace sources — uv errors on them outside workspace context
         sed -i '/\[tool\.uv\.sources\.jupyter-deploy\]/,+1d' libs/pytest-jupyter-deploy/pyproject.toml && \
         sed -i '/\[tool\.uv\.sources\.\(jupyter-deploy\|pytest-jupyter-deploy\)\]/,+1d' libs/jupyter-deploy-tf-aws-ec2-base/pyproject.toml && \
+        sed -i '/\[tool\.uv\.sources\.\(jupyter-deploy\|pytest-jupyter-deploy\)\]/,+1d' libs/jupyter-deploy-tf-aws-ec2-jupyterlab/pyproject.toml && \
         sed -i '/\[tool\.uv\.sources\.\(jupyter-deploy\|pytest-jupyter-deploy\)\]/,+1d' libs/jupyter-deploy-tf-aws-eks-oidc/pyproject.toml && \
         uv sync && \
         .venv/bin/playwright install firefox && \
