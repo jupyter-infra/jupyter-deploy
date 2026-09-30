@@ -4,14 +4,32 @@ from unittest.mock import ANY, MagicMock, Mock, patch
 
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.supervised_execution import NullDisplay
-from jupyter_deploy.enum import StoreType
-from jupyter_deploy.handlers.init_handler import InitHandler
+from jupyter_deploy.enum import StoreType, TemplateSource
+from jupyter_deploy.exceptions import (
+    InvalidTemplateNameError,
+    StoreTypeNotSpecifiedError,
+    TemplateNotFoundError,
+)
+from jupyter_deploy.handlers.init_handler import InitHandler, _suggest_template_package
 from jupyter_deploy.infrastructure.enum import AWSInfrastructureType
+from jupyter_deploy.preferences import JupyterDeployPreferencesV1
 from jupyter_deploy.provider.enum import ProviderType
+
+_RETRIEVE_PREFERENCES = "jupyter_deploy.handlers.preferences_handler.retrieve_preferences"
+_TEMPLATES = "jupyter_deploy.handlers.init_handler.TEMPLATES"
 
 
 class TestInitHandler(unittest.TestCase):
     """Test class for InitHandler."""
+
+    def setUp(self) -> None:
+        # Every construction below omits the template, so the handler reads the preferences file.
+        # Neutralize it for the whole class: patched here rather than per test, because these tests
+        # are about project paths and template lookup, not about resolution, and a decorator would
+        # add an unused argument to each of their signatures.
+        patcher = patch(_RETRIEVE_PREFERENCES, return_value=JupyterDeployPreferencesV1())
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     @patch("jupyter_deploy.fs_utils.get_default_project_path")
     @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
@@ -30,7 +48,7 @@ class TestInitHandler(unittest.TestCase):
         # Assert
         self.assertEqual(handler.project_path, Path(project_dir))
         self.assertEqual(handler.engine, EngineType.TERRAFORM)
-        mock_find_template_path.assert_called_once_with("aws:ec2:base")
+        mock_find_template_path.assert_called_once_with("aws:ec2:jupyterlab")
         mock_get_default_project_path.assert_not_called()
 
     @patch("jupyter_deploy.fs_utils.get_default_project_path")
@@ -51,7 +69,7 @@ class TestInitHandler(unittest.TestCase):
         # Assert
         self.assertEqual(handler.project_path, mock_default_path)
         self.assertEqual(handler.engine, EngineType.TERRAFORM)
-        mock_find_template_path.assert_called_once_with("aws:ec2:base")
+        mock_find_template_path.assert_called_once_with("aws:ec2:jupyterlab")
         mock_get_default_project_path.assert_called_once()
 
     @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
@@ -77,73 +95,20 @@ class TestInitHandler(unittest.TestCase):
         mock_find_template_path.assert_called_once_with("aws:ec2:custom-template")
 
     @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
-    @patch("jupyter_deploy.template_utils.TEMPLATES", {"terraform": {"aws:ec2:base": Path("/mock/template/path")}})
-    def test_find_template_path_valid(self, mock_find_template_path: MagicMock) -> None:
-        """Test _find_template_path with valid template name."""
-        # Setup
+    def test_init_with_full_template_name_ignores_provider_and_infrastructure(
+        self, mock_find_template_path: MagicMock
+    ) -> None:
+        """A template that already names its provider and infrastructure is used as-is."""
         mock_find_template_path.return_value = Path("/mock/template/path")
 
-        handler = InitHandler(project_dir=Path("/test/project/dir"))
+        InitHandler(
+            project_dir=Path("/test/project/dir"),
+            provider=ProviderType.AWS,
+            infrastructure=AWSInfrastructureType.EC2,
+            template="AWS:EKS:oidc",
+        )
 
-        # Execute
-        mock_find_template_path.return_value = Path("/mock/template/path")
-        result = handler._find_template_path("aws:ec2:base")
-
-        # Assert
-        self.assertEqual(result, Path("/mock/template/path"))
-
-    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
-    def test_find_template_path_empty(self, mock_find_template_path: MagicMock) -> None:
-        """Test _find_template_path with empty template name."""
-        # Setup
-        mock_find_template_path.side_effect = [
-            Path("/mock/template/path"),  # For constructor
-            ValueError("Template name cannot be empty"),  # For the actual test
-        ]
-
-        handler = InitHandler(project_dir=Path("/test/project/dir"))
-
-        # Execute and Assert
-        with self.assertRaisesRegex(ValueError, "Template name cannot be empty"):
-            # Set up the mock to raise the expected exception
-            mock_find_template_path.side_effect = ValueError("Template name cannot be empty")
-            handler._find_template_path("")
-
-    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
-    @patch("jupyter_deploy.template_utils.TEMPLATES", {})
-    def test_find_template_path_unsupported_engine(self, mock_find_template_path: MagicMock) -> None:
-        """Test _find_template_path with unsupported engine."""
-        # Setup
-        mock_find_template_path.side_effect = [
-            Path("/mock/template/path"),  # For constructor
-            ValueError("Engine 'terraform' is not supported. Available engines: none available"),  # For the actual test
-        ]
-
-        handler = InitHandler(project_dir=Path("/test/project/dir"))
-
-        # Execute and Assert
-        with self.assertRaisesRegex(ValueError, "Engine 'terraform' is not supported"):
-            mock_find_template_path.side_effect = ValueError("Engine 'terraform' is not supported")
-            handler._find_template_path("aws:ec2:base")
-
-    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
-    @patch("jupyter_deploy.template_utils.TEMPLATES", {"terraform": {}})
-    def test_find_template_path_template_not_found(self, mock_find_template_path: MagicMock) -> None:
-        """Test _find_template_path with template not found."""
-        # Setup
-        mock_find_template_path.side_effect = [
-            Path("/mock/template/path"),  # For constructor
-            ValueError(
-                "Template 'aws:ec2:base' not found for engine 'terraform'. Available templates: none"
-            ),  # For the actual test
-        ]
-
-        handler = InitHandler(project_dir=Path("/test/project/dir"))
-
-        # Execute and Assert
-        with self.assertRaisesRegex(ValueError, "Template 'aws:ec2:base' not found"):
-            mock_find_template_path.side_effect = ValueError("Template 'aws:ec2:base' not found")
-            handler._find_template_path("aws:ec2:base")
+        mock_find_template_path.assert_called_once_with("aws:eks:oidc")
 
     @patch("jupyter_deploy.fs_utils.is_empty_dir")
     @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
@@ -347,3 +312,183 @@ class TestInitHandlerRestore(unittest.TestCase):
             store_id="my-bucket",
             project_id="tpl-abc123",
         )
+
+
+class TestInitHandlerTemplateResolution(unittest.TestCase):
+    """The handler resolves the template so that every consumer gets the same precedence."""
+
+    @patch(_RETRIEVE_PREFERENCES)
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
+    def test_falls_back_to_the_preference(self, mock_find_template_path: MagicMock, mock_prefs: Mock) -> None:
+        mock_prefs.return_value = JupyterDeployPreferencesV1(default_template="aws:ec2:base")
+
+        handler = InitHandler(project_dir=Path("/test/dir"), template=None)
+
+        self.assertEqual(handler.template_name, "aws:ec2:base")
+        self.assertEqual(handler.template_source, TemplateSource.PREFERENCES)
+        mock_find_template_path.assert_called_once_with("aws:ec2:base")
+
+    @patch(_RETRIEVE_PREFERENCES)
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
+    def test_falls_back_to_the_built_in_default_and_records_it(
+        self, mock_find_template_path: MagicMock, mock_prefs: Mock
+    ) -> None:
+        mock_prefs.return_value = JupyterDeployPreferencesV1()
+
+        handler = InitHandler(project_dir=Path("/test/dir"), template=None)
+
+        self.assertEqual(handler.template_name, "aws:ec2:jupyterlab")
+        self.assertEqual(handler.template_source, TemplateSource.BUILT_IN)
+
+    @patch(_RETRIEVE_PREFERENCES)
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
+    def test_explicit_template_beats_the_preference(self, mock_find_template_path: MagicMock, mock_prefs: Mock) -> None:
+        mock_prefs.return_value = JupyterDeployPreferencesV1(default_template="aws:ec2:base")
+
+        handler = InitHandler(project_dir=Path("/test/dir"), template="aws:eks:oidc")
+
+        self.assertEqual(handler.template_name, "aws:eks:oidc")
+        self.assertEqual(handler.template_source, TemplateSource.ARGUMENT)
+        mock_prefs.assert_not_called()
+
+    @patch(_RETRIEVE_PREFERENCES)
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
+    def test_raises_on_a_malformed_preference(self, mock_find_template_path: MagicMock, mock_prefs: Mock) -> None:
+        mock_prefs.return_value = JupyterDeployPreferencesV1(default_template="ec2:base")
+
+        with self.assertRaises(InvalidTemplateNameError):
+            InitHandler(project_dir=Path("/test/dir"), template=None)
+
+        mock_find_template_path.assert_not_called()
+
+    @patch(_RETRIEVE_PREFERENCES)
+    @patch("jupyter_deploy.handlers.init_handler.InitHandler._find_template_path")
+    def test_raises_on_a_malformed_argument(self, mock_find_template_path: MagicMock, mock_prefs: Mock) -> None:
+        with self.assertRaises(InvalidTemplateNameError):
+            InitHandler(project_dir=Path("/test/dir"), template="aws::base")
+
+        mock_find_template_path.assert_not_called()
+
+
+class TestInitHandlerRestoreStoreTypeResolution(unittest.TestCase):
+    """Restoring reaches a store, so it falls back to the preference like every other store command."""
+
+    @patch(_RETRIEVE_PREFERENCES)
+    @patch("jupyter_deploy.handlers.init_handler.write_store_config")
+    @patch("jupyter_deploy.handlers.init_handler.StoreManagerFactory")
+    def test_uses_the_given_store_type(
+        self, mock_factory: Mock, mock_write_store_config: Mock, mock_prefs: Mock
+    ) -> None:
+        mock_factory.get_manager.return_value = Mock(resolve_store=Mock(return_value=Mock(store_id="a-bucket")))
+
+        InitHandler.restore(
+            project_dir=Path("/tmp/restored"),
+            project_id="tpl-abc123",
+            store_type=StoreType.S3_ONLY,
+            display_manager=NullDisplay(),
+        )
+
+        mock_factory.get_manager.assert_called_once_with(store_type=StoreType.S3_ONLY, store_id=None)
+        mock_prefs.assert_not_called()
+
+    @patch(_RETRIEVE_PREFERENCES)
+    @patch("jupyter_deploy.handlers.init_handler.write_store_config")
+    @patch("jupyter_deploy.handlers.init_handler.StoreManagerFactory")
+    def test_falls_back_to_the_preferred_store_type(
+        self, mock_factory: Mock, mock_write_store_config: Mock, mock_prefs: Mock
+    ) -> None:
+        mock_factory.get_manager.return_value = Mock(resolve_store=Mock(return_value=Mock(store_id="a-bucket")))
+        mock_prefs.return_value = JupyterDeployPreferencesV1(default_store_type="s3-ddb")
+
+        InitHandler.restore(
+            project_dir=Path("/tmp/restored"),
+            project_id="tpl-abc123",
+            display_manager=NullDisplay(),
+        )
+
+        mock_factory.get_manager.assert_called_once_with(store_type=StoreType.S3_DDB, store_id=None)
+        self.assertEqual(mock_write_store_config.call_args.kwargs["store_type"], "s3-ddb")
+
+    @patch(_RETRIEVE_PREFERENCES)
+    @patch("jupyter_deploy.handlers.init_handler.write_store_config")
+    @patch("jupyter_deploy.handlers.init_handler.StoreManagerFactory")
+    def test_raises_when_neither_is_available(
+        self, mock_factory: Mock, mock_write_store_config: Mock, mock_prefs: Mock
+    ) -> None:
+        mock_prefs.return_value = JupyterDeployPreferencesV1()
+
+        with self.assertRaises(StoreTypeNotSpecifiedError):
+            InitHandler.restore(
+                project_dir=Path("/tmp/restored"),
+                project_id="tpl-abc123",
+                display_manager=NullDisplay(),
+            )
+
+        mock_factory.get_manager.assert_not_called()
+
+
+class TestFindTemplatePath(unittest.TestCase):
+    """Exercises the real lookup: `init_handler` imports TEMPLATES directly, so patch it there."""
+
+    def setUp(self) -> None:
+        patcher = patch(_RETRIEVE_PREFERENCES, return_value=JupyterDeployPreferencesV1())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    @patch(_TEMPLATES, {"terraform": {"aws:ec2:base": Path("/installed/base")}})
+    def test_returns_the_path_of_an_installed_template(self) -> None:
+        handler = InitHandler(project_dir=Path("/test/dir"), template="aws:ec2:base")
+
+        self.assertEqual(handler.source_path, Path("/installed/base"))
+
+    @patch(_TEMPLATES, {"terraform": {"aws:ec2:base": Path("/installed/base")}})
+    def test_names_what_is_installed_when_the_template_is_missing(self) -> None:
+        with self.assertRaises(TemplateNotFoundError) as ctx:
+            InitHandler(project_dir=Path("/test/dir"), template="aws:ec2:jupyterlab")
+
+        self.assertEqual(ctx.exception.template_name, "aws:ec2:jupyterlab")
+        self.assertEqual(ctx.exception.engine, "terraform")
+        self.assertEqual(ctx.exception.installed, ["aws:ec2:base"])
+        self.assertEqual(ctx.exception.suggested_package, "jupyter-deploy-tf-aws-ec2-jupyterlab")
+
+    @patch(_TEMPLATES, {"terraform": {}})
+    def test_reports_an_empty_installed_list(self) -> None:
+        with self.assertRaises(TemplateNotFoundError) as ctx:
+            InitHandler(project_dir=Path("/test/dir"), template="aws:ec2:jupyterlab")
+
+        self.assertEqual(ctx.exception.installed, [])
+
+    @patch(_TEMPLATES, {"terraform": {"aws:eks:oidc": Path("/x"), "aws:ec2:base": Path("/y")}})
+    def test_sorts_the_installed_list(self) -> None:
+        with self.assertRaises(TemplateNotFoundError) as ctx:
+            InitHandler(project_dir=Path("/test/dir"), template="aws:ec2:jupyterlab")
+
+        self.assertEqual(ctx.exception.installed, ["aws:ec2:base", "aws:eks:oidc"])
+
+    @patch(_TEMPLATES, {"terraform": {"aws:ec2:base": Path("/installed/base")}})
+    def test_refuses_an_empty_template_name(self) -> None:
+        """Unreachable through the CLI, since resolving a template never yields an empty name."""
+        handler = InitHandler(project_dir=Path("/test/dir"), template="aws:ec2:base")
+
+        with self.assertRaisesRegex(ValueError, "Template name cannot be empty"):
+            handler._find_template_path("")
+
+    @patch(_TEMPLATES, {})
+    def test_refuses_an_engine_that_registers_no_templates(self) -> None:
+        """Unreachable through the CLI, since --engine only accepts the EngineType values."""
+        with self.assertRaisesRegex(ValueError, "Engine 'terraform' is not supported"):
+            InitHandler(project_dir=Path("/test/dir"), template="aws:ec2:base")
+
+
+class TestSuggestTemplatePackage(unittest.TestCase):
+    def test_composes_the_conventional_distribution_name(self) -> None:
+        self.assertEqual(
+            _suggest_template_package("terraform", "aws:ec2:jupyterlab"),
+            "jupyter-deploy-tf-aws-ec2-jupyterlab",
+        )
+
+    def test_returns_none_for_an_engine_with_no_known_abbreviation(self) -> None:
+        self.assertIsNone(_suggest_template_package("pulumi", "aws:ec2:jupyterlab"))
+
+    def test_returns_none_for_a_name_that_is_not_three_segments(self) -> None:
+        self.assertIsNone(_suggest_template_package("terraform", "jupyterlab"))
