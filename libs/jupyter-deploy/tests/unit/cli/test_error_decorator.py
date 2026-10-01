@@ -22,6 +22,7 @@ from jupyter_deploy.enum import ProviderType
 from jupyter_deploy.exceptions import (
     CommandNotImplementedError,
     InvalidProviderCredentialsError,
+    InvalidVariableTypeError,
     JupyterDeployError,
     ManifestValueNotDeclaredError,
     OptionalParameterNotSupportedError,
@@ -135,6 +136,40 @@ class TestRequiredOutputErrors(unittest.TestCase):
         # Nothing the user can do to this project fixes it, and creating a fresh one is not a fix.
         self.assertNotIn("jd init", output)
         self.assertNotIn("jd up", output)
+
+
+class TestInvalidVariableType(unittest.TestCase):
+    """Test cases for a variables.yaml value whose type does not match the template's declaration."""
+
+    def test_reports_the_variable_the_reason_and_where_to_fix_it(self) -> None:
+        error = InvalidVariableTypeError(
+            variable_name="oauth_allowed_teams",
+            value="my-org:my-team",
+            details=["Input should be a valid list, got: str"],
+        )
+
+        output = _render(error, ["config"])
+
+        self.assertIn("oauth_allowed_teams", output)
+        self.assertIn("my-org:my-team", output)
+        # Without the reason the user cannot tell what shape the value should have taken.
+        self.assertIn("Input should be a valid list", output)
+        self.assertIn("variables.yaml", output)
+
+    def test_reports_every_offending_part_of_the_value(self) -> None:
+        error = InvalidVariableTypeError(
+            variable_name="workspace_nodepools",
+            value=[{"name": {}}, {"disk_size_gb": 50}],
+            details=[
+                "at [0].name: Input should be a valid string, got: dict",
+                "at [1].disk_size_gb: Input should be a valid string, got: int",
+            ],
+        )
+
+        output = _render(error, ["config"])
+
+        self.assertIn("[0].name", output)
+        self.assertIn("[1].disk_size_gb", output)
 
 
 class TestOptionalParameterNotSupported(unittest.TestCase):

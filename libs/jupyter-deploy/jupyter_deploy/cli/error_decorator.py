@@ -35,6 +35,7 @@ from jupyter_deploy.exceptions import (
     InvalidStoreTypeError,
     InvalidTemplateNameError,
     InvalidVariablesDotYamlError,
+    InvalidVariableTypeError,
     JupyterDeployError,
     LogCleanupError,
     LogNotFoundError,
@@ -424,6 +425,14 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
     except (VariableNotFoundError, OutputNotFoundError) as e:
         console.print(f":x: {e}", style="bold red", highlight=False)
         # check if next steps provided, if so print them
+        raise typer.Exit(code=1) from None
+
+    except InvalidVariableTypeError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        for detail in e.details:
+            console.print(detail, style="red", highlight=False)
+        console.line()
+        console.print(":bulb: Fix the value in variables.yaml, then run [bold cyan]jd config[/] again.")
         raise typer.Exit(code=1) from None
 
     except ProjectOutputsNotAvailableError as e:
