@@ -1,8 +1,10 @@
 import unittest
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from unittest.mock import patch
 
 from parameterized import parameterized  # type: ignore
+from pydantic import BaseModel, ValidationError
 
 from jupyter_deploy import str_utils
 from jupyter_deploy.str_utils import (
@@ -124,6 +126,77 @@ class TestToListStr(unittest.TestCase):
             self.assertEqual(to_list_str(input_str, sep=sep), expect_list)
         else:
             self.assertEqual(to_list_str(input_str), expect_list)
+
+
+class _ListModel(BaseModel):
+    assigned_value: list[str] | None = None
+
+
+class _ListMapModel(BaseModel):
+    assigned_value: list[dict[str, str]] | None = None
+    count: int | None = None
+
+
+def _error_from(model: type[BaseModel], **kwargs: Any) -> ValidationError:
+    """Return the error a real pydantic validation raises for these field values."""
+    try:
+        model(**kwargs)
+    except ValidationError as e:
+        return e
+    raise AssertionError(f"Expected {model.__name__} to reject {kwargs}")
+
+
+class TestDescribeValidationErrors(unittest.TestCase):
+    """Test cases for rendering a pydantic error as lines a user can act on."""
+
+    def test_reports_the_reason_and_the_type_received(self) -> None:
+        error = _error_from(_ListModel, assigned_value="org:team")
+
+        lines = str_utils.describe_validation_errors(error, root_field="assigned_value")
+
+        self.assertEqual(["Input should be a valid list, got: str"], lines)
+
+    def test_omits_the_path_when_the_whole_value_is_wrong(self) -> None:
+        error = _error_from(_ListModel, assigned_value="org:team")
+
+        lines = str_utils.describe_validation_errors(error, root_field="assigned_value")
+
+        # The error is about the value itself, so there is no part of it to point at.
+        self.assertNotIn("at ", lines[0])
+
+    def test_points_at_the_offending_part_of_a_nested_value(self) -> None:
+        error = _error_from(_ListMapModel, assigned_value=[{"name": "cpu"}, {"disk_size_gb": 50}])
+
+        lines = str_utils.describe_validation_errors(error, root_field="assigned_value")
+
+        self.assertEqual(["at [1].disk_size_gb: Input should be a valid string, got: int"], lines)
+
+    def test_returns_one_line_per_error(self) -> None:
+        error = _error_from(_ListMapModel, assigned_value=[{"a": 1}, {"b": 2}], count="many")
+
+        lines = str_utils.describe_validation_errors(error, root_field="assigned_value")
+
+        self.assertEqual(3, len(lines))
+        self.assertIn("at [0].a: ", lines[0])
+        self.assertIn("at [1].b: ", lines[1])
+        # A sibling field is not under root_field, so it keeps its own name in the path.
+        self.assertIn("at count: ", lines[2])
+
+    def test_keeps_the_root_field_in_the_path_when_not_given(self) -> None:
+        error = _error_from(_ListMapModel, assigned_value=[{"name": 1}])
+
+        lines = str_utils.describe_validation_errors(error)
+
+        self.assertEqual(["at assigned_value[0].name: Input should be a valid string, got: int"], lines)
+
+    def test_keeps_the_path_when_root_field_does_not_match(self) -> None:
+        error = _error_from(_ListMapModel, count="many")
+
+        lines = str_utils.describe_validation_errors(error, root_field="assigned_value")
+
+        self.assertEqual(
+            ["at count: Input should be a valid integer, unable to parse string as an integer, got: str"], lines
+        )
 
 
 class TestFormatTimestamp(unittest.TestCase):

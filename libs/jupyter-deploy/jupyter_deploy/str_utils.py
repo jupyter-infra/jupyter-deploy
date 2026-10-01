@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+from pydantic import ValidationError
+
 
 def to_cli_option_name(s: str) -> str:
     """Return name to kebab-case CLI option format.
@@ -57,6 +59,34 @@ def to_list_str(concatenated_list: str, sep: str = ",") -> list[str]:
 
     items = concatenated_list.split(sep)
     return items
+
+
+def describe_validation_errors(error: ValidationError, root_field: str | None = None) -> list[str]:
+    """Return one user-facing line per pydantic error, each pointing at the offending part of the value.
+
+    Pydantic's own rendering names the model class, repeats the whole input, and appends a docs URL:
+    noise for a user who passed the value in a yaml file and has no model to look at. This keeps the
+    part they can act on -- the reason, and where in their value it applies.
+
+    Args:
+        error: The pydantic error to describe.
+        root_field: Model field the value was validated under, dropped from each path when present,
+            so paths read from the user's value rather than from the model wrapping it.
+
+    Examples:
+        Input should be a valid list, got: str
+        at [1].disk_size_gb: Input should be a valid string, got: int
+    """
+    lines: list[str] = []
+
+    for err in error.errors():
+        loc = err["loc"]
+        if root_field and loc[:1] == (root_field,):
+            loc = loc[1:]
+        path = "".join(f"[{part}]" if isinstance(part, int) else f".{part}" for part in loc).lstrip(".")
+        location = f"at {path}: " if path else ""
+        lines.append(f"{location}{err['msg']}, got: {type(err['input']).__name__}")
+    return lines
 
 
 def parse_timestamp(raw: str) -> datetime | None:
