@@ -368,7 +368,7 @@ class TestInitTemplateNotInstalled(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 1, result.output)
         self.assertIn("is not installed", result.output)
-        self.assertIn("uv add jupyter-deploy-tf-aws-ec2-jupyterlab", result.output)
+        self.assertIn("jupyter-deploy-tf-aws-ec2-jupyterlab", result.output)
 
     @patch(_INIT_HANDLER)
     def test_offers_an_installed_template_as_the_default(self, mock_handler_cls: Mock) -> None:

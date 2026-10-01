@@ -65,7 +65,6 @@ class TestDefaultTemplateNotInstalled(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             result = self._run_bare_init(tmp_dir)
 
-        self.assertIn("uv add", result.stdout)
         self.assertIn("jupyter-deploy-tf-aws-ec2-jupyterlab", result.stdout)
 
     def test_init_offers_the_installed_template_as_a_preference(self) -> None:

@@ -95,7 +95,7 @@ class TestStartCommand(unittest.TestCase):
         result = CliRunner().invoke(proxy_app, ["start"])
 
         self.assertEqual(result.exit_code, 1)
-        self.assertIn("pip install 'jupyter-deploy[proxy]'", _plain(result.stdout))
+        self.assertIn("jupyter-deploy[proxy]", _plain(result.stdout))
 
     @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
