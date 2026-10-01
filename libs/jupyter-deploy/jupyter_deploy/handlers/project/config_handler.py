@@ -294,8 +294,8 @@ class ConfigHandler(BaseProjectHandler):
                 or if any managed volume has no backup. Restoring only some volumes would recreate the
                 rest empty, which is the data loss this path exists to prevent.
             IncompatibleHostStateError: If the host is not stopped, so quiescence cannot be established.
-            KeyError: If the template declares no variable by that name, raised by the record write
-                before the project is touched.
+            VariableNotFoundError: If the template declares no variable by that name, raised by the
+                record write before the project is touched.
         """
         volume_handler = VolumeHandler(display_manager=self.display_manager)
         volume_handler.validate_backups_ready()

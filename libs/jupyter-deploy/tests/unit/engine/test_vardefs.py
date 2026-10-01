@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 import parameterized  # type: ignore
 import typer
 
+from jupyter_deploy.constants import MASKED_SECRET_VALUE
 from jupyter_deploy.engine.vardefs import (
     AnyNumericTemplateVariableDefinition,
     BoolTemplateVariableDefinition,
@@ -16,6 +17,7 @@ from jupyter_deploy.engine.vardefs import (
     StrTemplateVariableDefinition,
     TemplateVariableDefinition,
 )
+from jupyter_deploy.exceptions import InvalidVariableTypeError
 
 
 class TestTemplateVariableClasses(unittest.TestCase):
@@ -350,6 +352,47 @@ class TestTemplateVariableClasses(unittest.TestCase):
             instance.validate_value(invalid_val)
         with self.assertRaises(ValueError):
             instance.validate_value(None)
+
+    @parameterized.parameterized.expand(
+        [
+            (ListStrTemplateVariableDefinition, "org:team", "Input should be a valid list, got: str"),
+            (DictStrTemplateVariableDefinition, ["k=v"], "Input should be a valid dictionary, got: list"),
+            (
+                IntTemplateVariableDefinition,
+                "two",
+                "Input should be a valid integer, unable to parse string as an integer, got: str",
+            ),
+        ]
+    )
+    def test_validate_value_error_includes_validation_details(self, clz: type, invalid_val: Any, detail: str) -> None:
+        instance: TemplateVariableDefinition = clz(variable_name="var", description="desc")
+
+        with self.assertRaises(InvalidVariableTypeError) as ctx:
+            instance.validate_value(invalid_val)
+
+        self.assertEqual(f"Invalid value for variable 'var': {invalid_val}", str(ctx.exception))
+        self.assertEqual("var", ctx.exception.variable_name)
+        self.assertEqual([detail], ctx.exception.details)
+
+    def test_validate_value_error_details_read_from_the_value_not_the_model(self) -> None:
+        instance = ListMapStrTemplateVariableDefinition(variable_name="var", description="desc")
+
+        with self.assertRaises(InvalidVariableTypeError) as ctx:
+            instance.validate_value([{"k1": "v1"}, {"k2": {"nested": "val"}}])
+
+        # 'assigned_value' is the model field the value is validated under: an internal name that
+        # means nothing to a user reading their variables.yaml, so it must not appear in the path.
+        self.assertEqual(["at [1].k2: Input should be a valid string, got: dict"], ctx.exception.details)
+
+    def test_validate_value_error_hides_sensitive_value(self) -> None:
+        instance = ListStrTemplateVariableDefinition(variable_name="var", description="desc", sensitive=True)
+
+        with self.assertRaises(InvalidVariableTypeError) as ctx:
+            instance.validate_value("s3cr3t")
+
+        self.assertNotIn("s3cr3t", str(ctx.exception))
+        self.assertEqual(f"Invalid value for variable 'var': {MASKED_SECRET_VALUE}", str(ctx.exception))
+        self.assertEqual(["Input should be a valid list, got: str"], ctx.exception.details)
 
     @parameterized.parameterized.expand(
         [

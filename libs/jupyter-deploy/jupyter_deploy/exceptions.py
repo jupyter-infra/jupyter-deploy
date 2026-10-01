@@ -5,6 +5,8 @@ across interfaces (CLI, API, etc.), while also preserving their original excepti
 types (ValueError, RuntimeError, etc.) for backwards compatibility.
 """
 
+from typing import Any
+
 from jupyter_deploy.enum import ProviderType
 
 
@@ -112,6 +114,24 @@ class VariableNotFoundError(LookupJupyterDeployError, KeyError):
     def __init__(self, variable_name: str) -> None:
         self.variable_name = variable_name
         super().__init__(f"Variable '{variable_name}' not found.")
+
+
+class InvalidVariableTypeError(JupyterDeployError, TypeError):
+    """Raised when a value assigned to a variable does not match the type the template declares.
+
+    Subclasses TypeError: callers which catch TypeError around a variable write keep working.
+
+    Attributes:
+        variable_name: The name of the variable whose value was rejected
+        value: The rejected value, replaced by a placeholder when the variable is sensitive
+        details: One line per offending part of the value, e.g. 'Input should be a valid list, got: str'
+    """
+
+    def __init__(self, variable_name: str, value: Any, details: list[str]) -> None:
+        self.variable_name = variable_name
+        self.value = value
+        self.details = details
+        super().__init__(f"Invalid value for variable '{variable_name}': {value}")
 
 
 class OutputNotFoundError(LookupJupyterDeployError, KeyError):

@@ -4,6 +4,8 @@ from typing import Any, Generic, TypeVar, get_args
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from jupyter_deploy import str_utils
+from jupyter_deploy.constants import MASKED_SECRET_VALUE
+from jupyter_deploy.exceptions import InvalidVariableTypeError
 
 T = TypeVar("T")
 
@@ -49,7 +51,8 @@ class TemplateVariableDefinition(BaseModel, Generic[T]):
 
         Raises:
             - ValueError if the value is None
-            - TypeError if the value is not of the right type.
+            - InvalidVariableTypeError (a TypeError) if the value is not of the right type;
+              it carries one detail line per offending part of the value.
         """
         if value is None:
             raise ValueError(f"Attempted to set a None value for variable: {self.variable_name}")
@@ -59,7 +62,13 @@ class TemplateVariableDefinition(BaseModel, Generic[T]):
             del dict_val["assigned_value"]
             instance = self.__class__(**dict_val, assigned_value=value)
         except ValidationError as e:
-            raise TypeError(f"Invalid value for variable '{self.variable_name}': {value}") from e
+            raise InvalidVariableTypeError(
+                variable_name=self.variable_name,
+                value=MASKED_SECRET_VALUE if self.sensitive else value,
+                # The value is validated as this model's `assigned_value`, an internal name:
+                # drop it so each path reads from the value the user passed.
+                details=str_utils.describe_validation_errors(e, root_field="assigned_value"),
+            ) from e
 
         assigned_value = instance.assigned_value
 

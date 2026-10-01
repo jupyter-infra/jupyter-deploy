@@ -17,7 +17,7 @@ from jupyter_deploy.engine.terraform.tf_constants import (
     get_preset_filename,
 )
 from jupyter_deploy.engine.vardefs import TemplateVariableDefinition
-from jupyter_deploy.exceptions import ConfigurationError
+from jupyter_deploy.exceptions import ConfigurationError, InvalidVariableTypeError, VariableNotFoundError
 from jupyter_deploy.manifest import JupyterDeployManifest
 
 
@@ -84,7 +84,7 @@ class TerraformVariablesHandler(EngineVariablesHandler):
             existing_vardef = template_vars.get(varname)
 
             if not existing_vardef:
-                raise KeyError(f"Variable not found: {varname}")
+                raise VariableNotFoundError(varname)
             converted_value = existing_vardef.validate_value(varvalue)
 
             # here we leverage pydantic to cast the value.
@@ -116,13 +116,18 @@ class TerraformVariablesHandler(EngineVariablesHandler):
         the last-known-good recorded state.
 
         Raises:
-            ConfigurationError: If a variable value has an incorrect type (e.g. list
-                instead of map). The message tells the user which variable to fix.
+            InvalidVariableTypeError: If a variable value has an incorrect type (e.g. list
+                instead of map). It names the variable to fix and why the value was rejected.
+            ConfigurationError: For any other write failure, e.g. a variable name that the
+                template does not declare.
         """
         varvalues, sensitive_varvalues = self._collect_varvalues_from_config()
         try:
             self.update_variable_records_staging(varvalues)
             self.update_variable_records_staging(sensitive_varvalues, sensitive=True)
+        except InvalidVariableTypeError:
+            # Already names the variable and carries its own detail lines; wrapping would drop them.
+            raise
         except (TypeError, KeyError) as e:
             raise ConfigurationError(
                 str(e),
@@ -144,7 +149,7 @@ class TerraformVariablesHandler(EngineVariablesHandler):
         for varname, varvalue in varvalues.items():
             existing_vardef = template_vars.get(varname)
             if not existing_vardef:
-                raise KeyError(f"Variable not found: {varname}")
+                raise VariableNotFoundError(varname)
             converted_value = existing_vardef.validate_value(varvalue)
             updated_vals[varname] = converted_value
 

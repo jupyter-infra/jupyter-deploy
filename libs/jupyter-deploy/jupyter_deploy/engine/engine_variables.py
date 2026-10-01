@@ -101,8 +101,8 @@ class EngineVariablesHandler(ABC):
         """Update the recorded values of all variables passed.
 
         Raises:
-            KeyError if any of the variable name is not found
-            TypeError if the any of the variable definition is not of the right type.
+            VariableNotFoundError (a KeyError) if any of the variable name is not found
+            InvalidVariableTypeError (a TypeError) if any of the values is not of the right type.
         """
         pass
 
