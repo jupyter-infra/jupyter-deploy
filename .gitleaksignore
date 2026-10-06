@@ -1,0 +1,6 @@
+# Reviewed false positives (gitleaks fingerprints: commit:file:rule:line).
+# Unit-test calls like runner.execute_instruction(instruction_name=..., resolved_arguments=...):
+# gitleaks reads the method/argument names as generic API keys.
+f2cb6de1c58ebf3a27e22349421543072707e6ea:libs/jupyter-deploy/tests/unit/provider/k8s/test_k8s_runner.py:generic-api-key:180
+e81d7fc1c0e25e8cbd69d30509a4059b28c54fa3:libs/jupyter-deploy/tests/unit/provider/aws/test_aws_runner.py:generic-api-key:78
+e81d7fc1c0e25e8cbd69d30509a4059b28c54fa3:libs/jupyter-deploy/tests/unit/provider/aws/test_aws_runner.py:generic-api-key:83

@@ -2,6 +2,10 @@
 default:
     @just --list
 
+# Scan the full git history for committed secrets (same check as CI)
+secret-scan:
+    gitleaks git . --log-opts="--all" --redact --verbose
+
 # Run all linting and formatting tools
 lint:
     uv run ruff format
