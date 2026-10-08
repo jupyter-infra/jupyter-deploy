@@ -118,7 +118,8 @@ class TestReadmeDocsConsistency(unittest.TestCase):
 
     def test_usage_installation(self) -> None:
         """Installation subsection must match."""
-        readme_sub = _extract_section(self.readme, "### Installation")
+        readme_usage = _extract_section(self.readme, "## Usage")
+        readme_sub = _extract_section(readme_usage, "### Installation")
         doc_sub = _extract_section(self.user_guide_md, "## Installation")
         self.assertEqual(
             _normalize(readme_sub),

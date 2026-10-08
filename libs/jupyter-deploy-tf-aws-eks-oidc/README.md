@@ -21,6 +21,13 @@ Administrators use `jupyter-deploy` to monitor cluster health, manage workspaces
 
 ## Prerequisites
 
+### Installation
+
+- Install the **JupyterDeploy** CLI with the `aws`, `k8s` options: `uv add "jupyter-deploy[aws,k8s]"`
+- Install the **AWS EKS OIDC** template: `uv add jupyter-deploy-tf-aws-eks-oidc`
+
+If you use `pip` instead of `uv`, run `pip install "jupyter-deploy[aws,k8s]" jupyter-deploy-tf-aws-eks-oidc`.
+
 ### AWS account
 The template creates AWS resources (VPC, EKS cluster, node groups, IAM roles, ECR, Route 53 records).
 Your local environment needs access to valid AWS credentials.

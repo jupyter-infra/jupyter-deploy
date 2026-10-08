@@ -21,6 +21,13 @@ authenticates and authorizes each request based on your AWS credentials.
 
 ## Prerequisites
 
+### Installation
+
+- Install the **JupyterDeploy** CLI with the `aws`, `proxy` options: `uv add "jupyter-deploy[aws,proxy]"`
+- Install the **AWS EC2 JupyterLab** template: `uv add jupyter-deploy-tf-aws-ec2-jupyterlab`
+
+If you use `pip` instead of `uv`, run `pip install "jupyter-deploy[aws,proxy]" jupyter-deploy-tf-aws-ec2-jupyterlab`.
+
 ### AWS account
 
 The template needs to create AWS resources. Your local environment needs access to valid AWS credentials.
