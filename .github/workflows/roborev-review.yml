@@ -1,5 +1,14 @@
 # Automated roborev PR review.
 #
+# Dual-mode workflow (#305):
+# - Entrypoint for this repo: pull_request_target reviews every non-draft PR
+#   revision, and workflow_dispatch reviews any PR on demand.
+# - Reusable for consumer repos: a small shim declares its own triggers,
+#   concurrency, and permissions, then calls this workflow via
+#   `uses: jupyter-infra/jupyter-deploy/.github/workflows/roborev-review.yml@main`.
+#   The called run executes in the caller's context: its events, its
+#   GITHUB_TOKEN, its `review` environment, and its REVIEW_* variables.
+#
 # Triggered on pull_request_target so it runs with base-repo credentials even
 # for fork PRs (a plain pull_request workflow gets no OIDC token from a fork).
 # The review fires per PR revision, in parallel with CI, regardless of CI result.
@@ -13,12 +22,20 @@
 # prompt-injected review of a malicious diff can at worst spend model tokens and
 # produce a misleading comment.
 #
-# Inert until these repo variables are set (after tf-aws-iam-ci is deployed with
+# Configuration, resolved per value as repository or organization variable,
+# else default (after tf-aws-iam-ci is deployed with
 # create_review_resources = true and the review image is published):
 #   REVIEW_RUN_ROLE_ARN   IAM role ARN (review_run_iam_role_arn output)
 #   REVIEW_IMAGE          ECR image ref, e.g. <repo-url>:latest
 #   REVIEW_BEDROCK_MODEL  Bedrock model / inference-profile ID (e.g. us.anthropic.claude-opus-4-8)
 #   REVIEW_AWS_REGION     optional, defaults to us-west-2
+#   REVIEW_MIN_SEVERITY   optional severity floor for findings, defaults to medium
+#   REVIEW_REASONING      optional reasoning level, defaults to standard
+# When a required value is missing, the config job names it and points at the
+# setup steps instead of skipping silently. Review policy (agents, review
+# types, per-repo review_guidelines) stays in the repo's .roborev.toml; the
+# severity floor and reasoning in CI come from the values above, passed as CLI
+# flags, which override the toml equivalents.
 
 name: roborev review
 
@@ -35,12 +52,26 @@ on:
         description: "Smoke test only: verify the OIDC to Bedrock chain, skip review"
         type: boolean
         default: false
+  workflow_call:
+    inputs:
+      pr:
+        description: "PR number to review (shim passes its workflow_dispatch input through)"
+        required: false
+        type: string
+        default: ""
+      smoke:
+        description: "Smoke test only: verify the OIDC to Bedrock chain, skip review"
+        required: false
+        type: boolean
+        default: false
 
 # One review per PR; a new push cancels the in-flight review for that PR.
+# Applies to entrypoint runs; shims declare their own concurrency group.
 concurrency:
   group: roborev-review-${{ github.event.pull_request.number || inputs.pr }}
   cancel-in-progress: true
 
+# Applies to entrypoint runs; called runs get the shim's permissions.
 permissions:
   contents: read
   pull-requests: write
@@ -48,15 +79,113 @@ permissions:
   id-token: write
 
 jobs:
+  # Resolve configuration once, and make the unconfigured state loud: name the
+  # missing values and where they are set, instead of skipping silently.
+  config:
+    name: resolve configuration
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.resolve.outputs.configured }}
+      role_arn: ${{ steps.resolve.outputs.role_arn }}
+      image: ${{ steps.resolve.outputs.image }}
+      model: ${{ steps.resolve.outputs.model }}
+      region: ${{ steps.resolve.outputs.region }}
+      min_severity: ${{ steps.resolve.outputs.min_severity }}
+      reasoning: ${{ steps.resolve.outputs.reasoning }}
+    steps:
+      - name: Resolve configuration
+        id: resolve
+        env:
+          VAR_ROLE_ARN: ${{ vars.REVIEW_RUN_ROLE_ARN }}
+          VAR_IMAGE: ${{ vars.REVIEW_IMAGE }}
+          VAR_MODEL: ${{ vars.REVIEW_BEDROCK_MODEL }}
+          VAR_REGION: ${{ vars.REVIEW_AWS_REGION }}
+          VAR_MIN_SEVERITY: ${{ vars.REVIEW_MIN_SEVERITY }}
+          VAR_REASONING: ${{ vars.REVIEW_REASONING }}
+        run: |
+          set -euo pipefail
+          role_arn="$VAR_ROLE_ARN"
+          image="$VAR_IMAGE"
+          model="$VAR_MODEL"
+          region="${VAR_REGION:-us-west-2}"
+          min_severity="${VAR_MIN_SEVERITY:-medium}"
+          reasoning="${VAR_REASONING:-standard}"
+
+          # Fail closed on malformed values: in workflow-ref trust mode these
+          # come from the caller's repository variables, so they are validated,
+          # never trusted (see the run-role trust docs in tf-aws-iam-ci).
+          for v in "$role_arn" "$image" "$model" "$region" "$min_severity" "$reasoning"; do
+            case "$v" in
+              *$'\n'*) echo "::error::configuration value contains a newline"; exit 1 ;;
+            esac
+          done
+          case "$min_severity" in
+            critical|high|medium|low) ;;
+            *) echo "::error::invalid REVIEW_MIN_SEVERITY: $min_severity"; exit 1 ;;
+          esac
+          case "$reasoning" in
+            fast|standard|medium|thorough|maximum) ;;
+            *) echo "::error::invalid REVIEW_REASONING: $reasoning"; exit 1 ;;
+          esac
+          case "$region" in
+            [a-z][a-z]-[a-z]*-[0-9]) ;;
+            *) echo "::error::invalid REVIEW_AWS_REGION: $region"; exit 1 ;;
+          esac
+          arn_re='^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$'
+          ecr_re='^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/'
+          ecr_re="${ecr_re}[a-z0-9._/-]+(:[A-Za-z0-9._-]+)?(@sha256:[0-9a-f]{64})?\$"
+          if [ -n "$role_arn" ] && ! printf '%s' "$role_arn" | grep -Eq "$arn_re"; then
+            echo "::error::invalid REVIEW_RUN_ROLE_ARN"
+            exit 1
+          fi
+          if [ -n "$image" ] && ! printf '%s' "$image" | grep -Eq "$ecr_re"; then
+            echo "::error::invalid REVIEW_IMAGE: expected a private ECR image reference"
+            exit 1
+          fi
+          if [ -n "$model" ] && ! printf '%s' "$model" | grep -Eq '^[A-Za-z0-9._:/-]+$'; then
+            echo "::error::invalid REVIEW_BEDROCK_MODEL"
+            exit 1
+          fi
+
+          missing=""
+          [ -n "$role_arn" ] || missing="$missing REVIEW_RUN_ROLE_ARN"
+          [ -n "$image" ] || missing="$missing REVIEW_IMAGE"
+          [ -n "$model" ] || missing="$missing REVIEW_BEDROCK_MODEL"
+
+          if [ -n "$missing" ]; then
+            msg="roborev review is not configured: missing repository or organization"
+            msg="$msg variables:$missing. Setup: deploy tf-aws-iam-ci with"
+            msg="$msg create_review_resources = true, publish the review image, then set"
+            msg="$msg the variables; see the header of"
+            msg="$msg jupyter-infra/jupyter-deploy/.github/workflows/roborev-review.yml."
+            echo "::warning::$msg"
+            {
+              echo "## roborev review not configured"
+              echo ""
+              echo "$msg"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          {
+            echo "role_arn=$role_arn"
+            echo "image=$image"
+            echo "model=$model"
+            echo "region=$region"
+            echo "min_severity=$min_severity"
+            echo "reasoning=$reasoning"
+          } >> "$GITHUB_OUTPUT"
+
   review:
     name: roborev review
+    needs: config
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: >-
-      github.event.pull_request.draft != true
-      && vars.REVIEW_RUN_ROLE_ARN != ''
-      && vars.REVIEW_IMAGE != ''
-      && vars.REVIEW_BEDROCK_MODEL != ''
+      needs.config.outputs.configured == 'true'
+      && github.event.pull_request.draft != true
     environment: review
     steps:
       # Trusted base branch only. The PR head is fetched as data later, never run.
@@ -110,8 +239,8 @@ jobs:
         if: steps.pr.outputs.skip != 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.REVIEW_RUN_ROLE_ARN }}
-          aws-region: ${{ vars.REVIEW_AWS_REGION || 'us-west-2' }}
+          role-to-assume: ${{ needs.config.outputs.role_arn }}
+          aws-region: ${{ needs.config.outputs.region }}
           # Pin the session to 1h: long enough for the 30-min job with margin, short
           # enough to keep the leaked-credential window small. Keep this above the job
           # timeout; a longer job means raising both.
@@ -142,11 +271,12 @@ jobs:
       - name: Pull review image
         if: steps.pr.outputs.skip != 'true'
         env:
-          REVIEW_IMAGE: ${{ vars.REVIEW_IMAGE }}
+          REVIEW_IMAGE: ${{ needs.config.outputs.image }}
+          AWS_REGION_CONFIG: ${{ needs.config.outputs.region }}
         run: |
           set -euo pipefail
           registry="${REVIEW_IMAGE%%/*}"
-          aws ecr get-login-password --region "${{ vars.REVIEW_AWS_REGION || 'us-west-2' }}" \
+          aws ecr get-login-password --region "$AWS_REGION_CONFIG" \
             | docker login --username AWS --password-stdin "$registry"
           docker pull "$REVIEW_IMAGE"
 
@@ -155,15 +285,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ steps.pr.outputs.head }}
         run: |
-          gh api -X POST "repos/$REPO/statuses/${{ steps.pr.outputs.head }}" \
+          gh api -X POST "repos/$REPO/statuses/$HEAD_SHA" \
             -f context=roborev/review -f state=pending \
             -f description="review running" > /dev/null
 
       - name: Smoke test (Bedrock reachability)
         if: steps.pr.outputs.skip != 'true' && inputs.smoke
         env:
-          REVIEW_IMAGE: ${{ vars.REVIEW_IMAGE }}
+          REVIEW_IMAGE: ${{ needs.config.outputs.image }}
+          MODEL: ${{ needs.config.outputs.model }}
         run: |
           set -euo pipefail
           out=$(docker run --rm \
@@ -173,7 +305,7 @@ jobs:
             -v "$RUNNER_TEMP/aws:/home/node/.aws:ro" \
             -e AWS_REGION -e AWS_DEFAULT_REGION \
             -e CLAUDE_CODE_USE_BEDROCK=1 \
-            -e ANTHROPIC_MODEL="${{ vars.REVIEW_BEDROCK_MODEL }}" \
+            -e ANTHROPIC_MODEL="$MODEL" \
             "$REVIEW_IMAGE" claude -p "Reply with exactly: BEDROCK_OK")
           echo "model replied: $out"
           [[ "$out" == *BEDROCK_OK* ]]
@@ -184,10 +316,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          REVIEW_IMAGE: ${{ vars.REVIEW_IMAGE }}
+          REVIEW_IMAGE: ${{ needs.config.outputs.image }}
           PR: ${{ steps.pr.outputs.pr }}
           HEAD_SHA: ${{ steps.pr.outputs.head }}
           BASE_SHA: ${{ steps.pr.outputs.base }}
+          MODEL: ${{ needs.config.outputs.model }}
+          MIN_SEVERITY: ${{ needs.config.outputs.min_severity }}
+          REASONING: ${{ needs.config.outputs.reasoning }}
         run: |
           set -euo pipefail
           # Fetch the PR head as git objects only. Never checked out, never executed.
@@ -212,13 +347,13 @@ jobs:
             -v "$RUNNER_TEMP/aws:/home/node/.aws:ro" \
             -e AWS_REGION -e AWS_DEFAULT_REGION \
             -e CLAUDE_CODE_USE_BEDROCK=1 \
-            -e ANTHROPIC_MODEL="${{ vars.REVIEW_BEDROCK_MODEL }}" \
+            -e ANTHROPIC_MODEL="$MODEL" \
             -v "$PWD:/workspace" -w /workspace \
             "$REVIEW_IMAGE" \
             sh -c "git config --global --add safe.directory /workspace \
               && roborev ci review --ref ${base_sha}..${HEAD_SHA} \
                    --pr ${PR} --gh-repo ${REPO} \
-                   --min-severity medium --reasoning standard" \
+                   --min-severity ${MIN_SEVERITY} --reasoning ${REASONING}" \
             > "$RUNNER_TEMP/review.md" \
             || { rc=$?; echo "roborev failed (exit $rc); container stdout:"; \
                  cat "$RUNNER_TEMP/review.md"; exit "$rc"; }
