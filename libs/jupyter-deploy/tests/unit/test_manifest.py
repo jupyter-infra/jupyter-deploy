@@ -24,6 +24,7 @@ from jupyter_deploy.manifest import (
     JupyterDeployInstructionV1,
     JupyterDeployManifestV1,
     JupyterDeployProjectStoreV1,
+    JupyterDeployStatusRuleV1,
 )
 
 
@@ -743,3 +744,24 @@ class TestJupyterDeployManifestV1VolumeReadiness(unittest.TestCase):
 
     def test_a_template_with_no_commands_opts_out(self) -> None:
         self.assertFalse(self._manifest([]).supports_volume_readiness())
+
+
+class TestJupyterDeployStatusRuleV1(unittest.TestCase):
+    RULE: dict[str, Any] = {
+        "display": "Starting",
+        "all": [{"path": ".status.conditions[type=Progressing].status", "equals": "True"}],
+    }
+
+    def test_detail_defaults_to_empty(self) -> None:
+        rule = JupyterDeployStatusRuleV1.model_validate(self.RULE)
+        self.assertEqual(rule.detail, [])
+
+    def test_parses_detail_paths(self) -> None:
+        paths = [".status.conditions[type=Progressing].reason", ".status.conditions[type=Progressing].message"]
+        rule = JupyterDeployStatusRuleV1.model_validate({**self.RULE, "detail": paths})
+        self.assertEqual(rule.detail, paths)
+
+    def test_accepts_unknown_keys(self) -> None:
+        """Unknown keys parse, so a manifest can carry fields an older CLI does not know."""
+        rule = JupyterDeployStatusRuleV1.model_validate({**self.RULE, "hints": ["check the image name"]})
+        self.assertEqual(rule.display, "Starting")

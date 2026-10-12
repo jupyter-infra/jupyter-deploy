@@ -326,9 +326,26 @@ class JupyterDeployStatusRuleMatchV1(BaseModel):
 
 
 class JupyterDeployStatusRuleV1(BaseModel):
+    """One rule of `server-status-rules` or `pool-status-rules`.
+
+    The first rule whose `all` matchers hold against the resource JSON names the status.
+    `detail` lists paths, in the same syntax as the matchers, whose values are printed
+    after the display word; a path that resolves to nothing is skipped.
+
+    Example YAML:
+        - display: Starting
+          all:
+          - path: .status.conditions[type=Progressing].status
+            equals: "True"
+          detail:
+          - .status.conditions[type=Progressing].reason
+          - .status.conditions[type=Progressing].message
+    """
+
     model_config = ConfigDict(extra="allow", populate_by_name=True)
     display: str
     all: list[JupyterDeployStatusRuleMatchV1]
+    detail: list[str] = Field(default_factory=list)
 
 
 class JupyterDeployProjectStoreV1(BaseModel):
