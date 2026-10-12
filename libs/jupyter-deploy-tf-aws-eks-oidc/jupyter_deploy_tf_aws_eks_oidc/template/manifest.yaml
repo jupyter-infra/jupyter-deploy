@@ -66,6 +66,9 @@ server-status-rules:
     equals: "True"
   - path: .spec.desiredStatus
     equals: Stopped
+  detail:
+  - .status.conditions[type=Progressing].reason
+  - .status.conditions[type=Progressing].message
 - display: Stopped
   all:
   - path: .status.conditions[type=Stopped].status
