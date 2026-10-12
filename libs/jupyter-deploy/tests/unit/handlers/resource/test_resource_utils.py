@@ -234,6 +234,21 @@ class TestEvaluateStatusRules(unittest.TestCase):
             ),
         )
 
+    def test_detail_collapses_whitespace_to_one_line(self) -> None:
+        resource = json.dumps(
+            {
+                "status": {
+                    "conditions": [
+                        {"type": "Progressing", "status": "True", "reason": "  ", "message": "line one\n  line two\t"}
+                    ]
+                }
+            }
+        )
+        self.assertEqual(
+            evaluate_status_rules(resource, self.DETAIL_RULES),
+            ResourceStatus(display="Starting", detail=["line one line two"]),
+        )
+
     def test_detail_skips_empty_and_missing_values(self) -> None:
         resource = json.dumps({"status": {"conditions": [{"type": "Progressing", "status": "True", "reason": ""}]}})
         self.assertEqual(
