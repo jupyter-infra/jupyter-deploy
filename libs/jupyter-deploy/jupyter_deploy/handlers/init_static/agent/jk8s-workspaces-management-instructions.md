@@ -26,8 +26,9 @@ jd server list --limit 20 --continue-from TOKEN
 `jd server status` reports an operational word derived from the Workspace's
 conditions: `Running`, `Starting`, `Stopping`, `Stopped`, or `Degraded`. For
 `Starting`, `Stopping` and `Degraded` the word is followed by the condition's reason
-and message, for example `Starting: WaitingForNode, Pod should schedule on: nodeclaim/...`;
-`Running` and `Stopped` are always the bare word.
+and message when the operator recorded them, for example
+`Starting: WaitingForNode, Pod should schedule on: nodeclaim/...`; `Running` and `Stopped`
+are always the bare word.
 
 ```bash
 jd server status --name WORKSPACE-NAME --scope SCOPE
