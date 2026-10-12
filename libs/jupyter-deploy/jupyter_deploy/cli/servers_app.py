@@ -5,6 +5,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 
 from jupyter_deploy import cmd_utils
 from jupyter_deploy.cli.error_decorator import handle_cli_errors
@@ -42,7 +43,11 @@ def status(
         with simple_display_manager.spinner("Checking server status..."):
             server_status = handler.get_server_status(name=name, scope=scope or None)
 
-        console.print(f"Server status: [bold cyan]{server_status}[/]")
+        status_text = server_status.display
+        if server_status.detail:
+            status_text += ": " + ", ".join(server_status.detail)
+        # Recorded messages may contain [bracketed] text that Rich would read as markup.
+        console.print(f"Server status: [bold cyan]{escape(status_text)}[/]", soft_wrap=True)
 
 
 @servers_app.command()

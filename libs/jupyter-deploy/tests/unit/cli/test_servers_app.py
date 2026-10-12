@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 from typer.testing import CliRunner
 
 from jupyter_deploy.cli.servers_app import servers_app
-from jupyter_deploy.handlers.payloads import ServerDetail
+from jupyter_deploy.handlers.payloads import ResourceStatus, ServerDetail
 from jupyter_deploy.manifest import InvalidServiceError
 
 
@@ -39,7 +39,7 @@ class TestServerStatusCmd(unittest.TestCase):
         mock_server_handler.get_server_status = mock_get_server_status
         mock_server_handler.get_console = mock_get_console
 
-        mock_get_server_status.return_value = "IN_SERVICE"
+        mock_get_server_status.return_value = ResourceStatus(display="IN_SERVICE")
         mock_get_console.return_value = Mock()
 
         return mock_server_handler, {
@@ -120,6 +120,39 @@ class TestServerStatusCmd(unittest.TestCase):
         # Assert
         self.assertEqual(result.exit_code, 0)
         mock_project_dir.assert_called_once_with(Path("/test/project/path"))
+
+    def invoke_status_with(self, status: ResourceStatus) -> str:
+        """Run <jd server status> against a handler returning the given status, return the stdout."""
+        mock_server_handler, mock_handler_fns = self.get_mock_server_handler()
+        mock_handler_fns["get_server_status"].return_value = status
+        with (
+            patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler", return_value=mock_server_handler),
+            patch("jupyter_deploy.cmd_utils.project_dir") as mock_project_dir,
+        ):
+            mock_project_dir.return_value.__enter__.return_value = None
+            result = CliRunner().invoke(servers_app, ["status"])
+        self.assertEqual(result.exit_code, 0)
+        return result.stdout
+
+    def test_prints_the_status_word_alone_without_detail(self) -> None:
+        stdout = self.invoke_status_with(ResourceStatus(display="Running"))
+        self.assertIn("Server status: Running\n", stdout)
+
+    def test_prints_detail_after_the_status_word(self) -> None:
+        stdout = self.invoke_status_with(
+            ResourceStatus(display="Starting", detail=["WaitingForNode", "Pod should schedule on: nodeclaim/default-x"])
+        )
+        self.assertIn("Server status: Starting: WaitingForNode, Pod should schedule on: nodeclaim/default-x\n", stdout)
+
+    def test_prints_bracketed_detail_verbatim(self) -> None:
+        message = 'Back-off pulling image "ghcr.io/org/app:1" [nodeclaim/default-x]'
+        stdout = self.invoke_status_with(ResourceStatus(display="Degraded", detail=["ImagePullBackOff", message]))
+        self.assertIn(f"Server status: Degraded: ImagePullBackOff, {message}\n", stdout)
+
+    def test_prints_long_detail_on_one_line(self) -> None:
+        message = "Pod should schedule on: " + ", ".join(f"nodeclaim/default-{i:03d}" for i in range(8))
+        stdout = self.invoke_status_with(ResourceStatus(display="Starting", detail=["WaitingForNode", message]))
+        self.assertIn(f"Server status: Starting: WaitingForNode, {message}\n", stdout)
 
     @patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
