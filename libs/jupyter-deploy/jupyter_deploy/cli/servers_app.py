@@ -46,7 +46,8 @@ def status(
         status_text = server_status.display
         if server_status.detail:
             status_text += ": " + ", ".join(server_status.detail)
-        # Recorded messages may contain [bracketed] text that Rich would read as markup.
+        # Recorded messages may contain [bracketed] text that Rich would read as markup, and may run
+        # past the console width, where Rich would otherwise break the status line in two.
         console.print(f"Server status: [bold cyan]{escape(status_text)}[/]", soft_wrap=True)
 
 
