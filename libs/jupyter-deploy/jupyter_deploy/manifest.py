@@ -329,8 +329,9 @@ class JupyterDeployStatusRuleV1(BaseModel):
     """One rule of `server-status-rules` or `pool-status-rules`.
 
     The first rule whose `all` matchers hold against the resource JSON names the status.
-    `detail` lists paths, in the same syntax as the matchers, whose values are printed
-    after the display word; a path that resolves to nothing is skipped.
+    `detail` lists paths, in the same syntax as the matchers, whose values `jd server status`
+    prints after the display word, each collapsed to one line; a path that resolves to nothing
+    is skipped. `jd pool` prints the display word only.
 
     Example YAML:
         - display: Starting
