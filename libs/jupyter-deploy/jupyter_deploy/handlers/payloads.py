@@ -164,6 +164,14 @@ class PoolDetail:
 
 
 @dataclass
+class ResourceStatus:
+    """Status word selected by a status rule, with the values its detail paths resolved to."""
+
+    display: str
+    detail: list[str] = field(default_factory=list)
+
+
+@dataclass
 class ServerDetail:
     """Result of jd server show."""
 

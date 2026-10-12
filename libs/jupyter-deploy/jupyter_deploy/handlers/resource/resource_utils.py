@@ -3,6 +3,7 @@ import json
 import re
 from typing import Any
 
+from jupyter_deploy.handlers.payloads import ResourceStatus
 from jupyter_deploy.manifest import JupyterDeployDisplayFieldV1, JupyterDeployStatusRuleV1
 from jupyter_deploy.provider import manifest_command_runner as cmd_runner
 
@@ -121,20 +122,26 @@ def resolve_path(resource: dict[str, Any], path: str) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def evaluate_status_rules(resource_json: str, rules: list[JupyterDeployStatusRuleV1]) -> str:
+def evaluate_status_rules(resource_json: str, rules: list[JupyterDeployStatusRuleV1]) -> ResourceStatus:
+    """Return the display of the first rule whose matchers all hold, with the values of its detail paths.
+
+    Detail paths that resolve to no string, or to an empty one, are skipped. Unparseable input
+    or no matching rule gives "Unknown" with no detail.
+    """
     try:
         resource = json.loads(resource_json)
     except (json.JSONDecodeError, TypeError):
-        return "Unknown"
+        return ResourceStatus(display="Unknown")
 
     if not isinstance(resource, dict):
-        return "Unknown"
+        return ResourceStatus(display="Unknown")
 
     for rule in rules:
         if all(resolve_path(resource, m.path) == m.equals for m in rule.all):
-            return rule.display
+            detail = [value for value in (resolve_path(resource, path) for path in rule.detail) if value]
+            return ResourceStatus(display=rule.display, detail=detail)
 
-    return "Unknown"
+    return ResourceStatus(display="Unknown")
 
 
 def collect_results(

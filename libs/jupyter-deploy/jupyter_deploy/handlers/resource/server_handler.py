@@ -7,7 +7,7 @@ from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.engine.terraform import tf_outputs, tf_variables
 from jupyter_deploy.exceptions import ResourceNameRequiredError
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
-from jupyter_deploy.handlers.payloads import ServerDetail
+from jupyter_deploy.handlers.payloads import ResourceStatus, ServerDetail
 from jupyter_deploy.handlers.resource.resource_utils import collect_results, evaluate_status_rules
 from jupyter_deploy.provider import manifest_command_runner as cmd_runner
 from jupyter_deploy.provider.resolved_clidefs import ResolvedCliParameter, StrResolvedCliParameter
@@ -73,8 +73,8 @@ class ServerHandler(BaseProjectHandler):
         if name is None and self.project_manifest.multi_server:
             raise ResourceNameRequiredError("server", "jd server list")
 
-    def get_server_status(self, name: str | None = None, scope: str | None = None) -> str:
-        """Sends an health check to the jupyter server app, return status."""
+    def get_server_status(self, name: str | None = None, scope: str | None = None) -> ResourceStatus:
+        """Sends an health check to the jupyter server app, return the status word and its detail values."""
         self._require_name(name)
         resolved_scope = self._resolve_scope(scope)
         command = self.project_manifest.get_command("server.status")
@@ -92,7 +92,7 @@ class ServerHandler(BaseProjectHandler):
 
         rules = self.project_manifest.server_status_rules
         if not rules:
-            return runner.get_result_value(command, "server.status", str)
+            return ResourceStatus(display=runner.get_result_value(command, "server.status", str))
 
         resource_json = runner.get_result_value(command, "server.status.resource", str)
         return evaluate_status_rules(resource_json, rules)
