@@ -48,12 +48,18 @@ server-status-rules:
   all:
   - path: .status.conditions[type=Degraded].status
     equals: "True"
+  detail:
+  - .status.conditions[type=Degraded].reason
+  - .status.conditions[type=Degraded].message
 - display: Starting
   all:
   - path: .status.conditions[type=Progressing].status
     equals: "True"
   - path: .spec.desiredStatus
     equals: Running
+  detail:
+  - .status.conditions[type=Progressing].reason
+  - .status.conditions[type=Progressing].message
 - display: Stopping
   all:
   - path: .status.conditions[type=Progressing].status

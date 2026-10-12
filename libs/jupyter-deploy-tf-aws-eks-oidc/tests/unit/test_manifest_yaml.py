@@ -360,6 +360,28 @@ class TestManifest(unittest.TestCase):
             {"ACTIVE", "CREATING", "UPDATING", "DEGRADED", "DELETING", "CREATE_FAILED", "DELETE_FAILED"},
         )
 
+    def test_server_status_rules_detail_only_on_starting_and_degraded(self) -> None:
+        """Only Starting and Degraded carry detail: the e2e helpers compare the whole status text with a word."""
+        manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
+        detail_by_display = {rule.display: rule.detail for rule in manifest.server_status_rules or []}
+        self.assertEqual(
+            detail_by_display,
+            {
+                "Degraded": [
+                    ".status.conditions[type=Degraded].reason",
+                    ".status.conditions[type=Degraded].message",
+                ],
+                "Starting": [
+                    ".status.conditions[type=Progressing].reason",
+                    ".status.conditions[type=Progressing].message",
+                ],
+                "Stopping": [],
+                "Stopped": [],
+                "Running": [],
+            },
+        )
+        self.assertTrue(all(rule.detail == [] for rule in manifest.pool_status_rules or []))
+
     def test_host_list_command_supports_query_param(self) -> None:
         """host.list command must wire a 'query' source-key for the --query filter."""
         if self.MANIFEST is None:
