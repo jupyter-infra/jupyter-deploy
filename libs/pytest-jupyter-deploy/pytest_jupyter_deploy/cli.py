@@ -165,7 +165,8 @@ class JDCli:
             scope: Kubernetes namespace / scope
 
         Returns:
-            Server status string (e.g., "Running", "Stopped")
+            The text after "Server status:": the display word ("Running", "Stopped"), followed by
+            ": reason, message" for Starting, Stopping and Degraded when the template's rules carry detail
 
         Raises:
             JDCliError: If command fails
@@ -189,11 +190,11 @@ class JDCli:
         timeout_s: int = 180,
         interval_s: int = 10,
     ) -> None:
-        """Poll server status via jd CLI until it matches target or timeout.
+        """Poll server status via jd CLI until its display word matches target or timeout.
 
         Args:
             name: Server / workspace name
-            target_status: Expected status (e.g., "Running", "Stopped")
+            target_status: Expected display word (e.g., "Running", "Stopped", "Degraded")
             scope: Kubernetes namespace / scope
             timeout_s: Maximum wait time in seconds
             interval_s: Seconds between polls
@@ -206,7 +207,7 @@ class JDCli:
         while time.time() < deadline:
             try:
                 last_status = self.get_scoped_server_status(name, scope)
-                if last_status == target_status:
+                if last_status.split(":", 1)[0].strip() == target_status:
                     return
             except (JDCliError, ValueError):
                 pass
