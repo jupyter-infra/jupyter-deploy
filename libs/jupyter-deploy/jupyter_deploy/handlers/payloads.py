@@ -165,10 +165,7 @@ class PoolDetail:
 
 @dataclass
 class ResourceStatus:
-    """Status word of a server or pool with the values of its rule's detail paths.
-
-    Detail is empty when the template declares no rules.
-    """
+    """Display word of a server or pool with the values of its rule's detail paths."""
 
     display: str
     detail: list[str] = field(default_factory=list)

@@ -379,7 +379,7 @@ class TestPoolHandler(unittest.TestCase):
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
     @patch("jupyter_deploy.handlers.resource.pool_handler.collect_results")
-    def test_show_pool_status_stays_a_word_when_rule_has_detail(
+    def test_show_pool_status_omits_rule_detail(
         self,
         mock_collect_results: Mock,
         mock_cmd_runner_class: Mock,

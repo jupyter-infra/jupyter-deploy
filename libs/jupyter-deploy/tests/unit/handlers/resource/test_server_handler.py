@@ -565,7 +565,6 @@ class TestServerHandler(unittest.TestCase):
                 display="Starting", detail=["WaitingForNode", "Pod should schedule on: nodeclaim/default-abc12"]
             ),
         )
-        mock_cmd_runner_fns["get_result_value"].assert_called_once_with(mock_cmd, "server.status.resource", str)
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")

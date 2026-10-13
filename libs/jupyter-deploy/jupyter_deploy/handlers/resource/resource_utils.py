@@ -123,9 +123,9 @@ def resolve_path(resource: dict[str, Any], path: str) -> str | None:
 
 
 def evaluate_status_rules(resource_json: str, rules: list[JupyterDeployStatusRuleV1]) -> ResourceStatus:
-    """Return the display of the first rule whose matchers all hold, with the values of its detail paths.
+    """Return the display word of the first rule whose matchers all hold, with the values of its detail paths.
 
-    Detail paths that resolve to no string, or to an empty one, are skipped. Unparseable input
+    Detail paths that resolve to no string, or to a blank one, are skipped. Unparseable input
     or no matching rule gives "Unknown" with no detail.
     """
     try:
@@ -142,7 +142,7 @@ def evaluate_status_rules(resource_json: str, rules: list[JupyterDeployStatusRul
             for path in rule.detail:
                 value = resolve_path(resource, path)
                 if value and value.strip():
-                    # One line per status: a recorded message may contain newlines.
+                    # A recorded message may contain newlines.
                     detail.append(" ".join(value.split()))
             return ResourceStatus(display=rule.display, detail=detail)
 

@@ -74,7 +74,7 @@ class ServerHandler(BaseProjectHandler):
             raise ResourceNameRequiredError("server", "jd server list")
 
     def get_server_status(self, name: str | None = None, scope: str | None = None) -> ResourceStatus:
-        """Sends a health check to the jupyter server app, return the status word and its detail values."""
+        """Sends a health check to the jupyter server app, return the display word and its detail values."""
         self._require_name(name)
         resolved_scope = self._resolve_scope(scope)
         command = self.project_manifest.get_command("server.status")

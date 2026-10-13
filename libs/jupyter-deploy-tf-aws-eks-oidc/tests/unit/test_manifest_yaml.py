@@ -360,8 +360,8 @@ class TestManifest(unittest.TestCase):
             {"ACTIVE", "CREATING", "UPDATING", "DEGRADED", "DELETING", "CREATE_FAILED", "DELETE_FAILED"},
         )
 
-    def test_server_status_rules_detail_on_transitions_only(self) -> None:
-        """Running and Stopped stay a bare word: the e2e helpers compare the whole status text with them."""
+    def test_server_status_rules_carry_detail_except_running_and_stopped(self) -> None:
+        """The e2e helpers compare the whole status text with Running and Stopped, so those rules carry no detail."""
         manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
         detail_by_display = {rule.display: rule.detail for rule in manifest.server_status_rules or []}
         self.assertEqual(
