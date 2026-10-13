@@ -130,15 +130,16 @@ class TestServerStatusCmd(unittest.TestCase):
             patch("jupyter_deploy.cmd_utils.project_dir") as mock_project_dir,
         ):
             mock_project_dir.return_value.__enter__.return_value = None
-            result = CliRunner().invoke(servers_app, ["status"])
+            # a non-TTY Rich console takes its width from COLUMNS, so the wrapping test needs a fixed one
+            result = CliRunner(env={"COLUMNS": "80"}).invoke(servers_app, ["status"])
         self.assertEqual(result.exit_code, 0)
         return result.stdout
 
-    def test_prints_the_status_word_alone_without_detail(self) -> None:
+    def test_prints_the_display_word_alone_without_detail(self) -> None:
         stdout = self.invoke_status_with(ResourceStatus(display="Running"))
         self.assertIn("Server status: Running\n", stdout)
 
-    def test_prints_detail_after_the_status_word(self) -> None:
+    def test_prints_detail_after_the_display_word(self) -> None:
         stdout = self.invoke_status_with(
             ResourceStatus(display="Starting", detail=["WaitingForNode", "Pod should schedule on: nodeclaim/default-x"])
         )
@@ -153,6 +154,21 @@ class TestServerStatusCmd(unittest.TestCase):
         message = "Pod should schedule on: " + ", ".join(f"nodeclaim/default-{i:03d}" for i in range(8))
         stdout = self.invoke_status_with(ResourceStatus(display="Starting", detail=["WaitingForNode", message]))
         self.assertIn(f"Server status: Starting: WaitingForNode, {message}\n", stdout)
+
+    def test_drops_control_sequences_from_detail(self) -> None:
+        stdout = self.invoke_status_with(
+            ResourceStatus(
+                display="Degraded", detail=["ImagePullBackOff", "\x1b[31mred\x1b[0m \x1b]8;;http://x\x1b\\link"]
+            )
+        )
+        self.assertIn("Server status: Degraded: ImagePullBackOff, red link\n", stdout)
+        self.assertNotIn("\x1b", stdout)
+
+    def test_prints_emoji_codes_in_detail_verbatim(self) -> None:
+        stdout = self.invoke_status_with(
+            ResourceStatus(display="Degraded", detail=["ImagePullBackOff", "image :x: not found"])
+        )
+        self.assertIn("Server status: Degraded: ImagePullBackOff, image :x: not found\n", stdout)
 
     @patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")

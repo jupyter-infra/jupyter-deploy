@@ -1,4 +1,5 @@
 import json
+import re
 from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated
@@ -11,6 +12,9 @@ from jupyter_deploy import cmd_utils
 from jupyter_deploy.cli.error_decorator import handle_cli_errors
 from jupyter_deploy.cli.simple_display import SimpleDisplayManager
 from jupyter_deploy.handlers.resource import server_handler
+
+# ANSI control sequences (CSI and OSC) and the remaining C0 and C1 control characters
+_TERMINAL_CONTROLS = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|[\x00-\x1f\x7f-\x9f]")
 
 servers_app = typer.Typer(
     help="Interact with the server(s) running your app(s).",
@@ -46,9 +50,14 @@ def status(
         status_text = server_status.display
         if server_status.detail:
             status_text += ": " + ", ".join(server_status.detail)
-        # Recorded messages may contain [bracketed] text that Rich would read as markup, and may run
-        # past the console width, where Rich would otherwise wrap the status line.
-        console.print(f"Server status: [bold cyan]{escape(status_text)}[/]", soft_wrap=True)
+        # The detail values are condition messages: Rich would read their [bracketed] text as markup and
+        # their :name: as emoji, and would wrap a long one at the console width; the terminal would run
+        # their control sequences.
+        console.print(
+            f"Server status: [bold cyan]{escape(_TERMINAL_CONTROLS.sub('', status_text))}[/]",
+            soft_wrap=True,
+            emoji=False,
+        )
 
 
 @servers_app.command()
