@@ -138,13 +138,13 @@ def evaluate_status_rules(resource_json: str, rules: list[JupyterDeployStatusRul
 
     for rule in rules:
         if all(resolve_path(resource, m.path) == m.equals for m in rule.all):
-            detail = []
+            values = []
             for path in rule.detail:
-                value = resolve_path(resource, path)
-                if value and value.strip():
-                    # A recorded message may contain newlines.
-                    detail.append(" ".join(value.split()))
-            return ResourceStatus(display=rule.display, detail=detail)
+                words = (resolve_path(resource, path) or "").split()
+                if words:
+                    # the CLI prints each value inline after the display word, and a condition message may span lines
+                    values.append(" ".join(words))
+            return ResourceStatus(display=rule.display, detail=values)
 
     return ResourceStatus(display="Unknown")
 

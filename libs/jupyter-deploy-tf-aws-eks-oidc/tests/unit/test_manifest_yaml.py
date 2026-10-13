@@ -383,7 +383,12 @@ class TestManifest(unittest.TestCase):
                 "Running": [],
             },
         )
-        self.assertTrue(all(rule.detail == [] for rule in manifest.pool_status_rules or []))
+
+    def test_pool_status_rules_declare_no_detail(self) -> None:
+        """`detail` has no effect in pool rules, so a declared one would be dead configuration."""
+        manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
+        for rule in manifest.pool_status_rules or []:
+            self.assertEqual(rule.detail, [], rule.display)
 
     def test_host_list_command_supports_query_param(self) -> None:
         """host.list command must wire a 'query' source-key for the --query filter."""

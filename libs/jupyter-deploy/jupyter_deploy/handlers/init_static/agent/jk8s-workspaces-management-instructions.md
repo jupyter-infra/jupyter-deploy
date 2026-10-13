@@ -27,7 +27,7 @@ jd server list --limit 20 --continue-from TOKEN
 conditions: `Running`, `Starting`, `Stopping`, `Stopped`, or `Degraded`. For
 `Starting`, `Stopping` and `Degraded` the word is followed by the condition's reason
 and message when the operator recorded them, for example
-`Starting: WaitingForNode, Pod should schedule on: nodeclaim/...`; `Running` and `Stopped`
+`Starting: ResourcesNotReady, Workspace is starting`; `Running` and `Stopped`
 are always the bare word.
 
 ```bash
