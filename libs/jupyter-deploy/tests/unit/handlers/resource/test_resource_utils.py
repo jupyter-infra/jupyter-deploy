@@ -212,21 +212,22 @@ class TestEvaluateStatusRules(unittest.TestCase):
         ),
     ]
 
+    @staticmethod
+    def progressing_workspace(reason: str, message: str | None = None) -> str:
+        """A Workspace JSON whose Progressing condition is shaped as the operator writes it."""
+        condition: dict[str, object] = {
+            "type": "Progressing",
+            "status": "True",
+            "reason": reason,
+            "lastTransitionTime": "2026-10-12T13:12:02Z",
+            "observedGeneration": 1,
+        }
+        if message is not None:
+            condition["message"] = message
+        return json.dumps({"status": {"conditions": [condition]}})
+
     def test_detail_resolved_from_the_matching_rule(self) -> None:
-        resource = json.dumps(
-            {
-                "status": {
-                    "conditions": [
-                        {
-                            "type": "Progressing",
-                            "status": "True",
-                            "reason": "WaitingForNode",
-                            "message": "Pod should schedule on: nodeclaim/default-abc12",
-                        }
-                    ]
-                }
-            }
-        )
+        resource = self.progressing_workspace("WaitingForNode", "Pod should schedule on: nodeclaim/default-abc12")
         self.assertEqual(
             evaluate_status_rules(resource, self.DETAIL_RULES),
             ResourceStatus(
@@ -235,24 +236,15 @@ class TestEvaluateStatusRules(unittest.TestCase):
         )
 
     def test_detail_collapses_whitespace_to_one_line(self) -> None:
-        resource = json.dumps(
-            {
-                "status": {
-                    "conditions": [
-                        {"type": "Progressing", "status": "True", "reason": "  ", "message": "line one\n  line two\t"}
-                    ]
-                }
-            }
-        )
+        resource = self.progressing_workspace("  ", "line one\n  line two\t")
         self.assertEqual(
             evaluate_status_rules(resource, self.DETAIL_RULES),
             ResourceStatus(display="Starting", detail=["line one line two"]),
         )
 
     def test_detail_skips_empty_and_missing_values(self) -> None:
-        resource = json.dumps({"status": {"conditions": [{"type": "Progressing", "status": "True", "reason": ""}]}})
         self.assertEqual(
-            evaluate_status_rules(resource, self.DETAIL_RULES),
+            evaluate_status_rules(self.progressing_workspace(""), self.DETAIL_RULES),
             ResourceStatus(display="Starting"),
         )
 

@@ -1,3 +1,4 @@
+import json
 import re
 import unittest
 from pathlib import Path
@@ -6,6 +7,8 @@ from typing import Any
 import yaml
 from jupyter_deploy import manifest_validation
 from jupyter_deploy.handlers import base_project_handler
+from jupyter_deploy.handlers.payloads import ResourceStatus
+from jupyter_deploy.handlers.resource.resource_utils import evaluate_status_rules
 from jupyter_deploy.manifest import JupyterDeployManifestV1
 
 from jupyter_deploy_tf_aws_eks_oidc.template import TEMPLATE_PATH
@@ -359,6 +362,65 @@ class TestManifest(unittest.TestCase):
             mng_states,
             {"ACTIVE", "CREATING", "UPDATING", "DEGRADED", "DELETING", "CREATE_FAILED", "DELETE_FAILED"},
         )
+
+    def test_server_status_rules_read_the_operator_conditions(self) -> None:
+        """The rules against conditions shaped as the operator writes them, so a path typo in the manifest or a
+        renamed operator field fails here instead of printing a bare word."""
+        manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
+        rules = manifest.server_status_rules or []
+
+        def condition(cond_type: str, status: str, reason: str, message: str) -> dict[str, Any]:
+            return {
+                "type": cond_type,
+                "status": status,
+                "reason": reason,
+                "message": message,
+                "lastTransitionTime": "2026-10-12T13:12:02Z",
+                "observedGeneration": 1,
+            }
+
+        def workspace(desired: str, *conditions: dict[str, Any]) -> str:
+            return json.dumps({"spec": {"desiredStatus": desired}, "status": {"conditions": list(conditions)}})
+
+        starting = workspace(
+            "Running",
+            condition("Available", "False", "ResourcesNotReady", "Workspace is starting"),
+            condition("Progressing", "True", "ResourcesNotReady", "Workspace is starting"),
+            condition("Degraded", "False", "NoError", "No errors detected"),
+        )
+        self.assertEqual(
+            evaluate_status_rules(starting, rules),
+            ResourceStatus("Starting", ["ResourcesNotReady", "Workspace is starting"]),
+        )
+
+        failed = workspace(
+            "Running",
+            condition("Available", "False", "ImagePullBackOff", 'Back-off pulling image "jupyter/notebook:typo"'),
+            condition("Progressing", "False", "ImagePullBackOff", 'Back-off pulling image "jupyter/notebook:typo"'),
+            condition("Degraded", "True", "ImagePullBackOff", 'Back-off pulling image "jupyter/notebook:typo"'),
+        )
+        self.assertEqual(
+            evaluate_status_rules(failed, rules),
+            ResourceStatus("Degraded", ["ImagePullBackOff", 'Back-off pulling image "jupyter/notebook:typo"']),
+        )
+
+        stopping = workspace(
+            "Stopped",
+            condition("Progressing", "True", "ResourcesNotStopped", "Resources are still running"),
+            condition("Stopped", "False", "ResourcesNotStopped", "Resources are still running"),
+        )
+        self.assertEqual(
+            evaluate_status_rules(stopping, rules),
+            ResourceStatus("Stopping", ["ResourcesNotStopped", "Resources are still running"]),
+        )
+
+        running = workspace(
+            "Running",
+            condition("Available", "True", "ResourcesReady", "Workspace is available"),
+            condition("Progressing", "False", "ResourcesReady", "Workspace is available"),
+            condition("Degraded", "False", "NoError", "No errors detected"),
+        )
+        self.assertEqual(evaluate_status_rules(running, rules), ResourceStatus("Running"))
 
     def test_server_status_rules_carry_detail_except_running_and_stopped(self) -> None:
         """Running and Stopped are settled states whose display word says everything; the reason and message

@@ -547,6 +547,8 @@ class TestServerHandler(unittest.TestCase):
                             "status": "True",
                             "reason": "WaitingForNode",
                             "message": "Pod should schedule on: nodeclaim/default-abc12",
+                            "lastTransitionTime": "2026-10-12T13:12:02Z",
+                            "observedGeneration": 1,
                         }
                     ]
                 }

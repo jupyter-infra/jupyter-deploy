@@ -403,7 +403,19 @@ class TestPoolHandler(unittest.TestCase):
 
         mock_collect_results.return_value = {
             "name": "workspace-gpu",
-            "resource": {"status": {"conditions": [{"type": "Ready", "status": "False", "message": "NodeClass"}]}},
+            "resource": {
+                "status": {
+                    "conditions": [
+                        {
+                            "type": "Ready",
+                            "status": "False",
+                            "reason": "NodeClassNotReady",
+                            "message": "NodeClass",
+                            "lastTransitionTime": "2026-10-12T13:12:02Z",
+                        }
+                    ]
+                }
+            },
         }
 
         handler = PoolHandler(display_manager=NullDisplay())

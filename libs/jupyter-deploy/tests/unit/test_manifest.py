@@ -761,6 +761,13 @@ class TestJupyterDeployStatusRuleV1(unittest.TestCase):
         rule = JupyterDeployStatusRuleV1.model_validate({**self.RULE, "detail": paths})
         self.assertEqual(rule.detail, paths)
 
+    def test_rejects_a_detail_that_is_not_a_list(self) -> None:
+        """A declared field, not an unknown key the model lets through: one path written bare is a manifest error."""
+        with self.assertRaises(ValidationError):
+            JupyterDeployStatusRuleV1.model_validate(
+                {**self.RULE, "detail": ".status.conditions[type=Progressing].reason"}
+            )
+
     def test_accepts_unknown_keys(self) -> None:
         """Unknown keys parse, so a manifest can carry fields an older CLI does not know."""
         rule = JupyterDeployStatusRuleV1.model_validate({**self.RULE, "hints": ["check the image name"]})

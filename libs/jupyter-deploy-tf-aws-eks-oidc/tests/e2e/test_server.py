@@ -146,7 +146,7 @@ def test_server_list_invalid_continuation_token(e2e_deployment: EndToEndDeployme
 def test_server_status_running(e2e_deployment: EndToEndDeployment, e2e_workspace: str) -> None:
     """Verify that server status returns Running for the test workspace."""
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "server", "status", "--name", e2e_workspace])
-    assert "Running" in result.stdout, f"Expected 'Running' in output:\n{result.stdout}"
+    assert "Server status: Running" in result.stdout, f"Expected 'Server status: Running' in output:\n{result.stdout}"
 
 
 def test_server_status_not_found(e2e_deployment: EndToEndDeployment, e2e_workspace: str) -> None:
