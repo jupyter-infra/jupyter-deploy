@@ -42,7 +42,7 @@ jd config
 jd up
 ```
 
-> When `create_review_resources = true`: each `review_repos` repo's `review` GitHub Actions environment MUST have protection rules (required reviewers and/or restricted branches/tags). The run role trusts `repo:<org>/<repo>:environment:review` via OIDC, which only proves a job declared the environment, not that the workflow was trusted; without protection rules a malicious PR could assume the run role on its own terms.
+> When `create_review_resources = true`, the run role's trust depends on the mode. With `review_trust_workflow_refs` set, the role also requires the OIDC `job_workflow_ref` claim to match a pinned reusable workflow, so only that workflow as committed on its pinned ref can assume the role, from any repo in the org. That extends the caller set to every repo in the org: enable it only if every org repo admin may spend the run role's capabilities (image pull, Bedrock invocation), since a repo's own `review` environment and `REVIEW_*` variables are under its admins' control; the workflow validates caller configuration and fails closed on malformed values. With only `review_repos`, trust rests on the environment claim alone, which only proves a job declared the environment, not that the workflow was trusted. In both modes each consumer repo's `review` environment MUST have protection rules (required reviewers and/or restricted branches/tags); without them a malicious PR could assume the run role on its own terms.
 
 ### Inspect outputs
 ```bash
@@ -151,7 +151,8 @@ This project:
 | test_results_bucket_prefix | `string` | `jd-ci-e2e-results` | Prefix for the S3 bucket that stores E2E test results (3-28 chars) |
 | create_review_resources | `bool` | `false` | Whether to create the roborev review resources (ECR repo + publish/run roles); off for CI-only deployments |
 | publish_repo | `string` | `jupyter-deploy` | GitHub repo that builds and pushes the review image (used when create_review_resources is true) |
-| review_repos | `list(string)` | `[]` | GitHub repos that run reviews (used when create_review_resources is true) |
+| review_repos | `list(string)` | `[]` | GitHub repos that run reviews (used when create_review_resources is true and review_trust_workflow_refs is empty) |
+| review_trust_workflow_refs | `list(string)` | `[]` | Reusable-workflow refs the run role trusts via the OIDC `job_workflow_ref` claim; when set, replaces the review_repos allowlist with org-wide sub + workflow pin |
 | bedrock_inference_profile_ids | `list(string)` | `["us.anthropic.claude-*"]` | Inference profiles the run role may invoke; region and account are filled in |
 | bedrock_foundation_model_arns | `list(string)` | `["arn:aws:bedrock:us-*::foundation-model/anthropic.claude-*"]` | Foundation-model ARNs the run role may invoke (AWS-owned, no account) |
 | review_resource_prefix | `string` | `jupyter-infra-review` | Naming prefix for the review ECR repo and IAM roles |

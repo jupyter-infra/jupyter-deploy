@@ -43,6 +43,19 @@ variable "oidc_trust_subject" {
   type        = string
 }
 
+variable "oidc_job_workflow_refs" {
+  description = <<-EOT
+    job_workflow_ref claim patterns for the OIDC trust policy. When non-empty,
+    the role can only be assumed by a job running one of these reusable
+    workflows (in addition to the sub match), so trust follows the pinned
+    workflow file rather than the repo list alone.
+
+    Example: ["jupyter-infra/jupyter-deploy/.github/workflows/roborev-review.yml@refs/heads/main"]
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "managed_policy_arns" {
   description = "List of AWS managed policy ARNs to attach to the role."
   type        = list(string)
