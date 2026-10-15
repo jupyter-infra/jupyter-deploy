@@ -361,7 +361,8 @@ class TestManifest(unittest.TestCase):
         )
 
     def test_server_status_rules_carry_detail_except_running_and_stopped(self) -> None:
-        """The e2e helpers compare the whole status text with Running and Stopped, so those rules carry no detail."""
+        """Running and Stopped are settled states whose display word says everything; the reason and message
+        matter while a workspace is starting, stopping or failing."""
         manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
         detail_by_display = {rule.display: rule.detail for rule in manifest.server_status_rules or []}
         self.assertEqual(

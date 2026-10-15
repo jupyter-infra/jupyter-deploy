@@ -1,5 +1,6 @@
 """Unit tests for the server status poller."""
 
+import itertools
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -18,7 +19,11 @@ class TestPollScopedServerStatus(unittest.TestCase):
     def test_matches_a_bare_word(self, _status: Mock) -> None:
         JDCli(Path("/project")).poll_scoped_server_status("ws", "Running", timeout_s=1, interval_s=0)
 
+    @patch("pytest_jupyter_deploy.cli.time")
     @patch.object(JDCli, "get_scoped_server_status", return_value="Starting: WaitingForNode, waiting")
-    def test_times_out_on_another_word(self, _status: Mock) -> None:
+    def test_times_out_on_another_word(self, status: Mock, clock: Mock) -> None:
+        # the clock advances one second per read: one poll fits before the deadline
+        clock.time.side_effect = itertools.count()
         with self.assertRaises(TimeoutError):
-            JDCli(Path("/project")).poll_scoped_server_status("ws", "Running", timeout_s=0, interval_s=0)
+            JDCli(Path("/project")).poll_scoped_server_status("ws", "Running", timeout_s=2, interval_s=0)
+        status.assert_called_once()

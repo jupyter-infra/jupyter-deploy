@@ -165,7 +165,7 @@ class PoolDetail:
 
 @dataclass
 class ResourceStatus:
-    """Display word of a server or pool with the values of its rule's detail paths."""
+    """Display word of a resource with the values of its matching rule's detail paths."""
 
     display: str
     detail: list[str] = field(default_factory=list)
