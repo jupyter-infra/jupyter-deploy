@@ -33,7 +33,7 @@ class TestManifest(unittest.TestCase):
     ]
     # the start steps the template spells out; any other Progressing reason prints the bare word
     START_STEP_PHRASES = {
-        "WaitingForNode": "waiting for node",
+        "WaitingForNode": "provisioning node",
         "PullingImage": "pulling image",
         "StartingContainer": "starting container",
     }

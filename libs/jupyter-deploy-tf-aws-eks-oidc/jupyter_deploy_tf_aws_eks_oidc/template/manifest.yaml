@@ -154,7 +154,7 @@ server-status-rules:
   all:
   - path: .status.conditions[type=Degraded].status
     equals: "True"
-- display: Starting (waiting for node)
+- display: Starting (provisioning node)
   all:
   - path: .status.conditions[type=Progressing].status
     equals: "True"
