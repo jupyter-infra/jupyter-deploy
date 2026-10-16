@@ -165,9 +165,9 @@ class JDCli:
             scope: Kubernetes namespace / scope
 
         Returns:
-            The text after "Server status:": the display word ("Running", "Stopped"), followed by the
-            operator's reason in parentheses for Starting, Stopping and Degraded when the template's rules
-            carry a detail path, for example "Starting (WaitingForNode)"
+            The text after "Server status:": the display word ("Running", "Stopped"), followed in
+            parentheses by the start step in words for Starting and by the operator's reason for Degraded
+            when the template's rules carry a detail path, for example "Starting (waiting for node)"
 
         Raises:
             JDCliError: If command fails

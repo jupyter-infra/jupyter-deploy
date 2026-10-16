@@ -70,8 +70,8 @@ jd server list
 # list workspaces in a specific namespace
 jd server list --scope default
 
-# check workspace status; while a workspace starts, stops or fails, the operator's reason follows
-# the word in parentheses, for example "Server status: Starting (WaitingForNode)"
+# check workspace status; a start shows its step and a failure its reason in parentheses, for example
+# "Server status: Starting (waiting for node)" or "Server status: Degraded (ImagePullBackOff)"
 jd server status --name my-workspace --scope default
 
 # show workspace details
