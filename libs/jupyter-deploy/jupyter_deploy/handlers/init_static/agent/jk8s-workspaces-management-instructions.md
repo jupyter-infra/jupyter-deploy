@@ -28,8 +28,7 @@ jd server list --limit 20 --continue-from TOKEN
 follows in parentheses: `Starting (waiting for node)`, `Starting (pulling image)`,
 `Starting (starting container)`. When a start has failed, the reason follows:
 `Degraded (ImagePullBackOff)`; a failure the template has no rule for prints the bare
-`Degraded`. The strings are defined in the template's `server-status-rules`; the
-condition's reason and message are in `jd server show --json`.
+`Degraded`. The condition's reason and message are in `jd server show --json`.
 
 ```bash
 jd server status --name WORKSPACE-NAME --scope SCOPE
