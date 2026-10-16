@@ -186,7 +186,7 @@ variable "karpenter_version" {
 
     Refer to: https://github.com/aws/karpenter-provider-aws/releases
 
-    Recommended: 1.14.1
+    Recommended: 1.15.0
   EOT
   type        = string
 }
@@ -197,7 +197,7 @@ variable "keda_version" {
 
     Refer to: https://github.com/kedacore/charts/releases
 
-    Recommended: 2.20.2
+    Recommended: 2.21.0
   EOT
   type        = string
 }
@@ -211,7 +211,7 @@ variable "prometheus_version" {
 
     Refer to: https://github.com/prometheus-community/helm-charts/releases
 
-    Recommended: 29.27.0
+    Recommended: 29.37.0
   EOT
   type        = string
 }
@@ -494,7 +494,7 @@ variable "nvidia_device_plugin_version" {
 
     Refer to: https://github.com/NVIDIA/k8s-device-plugin/releases
 
-    Recommended: 0.20.0
+    Recommended: 0.20.1
   EOT
   type        = string
 }
@@ -1061,13 +1061,13 @@ variable "workspace_app_claude_code_version" {
     Changing it rebuilds the image; workspaces pick up the new build on their
     next start once you also increment workspace_app_jupyterlab_image_build.
 
-    Example: 2.1.287
+    Example: 2.1.302
   EOT
   type        = string
 
   validation {
     condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+$", var.workspace_app_claude_code_version))
-    error_message = "workspace_app_claude_code_version must be an exact version (e.g. 2.1.287)."
+    error_message = "workspace_app_claude_code_version must be an exact version (e.g. 2.1.302)."
   }
 }
 
@@ -1078,13 +1078,13 @@ variable "workspace_app_codex_version" {
     Changing it rebuilds the image; workspaces pick up the new build on their
     next start once you also increment workspace_app_jupyterlab_image_build.
 
-    Example: 0.162.1
+    Example: 0.163.0
   EOT
   type        = string
 
   validation {
     condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+$", var.workspace_app_codex_version))
-    error_message = "workspace_app_codex_version must be an exact version (e.g. 0.162.1)."
+    error_message = "workspace_app_codex_version must be an exact version (e.g. 0.163.0)."
   }
 }
 
