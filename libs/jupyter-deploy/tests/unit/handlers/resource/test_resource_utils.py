@@ -270,15 +270,9 @@ class TestEvaluateStatusRules(unittest.TestCase):
             ResourceStatus(display="Starting", detail="waiting for node"),
         )
 
-    def test_detail_display_hides_an_unmapped_value(self) -> None:
+    def test_detail_display_leaves_an_unmapped_value_as_is(self) -> None:
         self.assertEqual(
             evaluate_status_rules(self.progressing_workspace("PullingImage"), self.PHRASE_RULES),
-            ResourceStatus(display="Starting"),
-        )
-
-    def test_detail_prints_the_raw_value_without_a_map(self) -> None:
-        self.assertEqual(
-            evaluate_status_rules(self.progressing_workspace("PullingImage"), self.DETAIL_RULES),
             ResourceStatus(display="Starting", detail="PullingImage"),
         )
 
