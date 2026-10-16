@@ -367,15 +367,16 @@ class TestManifest(unittest.TestCase):
         "PullingImage": "pulling image",
         "StartingContainer": "starting container",
     }
-    # every reason the operator puts on Degraded: the kubelet's container failures, then its own
+    # the failure reasons the template names, the kubelet's container failures then the operator's own;
+    # any other Degraded reason prints the bare word
     FAILURE_REASONS = {
         "ImagePullBackOff",
-        "ErrImagePull",
         "InvalidImageName",
         "CrashLoopBackOff",
         "CreateContainerConfigError",
         "CreateContainerError",
         "RunContainerError",
+        "ContainerStartFailed",
         "FailedCreate",
         "ComputeStalled",
         "ComputeError",
@@ -406,8 +407,8 @@ class TestManifest(unittest.TestCase):
         )
 
     def test_server_status_rules_read_the_operator_conditions(self) -> None:
-        """The rules against conditions shaped as the operator writes them, so a path typo in the manifest or a
-        renamed operator field fails here instead of printing a bare word."""
+        """Evaluates the rules against conditions shaped as the operator writes them, so a path typo in the manifest
+        or a renamed operator field fails here instead of printing a bare word."""
         rules = JupyterDeployManifestV1.model_validate(self.MANIFEST).server_status_rules or []
 
         for reason, phrase in self.START_STEPS.items():

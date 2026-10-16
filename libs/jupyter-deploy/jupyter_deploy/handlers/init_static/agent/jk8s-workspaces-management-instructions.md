@@ -27,10 +27,11 @@ jd server list --limit 20 --continue-from TOKEN
 conditions: `Running`, `Starting`, `Stopping`, `Stopped`, or `Degraded`. While a
 workspace starts, the word carries the step in parentheses, `Starting (waiting for
 node)`, `Starting (pulling image)` or `Starting (starting container)`; when a start has
-failed, it carries the operator's reason, for example `Degraded (ImagePullBackOff)`.
+failed with one of the reasons the template names, it carries that reason, for example
+`Degraded (ImagePullBackOff)`, and any other failure prints the bare `Degraded`.
 `Running`, `Stopping` and `Stopped` are always the bare word. These strings come from
-the template's `server-status-rules`; the condition's message is in the output of
-`jd server show --json`.
+the template's `server-status-rules`; the condition's reason and message are in the
+output of `jd server show --json`.
 
 ```bash
 jd server status --name WORKSPACE-NAME --scope SCOPE

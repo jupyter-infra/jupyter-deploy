@@ -51,12 +51,6 @@ server-status-rules:
     equals: "True"
   - path: .status.conditions[type=Degraded].reason
     equals: ImagePullBackOff
-- display: Degraded (ErrImagePull)
-  all:
-  - path: .status.conditions[type=Degraded].status
-    equals: "True"
-  - path: .status.conditions[type=Degraded].reason
-    equals: ErrImagePull
 - display: Degraded (InvalidImageName)
   all:
   - path: .status.conditions[type=Degraded].status
@@ -87,6 +81,12 @@ server-status-rules:
     equals: "True"
   - path: .status.conditions[type=Degraded].reason
     equals: RunContainerError
+- display: Degraded (ContainerStartFailed)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: ContainerStartFailed
 - display: Degraded (FailedCreate)
   all:
   - path: .status.conditions[type=Degraded].status
