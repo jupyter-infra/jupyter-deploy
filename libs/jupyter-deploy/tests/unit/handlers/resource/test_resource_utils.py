@@ -2,7 +2,6 @@ import json
 import unittest
 from unittest.mock import Mock
 
-from jupyter_deploy.handlers.payloads import ResourceStatus
 from jupyter_deploy.handlers.resource.resource_utils import (
     collect_results,
     evaluate_status_rules,
@@ -147,7 +146,7 @@ class TestEvaluateStatusRules(unittest.TestCase):
                 }
             }
         )
-        self.assertEqual(evaluate_status_rules(resource, self.RULES), ResourceStatus(display="Running"))
+        self.assertEqual(evaluate_status_rules(resource, self.RULES), "Running")
 
     def test_stopped(self) -> None:
         resource = json.dumps(
@@ -157,7 +156,7 @@ class TestEvaluateStatusRules(unittest.TestCase):
                 }
             }
         )
-        self.assertEqual(evaluate_status_rules(resource, self.RULES), ResourceStatus(display="Stopped"))
+        self.assertEqual(evaluate_status_rules(resource, self.RULES), "Stopped")
 
     def test_starting(self) -> None:
         resource = json.dumps(
@@ -168,7 +167,7 @@ class TestEvaluateStatusRules(unittest.TestCase):
                 },
             }
         )
-        self.assertEqual(evaluate_status_rules(resource, self.RULES), ResourceStatus(display="Starting"))
+        self.assertEqual(evaluate_status_rules(resource, self.RULES), "Starting")
 
     def test_stopping(self) -> None:
         resource = json.dumps(
@@ -179,7 +178,7 @@ class TestEvaluateStatusRules(unittest.TestCase):
                 },
             }
         )
-        self.assertEqual(evaluate_status_rules(resource, self.RULES), ResourceStatus(display="Stopping"))
+        self.assertEqual(evaluate_status_rules(resource, self.RULES), "Stopping")
 
     def test_degraded(self) -> None:
         resource = json.dumps(
@@ -189,98 +188,17 @@ class TestEvaluateStatusRules(unittest.TestCase):
                 }
             }
         )
-        self.assertEqual(evaluate_status_rules(resource, self.RULES), ResourceStatus(display="Degraded"))
+        self.assertEqual(evaluate_status_rules(resource, self.RULES), "Degraded")
 
     def test_unknown_on_no_match(self) -> None:
         resource = json.dumps({"status": {"conditions": []}})
-        self.assertEqual(evaluate_status_rules(resource, self.RULES), ResourceStatus(display="Unknown"))
+        self.assertEqual(evaluate_status_rules(resource, self.RULES), "Unknown")
 
     def test_unknown_on_invalid_json(self) -> None:
-        self.assertEqual(evaluate_status_rules("not-json", self.RULES), ResourceStatus(display="Unknown"))
+        self.assertEqual(evaluate_status_rules("not-json", self.RULES), "Unknown")
 
     def test_unknown_on_empty_string(self) -> None:
-        self.assertEqual(evaluate_status_rules("", self.RULES), ResourceStatus(display="Unknown"))
-
-    DETAIL_RULES = [
-        JupyterDeployStatusRuleV1(
-            display="Starting",
-            all=[JupyterDeployStatusRuleMatchV1(path=".status.conditions[type=Progressing].status", equals="True")],
-            detail=".status.conditions[type=Progressing].reason",
-        ),
-    ]
-    MESSAGE_RULES = [
-        JupyterDeployStatusRuleV1(
-            display="Starting",
-            all=[JupyterDeployStatusRuleMatchV1(path=".status.conditions[type=Progressing].status", equals="True")],
-            detail=".status.conditions[type=Progressing].message",
-        ),
-    ]
-    PHRASE_RULES = [
-        JupyterDeployStatusRuleV1(
-            display="Starting",
-            all=[JupyterDeployStatusRuleMatchV1(path=".status.conditions[type=Progressing].status", equals="True")],
-            detail=".status.conditions[type=Progressing].reason",
-            detail_display={"WaitingForNode": "waiting for node", "ResourcesNotReady": ""},
-        ),
-    ]
-
-    @staticmethod
-    def progressing_workspace(reason: str, message: str | None = None) -> str:
-        """A Workspace JSON whose Progressing condition is shaped as the operator writes it."""
-        condition: dict[str, object] = {
-            "type": "Progressing",
-            "status": "True",
-            "reason": reason,
-            "lastTransitionTime": "2026-10-12T13:12:02Z",
-            "observedGeneration": 1,
-        }
-        if message is not None:
-            condition["message"] = message
-        return json.dumps({"status": {"conditions": [condition]}})
-
-    def test_detail_resolved_from_the_matching_rule(self) -> None:
-        resource = self.progressing_workspace("WaitingForNode", "Pod should schedule on: nodeclaim/default-abc12")
-        self.assertEqual(
-            evaluate_status_rules(resource, self.DETAIL_RULES),
-            ResourceStatus(display="Starting", detail="WaitingForNode"),
-        )
-
-    def test_detail_collapses_whitespace_to_one_line(self) -> None:
-        resource = self.progressing_workspace("WaitingForNode", "line one\n  line two\t")
-        self.assertEqual(
-            evaluate_status_rules(resource, self.MESSAGE_RULES),
-            ResourceStatus(display="Starting", detail="line one line two"),
-        )
-
-    def test_detail_is_none_for_a_blank_value(self) -> None:
-        self.assertEqual(
-            evaluate_status_rules(self.progressing_workspace("  "), self.DETAIL_RULES),
-            ResourceStatus(display="Starting"),
-        )
-
-    def test_detail_is_none_for_a_missing_value(self) -> None:
-        self.assertEqual(
-            evaluate_status_rules(self.progressing_workspace("WaitingForNode"), self.MESSAGE_RULES),
-            ResourceStatus(display="Starting"),
-        )
-
-    def test_detail_display_maps_the_value(self) -> None:
-        self.assertEqual(
-            evaluate_status_rules(self.progressing_workspace("WaitingForNode"), self.PHRASE_RULES),
-            ResourceStatus(display="Starting", detail="waiting for node"),
-        )
-
-    def test_detail_display_leaves_an_unmapped_value_as_is(self) -> None:
-        self.assertEqual(
-            evaluate_status_rules(self.progressing_workspace("PullingImage"), self.PHRASE_RULES),
-            ResourceStatus(display="Starting", detail="PullingImage"),
-        )
-
-    def test_detail_display_mapped_to_blank_gives_none(self) -> None:
-        self.assertEqual(
-            evaluate_status_rules(self.progressing_workspace("ResourcesNotReady"), self.PHRASE_RULES),
-            ResourceStatus(display="Starting"),
-        )
+        self.assertEqual(evaluate_status_rules("", self.RULES), "Unknown")
 
 
 class TestCollectResults(unittest.TestCase):

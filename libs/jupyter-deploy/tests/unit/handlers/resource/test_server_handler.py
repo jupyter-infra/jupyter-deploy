@@ -1,4 +1,3 @@
-import json
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -8,13 +7,10 @@ import yaml
 
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.supervised_execution import NullDisplay
-from jupyter_deploy.handlers.payloads import ResourceStatus
 from jupyter_deploy.handlers.resource.server_handler import ServerHandler
 from jupyter_deploy.manifest import (
     JupyterDeployManifest,
     JupyterDeployManifestV1,
-    JupyterDeployStatusRuleMatchV1,
-    JupyterDeployStatusRuleV1,
 )
 
 
@@ -183,7 +179,7 @@ class TestServerHandler(unittest.TestCase):
 
         # Test get_server_status
         status = handler.get_server_status()
-        self.assertEqual(status, ResourceStatus(display="IN_SERVICE"))
+        self.assertEqual(status, "IN_SERVICE")
         cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
         self.assertIn("scope", cli_paramdefs)
         self.assertEqual(cli_paramdefs["scope"].value, "default")
@@ -498,7 +494,7 @@ class TestServerHandler(unittest.TestCase):
         result = handler.get_server_status()
 
         # Verify
-        self.assertEqual(result, ResourceStatus(display="IN_SERVICE"))
+        self.assertEqual(result, "IN_SERVICE")
         mock_cmd_runner_class.assert_called_once()
         mock_manifest_fns["get_command"].assert_called_once_with("server.status")
         self.assertEqual(mock_cmd_runner_class.call_args[1]["output_handler"], mock_output_handler)
@@ -507,61 +503,6 @@ class TestServerHandler(unittest.TestCase):
         self.assertIn("scope", cli_paramdefs)
         self.assertEqual(cli_paramdefs["scope"].value, "default")
         mock_cmd_runner_fns["get_result_value"].assert_called_once_with(mock_cmd, "server.status", str)
-
-    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
-    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
-    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
-    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
-    def test_get_status_evaluates_rules_against_the_resource(
-        self,
-        mock_cmd_runner_class: Mock,
-        mock_tf_variables_handler: Mock,
-        mock_tf_outputs_handler: Mock,
-        mock_retrieve_manifest: Mock,
-    ) -> None:
-        # Setup
-        mock_manifest, mock_manifest_fns = self.get_mock_manifest_and_fns()
-        mock_manifest.server_status_rules = [
-            JupyterDeployStatusRuleV1(
-                display="Starting",
-                all=[JupyterDeployStatusRuleMatchV1(path=".status.conditions[type=Progressing].status", equals="True")],
-                detail=".status.conditions[type=Progressing].reason",
-            )
-        ]
-        mock_cmd = Mock()
-        mock_manifest_fns["get_command"].return_value = mock_cmd
-        mock_retrieve_manifest.return_value = mock_manifest
-        mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
-        mock_tf_variables_handler.return_value = Mock()
-
-        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
-        mock_cmd_runner_fns["get_result_value"].return_value = json.dumps(
-            {
-                "status": {
-                    "conditions": [
-                        {
-                            "type": "Progressing",
-                            "status": "True",
-                            "reason": "WaitingForNode",
-                            "message": "Pod should schedule on: nodeclaim/default-abc12",
-                            "lastTransitionTime": "2026-10-12T13:12:02Z",
-                            "observedGeneration": 1,
-                        }
-                    ]
-                }
-            }
-        )
-        mock_cmd_runner_class.return_value = mock_cmd_runner
-
-        # Act
-        handler = ServerHandler(display_manager=NullDisplay())
-        result = handler.get_server_status()
-
-        # Verify
-        self.assertEqual(
-            result,
-            ResourceStatus(display="Starting", detail="WaitingForNode"),
-        )
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")

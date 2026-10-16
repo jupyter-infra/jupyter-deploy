@@ -164,14 +164,6 @@ class PoolDetail:
 
 
 @dataclass
-class ResourceStatus:
-    """Display word of a resource, with the value of its matching rule's detail path when it has one."""
-
-    display: str
-    detail: str | None = None
-
-
-@dataclass
 class ServerDetail:
     """Result of jd server show."""
 

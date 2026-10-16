@@ -1,20 +1,15 @@
 import json
-import re
 from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.console import Console
-from rich.markup import escape
 
 from jupyter_deploy import cmd_utils
 from jupyter_deploy.cli.error_decorator import handle_cli_errors
 from jupyter_deploy.cli.simple_display import SimpleDisplayManager
 from jupyter_deploy.handlers.resource import server_handler
-
-# ANSI control sequences (CSI and OSC) and the remaining C0 and C1 control characters
-_TERMINAL_CONTROLS = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|[\x00-\x1f\x7f-\x9f]")
 
 servers_app = typer.Typer(
     help="Interact with the server(s) running your app(s).",
@@ -47,12 +42,7 @@ def status(
         with simple_display_manager.spinner("Checking server status..."):
             server_status = handler.get_server_status(name=name, scope=scope or None)
 
-        status_line = f"Server status: [bold cyan]{server_status.display}[/]"
-        if server_status.detail:
-            # The detail is an operator reason today, but a template may point it at any text: Rich would read
-            # [brackets] as markup and :name: as emoji and wrap a long one; the terminal would run control sequences.
-            status_line += f" ({escape(_TERMINAL_CONTROLS.sub('', server_status.detail))})"
-        console.print(status_line, soft_wrap=True, emoji=False)
+        console.print(f"Server status: [bold cyan]{server_status}[/]")
 
 
 @servers_app.command()

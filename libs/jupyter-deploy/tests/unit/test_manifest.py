@@ -24,7 +24,6 @@ from jupyter_deploy.manifest import (
     JupyterDeployInstructionV1,
     JupyterDeployManifestV1,
     JupyterDeployProjectStoreV1,
-    JupyterDeployStatusRuleV1,
 )
 
 
@@ -744,45 +743,3 @@ class TestJupyterDeployManifestV1VolumeReadiness(unittest.TestCase):
 
     def test_a_template_with_no_commands_opts_out(self) -> None:
         self.assertFalse(self._manifest([]).supports_volume_readiness())
-
-
-class TestJupyterDeployStatusRuleV1(unittest.TestCase):
-    RULE: dict[str, Any] = {
-        "display": "Starting",
-        "all": [{"path": ".status.conditions[type=Progressing].status", "equals": "True"}],
-    }
-
-    def test_detail_defaults_to_none(self) -> None:
-        rule = JupyterDeployStatusRuleV1.model_validate(self.RULE)
-        self.assertIsNone(rule.detail)
-
-    def test_parses_a_detail_path(self) -> None:
-        path = ".status.conditions[type=Progressing].reason"
-        rule = JupyterDeployStatusRuleV1.model_validate({**self.RULE, "detail": path})
-        self.assertEqual(rule.detail, path)
-
-    def test_rejects_a_detail_list(self) -> None:
-        """A declared field, not an unknown key the model lets through: a list of paths is a manifest error."""
-        with self.assertRaises(ValidationError):
-            JupyterDeployStatusRuleV1.model_validate(
-                {**self.RULE, "detail": [".status.conditions[type=Progressing].reason"]}
-            )
-
-    def test_detail_display_defaults_to_empty(self) -> None:
-        rule = JupyterDeployStatusRuleV1.model_validate(self.RULE)
-        self.assertEqual(rule.detail_display, {})
-
-    def test_parses_detail_display_through_its_alias(self) -> None:
-        rule = JupyterDeployStatusRuleV1.model_validate(
-            {**self.RULE, "detail-display": {"WaitingForNode": "waiting for node"}}
-        )
-        self.assertEqual(rule.detail_display, {"WaitingForNode": "waiting for node"})
-
-    def test_rejects_a_detail_display_that_is_not_a_mapping(self) -> None:
-        with self.assertRaises(ValidationError):
-            JupyterDeployStatusRuleV1.model_validate({**self.RULE, "detail-display": ["waiting for node"]})
-
-    def test_accepts_unknown_keys(self) -> None:
-        """Unknown keys parse, so a manifest can carry fields an older CLI does not know."""
-        rule = JupyterDeployStatusRuleV1.model_validate({**self.RULE, "hints": ["check the image name"]})
-        self.assertEqual(rule.display, "Starting")
