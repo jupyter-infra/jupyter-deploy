@@ -367,8 +367,7 @@ class TestManifest(unittest.TestCase):
         "PullingImage": "pulling image",
         "StartingContainer": "starting container",
     }
-    # the failure reasons the template names, the kubelet's container failures then the operator's own;
-    # any other Degraded reason prints the bare word
+    # the failure reasons the template names; any other Degraded reason prints the bare word
     FAILURE_REASONS = {
         "ImagePullBackOff",
         "InvalidImageName",
