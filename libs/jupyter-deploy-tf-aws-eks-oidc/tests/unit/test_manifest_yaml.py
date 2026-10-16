@@ -74,6 +74,18 @@ class TestManifest(unittest.TestCase):
             by_type[cond_type].update(status=status, reason=reason)
         return json.dumps(workspace)
 
+    @classmethod
+    def _starting(cls, reason: str) -> str:
+        return cls._workspace(
+            "Running", ("Available", "False", reason), ("Progressing", "True", reason), ("Degraded", "False", "NoError")
+        )
+
+    @classmethod
+    def _failed(cls, reason: str) -> str:
+        return cls._workspace(
+            "Running", ("Available", "False", reason), ("Progressing", "False", reason), ("Degraded", "True", reason)
+        )
+
     def _server_status_rules(self) -> list[JupyterDeployStatusRuleV1]:
         return JupyterDeployManifestV1.model_validate(self.MANIFEST).server_status_rules or []
 
@@ -404,41 +416,21 @@ class TestManifest(unittest.TestCase):
         rules = self._server_status_rules()
         for reason, phrase in self.START_STEP_PHRASES.items():
             with self.subTest(reason=reason):
-                starting = self._workspace(
-                    "Running",
-                    ("Available", "False", reason),
-                    ("Progressing", "True", reason),
-                    ("Degraded", "False", "NoError"),
-                )
+                starting = self._starting(reason)
                 self.assertEqual(evaluate_status_rules(starting, rules), f"Starting ({phrase})")
 
     def test_each_failure_reason_prints_in_parentheses(self) -> None:
         rules = self._server_status_rules()
         for reason in self.FAILURE_REASONS:
             with self.subTest(reason=reason):
-                failed = self._workspace(
-                    "Running",
-                    ("Available", "False", reason),
-                    ("Progressing", "False", reason),
-                    ("Degraded", "True", reason),
-                )
+                failed = self._failed(reason)
                 self.assertEqual(evaluate_status_rules(failed, rules), f"Degraded ({reason})")
 
     def test_reasons_without_a_rule_print_the_bare_word(self) -> None:
         rules = self._server_status_rules()
-        starting = self._workspace(
-            "Running",
-            ("Available", "False", "SomethingNew"),
-            ("Progressing", "True", "SomethingNew"),
-            ("Degraded", "False", "NoError"),
-        )
+        starting = self._starting("SomethingNew")
         self.assertEqual(evaluate_status_rules(starting, rules), "Starting")
-        failed = self._workspace(
-            "Running",
-            ("Available", "False", "SomethingNew"),
-            ("Progressing", "False", "SomethingNew"),
-            ("Degraded", "True", "SomethingNew"),
-        )
+        failed = self._failed("SomethingNew")
         self.assertEqual(evaluate_status_rules(failed, rules), "Degraded")
 
     def test_stopping_and_running_print_the_bare_word(self) -> None:

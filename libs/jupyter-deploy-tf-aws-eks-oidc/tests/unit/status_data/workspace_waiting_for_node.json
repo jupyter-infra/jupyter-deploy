@@ -45,39 +45,39 @@
   "status": {
     "conditions": [
       {
-        "lastTransitionTime": "2026-10-16T01:36:59Z",
-        "message": "0/1 nodes are available: 1 Insufficient nvidia.com/gpu. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.",
-        "reason": "WaitingForNode",
+        "type": "Available",
         "status": "False",
-        "type": "Available"
+        "reason": "WaitingForNode",
+        "message": "0/1 nodes are available: 1 Insufficient nvidia.com/gpu. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.",
+        "lastTransitionTime": "2026-10-16T01:36:59Z"
       },
       {
-        "lastTransitionTime": "2026-10-16T01:36:59Z",
-        "message": "0/1 nodes are available: 1 Insufficient nvidia.com/gpu. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.",
-        "reason": "WaitingForNode",
+        "type": "Progressing",
         "status": "True",
-        "type": "Progressing"
+        "reason": "WaitingForNode",
+        "message": "0/1 nodes are available: 1 Insufficient nvidia.com/gpu. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.",
+        "lastTransitionTime": "2026-10-16T01:36:59Z"
       },
       {
-        "lastTransitionTime": "2026-10-16T01:36:59Z",
-        "message": "No errors detected",
+        "type": "Degraded",
+        "status": "False",
         "reason": "NoError",
-        "status": "False",
-        "type": "Degraded"
+        "message": "No errors detected",
+        "lastTransitionTime": "2026-10-16T01:36:59Z"
       },
       {
-        "lastTransitionTime": "2026-10-16T01:36:59Z",
-        "message": "Workspace is starting",
-        "reason": "DesiredStateRunning",
+        "type": "Stopped",
         "status": "False",
-        "type": "Stopped"
+        "reason": "DesiredStateRunning",
+        "message": "Workspace is starting",
+        "lastTransitionTime": "2026-10-16T01:36:59Z"
       },
       {
-        "lastTransitionTime": "2026-10-16T01:36:59Z",
-        "message": "Workspace is starting",
-        "reason": "DesiredStateRunning",
+        "type": "Deleting",
         "status": "False",
-        "type": "Deleting"
+        "reason": "DesiredStateRunning",
+        "message": "Workspace is starting",
+        "lastTransitionTime": "2026-10-16T01:36:59Z"
       }
     ],
     "deploymentName": "workspace-gpu-workspace",
