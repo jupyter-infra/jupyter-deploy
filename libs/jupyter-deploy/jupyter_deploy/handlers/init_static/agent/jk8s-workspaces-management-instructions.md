@@ -24,11 +24,12 @@ jd server list --limit 20 --continue-from TOKEN
 ```
 
 `jd server status` prints one of `Running`, `Starting`, `Stopping`, `Stopped` or
-`Degraded`, derived from the Workspace's conditions. While a workspace starts, the step
-follows in parentheses: `Starting (waiting for node)`, `Starting (pulling image)`,
-`Starting (starting container)`. When a start has failed, the reason follows:
-`Degraded (ImagePullBackOff)`; a failure the template has no rule for prints the bare
-`Degraded`. The condition's reason and message are in `jd server show --json`.
+`Degraded`, derived from the Workspace's conditions. While a workspace starts, the
+start step is shown in parentheses after the word: `Starting (waiting for node)`,
+`Starting (pulling image)`, `Starting (starting container)`. When a start has failed,
+the failure reason is shown the same way: `Degraded (ImagePullBackOff)`; a failure the
+template has no rule for prints the bare `Degraded`. For the full detail, including each
+condition's `message`, use `jd server show --json`, which prints the whole Workspace.
 
 ```bash
 jd server status --name WORKSPACE-NAME --scope SCOPE

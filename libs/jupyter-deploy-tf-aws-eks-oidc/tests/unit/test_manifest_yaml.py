@@ -31,6 +31,29 @@ class TestManifest(unittest.TestCase):
         "cluster_ca_certificate",
         "server_default_scope",
     ]
+    # the start steps the template spells out; any other Progressing reason prints the bare word
+    START_STEP_PHRASES = {
+        "WaitingForNode": "waiting for node",
+        "PullingImage": "pulling image",
+        "StartingContainer": "starting container",
+    }
+    # the failure reasons the template names; any other Degraded reason prints the bare word
+    FAILURE_REASONS = {
+        "ImagePullBackOff",
+        "InvalidImageName",
+        "CrashLoopBackOff",
+        "CreateContainerConfigError",
+        "CreateContainerError",
+        "RunContainerError",
+        "ContainerStartFailed",
+        "FailedCreate",
+        "ComputeStalled",
+        "ComputeError",
+        "ServiceError",
+        "AccessProbeThresholdExceeded",
+    }
+    # a Workspace as the jupyter-k8s operator wrote it on a Kind cluster, waiting for a GPU node
+    WORKSPACE_FIXTURE = Path(__file__).parent / "status_data" / "workspace_waiting_for_node.json"
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -40,6 +63,19 @@ class TestManifest(unittest.TestCase):
         variables_config_path = TEMPLATE_PATH / "variables.yaml"
         with open(variables_config_path) as variables_config_file:
             cls.VARIABLES_CONFIG = yaml.safe_load(variables_config_file)
+
+    @classmethod
+    def _workspace(cls, desired: str, *conditions: tuple[str, str, str]) -> str:
+        """The fixture Workspace with desiredStatus and the given (type, status, reason) conditions set on it."""
+        workspace = json.loads(cls.WORKSPACE_FIXTURE.read_text())
+        workspace["spec"]["desiredStatus"] = desired
+        by_type = {condition["type"]: condition for condition in workspace["status"]["conditions"]}
+        for cond_type, status, reason in conditions:
+            by_type[cond_type].update(status=status, reason=reason)
+        return json.dumps(workspace)
+
+    def _server_status_rules(self) -> list[JupyterDeployStatusRuleV1]:
+        return JupyterDeployManifestV1.model_validate(self.MANIFEST).server_status_rules or []
 
     def test_manifest_parses_as_yaml(self) -> None:
         self.assertIsNotNone(self.MANIFEST)
@@ -362,48 +398,11 @@ class TestManifest(unittest.TestCase):
             {"ACTIVE", "CREATING", "UPDATING", "DEGRADED", "DELETING", "CREATE_FAILED", "DELETE_FAILED"},
         )
 
-    START_STEPS = {
-        "WaitingForNode": "waiting for node",
-        "PullingImage": "pulling image",
-        "StartingContainer": "starting container",
-    }
-    # the failure reasons the template names; any other Degraded reason prints the bare word
-    FAILURE_REASONS = {
-        "ImagePullBackOff",
-        "InvalidImageName",
-        "CrashLoopBackOff",
-        "CreateContainerConfigError",
-        "CreateContainerError",
-        "RunContainerError",
-        "ContainerStartFailed",
-        "FailedCreate",
-        "ComputeStalled",
-        "ComputeError",
-        "ServiceError",
-        "AccessProbeThresholdExceeded",
-    }
-
-    # a Workspace as the jupyter-k8s operator wrote it on a Kind cluster, waiting for a GPU node
-    WORKSPACE_FIXTURE = Path(__file__).parent / "status_data" / "workspace_waiting_for_node.json"
-
-    @classmethod
-    def _workspace(cls, desired: str, *conditions: tuple[str, str, str]) -> str:
-        """The fixture Workspace with desiredStatus and the given (type, status, reason) conditions set on it."""
-        workspace = json.loads(cls.WORKSPACE_FIXTURE.read_text())
-        workspace["spec"]["desiredStatus"] = desired
-        by_type = {condition["type"]: condition for condition in workspace["status"]["conditions"]}
-        for cond_type, status, reason in conditions:
-            by_type[cond_type].update(status=status, reason=reason)
-        return json.dumps(workspace)
-
-    def _server_status_rules(self) -> list[JupyterDeployStatusRuleV1]:
-        return JupyterDeployManifestV1.model_validate(self.MANIFEST).server_status_rules or []
-
     def test_each_start_step_prints_its_phrase(self) -> None:
         """A typo in a manifest path or a renamed operator reason fails here instead of printing a bare
         `Starting` in production."""
         rules = self._server_status_rules()
-        for reason, phrase in self.START_STEPS.items():
+        for reason, phrase in self.START_STEP_PHRASES.items():
             with self.subTest(reason=reason):
                 starting = self._workspace(
                     "Running",
@@ -468,7 +467,9 @@ class TestManifest(unittest.TestCase):
         def reasons_matched_on(path: str) -> set[str]:
             return {match["equals"] for rule in rules for match in rule["all"] if match["path"] == path}
 
-        self.assertEqual(reasons_matched_on(".status.conditions[type=Progressing].reason"), set(self.START_STEPS))
+        self.assertEqual(
+            reasons_matched_on(".status.conditions[type=Progressing].reason"), set(self.START_STEP_PHRASES)
+        )
         self.assertEqual(reasons_matched_on(".status.conditions[type=Degraded].reason"), self.FAILURE_REASONS)
 
     def test_host_list_command_supports_query_param(self) -> None:
