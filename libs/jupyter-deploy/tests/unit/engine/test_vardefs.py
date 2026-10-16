@@ -43,6 +43,22 @@ class TestTemplateVariableClasses(unittest.TestCase):
         # Assert
         self.assertEqual(result, expected_output)
 
+    @parameterized.parameterized.expand(
+        [
+            (StrTemplateVariableDefinition, "--my-var"),
+            (IntTemplateVariableDefinition, "--my-var"),
+            (FloatTemplateVariableDefinition, "--my-var"),
+            (AnyNumericTemplateVariableDefinition, "--my-var"),
+            (BoolTemplateVariableDefinition, "--my-var/--no-my-var"),
+            (ListStrTemplateVariableDefinition, "--my-var"),
+            (DictStrTemplateVariableDefinition, "--my-var"),
+            (ListMapStrTemplateVariableDefinition, "--my-var"),
+        ]
+    )
+    def test_get_cli_option_declaration(self, clz: type, expected: str) -> None:
+        instance: TemplateVariableDefinition = clz(variable_name="my_var", description="desc")
+        self.assertEqual(instance.get_cli_option_declaration(), expected)
+
     def test_should_add_non_none_default_as_preset_to_description(self) -> None:
         # Setup
         var_def: TemplateVariableDefinition = TemplateVariableDefinition(

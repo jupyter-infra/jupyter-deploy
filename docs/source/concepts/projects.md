@@ -91,6 +91,14 @@ as a flag:
 jd config --volume-size-gb 50 --log-files-retention-days 90
 ```
 
+A boolean variable takes no value: `--<name>` sets it to true and `--no-<name>` sets it
+to false. Passing neither leaves the variable unchanged.
+
+```bash
+jd config --enable-default-gpu-pool
+jd config --no-enable-default-gpu-pool
+```
+
 To see every variable a template exposes — with its flag name, type, and description —
 run:
 

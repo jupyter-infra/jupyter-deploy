@@ -5,6 +5,7 @@ from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
 import typer
+from typer.testing import CliRunner, Result
 
 from jupyter_deploy.cli.variables_decorator import with_project_variables
 from jupyter_deploy.engine.vardefs import (
@@ -458,3 +459,62 @@ class TestWithTemplateVariableDecorator(unittest.TestCase):
         self.assertIn("test_var", call_args["variables"])
         self.assertTrue(isinstance(call_args["variables"]["test_var"], DictStrTemplateVariableDefinition))
         self.assertEqual(call_args["variables"]["test_var"].assigned_value, {"key1": "val1", "key2": "val2"})
+
+    def _invoke_with_bool_var(
+        self, mock_handler_class: Mock, mock_retrieve_manifest: Mock, mock_cwd: Mock, args: list[str]
+    ) -> tuple[Result, Mock]:
+        """Run a decorated command that exposes one boolean variable through typer with the given args."""
+        mock_cwd.return_value = Path("/to/cur/dir")
+        mock_retrieve_manifest.return_value = Mock()
+        mock_handler = MagicMock()
+        mock_handler_class.return_value = mock_handler
+        mock_handler.get_template_variables.return_value = {
+            "bool_var": BoolTemplateVariableDefinition(variable_name="bool_var", description="Boolean variable")
+        }
+        mock_fn = Mock()
+
+        def test_fn(variables: dict[str, Any] | None = None) -> None:
+            mock_fn(variables=variables)
+
+        app = typer.Typer()
+        app.command()(with_project_variables()(test_fn))
+        return CliRunner().invoke(app, args), mock_fn
+
+    @patch("jupyter_deploy.cli.variables_decorator.Path.cwd")
+    @patch("jupyter_deploy.cli.variables_decorator.base_project_handler.retrieve_project_manifest_if_available")
+    @patch("jupyter_deploy.cli.variables_decorator.variables_handler.VariablesHandler")
+    def test_bool_flag_sets_variable_to_true(
+        self, mock_handler_class: Mock, mock_retrieve_manifest: Mock, mock_cwd: Mock
+    ) -> None:
+        result, mock_fn = self._invoke_with_bool_var(
+            mock_handler_class, mock_retrieve_manifest, mock_cwd, ["--bool-var"]
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        variables = mock_fn.call_args.kwargs["variables"]
+        self.assertIs(variables["bool_var"].assigned_value, True)
+
+    @patch("jupyter_deploy.cli.variables_decorator.Path.cwd")
+    @patch("jupyter_deploy.cli.variables_decorator.base_project_handler.retrieve_project_manifest_if_available")
+    @patch("jupyter_deploy.cli.variables_decorator.variables_handler.VariablesHandler")
+    def test_no_prefixed_bool_flag_sets_variable_to_false(
+        self, mock_handler_class: Mock, mock_retrieve_manifest: Mock, mock_cwd: Mock
+    ) -> None:
+        result, mock_fn = self._invoke_with_bool_var(
+            mock_handler_class, mock_retrieve_manifest, mock_cwd, ["--no-bool-var"]
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        variables = mock_fn.call_args.kwargs["variables"]
+        self.assertIs(variables["bool_var"].assigned_value, False)
+
+    @patch("jupyter_deploy.cli.variables_decorator.Path.cwd")
+    @patch("jupyter_deploy.cli.variables_decorator.base_project_handler.retrieve_project_manifest_if_available")
+    @patch("jupyter_deploy.cli.variables_decorator.variables_handler.VariablesHandler")
+    def test_bool_variable_not_passed_when_neither_flag_given(
+        self, mock_handler_class: Mock, mock_retrieve_manifest: Mock, mock_cwd: Mock
+    ) -> None:
+        result, mock_fn = self._invoke_with_bool_var(mock_handler_class, mock_retrieve_manifest, mock_cwd, [])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertNotIn("bool_var", mock_fn.call_args.kwargs["variables"])

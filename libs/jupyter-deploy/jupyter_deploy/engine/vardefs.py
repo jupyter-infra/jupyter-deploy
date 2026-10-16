@@ -26,6 +26,10 @@ class TemplateVariableDefinition(BaseModel, Generic[T]):
         cli_var_name = str_utils.to_cli_option_name(self.variable_name)
         return cli_var_name
 
+    def get_cli_option_declaration(self) -> str:
+        """Return the option declaration for typer.Option: --<name> in kebab-case."""
+        return f"--{self.get_cli_var_name()}"
+
     def get_cli_description(self) -> str:
         """Return a one-liner description with preset information for the CLI attribute."""
         header = str_utils.get_trimmed_header(self.description)
@@ -119,7 +123,10 @@ class AnyNumericTemplateVariableDefinition(TemplateVariableDefinition[int | floa
 class BoolTemplateVariableDefinition(TemplateVariableDefinition[bool]):
     """Wrapper class for user-inputable bool value in a template."""
 
-    pass
+    def get_cli_option_declaration(self) -> str:
+        """Return the paired declaration: --<name> sets the variable to true, --no-<name> sets it to false."""
+        cli_name = self.get_cli_var_name()
+        return f"--{cli_name}/--no-{cli_name}"
 
 
 # keep List[str] instead of list[str] here: typer requires it

@@ -75,7 +75,7 @@ def with_project_variables() -> Callable:
 
         # Add each template variable as parameter to the wrapper function
         for var_name, var_def in var_defs.items():
-            option_name = f"--{var_def.get_cli_var_name()}"
+            option_name = var_def.get_cli_option_declaration()
             var_type = var_def.__class__.get_type()
             cli_description = var_def.get_cli_description()  # will embed default as [preset: <default>]
             # Pass typer.BadParameter so validators raise the correct exception for CLI
