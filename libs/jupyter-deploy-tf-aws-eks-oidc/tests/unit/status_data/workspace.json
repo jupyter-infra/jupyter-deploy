@@ -2,7 +2,6 @@
   "kind": "Workspace",
   "metadata": {
     "annotations": {
-      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"workspace.jupyter.org/v1alpha1\",\"kind\":\"Workspace\",\"metadata\":{\"annotations\":{},\"name\":\"jd445-shot-gpu\",\"namespace\":\"default\"},\"spec\":{\"accessType\":\"Public\",\"appType\":\"jupyterlab\",\"desiredStatus\":\"Running\",\"displayName\":\"GPU workspace\",\"image\":\"nginx:latest\",\"ownershipType\":\"Public\",\"resources\":{\"limits\":{\"cpu\":\"500m\",\"memory\":\"512Mi\",\"nvidia.com/gpu\":\"1\"},\"requests\":{\"cpu\":\"100m\",\"memory\":\"128Mi\",\"nvidia.com/gpu\":\"1\"}},\"serviceAccountName\":\"default\",\"storage\":{\"mountPath\":\"/data\",\"size\":\"1Gi\"},\"templateRef\":{\"name\":\"custom-image-template\"}}}\n",
       "workspace.jupyter.org/created-by": "kubernetes-admin",
       "workspace.jupyter.org/last-updated-by": "system:serviceaccount:jupyter-k8s-system:jupyter-k8s-controller-manager"
     },
