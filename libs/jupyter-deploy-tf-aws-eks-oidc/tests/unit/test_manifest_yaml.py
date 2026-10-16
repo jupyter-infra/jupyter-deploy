@@ -40,11 +40,16 @@ class TestManifest(unittest.TestCase):
     # the failure reasons the template names; any other Degraded reason prints the bare word
     FAILURE_REASONS = {
         "ImagePullBackOff",
+        "ErrImageNeverPull",
+        "ImageInspectError",
         "InvalidImageName",
-        "CrashLoopBackOff",
         "CreateContainerConfigError",
+        "PreCreateHookError",
         "CreateContainerError",
+        "PreStartHookError",
+        "PostStartHookError",
         "RunContainerError",
+        "CrashLoopBackOff",
         "ContainerStartFailed",
         "FailedCreate",
         "ComputeStalled",
@@ -450,7 +455,7 @@ class TestManifest(unittest.TestCase):
         self.assertEqual(evaluate_status_rules(running, rules), "Running")
 
     def test_detailed_rules_name_exactly_the_pinned_reasons(self) -> None:
-        """A rule added without a test above, or one kept after the operator drops a reason, fails here."""
+        """A rule added or removed without updating this list fails here."""
         if self.MANIFEST is None:
             self.fail("MANIFEST is None")
         rules = self.MANIFEST["server-status-rules"]

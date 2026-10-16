@@ -45,48 +45,81 @@ multi-server: true
 services: []
 server-status-rules:
 # jd uses the first matching rule: keep each reason-specific rule above its bare-word rule.
+# image pull failures the kubelet reports
 - display: Degraded (ImagePullBackOff)
   all:
   - path: .status.conditions[type=Degraded].status
     equals: "True"
   - path: .status.conditions[type=Degraded].reason
     equals: ImagePullBackOff
+- display: Degraded (ErrImageNeverPull)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: ErrImageNeverPull
+- display: Degraded (ImageInspectError)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: ImageInspectError
 - display: Degraded (InvalidImageName)
   all:
   - path: .status.conditions[type=Degraded].status
     equals: "True"
   - path: .status.conditions[type=Degraded].reason
     equals: InvalidImageName
-- display: Degraded (CrashLoopBackOff)
-  all:
-  - path: .status.conditions[type=Degraded].status
-    equals: "True"
-  - path: .status.conditions[type=Degraded].reason
-    equals: CrashLoopBackOff
+# container start failures the kubelet reports
 - display: Degraded (CreateContainerConfigError)
   all:
   - path: .status.conditions[type=Degraded].status
     equals: "True"
   - path: .status.conditions[type=Degraded].reason
     equals: CreateContainerConfigError
+- display: Degraded (PreCreateHookError)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: PreCreateHookError
 - display: Degraded (CreateContainerError)
   all:
   - path: .status.conditions[type=Degraded].status
     equals: "True"
   - path: .status.conditions[type=Degraded].reason
     equals: CreateContainerError
+- display: Degraded (PreStartHookError)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: PreStartHookError
+- display: Degraded (PostStartHookError)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: PostStartHookError
 - display: Degraded (RunContainerError)
   all:
   - path: .status.conditions[type=Degraded].status
     equals: "True"
   - path: .status.conditions[type=Degraded].reason
     equals: RunContainerError
+- display: Degraded (CrashLoopBackOff)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: CrashLoopBackOff
 - display: Degraded (ContainerStartFailed)
   all:
   - path: .status.conditions[type=Degraded].status
     equals: "True"
   - path: .status.conditions[type=Degraded].reason
     equals: ContainerStartFailed
+# the operator's own failures
 - display: Degraded (FailedCreate)
   all:
   - path: .status.conditions[type=Degraded].status
