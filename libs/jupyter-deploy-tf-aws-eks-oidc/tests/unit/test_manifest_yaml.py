@@ -384,13 +384,13 @@ class TestManifest(unittest.TestCase):
 
         starting = workspace(
             "Running",
-            condition("Available", "False", "ResourcesNotReady", "Workspace is starting"),
-            condition("Progressing", "True", "ResourcesNotReady", "Workspace is starting"),
+            condition("Available", "False", "WaitingForNode", "Waiting for a node to run the pod"),
+            condition("Progressing", "True", "WaitingForNode", "Waiting for a node to run the pod"),
             condition("Degraded", "False", "NoError", "No errors detected"),
         )
         self.assertEqual(
             evaluate_status_rules(starting, rules),
-            ResourceStatus("Starting", ["ResourcesNotReady", "Workspace is starting"]),
+            ResourceStatus("Starting", "WaitingForNode"),
         )
 
         failed = workspace(
@@ -401,7 +401,7 @@ class TestManifest(unittest.TestCase):
         )
         self.assertEqual(
             evaluate_status_rules(failed, rules),
-            ResourceStatus("Degraded", ["ImagePullBackOff", 'Back-off pulling image "jupyter/notebook:typo"']),
+            ResourceStatus("Degraded", "ImagePullBackOff"),
         )
 
         stopping = workspace(
@@ -411,7 +411,7 @@ class TestManifest(unittest.TestCase):
         )
         self.assertEqual(
             evaluate_status_rules(stopping, rules),
-            ResourceStatus("Stopping", ["ResourcesNotStopped", "Resources are still running"]),
+            ResourceStatus("Stopping", "ResourcesNotStopped"),
         )
 
         running = workspace(
@@ -423,27 +423,18 @@ class TestManifest(unittest.TestCase):
         self.assertEqual(evaluate_status_rules(running, rules), ResourceStatus("Running"))
 
     def test_server_status_rules_carry_detail_except_running_and_stopped(self) -> None:
-        """Running and Stopped are settled states whose display word says everything; the reason and message
-        matter while a workspace is starting, stopping or failing."""
+        """Running and Stopped are settled states whose display word says everything; the reason matters
+        while a workspace is starting, stopping or failing."""
         manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
         detail_by_display = {rule.display: rule.detail for rule in manifest.server_status_rules or []}
         self.assertEqual(
             detail_by_display,
             {
-                "Degraded": [
-                    ".status.conditions[type=Degraded].reason",
-                    ".status.conditions[type=Degraded].message",
-                ],
-                "Starting": [
-                    ".status.conditions[type=Progressing].reason",
-                    ".status.conditions[type=Progressing].message",
-                ],
-                "Stopping": [
-                    ".status.conditions[type=Progressing].reason",
-                    ".status.conditions[type=Progressing].message",
-                ],
-                "Stopped": [],
-                "Running": [],
+                "Degraded": ".status.conditions[type=Degraded].reason",
+                "Starting": ".status.conditions[type=Progressing].reason",
+                "Stopping": ".status.conditions[type=Progressing].reason",
+                "Stopped": None,
+                "Running": None,
             },
         )
 
@@ -451,7 +442,7 @@ class TestManifest(unittest.TestCase):
         """`detail` has no effect in pool rules, so a declared one would be dead configuration."""
         manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
         for rule in manifest.pool_status_rules or []:
-            self.assertEqual(rule.detail, [], rule.display)
+            self.assertIsNone(rule.detail, rule.display)
 
     def test_host_list_command_supports_query_param(self) -> None:
         """host.list command must wire a 'query' source-key for the --query filter."""

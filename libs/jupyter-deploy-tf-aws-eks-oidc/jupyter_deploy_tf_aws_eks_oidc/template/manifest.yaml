@@ -48,27 +48,21 @@ server-status-rules:
   all:
   - path: .status.conditions[type=Degraded].status
     equals: "True"
-  detail:
-  - .status.conditions[type=Degraded].reason
-  - .status.conditions[type=Degraded].message
+  detail: .status.conditions[type=Degraded].reason
 - display: Starting
   all:
   - path: .status.conditions[type=Progressing].status
     equals: "True"
   - path: .spec.desiredStatus
     equals: Running
-  detail:
-  - .status.conditions[type=Progressing].reason
-  - .status.conditions[type=Progressing].message
+  detail: .status.conditions[type=Progressing].reason
 - display: Stopping
   all:
   - path: .status.conditions[type=Progressing].status
     equals: "True"
   - path: .spec.desiredStatus
     equals: Stopped
-  detail:
-  - .status.conditions[type=Progressing].reason
-  - .status.conditions[type=Progressing].message
+  detail: .status.conditions[type=Progressing].reason
 - display: Stopped
   all:
   - path: .status.conditions[type=Stopped].status
