@@ -44,7 +44,7 @@ multi-host: true
 multi-server: true
 services: []
 server-status-rules:
-# First match wins: a rule that names a reason sits above the bare word it refines.
+# jd uses the first matching rule: keep each reason-specific rule above its bare-word rule.
 - display: Degraded (ImagePullBackOff)
   all:
   - path: .status.conditions[type=Degraded].status
