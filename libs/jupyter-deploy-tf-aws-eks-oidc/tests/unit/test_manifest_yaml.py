@@ -8,7 +8,7 @@ import yaml
 from jupyter_deploy import manifest_validation
 from jupyter_deploy.handlers import base_project_handler
 from jupyter_deploy.handlers.resource.resource_utils import evaluate_status_rules
-from jupyter_deploy.manifest import JupyterDeployManifestV1
+from jupyter_deploy.manifest import JupyterDeployManifestV1, JupyterDeployStatusRuleV1
 
 from jupyter_deploy_tf_aws_eks_oidc.template import TEMPLATE_PATH
 
@@ -386,7 +386,7 @@ class TestManifest(unittest.TestCase):
 
     @staticmethod
     def _workspace(desired: str, *conditions: tuple[str, str, str]) -> str:
-        """A Workspace JSON with conditions shaped as the operator writes them."""
+        """A Workspace JSON with (type, status, reason) conditions shaped as the operator writes them."""
         return json.dumps(
             {
                 "spec": {"desiredStatus": desired},
@@ -406,11 +406,13 @@ class TestManifest(unittest.TestCase):
             }
         )
 
-    def test_server_status_rules_read_the_operator_conditions(self) -> None:
-        """Evaluates the rules against conditions shaped as the operator writes them, so a path typo in the manifest
-        or a renamed operator field fails here instead of printing a bare word."""
-        rules = JupyterDeployManifestV1.model_validate(self.MANIFEST).server_status_rules or []
+    def _server_status_rules(self) -> list[JupyterDeployStatusRuleV1]:
+        return JupyterDeployManifestV1.model_validate(self.MANIFEST).server_status_rules or []
 
+    def test_each_start_step_prints_its_phrase(self) -> None:
+        """Evaluates the rules against conditions shaped as the operator writes them, so a path typo in the manifest
+        or a renamed operator reason fails here instead of printing a bare word."""
+        rules = self._server_status_rules()
         for reason, phrase in self.START_STEPS.items():
             with self.subTest(reason=reason):
                 starting = self._workspace(
@@ -421,6 +423,8 @@ class TestManifest(unittest.TestCase):
                 )
                 self.assertEqual(evaluate_status_rules(starting, rules), f"Starting ({phrase})")
 
+    def test_each_failure_reason_prints_in_parentheses(self) -> None:
+        rules = self._server_status_rules()
         for reason in self.FAILURE_REASONS:
             with self.subTest(reason=reason):
                 failed = self._workspace(
@@ -431,6 +435,8 @@ class TestManifest(unittest.TestCase):
                 )
                 self.assertEqual(evaluate_status_rules(failed, rules), f"Degraded ({reason})")
 
+    def test_reasons_the_template_does_not_name_print_the_bare_word(self) -> None:
+        rules = self._server_status_rules()
         # the released operator writes generic reasons; the operator from jupyter-k8s#490 writes the steps
         generic_start = self._workspace(
             "Running",
@@ -439,17 +445,22 @@ class TestManifest(unittest.TestCase):
             ("Degraded", "False", "NoError"),
         )
         self.assertEqual(evaluate_status_rules(generic_start, rules), "Starting")
+        unlisted_failure = self._workspace(
+            "Running",
+            ("Available", "False", "SomethingNew"),
+            ("Progressing", "False", "SomethingNew"),
+            ("Degraded", "True", "SomethingNew"),
+        )
+        self.assertEqual(evaluate_status_rules(unlisted_failure, rules), "Degraded")
 
-        unknown_failure = self._workspace("Running", ("Degraded", "True", "SomethingNew"))
-        self.assertEqual(evaluate_status_rules(unknown_failure, rules), "Degraded")
-
+    def test_stopping_and_running_print_the_bare_word(self) -> None:
+        rules = self._server_status_rules()
         stopping = self._workspace(
             "Stopped",
             ("Progressing", "True", "ResourcesNotStopped"),
             ("Stopped", "False", "ResourcesNotStopped"),
         )
         self.assertEqual(evaluate_status_rules(stopping, rules), "Stopping")
-
         running = self._workspace(
             "Running",
             ("Available", "True", "ResourcesReady"),
@@ -487,6 +498,7 @@ class TestManifest(unittest.TestCase):
         for display in displays:
             if " (" in display:
                 bare_word = display.split(" (", 1)[0]
+                self.assertIn(bare_word, displays, f"{display} has no bare-word fallback")
                 self.assertLess(displays.index(display), displays.index(bare_word), display)
 
     def test_host_list_command_supports_query_param(self) -> None:
