@@ -414,6 +414,17 @@ class TestManifest(unittest.TestCase):
             ResourceStatus("Stopping"),
         )
 
+        # the released operator writes generic reasons; the operator from jupyter-k8s#490 writes the steps
+        starting_without_steps = workspace(
+            "Running",
+            condition("Available", "False", "ResourcesNotReady", "Workspace is starting"),
+            condition("Progressing", "True", "ResourcesNotReady", "Workspace is starting"),
+            condition("Degraded", "False", "NoError", "No errors detected"),
+        )
+        self.assertEqual(
+            evaluate_status_rules(starting_without_steps, rules), ResourceStatus("Starting", "ResourcesNotReady")
+        )
+
         running = workspace(
             "Running",
             condition("Available", "True", "ResourcesReady", "Workspace is available"),
