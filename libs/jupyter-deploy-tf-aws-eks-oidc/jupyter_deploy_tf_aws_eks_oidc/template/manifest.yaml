@@ -56,13 +56,16 @@ server-status-rules:
   - path: .spec.desiredStatus
     equals: Running
   detail: .status.conditions[type=Progressing].reason
+  detail-display:
+    WaitingForNode: waiting for node
+    PullingImage: pulling image
+    StartingContainer: starting container
 - display: Stopping
   all:
   - path: .status.conditions[type=Progressing].status
     equals: "True"
   - path: .spec.desiredStatus
     equals: Stopped
-  detail: .status.conditions[type=Progressing].reason
 - display: Stopped
   all:
   - path: .status.conditions[type=Stopped].status

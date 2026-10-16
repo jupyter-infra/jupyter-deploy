@@ -390,7 +390,7 @@ class TestManifest(unittest.TestCase):
         )
         self.assertEqual(
             evaluate_status_rules(starting, rules),
-            ResourceStatus("Starting", "WaitingForNode"),
+            ResourceStatus("Starting", "waiting for node"),
         )
 
         failed = workspace(
@@ -411,7 +411,7 @@ class TestManifest(unittest.TestCase):
         )
         self.assertEqual(
             evaluate_status_rules(stopping, rules),
-            ResourceStatus("Stopping", "ResourcesNotStopped"),
+            ResourceStatus("Stopping"),
         )
 
         running = workspace(
@@ -423,8 +423,8 @@ class TestManifest(unittest.TestCase):
         self.assertEqual(evaluate_status_rules(running, rules), ResourceStatus("Running"))
 
     def test_server_status_rules_carry_detail_except_running_and_stopped(self) -> None:
-        """Running and Stopped are settled states whose display word says everything; the reason matters
-        while a workspace is starting, stopping or failing."""
+        """Running and Stopped are settled states whose display word says everything, and the operator has
+        no stop steps; the reason matters while a workspace is starting or failing."""
         manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
         detail_by_display = {rule.display: rule.detail for rule in manifest.server_status_rules or []}
         self.assertEqual(
@@ -432,9 +432,29 @@ class TestManifest(unittest.TestCase):
             {
                 "Degraded": ".status.conditions[type=Degraded].reason",
                 "Starting": ".status.conditions[type=Progressing].reason",
-                "Stopping": ".status.conditions[type=Progressing].reason",
+                "Stopping": None,
                 "Stopped": None,
                 "Running": None,
+            },
+        )
+
+    def test_server_status_rules_spell_the_start_steps(self) -> None:
+        """The Starting rule prints the step in the words the UI chip uses; Degraded prints the operator's
+        reason as is, the word `kubectl describe` shows."""
+        manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
+        phrases_by_display = {rule.display: rule.detail_display for rule in manifest.server_status_rules or []}
+        self.assertEqual(
+            phrases_by_display,
+            {
+                "Starting": {
+                    "WaitingForNode": "waiting for node",
+                    "PullingImage": "pulling image",
+                    "StartingContainer": "starting container",
+                },
+                "Degraded": {},
+                "Stopping": {},
+                "Stopped": {},
+                "Running": {},
             },
         )
 
