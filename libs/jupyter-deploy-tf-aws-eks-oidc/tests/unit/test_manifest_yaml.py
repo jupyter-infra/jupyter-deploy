@@ -52,7 +52,6 @@ class TestManifest(unittest.TestCase):
         "ServiceError",
         "AccessProbeThresholdExceeded",
     }
-    # a Workspace as the jupyter-k8s operator wrote it on a Kind cluster, waiting for a GPU node
     WORKSPACE_FIXTURE = Path(__file__).parent / "status_data" / "workspace_waiting_for_node.json"
 
     @classmethod
