@@ -165,8 +165,9 @@ class JDCli:
             scope: Kubernetes namespace / scope
 
         Returns:
-            The text after "Server status:": the display word ("Running", "Stopped"), followed by
-            ": reason, message" for Starting, Stopping and Degraded when the template's rules carry detail
+            The text after "Server status:": the display word ("Running", "Stopped"), followed by the
+            operator's reason in parentheses for Starting, Stopping and Degraded when the template's rules
+            carry a detail path, for example "Starting (WaitingForNode)"
 
         Raises:
             JDCliError: If command fails
@@ -207,7 +208,7 @@ class JDCli:
         while time.time() < deadline:
             try:
                 last_status = self.get_scoped_server_status(name, scope)
-                if last_status.split(":", 1)[0].strip() == target_status:
+                if last_status.split(" ", 1)[0] == target_status:
                     return
             except (JDCliError, ValueError):
                 pass

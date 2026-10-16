@@ -9,9 +9,7 @@ from pytest_jupyter_deploy.cli import JDCli
 
 
 class TestPollScopedServerStatus(unittest.TestCase):
-    @patch.object(
-        JDCli, "get_scoped_server_status", return_value="Starting: WaitingForNode, Pod should schedule on: nodeclaim/x"
-    )
+    @patch.object(JDCli, "get_scoped_server_status", return_value="Starting (WaitingForNode)")
     def test_matches_the_display_word_of_a_detailed_line(self, _status: Mock) -> None:
         JDCli(Path("/project")).poll_scoped_server_status("ws", "Starting", timeout_s=1, interval_s=0)
 
@@ -20,7 +18,7 @@ class TestPollScopedServerStatus(unittest.TestCase):
         JDCli(Path("/project")).poll_scoped_server_status("ws", "Running", timeout_s=1, interval_s=0)
 
     @patch("pytest_jupyter_deploy.cli.time")
-    @patch.object(JDCli, "get_scoped_server_status", return_value="Starting: WaitingForNode, waiting")
+    @patch.object(JDCli, "get_scoped_server_status", return_value="Starting (WaitingForNode)")
     def test_times_out_on_another_word(self, status: Mock, clock: Mock) -> None:
         # the clock advances one second per read: one poll fits before the deadline
         clock.time.side_effect = itertools.count()
