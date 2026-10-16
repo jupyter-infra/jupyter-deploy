@@ -12,8 +12,6 @@ Scope: ALL five router components deployed by the jupyter-k8s-aws-oidc chart —
 traefik (ingress), dex (OIDC IdP), oauth2-proxy (auth gate), authmiddleware (workspace
 connection auth), and web-app (workspace management UI). Each must land on the routing
 NodePool.
-
-Marked `full_deployment` — reads a live cluster (no mutation), requires it to exist.
 """
 
 import pytest
@@ -33,7 +31,6 @@ ROUTER_COMPONENTS = [
 ]
 
 
-@pytest.mark.full_deployment
 @pytest.mark.usefixtures("kubernetes_cluster_login")
 @pytest.mark.parametrize("selector,description", ROUTER_COMPONENTS)
 def test_router_components_run_on_routing_nodepool(

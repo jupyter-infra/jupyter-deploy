@@ -141,7 +141,7 @@ module "karpenter_controller_role" {
 
 resource "aws_eks_pod_identity_association" "karpenter_controller" {
   cluster_name    = module.eks_cluster.cluster_name
-  namespace       = "karpenter"
+  namespace       = local.release_namespaces.karpenter
   service_account = "karpenter"
   role_arn        = module.karpenter_controller_role.role_arn
 

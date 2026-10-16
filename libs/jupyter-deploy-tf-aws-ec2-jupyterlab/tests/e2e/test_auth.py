@@ -81,6 +81,8 @@ from pytest_jupyter_deploy.local_proxy.requests import (
     unverified_request,
 )
 
+pytestmark = pytest.mark.proxy
+
 # The sidecar's own X-Amz-Date format and skew allowance (main.go). Duplicated so a test cannot
 # silently follow a change to the value it is asserting.
 _AMZ_DATE_FORMAT = "%Y%m%dT%H%M%SZ"

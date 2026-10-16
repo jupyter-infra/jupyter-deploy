@@ -12,7 +12,7 @@
 # pulls from registry.k8s.io directly (no ECR repin).
 
 locals {
-  cluster_autoscaler_namespace       = "kube-system"
+  cluster_autoscaler_namespace       = local.release_namespaces.kube_system
   cluster_autoscaler_service_account = "cluster-autoscaler"
 
   # CA's image tag tracks the cluster's Kubernetes MINOR version (one image per minor);
@@ -121,7 +121,7 @@ resource "helm_release" "cluster_autoscaler" {
   repository = "https://kubernetes.github.io/autoscaler"
   chart      = "cluster-autoscaler"
   version    = var.cluster_autoscaler_chart_version
-  namespace  = local.cluster_autoscaler_namespace
+  namespace  = local.release_namespaces.kube_system
 
   set = [
     # Without this the chart's fullname is <release>-aws-cluster-autoscaler (the "name"

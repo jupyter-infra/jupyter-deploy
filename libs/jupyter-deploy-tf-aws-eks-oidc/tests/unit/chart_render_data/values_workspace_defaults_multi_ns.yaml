@@ -1,0 +1,130 @@
+# Mirrors helm_release.workspace_defaults for two workspace_namespaces entries:
+# team-a offers a CPU config beside the built-in jupyterlab, team-b only jupyterlab.
+workspaceTemplates:
+  - name: jupyterlab
+    namespace: team-a
+    isDefault: "true"
+    displayName: JupyterLab
+    description: "JupyterLab workspace with persistent EBS storage"
+    imageUri: docker.io/test/jupyterlab:latest
+    appType: jupyterlab
+    accessType: OwnerOnly
+    ownershipType: OwnerOnly
+    storageClassName: ebs-sc
+    defaultResources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+    resourceBounds:
+      cpu:
+        min: "100m"
+        max: "8"
+      memory:
+        min: "256Mi"
+        max: "32Gi"
+    nodeSelector:
+      jupyter-deploy/role: workspaces
+    tolerations:
+      - key: jupyter-deploy/role
+        operator: Equal
+        value: workspaces
+        effect: NoSchedule
+    readinessProbe:
+      port: 8888
+      initialDelaySeconds: 2
+      periodSeconds: 3
+      failureThreshold: 30
+    idleShutdown:
+      enabled: true
+      timeoutMinutes: 60
+      minTimeoutMinutes: 15
+      maxTimeoutMinutes: 480
+  - name: jupyterlab-small
+    namespace: team-a
+    isDefault: "false"
+    displayName: JupyterLab
+    description: "JupyterLab workspace with persistent EBS storage"
+    imageUri: docker.io/test/jupyterlab:latest
+    appType: jupyterlab
+    accessType: OwnerOnly
+    ownershipType: OwnerOnly
+    storageClassName: ebs-sc
+    defaultResources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+    resourceBounds:
+      cpu:
+        min: "100m"
+        max: "8"
+      memory:
+        min: "256Mi"
+        max: "32Gi"
+    nodeSelector:
+      jupyter-deploy/role: workspaces
+    tolerations:
+      - key: jupyter-deploy/role
+        operator: Equal
+        value: workspaces
+        effect: NoSchedule
+    readinessProbe:
+      port: 8888
+      initialDelaySeconds: 2
+      periodSeconds: 3
+      failureThreshold: 30
+    idleShutdown:
+      enabled: true
+      timeoutMinutes: 60
+      minTimeoutMinutes: 15
+      maxTimeoutMinutes: 480
+  - name: jupyterlab
+    namespace: team-b
+    isDefault: "true"
+    displayName: JupyterLab
+    description: "JupyterLab workspace with persistent EBS storage"
+    imageUri: docker.io/test/jupyterlab:latest
+    appType: jupyterlab
+    accessType: OwnerOnly
+    ownershipType: OwnerOnly
+    storageClassName: ebs-sc
+    defaultResources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+    resourceBounds:
+      cpu:
+        min: "100m"
+        max: "8"
+      memory:
+        min: "256Mi"
+        max: "32Gi"
+    nodeSelector:
+      jupyter-deploy/role: workspaces
+    tolerations:
+      - key: jupyter-deploy/role
+        operator: Equal
+        value: workspaces
+        effect: NoSchedule
+    readinessProbe:
+      port: 8888
+      initialDelaySeconds: 2
+      periodSeconds: 3
+      failureThreshold: 30
+    idleShutdown:
+      enabled: true
+      timeoutMinutes: 60
+      minTimeoutMinutes: 15
+      maxTimeoutMinutes: 480
+networkPolicy:
+  workspaceNamespaces:
+    - team-a
+    - team-b

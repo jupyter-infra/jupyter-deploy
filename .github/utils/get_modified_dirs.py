@@ -46,6 +46,10 @@ def get_updated_pkgs(file_diff: list) -> list:
         for lib_path in LIB_PATHS:
             if file.startswith(f"{lib_path}/"):
                 lib_dirs.add(lib_path)
+                # The root suite guards cross-package rules over the E2E suites
+                # (tests/unit/test_cli_marker_uniqueness.py), so an E2E edit has to run it too.
+                if file.startswith(f"{lib_path}/tests/e2e/"):
+                    root_changed = True
                 break
         else:
             root_changed = True

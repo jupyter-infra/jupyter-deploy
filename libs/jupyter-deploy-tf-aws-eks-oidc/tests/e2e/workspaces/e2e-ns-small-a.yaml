@@ -1,0 +1,12 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-ns-small-a
+  namespace: e2e-ns-a
+spec:
+  displayName: "E2E NS Small A"
+  desiredStatus: Running
+  ownershipType: Public
+  accessType: Public
+  templateRef:
+    name: e2e-cpu-small

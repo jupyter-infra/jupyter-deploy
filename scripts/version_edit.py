@@ -71,6 +71,11 @@ def set_tf_template_version(file_path: Path, new_version: str) -> None:
     _substitute(file_path, r'(template_version\s*=\s*)["\'][^"\']+["\']', rf'\g<1>"{new_version}"')
 
 
+def set_app_image_name_version(file_path: Path, app_name: str, new_version: str) -> None:
+    """Update the `<app_name>-v<version>` default image name in a presets tfvars or variables.yaml."""
+    _substitute(file_path, rf"({re.escape(app_name)}-v)[^\"'\s]+", rf"\g<1>{new_version}")
+
+
 def pep440_to_semver(version: str) -> str:
     """Convert a PEP 440 pre-release to SemVer (e.g. '0.1.0rc1' -> '0.1.0-rc.1')."""
     match = re.match(r"^(\d+\.\d+\.\d+)(rc|a|b)(\d+)$", version)

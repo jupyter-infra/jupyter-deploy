@@ -2,10 +2,17 @@ name: Release proxy (jupyter-deploy-client-proxy)
 
 run-name: Release jupyter-deploy-client-proxy
 
-# Mirrors release-plugin.yml (no live-deploy E2E gate — the proxy is cloud-blind). Its gate is
-# the offline functional suite; the Test PyPI install-check doubles as a CLI-with-proxy smoke.
+# Mirrors release-plugin.yml, plus a live gate: the offline functional suite runs before Test PyPI,
+# then e2e-proxy-release.yml runs the jupyterlab `proxy` E2E marker against the Test PyPI build
+# (CLI + template from prod PyPI) before the prod publish.
 on:
   workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Run every gate (incl. Test PyPI + E2E) but skip the prod PyPI publish and the GitHub Release"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -141,9 +148,18 @@ jobs:
           echo "::error::Test PyPI install failed after 2 attempts"
           exit 1
 
+  e2e-proxy-release:
+    name: E2E release gate (client proxy)
+    needs: [test-pypi-install, build]
+    uses: ./.github/workflows/e2e-proxy-release.yml
+    secrets: inherit
+    with:
+      pkg-version: ${{ needs.build.outputs.version }}
+
   prod-pypi-publish:
     name: Publish to PyPI
-    needs: [test-pypi-install, build]
+    needs: [e2e-proxy-release, build]
+    if: ${{ !inputs.dry-run }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write

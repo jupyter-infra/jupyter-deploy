@@ -9,6 +9,7 @@
 # the other fixtures.
 workspaceTemplates:
   - name: jupyterlab
+    namespace: default
     isDefault: "true"
     displayName: JupyterLab
     description: "JupyterLab workspace with persistent EBS storage"
@@ -49,6 +50,7 @@ workspaceTemplates:
       minTimeoutMinutes: 15
       maxTimeoutMinutes: 480
   - name: jupyterlab-gpu-p
+    namespace: default
     isDefault: "false"
     displayName: jupyterlab-gpu-p
     description: "JupyterLab workspace on the workspace-gpu-p pool"

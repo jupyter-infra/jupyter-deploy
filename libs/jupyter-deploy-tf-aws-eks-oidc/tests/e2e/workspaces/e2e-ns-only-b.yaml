@@ -1,0 +1,10 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-ns-only-b
+  namespace: e2e-ns-b
+spec:
+  displayName: "E2E NS Only B"
+  desiredStatus: Running
+  ownershipType: Public
+  accessType: Public

@@ -114,3 +114,15 @@ resource "aws_iam_instance_profile" "server_instance_profile" {
   }
   tags = var.combined_tags
 }
+
+# IAM is eventually consistent: a freshly-created instance profile is not always visible
+# to EC2's RunInstances yet, which fails with a misleading "Invalid IAM Instance Profile
+# name" (InvalidParameterValue) that the AWS provider does NOT retry. Gate the profile
+# name through this delay so the instance can't launch until the profile has propagated.
+# The profile name flows out of the trigger (below), making consumers wait on the value.
+resource "time_sleep" "instance_profile_propagation" {
+  create_duration = "20s"
+  triggers = {
+    instance_profile_name = aws_iam_instance_profile.server_instance_profile.name
+  }
+}

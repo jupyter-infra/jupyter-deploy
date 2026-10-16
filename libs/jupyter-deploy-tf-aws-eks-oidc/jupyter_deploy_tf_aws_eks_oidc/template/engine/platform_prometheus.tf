@@ -10,7 +10,7 @@ resource "helm_release" "prometheus" {
   repository       = "https://prometheus-community.github.io/helm-charts"
   chart            = "prometheus"
   version          = var.prometheus_version
-  namespace        = "monitoring"
+  namespace        = local.release_namespaces.monitoring
   create_namespace = true
   timeout          = 600
 

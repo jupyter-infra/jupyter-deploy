@@ -70,6 +70,19 @@ class WebAppNavigator:
         """Navigate to the kubectl access page."""
         self.page.goto(self.base_url + "/kubectl", wait_until="networkidle", timeout=timeout)
 
+    # ── Namespaces ────────────────────────────────────────────────────────────
+
+    def resolve_namespaces(self) -> tuple[str, list[str]]:
+        """Load the list page, then return (active namespace, namespaces the user can see).
+
+        Reads the web app's API with the browser session. The refreshed scan runs first:
+        the active namespace falls back to the default only once a fresh scan denies it.
+        """
+        self.goto_workspace_list()
+        listed = self.page.request.get(f"{self.base_url}/api/v1/namespaces?refresh=1").json()
+        active = self.page.request.get(f"{self.base_url}/api/v1/my-namespace").json()["active"]
+        return active, [item["namespace"] for item in listed["items"]]
+
     # ── Workspace creation ────────────────────────────────────────────────────
 
     def create_default_workspace(self, private: bool = False) -> str:

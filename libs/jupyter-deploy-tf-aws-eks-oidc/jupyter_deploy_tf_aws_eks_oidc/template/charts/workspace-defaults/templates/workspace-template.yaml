@@ -4,7 +4,7 @@ apiVersion: workspace.jupyter.org/v1alpha1
 kind: WorkspaceTemplate
 metadata:
   name: {{ .name | quote }}
-  namespace: {{ $.Values.sharedNamespace }}
+  namespace: {{ required "workspaceTemplates[].namespace is required" .namespace }}
   labels:
     workspace.jupyter.org/default-template: {{ .isDefault | quote }}
 spec:
@@ -39,6 +39,10 @@ spec:
     failureThreshold: {{ .readinessProbe.failureThreshold }}
   defaultPodSecurityContext:
     fsGroup: 1000
+  {{- with .baseEnv }}
+  baseEnv:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   defaultNodeSelector:
     {{- .nodeSelector | toYaml | nindent 4 }}
   defaultTolerations:

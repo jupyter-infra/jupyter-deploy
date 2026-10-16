@@ -19,6 +19,19 @@ locals {
     }
   ]
   github_orgs_unique = distinct([for t in local.oauth_teams_parsed : t.org])
+
+  # Every namespace a template release installs into. Each helm_release takes its
+  # namespace from here (tests/unit enforces it), so workspace_namespaces can refuse
+  # all of them (workspaces.tf), including namespaces later components add.
+  release_namespaces = {
+    kube_system = "kube-system"
+    karpenter   = "karpenter"
+    keda        = "keda"
+    monitoring  = "monitoring"
+    operator    = var.workspace_operator_namespace
+    router      = var.workspace_router_namespace
+    shared      = var.workspace_shared_namespace
+  }
 }
 
 # Shared namespace where workspace-layer resources live (WorkspaceTemplate,
@@ -42,7 +55,7 @@ resource "helm_release" "traefik_crds" {
   repository       = local.traefik_crds_repo
   chart            = "traefik-crds"
   version          = var.traefik_crd_chart_version
-  namespace        = var.workspace_router_namespace
+  namespace        = local.release_namespaces.router
   create_namespace = true
 
   # Access policy associations must outlive all K8s resources — without them the
@@ -62,7 +75,7 @@ resource "helm_release" "jupyter_k8s" {
   name             = "jupyter-k8s"
   chart            = var.workspace_operator_chart_oci
   version          = var.workspace_operator_chart_version
-  namespace        = var.workspace_operator_namespace
+  namespace        = local.release_namespaces.operator
   create_namespace = true
 
   set = [
@@ -91,7 +104,7 @@ resource "helm_release" "workspace_router" {
   name             = "jupyter-k8s-aws-oidc"
   chart            = var.workspace_router_chart_oci
   version          = var.workspace_router_chart_version
-  namespace        = var.workspace_router_namespace
+  namespace        = local.release_namespaces.router
   create_namespace = true
   wait             = false
   timeout          = 600
@@ -222,6 +235,20 @@ resource "helm_release" "workspace_router" {
         name  = "githubRbac.create"
         value = "false"
       },
+    ],
+    # Workspace namespaces the web app offers: the default one, plus the rest of
+    # workspace_namespaces (also discovered by their workspaces-enabled label).
+    [
+      {
+        name  = "webApp.workspacesDefaultNamespace"
+        value = local.workspace_ns_names[0]
+      },
+    ],
+    [
+      for idx, ns in slice(local.workspace_ns_names, 1, length(local.workspace_ns_names)) : {
+        name  = "webApp.workspaceNamespaceSelection.additionalNamespaces[${idx}]"
+        value = ns
+      }
     ],
     # Kubectl access page: cluster details injected from EKS module outputs
     [

@@ -4,6 +4,12 @@ run-name: Release jupyter-deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Run every gate (incl. Test PyPI + E2E) but skip the prod PyPI publish and the GitHub Release"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -197,6 +203,7 @@ jobs:
   prod-pypi-publish:
     name: Publish to PyPI
     needs: [e2e-cli-release, build]
+    if: ${{ !inputs.dry-run }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write

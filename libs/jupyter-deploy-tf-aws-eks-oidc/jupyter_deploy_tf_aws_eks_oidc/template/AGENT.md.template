@@ -57,19 +57,33 @@ variables (this template does not use the `jd users`/`jd teams` commands).
 
 - `oauth_allowed_teams` — list of GitHub teams allowed to sign in, each in `org:team` format
   (e.g. `my-org:data-science`). Members of these teams can authenticate via the browser.
-- `workspace_rbac_namespaces` — Kubernetes namespaces where those teams are granted
-  permissions to create and manage workspaces. Each namespace gets a Role and RoleBinding.
+- `workspace_namespaces` — the Kubernetes namespaces where workspaces run, and the teams granted
+  each. Empty (the default): every team in `oauth_allowed_teams` may create workspaces in
+  `default`. Non-empty: each entry `{name, teams, templates}` creates a namespace (or adopts
+  `default`) whose Role and RoleBinding cover only its listed teams; no namespace grants every
+  team, so list `default` explicitly to keep using it. `templates` adds `workspace_templates`
+  configs to the built-in `jupyterlab` card in that namespace.
 
 ```bash
 # allow two GitHub teams (pass each entry as a separate flag)
 jd config --oauth-allowed-teams my-org:data-science --oauth-allowed-teams my-org:ml-platform
-
-# grant those teams workspace permissions in specific namespaces
-jd config --workspace-rbac-namespaces default --workspace-rbac-namespaces research
-
-# apply the change
 jd up
 ```
+
+To isolate teams, edit `overrides:` in `variables.yaml`, then run `jd config` and `jd up`:
+
+```yaml
+overrides:
+  workspace_namespaces:
+    - name: default
+      teams: my-org:data-science,my-org:ml-platform
+    - name: ml-platform
+      teams: my-org:ml-platform
+      templates: jupyterlab-gpu
+```
+
+`jd config` refuses a change that would delete a template a live workspace still uses.
+Removing a namespace entry deletes that namespace and every workspace and volume in it.
 
 The OAuth app itself must be registered with the GitHub organization that owns these teams.
 When creating the OAuth app, log in as a member of the organization and set the
@@ -96,6 +110,36 @@ owners may need to approve the OAuth app for it to access team membership; see G
 {{ image-management-instructions }}
 
 {{ aws-inspector-scanning }}
+
+### Coding agents (Claude Code, Codex) on Amazon Bedrock
+
+The JupyterLab image ships `claude` and `codex`. With `workspace_bedrock_enabled: true` (the
+default), workspaces get AWS credentials through EKS Pod Identity and both CLIs call Amazon
+Bedrock with no setup. The variables:
+- `workspace_bedrock_enabled` turns the credentials on for every workspace namespace; an entry of
+  `workspace_namespaces` opts its namespace out with `bedrock: "false"`
+- `workspace_bedrock_model_patterns` lists the models workspaces may invoke (IAM wildcards)
+- `workspace_bedrock_inference_scope` is `geo` (requests stay in the region's geography) or `global`;
+  Codex has no geographic profile outside the US, so it needs `global` there
+- `workspace_app_claude_code_version` and `workspace_app_codex_version` pin the CLIs in the image;
+  each CLI's default model follows its version (Codex's is the one its release recommends for the
+  inference profile prefix, set at image build time)
+
+Verify from a workspace, headless (no first-run dialogs):
+
+```bash
+jd server exec --name <workspace-name> --scope <namespace> -- "claude -p 'Reply with OK'"
+jd server exec --name <workspace-name> --scope <namespace> -- "codex exec --skip-git-repo-check 'Reply with OK'"
+```
+
+IMPORTANT: in an account that never used a model, the first invocation enables it, through an AWS
+Marketplace subscription that the workspace roles cannot start, and accepts the model provider's
+EULA. Anthropic models also need a one-time first-time-use form with the deployer's company details.
+These are the deployer's decisions: point the user to TROUBLESHOOT.md, and never invoke a model,
+accept an agreement or submit the form on their behalf.
+
+Credentials reach a workspace at creation: a workspace older than its namespace's Bedrock
+configuration must be recreated, not restarted.
 
 ### View the full terraform logs
 
@@ -145,16 +189,22 @@ tag, which nodes with a cached layer do not re-pull. A new tag reaches NEW works
 `Workspace.spec.image` is pinned at creation time, so existing workspaces keep the image they were
 created with until that field is patched or the workspace is recreated.
 
+The JupyterLab image installs the coding agent CLIs at the versions passed as Docker build args
+(`workspace_app_claude_code_version`, `workspace_app_codex_version`), with their system configs in
+`jupyterlab/claude-managed-settings.json` and `jupyterlab/codex-config.toml` (copied under `/etc`,
+since `/home/jovyan` is the data volume). Codex's model is rendered into its config at build time
+from the installed release's own catalog (`codex debug models`, see `pick-codex-model.py`).
+
 ### Charts directory
 
 `./charts/` contains local Helm charts:
-- `workspace-defaults/` — deploys the default WorkspaceTemplate (and its workspace-ingress
-  NetworkPolicies) into the shared namespace, so workspace users can create workspaces later
-- `github-rbac/` — Roles/RoleBindings granting the `oauth_allowed_teams` GitHub teams workspace
-  permissions in each `workspace_rbac_namespaces` namespace, as well as read permission into
-  the shared namespace (`jupyter-k8s-shared`).
+- `workspace-defaults/` — deploys the WorkspaceTemplates and the workspace-ingress
+  NetworkPolicy into each workspace namespace, so workspace users can create workspaces later
+- `github-rbac/` — Roles/RoleBindings granting each workspace namespace's GitHub teams workspace
+  permissions in it, as well as read permission into the shared namespace (`jupyter-k8s-shared`)
+  to every `oauth_allowed_teams` team.
 Both are deployed via `helm_release` with a local path (see `workspaces.tf`), where values are passed
-through `set = [...]` blocks. Editing a chart's templates/values takes effect on the next `jd up`.
+through `values`/`set` arguments. Editing a chart's templates/values takes effect on the next `jd up`.
 
 ### Web UI
 

@@ -13,14 +13,12 @@ What is left is the four assertions that are about this template's declared surf
 outputs set, its no-secrets invariant, and the two outputs the access path depends on.
 """
 
-import pytest
 from jupyter_deploy.engine.terraform.tf_varfiles import parse_variables_dot_tf_content
 from jupyter_deploy.enum import ValueSource
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.terraform.utils import get_variables_dot_tf_path
 
 
-@pytest.mark.cli
 def test_show_outputs_list_matches_template(e2e_deployment: EndToEndDeployment) -> None:
     """`jd show --outputs --list` exposes every output this template's manifest declares.
 
@@ -45,7 +43,6 @@ def test_show_outputs_list_matches_template(e2e_deployment: EndToEndDeployment) 
     )
 
 
-@pytest.mark.cli
 def test_show_declares_no_sensitive_variables(e2e_deployment: EndToEndDeployment) -> None:
     """This template declares no sensitive variable — there is nothing to mask or `--reveal`.
 

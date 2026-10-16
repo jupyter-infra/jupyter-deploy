@@ -34,6 +34,8 @@ from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.local_proxy import LocalProxyApplication
 from pytest_jupyter_deploy.local_proxy.jupyterlab import AUTH_PROBE_PATH
 
+pytestmark = pytest.mark.proxy
+
 
 def test_open_detached_opens_jupyterlab_in_a_browser(
     e2e_deployment: EndToEndDeployment, client_proxy_app: LocalProxyApplication

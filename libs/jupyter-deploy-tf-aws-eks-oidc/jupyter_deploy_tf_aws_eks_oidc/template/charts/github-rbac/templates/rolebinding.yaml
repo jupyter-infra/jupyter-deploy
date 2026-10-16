@@ -1,20 +1,18 @@
-{{- range $ns := .Values.namespaces }}
+{{- range $grant := .Values.namespaceGrants }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: github-workspace-binding
-  namespace: {{ $ns }}
+  namespace: {{ $grant.name }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: github-workspace-role
 subjects:
-{{- range $org := $.Values.orgs }}
-{{- range $team := $org.teams }}
+{{- range $group := $grant.groups }}
   - apiGroup: rbac.authorization.k8s.io
     kind: Group
-    name: {{ $.Values.oidcGroupPrefix }}{{ $org.name }}:{{ $team }}
-{{- end }}
+    name: {{ $.Values.oidcGroupPrefix }}{{ $group }}
 {{- end }}
 {{- end }}

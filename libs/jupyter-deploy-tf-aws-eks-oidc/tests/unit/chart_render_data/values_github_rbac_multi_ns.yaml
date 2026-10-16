@@ -1,0 +1,16 @@
+# Mirrors helm_release.github_rbac for workspace_namespaces = [
+#   { name = "team-a", teams = "org-a:ml" },
+#   { name = "team-b", teams = "org-a:ml,org-b:research" },
+# ] with oauth_allowed_teams = ["org-a:ml", "org-b:research", "org-b:ops"].
+allowedGroups:
+  - org-a:ml
+  - org-b:research
+  - org-b:ops
+namespaceGrants:
+  - name: team-a
+    groups:
+      - org-a:ml
+  - name: team-b
+    groups:
+      - org-a:ml
+      - org-b:research

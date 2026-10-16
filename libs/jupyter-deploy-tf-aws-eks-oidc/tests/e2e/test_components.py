@@ -553,13 +553,6 @@ _DEFAULT_TEMPLATE_LABEL = "workspace.jupyter.org/default-template"
 _PATCHES_DIR = Path(__file__).parent / "patches"
 
 
-def _resolve_component_namespace(e2e_deployment: EndToEndDeployment, name: str) -> str:
-    """Resolve a component's namespace from its manifest scope output."""
-    comp = _get_manifest_components(e2e_deployment)[name]
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "show", "--output", comp.scope, "--text"])
-    return result.stdout.strip()
-
-
 def _kubectl_get_label(kind: str, name: str, namespace: str, label: str) -> str | None:
     """Return the value of a label on a resource, or None if the label is absent."""
     jsonpath = "{.metadata.labels." + label.replace(".", "\\.") + "}"
@@ -605,7 +598,9 @@ def test_component_reconcile_noop_on_no_drift(e2e_deployment: EndToEndDeployment
 
 
 @pytest.mark.usefixtures("kubernetes_cluster_login")
-def test_component_reconcile_add_back_missing_label(e2e_deployment: EndToEndDeployment) -> None:
+def test_component_reconcile_add_back_missing_label(
+    e2e_deployment: EndToEndDeployment, default_workspace_namespace: str
+) -> None:
     """Verify reconcile re-asserts a chart-managed field removed out-of-band.
 
     Removes the `default-template` label from the jupyterlab WorkspaceTemplate (a
@@ -614,7 +609,8 @@ def test_component_reconcile_add_back_missing_label(e2e_deployment: EndToEndDepl
     """
     e2e_deployment.ensure_deployed()
 
-    namespace = _resolve_component_namespace(e2e_deployment, _RECONCILE_RELEASE_COMPONENT)
+    # The release lives in the shared namespace; its templates in each workspace namespace.
+    namespace = default_workspace_namespace
 
     original = _kubectl_get_label(_DEFAULT_TEMPLATE_KIND, _DEFAULT_TEMPLATE_NAME, namespace, _DEFAULT_TEMPLATE_LABEL)
     assert original is not None, (

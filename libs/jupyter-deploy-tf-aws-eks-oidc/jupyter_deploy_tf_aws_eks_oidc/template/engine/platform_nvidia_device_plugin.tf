@@ -24,7 +24,7 @@ resource "helm_release" "nvidia_device_plugin" {
   repository = "https://nvidia.github.io/k8s-device-plugin"
   chart      = "nvidia-device-plugin"
   version    = var.nvidia_device_plugin_version
-  namespace  = "kube-system"
+  namespace  = local.release_namespaces.kube_system
 
   values = [
     yamlencode({

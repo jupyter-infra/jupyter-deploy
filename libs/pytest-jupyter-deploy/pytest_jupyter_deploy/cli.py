@@ -90,6 +90,22 @@ class JDCli:
             except subprocess.TimeoutExpired as e:
                 raise JDCliTimeoutError(f"Timeout while trying to run '{cmd}") from e
 
+    def run_command_expecting_failure(self, cmd: list[str], timeout_seconds: int | None = None) -> str:
+        """Run a command that must fail; return its output, flattened for substring assertions.
+
+        ANSI codes and box-drawing borders are stripped and whitespace is collapsed, so
+        a message the terminal wrapped across lines still matches as one string.
+
+        Raises:
+            AssertionError: If the command succeeds
+        """
+        try:
+            self.run_command(cmd, timeout_seconds=timeout_seconds)
+        except JDCliError as e:
+            text = re.sub(r"\x1b\[[0-9;]*m", "", str(e))
+            return " ".join(text.replace("│", " ").split())
+        raise AssertionError(f"Expected '{cmd}' to fail, but it succeeded")
+
     def get_host_status(self) -> str:
         """Get the host status string.
 

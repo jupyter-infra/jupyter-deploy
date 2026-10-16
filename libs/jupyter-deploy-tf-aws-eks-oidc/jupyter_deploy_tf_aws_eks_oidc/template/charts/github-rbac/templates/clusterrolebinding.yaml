@@ -7,10 +7,8 @@ roleRef:
   kind: ClusterRole
   name: github-auth-whoami
 subjects:
-{{- range $org := .Values.orgs }}
-{{- range $team := $org.teams }}
+{{- range $group := .Values.allowedGroups }}
   - apiGroup: rbac.authorization.k8s.io
     kind: Group
-    name: {{ $.Values.oidcGroupPrefix }}{{ $org.name }}:{{ $team }}
-{{- end }}
+    name: {{ $.Values.oidcGroupPrefix }}{{ $group }}
 {{- end }}

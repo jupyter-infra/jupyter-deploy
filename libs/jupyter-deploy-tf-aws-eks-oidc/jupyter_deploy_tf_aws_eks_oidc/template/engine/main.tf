@@ -335,5 +335,6 @@ resource "aws_eks_identity_provider_config" "dex" {
     groups_prefix                 = "github:"
   }
 
-  depends_on = [helm_release.workspace_router]
+  # Depends on the cluster only: the association takes ~10 min and does not need
+  # dex reachable, so it runs in parallel with the addons and platform releases.
 }

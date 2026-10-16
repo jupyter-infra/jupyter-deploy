@@ -604,6 +604,22 @@ class EndToEndDeployment:
         self.cli.run_command(["jupyter-deploy", "up", "-y"], timeout_seconds=timeout)
         self._has_up_history = True
 
+    def ensure_deployed_with_overrides(self, overrides: dict[str, Any], timeout_seconds: int | None = None) -> None:
+        """Write each value to the overrides section of variables.yaml, then `jd config` + `jd up`.
+
+        For values a `jd config` flag cannot express, such as a list of maps.
+
+        Args:
+            overrides: Variable name -> value (any type; written as typed YAML)
+            timeout_seconds: Override deploy timeout for this call
+
+        Raises:
+            JDCliError: If configuration or deployment fails
+        """
+        for key, value in overrides.items():
+            self.update_override_value(key, value)
+        self.ensure_deployed_with([], timeout_seconds=timeout_seconds)
+
     def get_str_variable_value(self, variable_name: str) -> str:
         """Call jupyter-deploy show CLI, return the parsed response as str."""
         result = self.cli.run_command(["jupyter-deploy", "show", "--variable", variable_name, "--text"])
@@ -617,6 +633,13 @@ class EndToEndDeployment:
         assert isinstance(value, str), f"Expected str, got {type(value)}"
         return value
 
+    def get_bool_variable_value(self, variable_name: str) -> bool:
+        """Call jupyter-deploy show CLI, return the parsed response as bool."""
+        result = self.cli.run_command(["jupyter-deploy", "show", "--variable", variable_name, "--text"])
+        output = result.stdout.strip().lower()
+        assert output in ("true", "false"), f"Expected a bool, got {output!r}"
+        return output == "true"
+
     def get_list_str_variable_value(self, variable_name: str) -> list[str]:
         """Call jupyter-deploy show CLI, return the parsed response as list[str]."""
         result = self.cli.run_command(["jupyter-deploy", "show", "--variable", variable_name, "--text"])
@@ -625,3 +648,12 @@ class EndToEndDeployment:
         value = ast.literal_eval(output)
         assert isinstance(value, list), f"Expected list, got {type(value)}"
         return value
+
+    def get_list_of_maps_variable_value(self, variable_name: str) -> list[dict[str, str]]:
+        """Call jupyter-deploy show CLI, return the parsed response as list[dict[str, str]]."""
+        result = self.cli.run_command(["jupyter-deploy", "show", "--variable", variable_name, "--text"])
+        value = ast.literal_eval(result.stdout.strip())
+        assert isinstance(value, list) and all(isinstance(v, dict) for v in value), (
+            f"Expected list of maps, got {value!r}"
+        )
+        return [dict(v) for v in value]

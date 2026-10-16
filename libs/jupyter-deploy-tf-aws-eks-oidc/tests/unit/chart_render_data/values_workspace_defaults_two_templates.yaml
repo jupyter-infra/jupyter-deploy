@@ -4,6 +4,7 @@
 # workspace_pool_templates and gpu_template_builtin in platform_karpenter.tf.
 workspaceTemplates:
   - name: jupyterlab
+    namespace: default
     isDefault: "true"
     displayName: JupyterLab
     description: "JupyterLab workspace with persistent EBS storage"
@@ -44,6 +45,7 @@ workspaceTemplates:
       minTimeoutMinutes: 15
       maxTimeoutMinutes: 480
   - name: jupyterlab-gpu
+    namespace: default
     isDefault: "false"
     displayName: JupyterLab GPU
     description: "JupyterLab workspace with one NVIDIA GPU and persistent EBS storage"

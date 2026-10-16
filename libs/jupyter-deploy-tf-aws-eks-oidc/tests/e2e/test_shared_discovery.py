@@ -2,7 +2,8 @@
 
 The web-app editor discovers templates + access strategies in both the user's own
 namespace AND the shared namespace Union(userNs, sharedNs), using the user's own token,
-to populate its dropdowns — without letting users mutate those resources. The read grant
+to populate its dropdowns — without letting users mutate those resources. The deployment
+seeds templates in each workspace namespace and the access strategy in the shared one. The read grant
 comes from two different Roles in the `github-rbac` chart:
 
 - shared namespace: `github-shared-discovery-reader`, a read-only (get/list) Role scoped
@@ -37,7 +38,7 @@ pytestmark = pytest.mark.usefixtures("kubernetes_cluster_login")
 DISCOVERY_RESOURCES = ["workspacetemplates", "workspaceaccessstrategies"]
 # Verbs an end user must NOT have on the discovery resources.
 WRITE_VERBS = ["create", "update", "patch", "delete"]
-# The user's own RBAC namespace (matches test_workspace.py / workspace_rbac_namespaces default).
+# The user's own RBAC namespace (matches test_workspace.py; the default when workspace_namespaces is empty).
 OWN_NAMESPACE = "default"
 
 
@@ -78,11 +79,12 @@ def test_user_can_list_and_describe_shared_discovery_resources(
     namespace = shared_namespace
 
     for resource in DISCOVERY_RESOURCES:
-        # list — non-empty (the deployment seeds a default template + access strategy)
         result = run_kubectl("get", resource, "-n", namespace, "-o", "name", as_user=user_a, as_groups=[group])
         assert result.returncode == 0, f"user cannot list {resource} in {namespace}:\n{result.stderr}"
         names = result.stdout.split()
-        assert names, f"expected at least one {resource} in {namespace}, got none"
+        # the deployment seeds the access strategy here; templates live in each workspace namespace
+        if resource == "workspaceaccessstrategies":
+            assert names, f"expected at least one {resource} in {namespace}, got none"
 
         # describe (get) each named object — proves read of the object body, not just list
         for name in names:
@@ -106,12 +108,18 @@ def test_user_cannot_write_shared_discovery_resources(
 def test_user_can_read_own_namespace_discovery_resources(e2e_deployment: EndToEndDeployment) -> None:
     """An end user can read templates + access strategies in their own namespace.
 
-    The default template/access-strategy live only in the shared namespace, so nothing is
-    seeded here — assert the read PERMISSION (get/list) rather than a non-empty list.
+    The templates are seeded here, the access strategy only in the shared namespace —
+    assert the read PERMISSION (get/list), plus the seeded templates.
     """
     e2e_deployment.ensure_deployed()
     user_a = _get_user_a()
     group = _get_impersonation_group()
+
+    result = run_kubectl(
+        "get", "workspacetemplates", "-n", OWN_NAMESPACE, "-o", "name", as_user=user_a, as_groups=[group]
+    )
+    assert result.returncode == 0, f"user cannot list workspacetemplates in {OWN_NAMESPACE}:\n{result.stderr}"
+    assert result.stdout.split(), f"expected the seeded templates in {OWN_NAMESPACE}, got none"
 
     for resource in DISCOVERY_RESOURCES:
         for verb in ("get", "list"):

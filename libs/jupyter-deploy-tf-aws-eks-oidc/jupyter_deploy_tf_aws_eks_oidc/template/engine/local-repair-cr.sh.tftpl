@@ -55,7 +55,7 @@ main() {
 
     echo "$CR_KIND/$CR_NAME missing — re-applying from release '$RELEASE_NAME' manifest..."
     if ! helm get manifest "$RELEASE_NAME" -n "$RELEASE_NAMESPACE" \
-        | yq "select(.kind == \"$CR_KIND\" and .metadata.name == \"$CR_NAME\")" \
+        | yq "select(.kind == \"$CR_KIND\" and .metadata.name == \"$CR_NAME\" and (.metadata.namespace // \"$RELEASE_NAMESPACE\") == \"$CR_NAMESPACE\")" \
         | kubectl apply -f - 2>&1; then
         echo "WARNING: failed to re-apply $CR_KIND/$CR_NAME from release '$RELEASE_NAME'."
         exit 0

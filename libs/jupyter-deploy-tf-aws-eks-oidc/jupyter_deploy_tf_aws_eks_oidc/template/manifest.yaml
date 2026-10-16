@@ -1176,8 +1176,8 @@ components:
   jupyterlab-template:
     type: CustomResourceWithoutStatus
     type-display: WorkspaceTemplate
-    description: Default workspace template
-    scope: workspace_shared_namespace
+    description: Default workspace template (in the default workspace namespace)
+    scope: server_default_scope
     resource-name: jupyterlab
     crd-group: workspace.jupyter.org
     crd-version: v1alpha1

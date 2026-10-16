@@ -28,8 +28,8 @@ _HELM = shutil.which("helm")
 _SKIP_WITHOUT_HELM = unittest.skipIf(_HELM is None and not os.environ.get("CI"), "helm not installed")
 
 
-def _helm_template(chart_dir: str, release_name: str, values_file: str | None) -> str:
-    cmd = ["helm", "template", release_name, str(TEMPLATE_PATH / chart_dir)]
+def _helm_template(chart_dir: str, release_name: str, values_file: str | None, namespace: str = "default") -> str:
+    cmd = ["helm", "template", release_name, str(TEMPLATE_PATH / chart_dir), "--namespace", namespace]
     if values_file is not None:
         cmd.extend(["-f", str(DATA_DIR / values_file)])
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
@@ -310,3 +310,81 @@ class TestWorkspaceDefaultsCustomPoolRender(unittest.TestCase):
 
     def test_idle_timeout_from_entry(self) -> None:
         self.assertEqual(self.custom["spec"]["defaultIdleShutdown"]["idleTimeoutInMinutes"], 20)
+
+
+def _docs_of_kind(rendered: str, kind: str) -> list[dict[str, Any]]:
+    return [doc for doc in yaml.safe_load_all(rendered) if doc and doc.get("kind") == kind]
+
+
+@_SKIP_WITHOUT_HELM
+class TestGithubRbacNamespaceGrantsRender(unittest.TestCase):
+    """Each namespace binds only its own groups; login-level grants cover every allowlisted group."""
+
+    rendered: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.rendered = _helm_template(
+            "charts/github-rbac", "github-rbac", "values_github_rbac_multi_ns.yaml", namespace="jupyter-k8s-shared"
+        )
+
+    def _subjects(self, kind: str, name: str, namespace: str | None = None) -> list[str]:
+        doc = next(
+            d
+            for d in _docs_of_kind(self.rendered, kind)
+            if d["metadata"]["name"] == name and d["metadata"].get("namespace") == namespace
+        )
+        return [s["name"] for s in doc["subjects"] or []]
+
+    def test_role_per_grant_namespace(self) -> None:
+        namespaces = [d["metadata"]["namespace"] for d in _docs_of_kind(self.rendered, "Role")]
+        self.assertEqual(sorted(namespaces), ["jupyter-k8s-shared", "team-a", "team-b"])
+
+    def test_namespace_binds_only_its_groups(self) -> None:
+        self.assertEqual(self._subjects("RoleBinding", "github-workspace-binding", "team-a"), ["github:org-a:ml"])
+        self.assertEqual(
+            self._subjects("RoleBinding", "github-workspace-binding", "team-b"),
+            ["github:org-a:ml", "github:org-b:research"],
+        )
+
+    def test_whoami_binds_every_allowed_group(self) -> None:
+        self.assertEqual(
+            self._subjects("ClusterRoleBinding", "github-auth-whoami"),
+            ["github:org-a:ml", "github:org-b:research", "github:org-b:ops"],
+        )
+
+    def test_shared_discovery_binds_every_allowed_group(self) -> None:
+        self.assertEqual(
+            self._subjects("RoleBinding", "github-shared-discovery-reader-binding", "jupyter-k8s-shared"),
+            ["github:org-a:ml", "github:org-b:research", "github:org-b:ops"],
+        )
+
+
+@_SKIP_WITHOUT_HELM
+class TestWorkspaceDefaultsMultiNamespaceRender(unittest.TestCase):
+    """Templates land in the namespace of their entry; every workspace namespace gets a NetworkPolicy."""
+
+    rendered: ClassVar[str]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.rendered = _helm_template(
+            "charts/workspace-defaults", "workspace-defaults", "values_workspace_defaults_multi_ns.yaml"
+        )
+
+    def test_templates_placed_per_namespace(self) -> None:
+        placed = sorted(
+            f"{d['metadata']['namespace']}/{d['metadata']['name']}" for d in _workspace_template_docs(self.rendered)
+        )
+        self.assertEqual(placed, ["team-a/jupyterlab", "team-a/jupyterlab-small", "team-b/jupyterlab"])
+
+    def test_access_strategy_stays_shared(self) -> None:
+        for doc in _workspace_template_docs(self.rendered):
+            self.assertEqual(
+                doc["spec"]["defaultAccessStrategy"],
+                {"name": "oauth-access-strategy", "namespace": "jupyter-k8s-shared"},
+            )
+
+    def test_network_policy_per_namespace(self) -> None:
+        namespaces = [d["metadata"]["namespace"] for d in _docs_of_kind(self.rendered, "NetworkPolicy")]
+        self.assertEqual(namespaces, ["team-a", "team-b"])

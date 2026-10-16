@@ -97,7 +97,7 @@ resource "helm_release" "karpenter" {
   repository       = "oci://public.ecr.aws/karpenter"
   chart            = "karpenter"
   version          = var.karpenter_version
-  namespace        = "karpenter"
+  namespace        = local.release_namespaces.karpenter
   create_namespace = true
 
   set = [
@@ -281,7 +281,7 @@ locals {
 resource "helm_release" "karpenter_nodepools" {
   name             = "karpenter-nodepools"
   chart            = "${path.module}/../charts/karpenter-nodepools"
-  namespace        = "karpenter"
+  namespace        = local.release_namespaces.karpenter
   create_namespace = false
   wait             = false
 

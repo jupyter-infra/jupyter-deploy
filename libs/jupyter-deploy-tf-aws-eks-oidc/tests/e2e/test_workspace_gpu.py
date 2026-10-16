@@ -27,7 +27,6 @@ from pytest_jupyter_deploy.workspaces.kubectl import (
 )
 from pytest_jupyter_deploy.workspaces.web_app import WebAppNavigator
 
-from .conftest import WORKSPACE_NAMESPACE, WORKSPACES_DIR
 from .constants import (
     GPU_EC2NODECLASS,
     GPU_NODEPOOL,
@@ -38,6 +37,8 @@ from .constants import (
     GPU_TEMPLATE_NAME,
     GPU_WORKSPACE,
     ORDER_GPU,
+    WORKSPACE_NAMESPACE,
+    WORKSPACES_DIR,
 )
 
 NOTEBOOKS_DIR = Path(__file__).parent / "notebooks"

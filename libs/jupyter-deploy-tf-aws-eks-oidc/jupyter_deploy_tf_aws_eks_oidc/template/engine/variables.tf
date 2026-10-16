@@ -115,7 +115,7 @@ variable "oauth_allowed_teams" {
   EOT
   type        = list(string)
   validation {
-    condition     = alltrue([for t in var.oauth_allowed_teams : length(split(":", t)) == 2])
+    condition     = alltrue([for t in var.oauth_allowed_teams : can(regex("^[^:\\s]+:[^:\\s]+$", t))])
     error_message = "Each entry in oauth_allowed_teams must be in 'org:team' format."
   }
 }
@@ -238,8 +238,9 @@ variable "routing_max_memory" {
 
 variable "workspace_nodepools" {
   description = <<-EOT
-    List of workspace Karpenter NodePool definitions. Each entry creates one
-    NodePool + EC2NodeClass pair. Supports multiple pools (e.g. CPU + GPU).
+    Workspace Karpenter NodePools, one NodePool + EC2NodeClass pair per entry. Keys: name, instance_families, disk_size_gb, max_cpu, max_memory, accelerator, role, max_gpus, templates.
+
+    Supports multiple pools (e.g. CPU + GPU).
 
     Required keys per entry (all strings):
       name              - NodePool and EC2NodeClass name (e.g. "workspace-cpu")
@@ -366,13 +367,17 @@ variable "workspace_nodepools" {
 
 variable "workspace_templates" {
   description = <<-EOT
-    Named workspace template configurations. A workspace_nodepools entry adopts
-    a config by listing its name in the entry's templates key; each (entry,
-    config) pairing renders one WorkspaceTemplate card, where the config
+    Named workspace template configurations. Keys: name, gpus, cpu, memory, idle_minutes, display_name, description.
+
+    A workspace_nodepools entry adopts a config by listing its name in the
+    entry's templates key; each (entry, config) pairing renders one
+    WorkspaceTemplate card, where the config
     supplies the shape and card copy and the entry supplies placement (its
     role). A config referenced by no entry renders nothing. Entries sharing a
     role may share a config; entries with different roles need distinct
-    configs, since a WorkspaceTemplate pins one node selector.
+    configs, since a WorkspaceTemplate pins one node selector. With
+    workspace_namespaces set, a namespace offers a config only when its
+    templates key lists it.
 
     Required keys per entry (all strings):
       name         - WorkspaceTemplate name (e.g. "jupyterlab-gpu-p"); unique,
@@ -542,25 +547,100 @@ variable "node_expire_after" {
   type        = string
 }
 
-variable "workspace_rbac_namespaces" {
+variable "workspace_namespaces" {
   description = <<-EOT
-    List of Kubernetes namespaces where GitHub teams are granted workspace permissions.
+    Kubernetes namespaces for workspaces, each with the GitHub teams allowed to use it. Keys: name, teams, templates, bedrock.
 
-    Each namespace gets a Role and RoleBinding allowing members of oauth_allowed_teams
-    to create, manage, and access workspaces.
+    Leave empty to use a single namespace: every workspace lives in "default",
+    and every team in oauth_allowed_teams may create workspaces there.
 
-    Example: ["default"]
+    Pass a list to isolate teams: each entry creates a namespace (or adopts the built-in
+    "default"), and only its listed teams may create, manage and access workspaces in it.
+    No namespace grants every allowlisted team; list "default" with its teams explicitly
+    to keep using it. The first entry is the default namespace of the web app and
+    of the <jd server> commands.
+
+    Removing or renaming a namespace deletes all resources in it, including workspaces.
+    In order to prevent accidental data loss, a guard prevents removing a namespace with
+    an active workspace. Removing a team from a namespace with workspaces only warns:
+    the workspaces stay, but their owners in that team lose access to them.
+
+    Required keys per entry (all strings):
+      name      - Kubernetes namespace (e.g. "team-ml"); unique across entries; must not
+                  start with "kube-" or "jupyter-k8s-", nor name a namespace a platform
+                  component uses ("karpenter", "keda", "monitoring", or the
+                  workspace_*_namespace values)
+      teams     - comma-separated GitHub teams in 'org:team' format
+                  (e.g. "my-org:ml,my-org:research"); each team must appear in
+                  oauth_allowed_teams
+    Optional keys per entry (all strings):
+      templates - comma-separated workspace_templates config names offered in this
+                  namespace, on top of the built-in "jupyterlab" template; each
+                  config must be offered by a workspace_nodepools entry
+      bedrock   - "false" to withhold Bedrock credentials from this namespace's
+                  workspaces when workspace_bedrock_enabled is true (default "true")
+
+    Example:
+      workspace_namespaces = [
+        { name = "default", teams = "my-org:platform" },
+        { name = "team-ml", teams = "my-org:ml,my-org:research", templates = "jupyterlab-gpu" },
+        { name = "guests", teams = "my-org:guests", bedrock = "false" },
+      ]
   EOT
-  type        = list(string)
+  type        = list(map(string))
 
   validation {
-    condition     = length(var.workspace_rbac_namespaces) >= 1
-    error_message = "workspace_rbac_namespaces must contain at least one namespace."
+    condition = alltrue([
+      for e in var.workspace_namespaces :
+      length(setsubtract(keys(e), ["name", "teams", "templates", "bedrock"])) == 0
+    ])
+    error_message = "Each workspace_namespaces entry may only set the keys name, teams, templates and bedrock."
   }
 
   validation {
-    condition     = alltrue([for ns in var.workspace_rbac_namespaces : can(regex("^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$", ns))])
-    error_message = "Each namespace must be a valid Kubernetes namespace (lowercase letters, digits, hyphens; 2-63 characters)."
+    condition = alltrue([
+      for e in var.workspace_namespaces : contains(["true", "false"], lookup(e, "bedrock", "true"))
+    ])
+    error_message = "workspace_namespaces bedrock must be \"true\" or \"false\"."
+  }
+
+  validation {
+    condition = alltrue([
+      for e in var.workspace_namespaces :
+      can(regex("^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$", lookup(e, "name", "")))
+    ])
+    error_message = "Each workspace_namespaces entry must set name to a valid Kubernetes namespace (lowercase letters, digits, hyphens; 2-63 characters)."
+  }
+
+  validation {
+    condition = alltrue([
+      for e in var.workspace_namespaces :
+      !startswith(lookup(e, "name", ""), "kube-") && !startswith(lookup(e, "name", ""), "jupyter-k8s-")
+    ])
+    error_message = "workspace_namespaces names must not start with \"kube-\" or \"jupyter-k8s-\", which are reserved for the cluster and the platform."
+  }
+
+  validation {
+    condition     = length(distinct([for e in var.workspace_namespaces : lookup(e, "name", "")])) == length(var.workspace_namespaces)
+    error_message = "workspace_namespaces names must be unique."
+  }
+
+  validation {
+    condition = alltrue([
+      for e in var.workspace_namespaces :
+      length([for raw in split(",", lookup(e, "teams", "")) : raw if trimspace(raw) != ""]) > 0
+    ])
+    error_message = "Each workspace_namespaces entry must list at least one team in teams."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for e in var.workspace_namespaces : [
+        for raw in split(",", lookup(e, "teams", "")) :
+        can(regex("^[^:\\s]+:[^:\\s]+$", trimspace(raw))) if trimspace(raw) != ""
+      ]
+    ]))
+    error_message = "Each team in workspace_namespaces teams must be in 'org:team' format."
   }
 }
 
@@ -952,11 +1032,12 @@ variable "workspace_app_jupyterlab_image_name" {
   description = <<-EOT
     The ECR repository name for the JupyterLab workspace image.
 
-    Changing this value creates a new ECR repository. Use the convention
-    'jupyterlab-v<version>' so that version upgrades produce a new repo
-    while keeping previous images available for running workspaces.
+    Changing this value creates a new ECR repository. The default,
+    'jupyterlab-v<template version>', follows each template release, so an
+    upgrade builds into a new repo while previous images stay available for
+    running workspaces.
 
-    Example: jupyterlab-v1.0.0
+    Example: jupyterlab-v0.4.0
   EOT
   type        = string
 }
@@ -971,4 +1052,105 @@ variable "workspace_app_jupyterlab_image_build" {
     Example: v1
   EOT
   type        = string
+}
+
+variable "workspace_app_claude_code_version" {
+  description = <<-EOT
+    The Claude Code version installed in the JupyterLab workspace image.
+
+    Changing it rebuilds the image; workspaces pick up the new build on their
+    next start once you also increment workspace_app_jupyterlab_image_build.
+
+    Example: 2.1.287
+  EOT
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+$", var.workspace_app_claude_code_version))
+    error_message = "workspace_app_claude_code_version must be an exact version (e.g. 2.1.287)."
+  }
+}
+
+variable "workspace_app_codex_version" {
+  description = <<-EOT
+    The Codex CLI version installed in the JupyterLab workspace image.
+
+    Changing it rebuilds the image; workspaces pick up the new build on their
+    next start once you also increment workspace_app_jupyterlab_image_build.
+
+    Example: 0.162.1
+  EOT
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+$", var.workspace_app_codex_version))
+    error_message = "workspace_app_codex_version must be an exact version (e.g. 0.162.1)."
+  }
+}
+
+variable "workspace_bedrock_enabled" {
+  description = <<-EOT
+    Whether workspaces get AWS credentials to call Amazon Bedrock, so that Claude
+    Code and Codex work out of the box in a workspace terminal.
+
+    When enabled, each workspace namespace gets its own IAM role, limited to
+    Bedrock inference on the models matching workspace_bedrock_model_patterns,
+    and bound to the namespace's workspace service account via EKS Pod Identity.
+    A workspace_namespaces entry may opt its namespace out with bedrock = "false".
+
+    Bedrock enables a model on its first invocation in the account, which takes AWS
+    Marketplace permissions the workspace roles do not have: invoke each model once as
+    an admin (e.g. in the Bedrock console playground) before users do. Anthropic models
+    also require the one-time first-time-use form.
+    Workspaces pick up a change on their next start.
+
+    Recommended: true
+  EOT
+  type        = bool
+}
+
+variable "workspace_bedrock_inference_scope" {
+  description = <<-EOT
+    Where Bedrock may serve Claude requests from workspaces.
+
+    "geo" uses the cross-region inference profiles of the deployment region's
+    geography (e.g. us.anthropic.* in us-west-2): requests stay within that geography.
+    "global" uses the global inference profiles (global.anthropic.*): more capacity,
+    but requests may be served from any commercial region.
+
+    Bedrock offers the OpenAI models through US and global inference profiles only:
+    outside the US, Codex needs "global".
+
+    Recommended: geo
+  EOT
+  type        = string
+
+  validation {
+    condition     = contains(["geo", "global"], var.workspace_bedrock_inference_scope)
+    error_message = "workspace_bedrock_inference_scope must be \"geo\" or \"global\"."
+  }
+}
+
+variable "workspace_bedrock_model_patterns" {
+  description = <<-EOT
+    Bedrock model IDs workspaces may invoke, as IAM wildcard patterns without the
+    inference profile prefix (e.g. "anthropic.claude-sonnet-*").
+
+    Covers both Claude Code (anthropic.*) and Codex (openai.*) models. Claude Code picks
+    its default model per release, which the patterns must keep allowed; Codex uses the
+    best model its release offers among the allowed ones.
+
+    Example: ["anthropic.claude-*", "openai.gpt-*"]
+  EOT
+  type        = list(string)
+
+  validation {
+    condition     = length(var.workspace_bedrock_model_patterns) > 0
+    error_message = "workspace_bedrock_model_patterns must list at least one pattern; disable workspace_bedrock_enabled to grant none."
+  }
+
+  validation {
+    condition     = alltrue([for p in var.workspace_bedrock_model_patterns : can(regex("^[a-z0-9][a-z0-9.*:-]*$", p))])
+    error_message = "workspace_bedrock_model_patterns entries must be model IDs or IAM wildcards (lowercase letters, digits, '.', '-', ':', '*'), without an inference profile prefix or ARN."
+  }
 }

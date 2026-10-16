@@ -17,6 +17,7 @@ import re
 import tomllib
 import unittest
 from pathlib import Path
+from types import ModuleType
 
 from jupyter_deploy import constants as jd_constants
 from jupyter_deploy.proxy import proxy_manager
@@ -53,13 +54,17 @@ def declared_dependency_names(package: str) -> set[str]:
     return {re.split(r"[<>=!~\[;\s]", str(spec))[0].strip().lower() for spec in specs}
 
 
-def lib_paths() -> list[str]:
-    """Import LIB_PATHS from the CI change detector, which is not an importable package."""
+def change_detector() -> ModuleType:
+    """Import the CI change detector, which is not an importable package."""
     spec = importlib.util.spec_from_file_location("get_modified_dirs", MODIFIED_DIRS_SCRIPT)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return list(module.LIB_PATHS)
+    return module
+
+
+def lib_paths() -> list[str]:
+    return list(change_detector().LIB_PATHS)
 
 
 class TestDeclaredPackages(unittest.TestCase):
@@ -91,6 +96,14 @@ class TestCiChangeDetectorLibPaths(unittest.TestCase):
     def test_lib_paths_has_no_duplicates(self) -> None:
         paths = lib_paths()
         self.assertEqual(len(paths), len(set(paths)))
+
+    def test_e2e_change_also_runs_the_root_suite(self) -> None:
+        dirs = change_detector().get_updated_pkgs(["libs/jupyter-deploy-tf-aws-ec2-base/tests/e2e/test_show.py"])
+        self.assertEqual([".", "libs/jupyter-deploy-tf-aws-ec2-base"], dirs)
+
+    def test_package_only_change_skips_the_root_suite(self) -> None:
+        dirs = change_detector().get_updated_pkgs(["libs/jupyter-deploy-tf-aws-ec2-base/tests/unit/test_x.py"])
+        self.assertEqual(["libs/jupyter-deploy-tf-aws-ec2-base"], dirs)
 
 
 class TestRootPyprojectPackageLists(unittest.TestCase):

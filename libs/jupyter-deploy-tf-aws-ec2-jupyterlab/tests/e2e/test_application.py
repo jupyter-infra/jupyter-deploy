@@ -9,11 +9,14 @@ and no ``--ci-dir`` bot credentials — the proxy injects the STS-identity token
 import contextlib
 from pathlib import Path
 
+import pytest
 import requests
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.local_proxy import LocalProxyApplication
 from pytest_jupyter_deploy.local_proxy.jupyterlab import api_session
 from pytest_jupyter_deploy.notebook import delete_notebook, run_notebook_in_jupyterlab, upload_notebook
+
+pytestmark = pytest.mark.proxy
 
 
 def test_application_simple_python(

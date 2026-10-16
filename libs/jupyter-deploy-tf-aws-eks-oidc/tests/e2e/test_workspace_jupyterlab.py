@@ -13,7 +13,7 @@ from pytest_jupyter_deploy.oauth2_proxy.dex import DexGitHubOAuth2ProxyApplicati
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 from pytest_jupyter_deploy.workspaces.kubectl import kubectl_get_workspace_access_url
 
-from .conftest import WORKSPACE_NAMESPACE
+from .constants import WORKSPACE_NAMESPACE
 
 NOTEBOOKS_DIR = Path(__file__).parent / "notebooks"
 

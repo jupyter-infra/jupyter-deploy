@@ -12,7 +12,7 @@ from pytest_jupyter_deploy.cli import JDCliError
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.workspaces.kubectl import kubectl_get_workspace_access_url
 
-from .conftest import WORKSPACE_NAMESPACE
+from .constants import WORKSPACE_NAMESPACE
 
 _URL_PATTERN = re.compile(r"Opening app at:\s+(https://\S+)")
 

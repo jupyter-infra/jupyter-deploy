@@ -19,7 +19,7 @@ import pytest
 from pytest_jupyter_deploy.cli import JDCli
 
 
-@pytest.mark.cli
+@pytest.mark.proxy
 @pytest.mark.no_deploy
 def test_proxy_status_on_undeployed_project(initialized_project: tuple[Path, JDCli]) -> None:
     """`jd proxy status` on an undeployed project reports no proxy, without a traceback."""
@@ -36,7 +36,7 @@ def test_proxy_status_on_undeployed_project(initialized_project: tuple[Path, JDC
     assert "Traceback" not in result.stderr
 
 
-@pytest.mark.cli
+@pytest.mark.proxy
 @pytest.mark.no_deploy
 def test_proxy_start_fails_on_undeployed_project(initialized_project: tuple[Path, JDCli]) -> None:
     """`jd proxy start` before `jd up` fails gracefully — there is no endpoint to resolve.

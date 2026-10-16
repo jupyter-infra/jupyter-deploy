@@ -43,7 +43,6 @@ def _assert_clean_failure(excinfo: pytest.ExceptionInfo[JDCliError], expected: s
         assert leak not in message, f"The CLI leaked a stack trace:\n{message}"
 
 
-@pytest.mark.cli
 def test_volume_list_json_reports_name_class_and_description(e2e_deployment: EndToEndDeployment) -> None:
     """`jd volume list --json` emits `{name, class, description}` per volume, like `component list`.
 
@@ -66,7 +65,6 @@ def test_volume_list_json_reports_name_class_and_description(e2e_deployment: End
     )
 
 
-@pytest.mark.cli
 def test_volume_list_renders_a_table(e2e_deployment: EndToEndDeployment) -> None:
     """The default rendering is a Name / Class / Description table, shaped like `jd component list`.
 
@@ -84,7 +82,6 @@ def test_volume_list_renders_a_table(e2e_deployment: EndToEndDeployment) -> None
         assert expected in output, f"Expected {expected!r} in the table:\n{output}"
 
 
-@pytest.mark.cli
 def test_volume_list_text_output_is_names_only(e2e_deployment: EndToEndDeployment) -> None:
     """`--text` gives comma-separated names, for a caller piping into another command.
 
@@ -101,7 +98,6 @@ def test_volume_list_text_output_is_names_only(e2e_deployment: EndToEndDeploymen
         assert chrome not in output, f"--text leaked table rendering: {output!r}"
 
 
-@pytest.mark.cli
 def test_volume_list_rejects_json_and_text_together(e2e_deployment: EndToEndDeployment) -> None:
     """The two output modes are mutually exclusive, and asking for both is a clean error."""
     e2e_deployment.ensure_deployed()
@@ -112,7 +108,6 @@ def test_volume_list_rejects_json_and_text_together(e2e_deployment: EndToEndDepl
     _assert_clean_failure(excinfo, "Cannot use both")
 
 
-@pytest.mark.cli
 def test_volume_show_defaults_to_the_home_volume(e2e_deployment: EndToEndDeployment) -> None:
     """Bare `jd volume show` resolves to the home volume and reports its live state.
 
@@ -142,7 +137,6 @@ def test_volume_show_defaults_to_the_home_volume(e2e_deployment: EndToEndDeploym
     assert detail["volume_type"] == "gp3", f"Unexpected provider tier: {detail['volume_type']!r}"
 
 
-@pytest.mark.cli
 def test_volume_show_by_name_matches_the_default(e2e_deployment: EndToEndDeployment) -> None:
     """`--name home` and no --name describe the same volume.
 
@@ -160,7 +154,6 @@ def test_volume_show_by_name_matches_the_default(e2e_deployment: EndToEndDeploym
     )
 
 
-@pytest.mark.cli
 def test_volume_status_defaults_to_the_home_volume(e2e_deployment: EndToEndDeployment) -> None:
     """`jd volume status` reports one status, for one volume: the home volume's attachment state.
 
@@ -181,7 +174,6 @@ def test_volume_status_defaults_to_the_home_volume(e2e_deployment: EndToEndDeplo
     assert "backed up" not in status, f"Status must describe the volume, not its backup: {status}"
 
 
-@pytest.mark.cli
 def test_volume_status_accepts_an_explicit_name(e2e_deployment: EndToEndDeployment) -> None:
     """`--name home` names the same volume the default resolves to, so it reports the same status."""
     e2e_deployment.ensure_deployed()
@@ -193,7 +185,6 @@ def test_volume_status_accepts_an_explicit_name(e2e_deployment: EndToEndDeployme
     assert status.count("status:") == 1, f"Expected exactly one status line, got: {status}"
 
 
-@pytest.mark.cli
 def test_volume_backup_refuses_while_the_host_runs(e2e_deployment: EndToEndDeployment) -> None:
     """A backup of a live disk is refused, not taken with a warning.
 
@@ -257,7 +248,6 @@ def test_volume_backup_replaces_the_previous_backup(
     assert second and second != first, f"Expected a new backup to supersede {first}, got {second!r}"
 
 
-@pytest.mark.cli
 def test_volume_show_rejects_an_unknown_name(e2e_deployment: EndToEndDeployment) -> None:
     """An identity this deployment does not mount is a clean error, not an empty result.
 
@@ -279,7 +269,6 @@ def test_volume_show_rejects_an_unknown_name(e2e_deployment: EndToEndDeployment)
     assert "jd volume list" in message, f"The refusal must say how to find the right name: {message}"
 
 
-@pytest.mark.cli
 def test_volume_status_rejects_an_unknown_name(e2e_deployment: EndToEndDeployment) -> None:
     """`status --name invalid` fails rather than reporting every volume.
 
@@ -294,7 +283,6 @@ def test_volume_status_rejects_an_unknown_name(e2e_deployment: EndToEndDeploymen
     _assert_clean_failure(excinfo, "invalid")
 
 
-@pytest.mark.cli
 def test_volume_backup_rejects_an_unknown_name(e2e_deployment: EndToEndDeployment) -> None:
     """`backup --name invalid` fails before creating anything.
 
