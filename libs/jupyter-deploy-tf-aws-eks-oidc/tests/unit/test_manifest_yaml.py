@@ -7,7 +7,6 @@ from typing import Any
 import yaml
 from jupyter_deploy import manifest_validation
 from jupyter_deploy.handlers import base_project_handler
-from jupyter_deploy.handlers.payloads import ResourceStatus
 from jupyter_deploy.handlers.resource.resource_utils import evaluate_status_rules
 from jupyter_deploy.manifest import JupyterDeployManifestV1
 
@@ -363,117 +362,131 @@ class TestManifest(unittest.TestCase):
             {"ACTIVE", "CREATING", "UPDATING", "DEGRADED", "DELETING", "CREATE_FAILED", "DELETE_FAILED"},
         )
 
+    START_STEPS = {
+        "WaitingForNode": "waiting for node",
+        "PullingImage": "pulling image",
+        "StartingContainer": "starting container",
+    }
+    # every reason the operator puts on Degraded: the kubelet's container failures, then its own
+    FAILURE_REASONS = {
+        "ImagePullBackOff",
+        "ErrImagePull",
+        "InvalidImageName",
+        "CrashLoopBackOff",
+        "CreateContainerConfigError",
+        "CreateContainerError",
+        "RunContainerError",
+        "FailedCreate",
+        "ComputeStalled",
+        "ComputeError",
+        "ServiceError",
+        "AccessProbeThresholdExceeded",
+    }
+
+    @staticmethod
+    def _workspace(desired: str, *conditions: tuple[str, str, str]) -> str:
+        """A Workspace JSON with conditions shaped as the operator writes them."""
+        return json.dumps(
+            {
+                "spec": {"desiredStatus": desired},
+                "status": {
+                    "conditions": [
+                        {
+                            "type": cond_type,
+                            "status": status,
+                            "reason": reason,
+                            "message": "set by the operator",
+                            "lastTransitionTime": "2026-10-12T13:12:02Z",
+                            "observedGeneration": 1,
+                        }
+                        for cond_type, status, reason in conditions
+                    ]
+                },
+            }
+        )
+
     def test_server_status_rules_read_the_operator_conditions(self) -> None:
         """The rules against conditions shaped as the operator writes them, so a path typo in the manifest or a
         renamed operator field fails here instead of printing a bare word."""
-        manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
-        rules = manifest.server_status_rules or []
+        rules = JupyterDeployManifestV1.model_validate(self.MANIFEST).server_status_rules or []
 
-        def condition(cond_type: str, status: str, reason: str, message: str) -> dict[str, Any]:
-            return {
-                "type": cond_type,
-                "status": status,
-                "reason": reason,
-                "message": message,
-                "lastTransitionTime": "2026-10-12T13:12:02Z",
-                "observedGeneration": 1,
-            }
+        for reason, phrase in self.START_STEPS.items():
+            with self.subTest(reason=reason):
+                starting = self._workspace(
+                    "Running",
+                    ("Available", "False", reason),
+                    ("Progressing", "True", reason),
+                    ("Degraded", "False", "NoError"),
+                )
+                self.assertEqual(evaluate_status_rules(starting, rules), f"Starting ({phrase})")
 
-        def workspace(desired: str, *conditions: dict[str, Any]) -> str:
-            return json.dumps({"spec": {"desiredStatus": desired}, "status": {"conditions": list(conditions)}})
-
-        starting = workspace(
-            "Running",
-            condition("Available", "False", "WaitingForNode", "Waiting for a node to run the pod"),
-            condition("Progressing", "True", "WaitingForNode", "Waiting for a node to run the pod"),
-            condition("Degraded", "False", "NoError", "No errors detected"),
-        )
-        self.assertEqual(
-            evaluate_status_rules(starting, rules),
-            ResourceStatus("Starting", "waiting for node"),
-        )
-
-        failed = workspace(
-            "Running",
-            condition("Available", "False", "ImagePullBackOff", 'Back-off pulling image "jupyter/notebook:typo"'),
-            condition("Progressing", "False", "ImagePullBackOff", 'Back-off pulling image "jupyter/notebook:typo"'),
-            condition("Degraded", "True", "ImagePullBackOff", 'Back-off pulling image "jupyter/notebook:typo"'),
-        )
-        self.assertEqual(
-            evaluate_status_rules(failed, rules),
-            ResourceStatus("Degraded", "ImagePullBackOff"),
-        )
-
-        stopping = workspace(
-            "Stopped",
-            condition("Progressing", "True", "ResourcesNotStopped", "Resources are still running"),
-            condition("Stopped", "False", "ResourcesNotStopped", "Resources are still running"),
-        )
-        self.assertEqual(
-            evaluate_status_rules(stopping, rules),
-            ResourceStatus("Stopping"),
-        )
+        for reason in self.FAILURE_REASONS:
+            with self.subTest(reason=reason):
+                failed = self._workspace(
+                    "Running",
+                    ("Available", "False", reason),
+                    ("Progressing", "False", reason),
+                    ("Degraded", "True", reason),
+                )
+                self.assertEqual(evaluate_status_rules(failed, rules), f"Degraded ({reason})")
 
         # the released operator writes generic reasons; the operator from jupyter-k8s#490 writes the steps
-        starting_without_steps = workspace(
+        generic_start = self._workspace(
             "Running",
-            condition("Available", "False", "ResourcesNotReady", "Workspace is starting"),
-            condition("Progressing", "True", "ResourcesNotReady", "Workspace is starting"),
-            condition("Degraded", "False", "NoError", "No errors detected"),
+            ("Available", "False", "ResourcesNotReady"),
+            ("Progressing", "True", "ResourcesNotReady"),
+            ("Degraded", "False", "NoError"),
         )
-        self.assertEqual(
-            evaluate_status_rules(starting_without_steps, rules), ResourceStatus("Starting", "ResourcesNotReady")
-        )
+        self.assertEqual(evaluate_status_rules(generic_start, rules), "Starting")
 
-        running = workspace(
+        unknown_failure = self._workspace("Running", ("Degraded", "True", "SomethingNew"))
+        self.assertEqual(evaluate_status_rules(unknown_failure, rules), "Degraded")
+
+        stopping = self._workspace(
+            "Stopped",
+            ("Progressing", "True", "ResourcesNotStopped"),
+            ("Stopped", "False", "ResourcesNotStopped"),
+        )
+        self.assertEqual(evaluate_status_rules(stopping, rules), "Stopping")
+
+        running = self._workspace(
             "Running",
-            condition("Available", "True", "ResourcesReady", "Workspace is available"),
-            condition("Progressing", "False", "ResourcesReady", "Workspace is available"),
-            condition("Degraded", "False", "NoError", "No errors detected"),
+            ("Available", "True", "ResourcesReady"),
+            ("Progressing", "False", "ResourcesReady"),
+            ("Degraded", "False", "NoError"),
         )
-        self.assertEqual(evaluate_status_rules(running, rules), ResourceStatus("Running"))
+        self.assertEqual(evaluate_status_rules(running, rules), "Running")
 
-    def test_server_status_rules_carry_detail_except_running_and_stopped(self) -> None:
-        """Running and Stopped are settled states whose display word says everything, and the operator has
-        no stop steps; the reason matters while a workspace is starting or failing."""
-        manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
-        detail_by_display = {rule.display: rule.detail for rule in manifest.server_status_rules or []}
+    def test_server_status_rules_name_every_start_step_and_failure_reason(self) -> None:
+        """The start steps print in the words the UI chip uses; a failure prints the reason as `kubectl describe`
+        shows it."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+        rules = self.MANIFEST["server-status-rules"]
+
+        def displays_by_reason(path: str) -> dict[str, str]:
+            return {
+                match["equals"]: rule["display"] for rule in rules for match in rule["all"] if match["path"] == path
+            }
+
         self.assertEqual(
-            detail_by_display,
-            {
-                "Degraded": ".status.conditions[type=Degraded].reason",
-                "Starting": ".status.conditions[type=Progressing].reason",
-                "Stopping": None,
-                "Stopped": None,
-                "Running": None,
-            },
+            displays_by_reason(".status.conditions[type=Progressing].reason"),
+            {reason: f"Starting ({phrase})" for reason, phrase in self.START_STEPS.items()},
         )
-
-    def test_server_status_rules_spell_the_start_steps(self) -> None:
-        """The Starting rule prints the step in the words the UI chip uses; Degraded prints the operator's
-        reason as is, the word `kubectl describe` shows."""
-        manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
-        phrases_by_display = {rule.display: rule.detail_display for rule in manifest.server_status_rules or []}
         self.assertEqual(
-            phrases_by_display,
-            {
-                "Starting": {
-                    "WaitingForNode": "waiting for node",
-                    "PullingImage": "pulling image",
-                    "StartingContainer": "starting container",
-                },
-                "Degraded": {},
-                "Stopping": {},
-                "Stopped": {},
-                "Running": {},
-            },
+            displays_by_reason(".status.conditions[type=Degraded].reason"),
+            {reason: f"Degraded ({reason})" for reason in self.FAILURE_REASONS},
         )
 
-    def test_pool_status_rules_declare_no_detail(self) -> None:
-        """`detail` has no effect in pool rules, so a declared one would be dead configuration."""
-        manifest = JupyterDeployManifestV1.model_validate(self.MANIFEST)
-        for rule in manifest.pool_status_rules or []:
-            self.assertIsNone(rule.detail, rule.display)
+    def test_server_status_rules_put_each_detailed_rule_before_its_bare_word(self) -> None:
+        """First match wins, so `Degraded (ImagePullBackOff)` must come before `Degraded`."""
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+        displays = [rule["display"] for rule in self.MANIFEST["server-status-rules"]]
+        for display in displays:
+            if " (" in display:
+                bare_word = display.split(" (", 1)[0]
+                self.assertLess(displays.index(display), displays.index(bare_word), display)
 
     def test_host_list_command_supports_query_param(self) -> None:
         """host.list command must wire a 'query' source-key for the --query filter."""

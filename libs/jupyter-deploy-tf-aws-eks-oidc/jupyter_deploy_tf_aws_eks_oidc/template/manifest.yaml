@@ -44,22 +44,113 @@ multi-host: true
 multi-server: true
 services: []
 server-status-rules:
+# First match wins: a rule that names a reason sits above the bare word it refines.
+- display: Degraded (ImagePullBackOff)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: ImagePullBackOff
+- display: Degraded (ErrImagePull)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: ErrImagePull
+- display: Degraded (InvalidImageName)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: InvalidImageName
+- display: Degraded (CrashLoopBackOff)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: CrashLoopBackOff
+- display: Degraded (CreateContainerConfigError)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: CreateContainerConfigError
+- display: Degraded (CreateContainerError)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: CreateContainerError
+- display: Degraded (RunContainerError)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: RunContainerError
+- display: Degraded (FailedCreate)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: FailedCreate
+- display: Degraded (ComputeStalled)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: ComputeStalled
+- display: Degraded (ComputeError)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: ComputeError
+- display: Degraded (ServiceError)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: ServiceError
+- display: Degraded (AccessProbeThresholdExceeded)
+  all:
+  - path: .status.conditions[type=Degraded].status
+    equals: "True"
+  - path: .status.conditions[type=Degraded].reason
+    equals: AccessProbeThresholdExceeded
 - display: Degraded
   all:
   - path: .status.conditions[type=Degraded].status
     equals: "True"
-  detail: .status.conditions[type=Degraded].reason
+- display: Starting (waiting for node)
+  all:
+  - path: .status.conditions[type=Progressing].status
+    equals: "True"
+  - path: .spec.desiredStatus
+    equals: Running
+  - path: .status.conditions[type=Progressing].reason
+    equals: WaitingForNode
+- display: Starting (pulling image)
+  all:
+  - path: .status.conditions[type=Progressing].status
+    equals: "True"
+  - path: .spec.desiredStatus
+    equals: Running
+  - path: .status.conditions[type=Progressing].reason
+    equals: PullingImage
+- display: Starting (starting container)
+  all:
+  - path: .status.conditions[type=Progressing].status
+    equals: "True"
+  - path: .spec.desiredStatus
+    equals: Running
+  - path: .status.conditions[type=Progressing].reason
+    equals: StartingContainer
 - display: Starting
   all:
   - path: .status.conditions[type=Progressing].status
     equals: "True"
   - path: .spec.desiredStatus
     equals: Running
-  detail: .status.conditions[type=Progressing].reason
-  detail-display:
-    WaitingForNode: waiting for node
-    PullingImage: pulling image
-    StartingContainer: starting container
 - display: Stopping
   all:
   - path: .status.conditions[type=Progressing].status
