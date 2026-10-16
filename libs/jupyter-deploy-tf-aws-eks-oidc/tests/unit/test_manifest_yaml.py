@@ -469,37 +469,17 @@ class TestManifest(unittest.TestCase):
         )
         self.assertEqual(evaluate_status_rules(running, rules), "Running")
 
-    def test_server_status_rules_name_every_start_step_and_failure_reason(self) -> None:
-        """The start steps print in the words the UI chip uses; a failure prints the reason as `kubectl describe`
-        shows it."""
+    def test_detailed_rules_name_exactly_the_pinned_reasons(self) -> None:
+        """A rule added without a test above, or one left behind after the operator drops a reason, fails here."""
         if self.MANIFEST is None:
             self.fail("MANIFEST is None")
         rules = self.MANIFEST["server-status-rules"]
 
-        def displays_by_reason(path: str) -> dict[str, str]:
-            return {
-                match["equals"]: rule["display"] for rule in rules for match in rule["all"] if match["path"] == path
-            }
+        def reasons_matched_on(path: str) -> set[str]:
+            return {match["equals"] for rule in rules for match in rule["all"] if match["path"] == path}
 
-        self.assertEqual(
-            displays_by_reason(".status.conditions[type=Progressing].reason"),
-            {reason: f"Starting ({phrase})" for reason, phrase in self.START_STEPS.items()},
-        )
-        self.assertEqual(
-            displays_by_reason(".status.conditions[type=Degraded].reason"),
-            {reason: f"Degraded ({reason})" for reason in self.FAILURE_REASONS},
-        )
-
-    def test_server_status_rules_put_each_detailed_rule_before_its_bare_word(self) -> None:
-        """First match wins, so `Degraded (ImagePullBackOff)` must come before `Degraded`."""
-        if self.MANIFEST is None:
-            self.fail("MANIFEST is None")
-        displays = [rule["display"] for rule in self.MANIFEST["server-status-rules"]]
-        for display in displays:
-            if " (" in display:
-                bare_word = display.split(" (", 1)[0]
-                self.assertIn(bare_word, displays, f"{display} has no bare-word fallback")
-                self.assertLess(displays.index(display), displays.index(bare_word), display)
+        self.assertEqual(reasons_matched_on(".status.conditions[type=Progressing].reason"), set(self.START_STEPS))
+        self.assertEqual(reasons_matched_on(".status.conditions[type=Degraded].reason"), self.FAILURE_REASONS)
 
     def test_host_list_command_supports_query_param(self) -> None:
         """host.list command must wire a 'query' source-key for the --query filter."""
