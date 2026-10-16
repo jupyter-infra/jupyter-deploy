@@ -525,10 +525,7 @@ class TestServerHandler(unittest.TestCase):
             JupyterDeployStatusRuleV1(
                 display="Starting",
                 all=[JupyterDeployStatusRuleMatchV1(path=".status.conditions[type=Progressing].status", equals="True")],
-                detail=[
-                    ".status.conditions[type=Progressing].reason",
-                    ".status.conditions[type=Progressing].message",
-                ],
+                detail=".status.conditions[type=Progressing].reason",
             )
         ]
         mock_cmd = Mock()
@@ -563,9 +560,7 @@ class TestServerHandler(unittest.TestCase):
         # Verify
         self.assertEqual(
             result,
-            ResourceStatus(
-                display="Starting", detail=["WaitingForNode", "Pod should schedule on: nodeclaim/default-abc12"]
-            ),
+            ResourceStatus(display="Starting", detail="WaitingForNode"),
         )
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")

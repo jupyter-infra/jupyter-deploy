@@ -752,20 +752,20 @@ class TestJupyterDeployStatusRuleV1(unittest.TestCase):
         "all": [{"path": ".status.conditions[type=Progressing].status", "equals": "True"}],
     }
 
-    def test_detail_defaults_to_empty(self) -> None:
+    def test_detail_defaults_to_none(self) -> None:
         rule = JupyterDeployStatusRuleV1.model_validate(self.RULE)
-        self.assertEqual(rule.detail, [])
+        self.assertIsNone(rule.detail)
 
-    def test_parses_detail_paths(self) -> None:
-        paths = [".status.conditions[type=Progressing].reason", ".status.conditions[type=Progressing].message"]
-        rule = JupyterDeployStatusRuleV1.model_validate({**self.RULE, "detail": paths})
-        self.assertEqual(rule.detail, paths)
+    def test_parses_a_detail_path(self) -> None:
+        path = ".status.conditions[type=Progressing].reason"
+        rule = JupyterDeployStatusRuleV1.model_validate({**self.RULE, "detail": path})
+        self.assertEqual(rule.detail, path)
 
-    def test_rejects_a_detail_that_is_not_a_list(self) -> None:
-        """A declared field, not an unknown key the model lets through: one path written bare is a manifest error."""
+    def test_rejects_a_detail_list(self) -> None:
+        """A declared field, not an unknown key the model lets through: a list of paths is a manifest error."""
         with self.assertRaises(ValidationError):
             JupyterDeployStatusRuleV1.model_validate(
-                {**self.RULE, "detail": ".status.conditions[type=Progressing].reason"}
+                {**self.RULE, "detail": [".status.conditions[type=Progressing].reason"]}
             )
 
     def test_accepts_unknown_keys(self) -> None:

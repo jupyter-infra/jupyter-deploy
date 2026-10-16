@@ -139,36 +139,32 @@ class TestServerStatusCmd(unittest.TestCase):
         stdout = self.invoke_status_with(ResourceStatus(display="Running"))
         self.assertIn("Server status: Running\n", stdout)
 
-    def test_prints_detail_after_the_display_word(self) -> None:
-        stdout = self.invoke_status_with(
-            ResourceStatus(display="Starting", detail=["WaitingForNode", "Pod should schedule on: nodeclaim/default-x"])
-        )
-        self.assertIn("Server status: Starting: WaitingForNode, Pod should schedule on: nodeclaim/default-x\n", stdout)
+    def test_prints_the_detail_in_parentheses_after_the_display_word(self) -> None:
+        stdout = self.invoke_status_with(ResourceStatus(display="Starting", detail="WaitingForNode"))
+        self.assertIn("Server status: Starting (WaitingForNode)\n", stdout)
 
+    # The detail is an operator reason in the shipped manifest, but a template may point it at any text,
+    # so the message-shaped values below pin what the line does with markup, width and control characters.
     def test_prints_bracketed_detail_verbatim(self) -> None:
         message = 'Back-off pulling image "ghcr.io/org/app:1" [nodeclaim/default-x]'
-        stdout = self.invoke_status_with(ResourceStatus(display="Degraded", detail=["ImagePullBackOff", message]))
-        self.assertIn(f"Server status: Degraded: ImagePullBackOff, {message}\n", stdout)
+        stdout = self.invoke_status_with(ResourceStatus(display="Degraded", detail=message))
+        self.assertIn(f"Server status: Degraded ({message})\n", stdout)
 
     def test_prints_long_detail_on_one_line(self) -> None:
         message = "Pod should schedule on: " + ", ".join(f"nodeclaim/default-{i:03d}" for i in range(8))
-        stdout = self.invoke_status_with(ResourceStatus(display="Starting", detail=["WaitingForNode", message]))
-        self.assertIn(f"Server status: Starting: WaitingForNode, {message}\n", stdout)
+        stdout = self.invoke_status_with(ResourceStatus(display="Starting", detail=message))
+        self.assertIn(f"Server status: Starting ({message})\n", stdout)
 
     def test_drops_control_sequences_from_detail(self) -> None:
         stdout = self.invoke_status_with(
-            ResourceStatus(
-                display="Degraded", detail=["ImagePullBackOff", "\x1b[31mred\x1b[0m \x1b]8;;http://x\x1b\\link"]
-            )
+            ResourceStatus(display="Degraded", detail="\x1b[31mred\x1b[0m \x1b]8;;http://x\x1b\\link")
         )
-        self.assertIn("Server status: Degraded: ImagePullBackOff, red link\n", stdout)
+        self.assertIn("Server status: Degraded (red link)\n", stdout)
         self.assertNotIn("\x1b", stdout)
 
     def test_prints_emoji_codes_in_detail_verbatim(self) -> None:
-        stdout = self.invoke_status_with(
-            ResourceStatus(display="Degraded", detail=["ImagePullBackOff", "image :x: not found"])
-        )
-        self.assertIn("Server status: Degraded: ImagePullBackOff, image :x: not found\n", stdout)
+        stdout = self.invoke_status_with(ResourceStatus(display="Degraded", detail="image :x: not found"))
+        self.assertIn("Server status: Degraded (image :x: not found)\n", stdout)
 
     @patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")

@@ -47,17 +47,12 @@ def status(
         with simple_display_manager.spinner("Checking server status..."):
             server_status = handler.get_server_status(name=name, scope=scope or None)
 
-        status_text = server_status.display
+        status_line = f"Server status: [bold cyan]{server_status.display}[/]"
         if server_status.detail:
-            status_text += ": " + ", ".join(server_status.detail)
-        # The detail values are condition messages: Rich would read their [bracketed] text as markup and
-        # their :name: as emoji, and would wrap a long one at the console width; the terminal would run
-        # their control sequences.
-        console.print(
-            f"Server status: [bold cyan]{escape(_TERMINAL_CONTROLS.sub('', status_text))}[/]",
-            soft_wrap=True,
-            emoji=False,
-        )
+            # The detail is an operator reason today, but a template may point it at any text: Rich would read
+            # [brackets] as markup and :name: as emoji and wrap a long one; the terminal would run control sequences.
+            status_line += f" ({escape(_TERMINAL_CONTROLS.sub('', server_status.detail))})"
+        console.print(status_line, soft_wrap=True, emoji=False)
 
 
 @servers_app.command()

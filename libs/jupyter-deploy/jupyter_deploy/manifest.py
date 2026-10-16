@@ -329,25 +329,23 @@ class JupyterDeployStatusRuleV1(BaseModel):
     """One rule of `server-status-rules` or `pool-status-rules`.
 
     The first rule whose `all` matchers hold against the resource JSON names the status.
-    `detail` lists paths, in the same syntax as the matchers, whose values `jd server status`
-    prints after the display word, each collapsed to one line; a path that does not resolve to a
-    non-blank string is skipped. `detail` has no effect in `pool-status-rules`, whose result carries the
-    display word only.
+    `detail` is a path, in the same syntax as the matchers, whose value `jd server status` prints
+    in parentheses after the display word, collapsed to one line; a path that does not resolve to a
+    non-blank string prints nothing. `detail` has no effect in `pool-status-rules`, whose result carries
+    the display word only.
 
     Example YAML:
         - display: Starting
           all:
           - path: .status.conditions[type=Progressing].status
             equals: "True"
-          detail:
-          - .status.conditions[type=Progressing].reason
-          - .status.conditions[type=Progressing].message
+          detail: .status.conditions[type=Progressing].reason
     """
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
     display: str
     all: list[JupyterDeployStatusRuleMatchV1]
-    detail: list[str] = Field(default_factory=list)
+    detail: str | None = None
 
 
 class JupyterDeployProjectStoreV1(BaseModel):

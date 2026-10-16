@@ -392,7 +392,7 @@ class TestPoolHandler(unittest.TestCase):
             JupyterDeployStatusRuleV1(
                 display="Degraded",
                 all=[JupyterDeployStatusRuleMatchV1(path=".status.conditions[type=Ready].status", equals="False")],
-                detail=[".status.conditions[type=Ready].message"],
+                detail=".status.conditions[type=Ready].message",
             )
         ]
         mock_retrieve_manifest.return_value = mock_manifest

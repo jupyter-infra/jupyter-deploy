@@ -205,10 +205,14 @@ class TestEvaluateStatusRules(unittest.TestCase):
         JupyterDeployStatusRuleV1(
             display="Starting",
             all=[JupyterDeployStatusRuleMatchV1(path=".status.conditions[type=Progressing].status", equals="True")],
-            detail=[
-                ".status.conditions[type=Progressing].reason",
-                ".status.conditions[type=Progressing].message",
-            ],
+            detail=".status.conditions[type=Progressing].reason",
+        ),
+    ]
+    MESSAGE_RULES = [
+        JupyterDeployStatusRuleV1(
+            display="Starting",
+            all=[JupyterDeployStatusRuleMatchV1(path=".status.conditions[type=Progressing].status", equals="True")],
+            detail=".status.conditions[type=Progressing].message",
         ),
     ]
 
@@ -230,21 +234,25 @@ class TestEvaluateStatusRules(unittest.TestCase):
         resource = self.progressing_workspace("WaitingForNode", "Pod should schedule on: nodeclaim/default-abc12")
         self.assertEqual(
             evaluate_status_rules(resource, self.DETAIL_RULES),
-            ResourceStatus(
-                display="Starting", detail=["WaitingForNode", "Pod should schedule on: nodeclaim/default-abc12"]
-            ),
+            ResourceStatus(display="Starting", detail="WaitingForNode"),
         )
 
     def test_detail_collapses_whitespace_to_one_line(self) -> None:
-        resource = self.progressing_workspace("  ", "line one\n  line two\t")
+        resource = self.progressing_workspace("WaitingForNode", "line one\n  line two\t")
         self.assertEqual(
-            evaluate_status_rules(resource, self.DETAIL_RULES),
-            ResourceStatus(display="Starting", detail=["line one line two"]),
+            evaluate_status_rules(resource, self.MESSAGE_RULES),
+            ResourceStatus(display="Starting", detail="line one line two"),
         )
 
-    def test_detail_skips_empty_and_missing_values(self) -> None:
+    def test_detail_is_none_for_a_blank_value(self) -> None:
         self.assertEqual(
-            evaluate_status_rules(self.progressing_workspace(""), self.DETAIL_RULES),
+            evaluate_status_rules(self.progressing_workspace("  "), self.DETAIL_RULES),
+            ResourceStatus(display="Starting"),
+        )
+
+    def test_detail_is_none_for_a_missing_value(self) -> None:
+        self.assertEqual(
+            evaluate_status_rules(self.progressing_workspace("WaitingForNode"), self.MESSAGE_RULES),
             ResourceStatus(display="Starting"),
         )
 

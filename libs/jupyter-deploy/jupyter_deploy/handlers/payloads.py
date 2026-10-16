@@ -165,10 +165,10 @@ class PoolDetail:
 
 @dataclass
 class ResourceStatus:
-    """Display word of a resource with the values of its matching rule's detail paths."""
+    """Display word of a resource, with the value of its matching rule's detail path when it has one."""
 
     display: str
-    detail: list[str] = field(default_factory=list)
+    detail: str | None = None
 
 
 @dataclass
