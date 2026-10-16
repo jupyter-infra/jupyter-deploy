@@ -383,11 +383,13 @@ class TestManifest(unittest.TestCase):
         "AccessProbeThresholdExceeded",
     }
 
-    @staticmethod
-    def _workspace(desired: str, *conditions: tuple[str, str, str]) -> str:
-        """The Workspace object in status_data/, as the operator wrote it, with desiredStatus and the given
-        (type, status, reason) conditions set on it."""
-        workspace = json.loads((Path(__file__).parent / "status_data" / "workspace.json").read_text())
+    # a Workspace as the jupyter-k8s operator wrote it on a Kind cluster, waiting for a GPU node
+    WORKSPACE_FIXTURE = Path(__file__).parent / "status_data" / "workspace_waiting_for_node.json"
+
+    @classmethod
+    def _workspace(cls, desired: str, *conditions: tuple[str, str, str]) -> str:
+        """The fixture Workspace with desiredStatus and the given (type, status, reason) conditions set on it."""
+        workspace = json.loads(cls.WORKSPACE_FIXTURE.read_text())
         workspace["spec"]["desiredStatus"] = desired
         by_type = {condition["type"]: condition for condition in workspace["status"]["conditions"]}
         for cond_type, status, reason in conditions:

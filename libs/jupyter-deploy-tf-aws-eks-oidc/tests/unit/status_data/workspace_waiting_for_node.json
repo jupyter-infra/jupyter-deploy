@@ -1,4 +1,5 @@
 {
+  "apiVersion": "workspace.jupyter.org/v1alpha1",
   "kind": "Workspace",
   "metadata": {
     "annotations": {
@@ -10,7 +11,7 @@
       "workspace.jupyter.org/template-name": "custom-image-template",
       "workspace.jupyter.org/template-namespace": "default"
     },
-    "name": "ws",
+    "name": "gpu-workspace",
     "namespace": "default"
   },
   "spec": {
@@ -79,8 +80,7 @@
         "type": "Deleting"
       }
     ],
-    "deploymentName": "workspace-jd445-shot-gpu",
-    "serviceName": "workspace-jd445-shot-gpu-service"
-  },
-  "apiVersion": "workspace.jupyter.org/v1alpha1"
+    "deploymentName": "workspace-gpu-workspace",
+    "serviceName": "workspace-gpu-workspace-service"
+  }
 }
