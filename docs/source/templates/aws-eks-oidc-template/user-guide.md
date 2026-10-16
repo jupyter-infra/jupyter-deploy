@@ -70,7 +70,7 @@ jd server list
 # list workspaces in a specific namespace
 jd server list --scope default
 
-# check workspace status; a start shows its step, a failure its reason: "Starting (waiting for node)"
+# check workspace status
 jd server status --name my-workspace --scope default
 
 # show workspace details

@@ -385,32 +385,21 @@ class TestManifest(unittest.TestCase):
 
     @staticmethod
     def _workspace(desired: str, *conditions: tuple[str, str, str]) -> str:
-        """A Workspace JSON with (type, status, reason) conditions shaped as the operator writes them."""
-        return json.dumps(
-            {
-                "spec": {"desiredStatus": desired},
-                "status": {
-                    "conditions": [
-                        {
-                            "type": cond_type,
-                            "status": status,
-                            "reason": reason,
-                            "message": "set by the operator",
-                            "lastTransitionTime": "2026-10-12T13:12:02Z",
-                            "observedGeneration": 1,
-                        }
-                        for cond_type, status, reason in conditions
-                    ]
-                },
-            }
-        )
+        """The Workspace object in status_data/, as the operator wrote it, with desiredStatus and the given
+        (type, status, reason) conditions set on it."""
+        workspace = json.loads((Path(__file__).parent / "status_data" / "workspace.json").read_text())
+        workspace["spec"]["desiredStatus"] = desired
+        by_type = {condition["type"]: condition for condition in workspace["status"]["conditions"]}
+        for cond_type, status, reason in conditions:
+            by_type[cond_type].update(status=status, reason=reason)
+        return json.dumps(workspace)
 
     def _server_status_rules(self) -> list[JupyterDeployStatusRuleV1]:
         return JupyterDeployManifestV1.model_validate(self.MANIFEST).server_status_rules or []
 
     def test_each_start_step_prints_its_phrase(self) -> None:
-        """Evaluates the rules against conditions shaped as the operator writes them, so a path typo in the manifest
-        or a renamed operator reason fails here instead of printing a bare word."""
+        """A typo in a manifest path or a renamed operator reason fails here instead of printing a bare
+        `Starting` in production."""
         rules = self._server_status_rules()
         for reason, phrase in self.START_STEPS.items():
             with self.subTest(reason=reason):
@@ -434,28 +423,28 @@ class TestManifest(unittest.TestCase):
                 )
                 self.assertEqual(evaluate_status_rules(failed, rules), f"Degraded ({reason})")
 
-    def test_reasons_the_template_does_not_name_print_the_bare_word(self) -> None:
+    def test_reasons_without_a_rule_print_the_bare_word(self) -> None:
         rules = self._server_status_rules()
-        # the released operator writes generic reasons; the operator from jupyter-k8s#490 writes the steps
-        generic_start = self._workspace(
+        starting = self._workspace(
             "Running",
-            ("Available", "False", "ResourcesNotReady"),
-            ("Progressing", "True", "ResourcesNotReady"),
+            ("Available", "False", "SomethingNew"),
+            ("Progressing", "True", "SomethingNew"),
             ("Degraded", "False", "NoError"),
         )
-        self.assertEqual(evaluate_status_rules(generic_start, rules), "Starting")
-        unlisted_failure = self._workspace(
+        self.assertEqual(evaluate_status_rules(starting, rules), "Starting")
+        failed = self._workspace(
             "Running",
             ("Available", "False", "SomethingNew"),
             ("Progressing", "False", "SomethingNew"),
             ("Degraded", "True", "SomethingNew"),
         )
-        self.assertEqual(evaluate_status_rules(unlisted_failure, rules), "Degraded")
+        self.assertEqual(evaluate_status_rules(failed, rules), "Degraded")
 
     def test_stopping_and_running_print_the_bare_word(self) -> None:
         rules = self._server_status_rules()
         stopping = self._workspace(
             "Stopped",
+            ("Available", "False", "ResourcesNotStopped"),
             ("Progressing", "True", "ResourcesNotStopped"),
             ("Stopped", "False", "ResourcesNotStopped"),
         )
@@ -469,7 +458,7 @@ class TestManifest(unittest.TestCase):
         self.assertEqual(evaluate_status_rules(running, rules), "Running")
 
     def test_detailed_rules_name_exactly_the_pinned_reasons(self) -> None:
-        """A rule added without a test above, or one left behind after the operator drops a reason, fails here."""
+        """A rule added without a test above, or one kept after the operator drops a reason, fails here."""
         if self.MANIFEST is None:
             self.fail("MANIFEST is None")
         rules = self.MANIFEST["server-status-rules"]
