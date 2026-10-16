@@ -414,6 +414,15 @@ class TestManifest(unittest.TestCase):
             ResourceStatus("Stopping"),
         )
 
+        # the operator before jupyter-k8s#490 writes no start step, so its Starting stays the bare word
+        starting_without_steps = workspace(
+            "Running",
+            condition("Available", "False", "ResourcesNotReady", "Workspace is starting"),
+            condition("Progressing", "True", "ResourcesNotReady", "Workspace is starting"),
+            condition("Degraded", "False", "NoError", "No errors detected"),
+        )
+        self.assertEqual(evaluate_status_rules(starting_without_steps, rules), ResourceStatus("Starting"))
+
         running = workspace(
             "Running",
             condition("Available", "True", "ResourcesReady", "Workspace is available"),
