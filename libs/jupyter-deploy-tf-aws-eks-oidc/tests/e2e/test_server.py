@@ -18,7 +18,7 @@ from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_get_workspace_ownership_type,
 )
 
-from .conftest import IMPERSONATED_USER
+from .constants import IMPERSONATED_USER
 
 
 def _list_servers_json(

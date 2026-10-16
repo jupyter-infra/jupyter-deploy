@@ -2,16 +2,16 @@
 # are matched as "<prefix><org>:<team>".
 oidcGroupPrefix: "github:"
 
-# -- GitHub organizations and teams granted workspace permissions.
-# Members of listed teams receive namespace-scoped Roles (workspace CRUD)
-# and a ClusterRole (self-subject access reviews for kubelogin).
-orgs: []
-  # - name: my-org
-  #   teams:
-  #     - team-a
+# -- Every "org:team" allowed to log in (oauth_allowed_teams). Members receive
+# a ClusterRole (self-subject access reviews for kubelogin) and read-only
+# discovery of the access strategies in the shared namespace.
+allowedGroups: []
+  # - my-org:team-a
 
-# -- Namespaces where workspace Roles and RoleBindings are created.
-# Each namespace gets a Role allowing workspace CRUD and a RoleBinding
-# for every org/team above.
-namespaces:
-  - default
+# -- Workspace namespaces and the "org:team" groups granted workspace CRUD in
+# each. Each namespace gets a Role and a RoleBinding to its groups only, so a
+# team holds no permission in a namespace that does not list it.
+namespaceGrants: []
+  # - name: team-ml
+  #   groups:
+  #     - my-org:ml

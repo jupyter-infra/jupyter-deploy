@@ -12,6 +12,7 @@ from pathlib import Path
 
 from version_edit import (
     pep440_to_semver,
+    set_app_image_name_version,
     set_chart_version,
     set_init_version,
     set_manifest_version,
@@ -45,6 +46,15 @@ def main() -> None:
     # Template files use SemVer (Helm requires it)
     set_manifest_version(template_path / "manifest.yaml", semver_version)
     set_tf_template_version(template_path / "engine" / "main.tf", semver_version)
+
+    # The jupyterlab app, and its image name, track the template version, so each release
+    # builds into a new ECR repository. PEP 440, like the app's pyproject.toml.
+    set_toml_version(template_path / "applications" / "jupyterlab" / "pyproject.toml", pep440_version)
+    for defaults_file in [
+        template_path / "engine" / "presets" / "defaults-all.tfvars",
+        template_path / "variables.yaml",
+    ]:
+        set_app_image_name_version(defaults_file, "jupyterlab", pep440_version)
 
     chart_dirs = ["workspace-defaults", "github-rbac"]
     for chart_dir in chart_dirs:

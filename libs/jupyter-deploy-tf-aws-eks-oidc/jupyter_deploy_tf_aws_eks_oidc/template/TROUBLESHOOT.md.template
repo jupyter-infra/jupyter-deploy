@@ -146,10 +146,11 @@ jd config --admin-role-names Admin --admin-role-names MyOtherRole
 jd up
 ```
 
-Workspace-level access is granted by the `github-rbac` chart to the GitHub teams in
-`oauth_allowed_teams`, scoped to the namespaces in `workspace_rbac_namespaces`. If a
-user gets `Forbidden` creating a workspace, confirm their team is in `oauth_allowed_teams`
-(in `org:team` format) and that the target namespace is in `workspace_rbac_namespaces`.
+Workspace-level access is granted by the `github-rbac` chart: to every team in
+`oauth_allowed_teams` in `default` when `workspace_namespaces` is empty, otherwise to each
+entry's `teams` in that entry's namespace only. If a user gets `Forbidden` creating a
+workspace, confirm their team is in `oauth_allowed_teams` (in `org:team` format) and, when
+`workspace_namespaces` is set, that the target namespace's entry lists their team.
 
 ## Karpenter fails to provision nodes after a version bump
 
@@ -196,5 +197,80 @@ pair: the `workspace-gpu` Karpenter pool, the NVIDIA device plugin, and the
 device plugin with `kubectl get daemonset nvidia-device-plugin -n kube-system`;
 it reports desired count 0 while the GPU pool is scaled to zero, which is idle,
 not failing.
+
+## Claude Code or Codex cannot reach Bedrock
+
+```bash
+# ask each agent from the workspace, headless (no first-run dialogs)
+jd server exec --name <workspace-name> --scope <namespace> -- "claude -p 'Reply with OK'"
+jd server exec --name <workspace-name> --scope <namespace> -- "codex exec --skip-git-repo-check 'Reply with OK'"
+
+# the service account the workspace runs as (expect "workspace")
+kubectl get workspace <workspace-name> -n <namespace> -o jsonpath='{.spec.serviceAccountName}'
+```
+
+- **Could not load AWS credentials**: the workspace was created before its namespace had the
+  `workspace` service account, or the namespace opts out (`bedrock: "false"` on its
+  `workspace_namespaces` entry, or `workspace_bedrock_enabled: false`). Credentials, like the
+  template env, reach a workspace at creation: recreate it.
+- **AccessDeniedException naming a model or inference profile**: the model is outside
+  `workspace_bedrock_model_patterns`, or its inference profile is outside
+  `workspace_bedrock_inference_scope` (Codex outside the US needs `global`).
+- **Codex's model reads `unset: ...`**: the deployment gives Codex no model to use; the
+  placeholder names the variable to change.
+- **AccessDeniedException on a model the patterns allow**: the model was never enabled in the
+  account; see below.
+
+## Workspaces are rejected with "multiple service accounts found with default label"
+
+The operator assigns each new workspace the service account labeled
+`workspace.jupyter.org/default-service-account=true` in its namespace, and refuses to choose
+when two carry the label. The template labels its own `workspace` service account; `jd config`
+refuses when another one already has the label, but a label added afterwards shows up only
+here. Remove the label from the other service account:
+
+```bash
+kubectl get serviceaccounts -n <namespace> -l workspace.jupyter.org/default-service-account=true
+kubectl label serviceaccount <name> -n <namespace> workspace.jupyter.org/default-service-account-
+```
+
+## Enable the Bedrock models in a new account
+
+Bedrock enables a third-party model (Anthropic Claude, OpenAI GPT) on its first invocation in an
+account, by subscribing the account through AWS Marketplace. The workspace roles hold no AWS
+Marketplace permissions, so a workspace cannot be that first caller: its call fails with
+`AccessDeniedException` until an admin enables the model. This is once per account (per AWS
+Organization for the Anthropic form), not per deployment.
+
+Invoking a third-party model, or creating its agreement, accepts the provider's EULA. Review the
+terms first.
+
+Run these with a principal that has `aws-marketplace:Subscribe`, `aws-marketplace:ViewSubscriptions`
+and `aws-marketplace:Unsubscribe`, in the deployment's region, on an account with a payment method:
+
+1. **Anthropic only: submit the first-time-use form.** Open any Anthropic model in the Bedrock
+   console model catalog and submit the use case details, or call
+   `aws bedrock put-use-case-for-model-access`.
+2. **Enable each model the workspaces use.** Open the model in the Bedrock console playground
+   and send one prompt. Each CLI picks its default model per release: Codex's is the
+   `model` line of `/etc/codex/config.toml` in a workspace, and `/model` in `claude` lists Claude
+   Code's.
+   Without the console, create the agreement directly:
+
+   ```bash
+   aws bedrock list-foundation-model-agreement-offers --model-id <model-id> --region <region>
+   aws bedrock create-foundation-model-agreement --model-id <model-id> --offer-token <offer-token> --region <region>
+   ```
+
+3. **Wait for the agreement**, which can take up to 15 minutes; calls fail meanwhile:
+
+   ```bash
+   # expect agreementAvailability.status AVAILABLE (PENDING while it is set up)
+   aws bedrock get-foundation-model-availability --model-id <model-id> --region <region>
+   ```
+
+These `aws bedrock` agreement commands need AWS CLI 2.27.42 or later. An `AccessDeniedException`
+that persists once the status is `AVAILABLE` points to an account-level restriction (SCP, or a model
+that needs additional access from AWS Sales).
 
 {{ generated-by-footer }}

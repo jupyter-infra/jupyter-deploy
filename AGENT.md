@@ -128,7 +128,7 @@ The engine directory has three tiers — keep them separate:
 
 1. **Core infra** (`modules/`, `main.tf`, `iam.tf`, `eks_addons.tf`, `platform.tf`): VPC, IAM roles, EKS cluster, MNG, security groups. Use `modules/` for reusable resources. These must exist before a kubeconfig is available.
 2. **Platform components** (`platform_*.tf`): Helm charts deployed onto the cluster once a working MNG is available — one file per component, named `platform_<component>.tf` (e.g. `platform_karpenter.tf`, `platform_keda.tf`, `platform_logging.tf`). Never put Helm releases in `modules/`.
-3. **App/charts** (`helm.tf`, `workspaces.tf`): consumer charts and workspace-specific resources (operator, router, workspace-defaults).
+3. **App/charts** (`helm.tf`, `workspaces.tf`, `workspace_*.tf`): consumer charts and workspace-specific resources (operator, router, workspace-defaults). A workspace feature that needs both AWS and in-cluster resources (e.g. `workspace_bedrock.tf`: IAM role + service account) keeps them together in its own `workspace_<feature>.tf`, not split into `iam.tf`.
 
 All variables MUST be defined in `variables.tf`. Default values MUST be in `presets/defaults-all.tfvars`. No `variable` blocks elsewhere.
 
@@ -194,6 +194,7 @@ Open PRs are reviewed automatically in CI by [roborev](https://roborev.io) (poli
 1. you MUST NOT silence linters without the user's permission
 2. you MUST NOT write docstrings that merely repeat a method name
 3. you MUST NOT use `TYPE_CHECKING` imports anywhere
+4. you MUST NEVER inline YAML in code (e.g. a manifest built as a Python string); keep it in a `.yaml` file and load or apply that file
 
 ## CLI docstring style
 In CLI command docstrings and help strings (`libs/jupyter-deploy/jupyter_deploy/cli/`):
@@ -242,7 +243,7 @@ E2E tests are located in `libs/<template-name>/tests/e2e/`
 
 1. Use the pytest plugin for test fixtures and helpers
 2. Use `@skip_if_testvars_not_set([...])` decorator to skip tests when required env vars are missing
-3. Template-specific utilities should be in `test_utils.py` within the template's e2e directory
+3. Template-specific shared values belong in `constants.py` within the template's e2e directory
 4. Template-specific fixtures should be in `conftest.py` within the template's e2e directory
 
 ## E2E Testing Workflow
@@ -310,6 +311,8 @@ The test container saves screenshots of failed tests to `./test-results`, use th
 Run E2E tests: `just test-e2e-eks-oidc <project-dir> TEST-SELECTOR`
 
 **Prerequisite:** Same as base — pass `ci-dir=<ci-project>` for browser-auth tests.
+
+**IMPORTANT:** Deploy first (`just ci-e2e-eks-deploy`); pytest's 30-min deploy timeout kills `jd up`.
 
 Examples (for project-dir == sandbox-e2e, ci-dir == sandbox-ci):
 - Run all tests: `just test-e2e-eks-oidc sandbox-e2e "" mutate=true,full-deploy=true,ci-dir=sandbox-ci`

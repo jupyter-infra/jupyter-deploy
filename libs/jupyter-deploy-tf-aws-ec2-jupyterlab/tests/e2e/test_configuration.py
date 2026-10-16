@@ -41,7 +41,6 @@ _EXPECTED_CONFIG_FLAGS = [
 ]
 
 
-@pytest.mark.cli
 @pytest.mark.no_deploy
 def test_project_is_configurable(e2e_deployment: EndToEndDeployment) -> None:
     """A project configures (terraform plan succeeds) with no required variables.
@@ -59,7 +58,6 @@ def test_project_is_configurable(e2e_deployment: EndToEndDeployment) -> None:
         assert engine_dir.exists(), f"Engine directory should exist after config: {engine_dir}"
 
 
-@pytest.mark.cli
 @pytest.mark.no_deploy
 def test_config_requires_no_variables(e2e_deployment: EndToEndDeployment) -> None:
     """`jd config` with no arguments and no variables.yaml edits succeeds (uber-simple flow)."""
@@ -69,7 +67,6 @@ def test_config_requires_no_variables(e2e_deployment: EndToEndDeployment) -> Non
         assert "Your project is ready" in result.stdout
 
 
-@pytest.mark.cli
 @pytest.mark.no_deploy
 def test_availability_zone_is_settable_and_clearable_from_the_cli(e2e_deployment: EndToEndDeployment) -> None:
     """`jd config --availability-zone <zone>` pins placement, and `any` gives up the pin again.
@@ -113,7 +110,6 @@ def test_availability_zone_is_settable_and_clearable_from_the_cli(e2e_deployment
         assert configured_zone() == "any", f"Expected the zone to be back to any, got: {configured_zone()!r}"
 
 
-@pytest.mark.cli
 @pytest.mark.no_deploy
 def test_config_interactive_accepts_all_defaults(e2e_deployment: EndToEndDeployment) -> None:
     """Interactive `jd config` completes with no prompt at all — the headline flow.
@@ -134,7 +130,6 @@ def test_config_interactive_accepts_all_defaults(e2e_deployment: EndToEndDeploym
         )
 
 
-@pytest.mark.cli
 @pytest.mark.no_deploy
 def test_config_help_shows_template_flags(initialized_project: tuple[Path, JDCli]) -> None:
     """`jd config --help` injects this template's variables as flags.
@@ -153,7 +148,6 @@ def test_config_help_shows_template_flags(initialized_project: tuple[Path, JDCli
     assert not missing, f"`jd config --help` is missing this template's flags: {missing}"
 
 
-@pytest.mark.cli
 @pytest.mark.no_deploy
 def test_variables_yaml_has_no_required_variables(initialized_project: tuple[Path, JDCli]) -> None:
     """The generated project's variables.yaml must have empty required / required_sensitive."""
@@ -167,7 +161,6 @@ def test_variables_yaml_has_no_required_variables(initialized_project: tuple[Pat
     )
 
 
-@pytest.mark.cli
 @pytest.mark.no_deploy
 def test_gitignore_generated_after_init(initialized_project: tuple[Path, JDCli]) -> None:
     """`.gitignore` is generated after `jd init` with the JD + terraform patterns."""
@@ -188,7 +181,6 @@ def test_gitignore_generated_after_init(initialized_project: tuple[Path, JDCli])
     assert "{{ engine_ignore_patterns }}" not in content
 
 
-@pytest.mark.cli
 @pytest.mark.no_deploy
 def test_agent_md_generated_after_init(initialized_project: tuple[Path, JDCli]) -> None:
     """AGENT.md is generated (and its .template removed) with all snippets substituted."""
@@ -203,7 +195,6 @@ def test_agent_md_generated_after_init(initialized_project: tuple[Path, JDCli]) 
     assert "}}" not in content, "Should not contain template placeholders"
 
 
-@pytest.mark.cli
 @pytest.mark.no_deploy
 def test_troubleshoot_md_generated_after_init(initialized_project: tuple[Path, JDCli]) -> None:
     """TROUBLESHOOT.md is generated (and its .template removed) with all snippets substituted."""
@@ -220,7 +211,6 @@ def test_troubleshoot_md_generated_after_init(initialized_project: tuple[Path, J
     assert "}}" not in content, "Should not contain template placeholders"
 
 
-@pytest.mark.cli
 @pytest.mark.no_deploy
 def test_store_config_written_after_config(configured_project: tuple[Path, JDCli]) -> None:
     """`.jd/store.yaml` is created after `jd config` with the s3-only store type."""
@@ -238,7 +228,6 @@ def test_store_config_written_after_config(configured_project: tuple[Path, JDCli
     assert store_config.get("store-id"), "store-id should not be empty"
 
 
-@pytest.mark.cli
 @pytest.mark.no_deploy
 def test_show_project_id_fails_on_unconfigured_project(configured_project: tuple[Path, JDCli]) -> None:
     """`jd show --project-id` fails gracefully (no stack trace) on an undeployed project."""

@@ -29,6 +29,8 @@ from pytest_jupyter_deploy.local_proxy import LocalProxyApplication
 from pytest_jupyter_deploy.local_proxy.jupyterlab import KERNEL_WS_SUBPROTOCOL, kernel_websocket
 from pytest_jupyter_deploy.local_proxy.requests import static_bundle_proxy
 
+pytestmark = pytest.mark.proxy
+
 # The proxy mints a 60s token and refreshes 15s before expiry, so a wait comfortably past 60s
 # guarantees at least one refresh cycle has completed.
 _CREDENTIAL_REFRESH_WAIT_SECONDS = 75

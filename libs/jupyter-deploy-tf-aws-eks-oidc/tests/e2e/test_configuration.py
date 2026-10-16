@@ -10,7 +10,6 @@ from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 from pytest_jupyter_deploy.undeployed_project import undeployed_project
 
 
-@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
@@ -29,7 +28,6 @@ def test_project_is_configurable(e2e_deployment: EndToEndDeployment) -> None:
         assert engine_dir.exists(), f"Engine directory should exist after config: {engine_dir}"
 
 
-@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
@@ -55,7 +53,6 @@ def test_gitignore_generated_after_init(e2e_deployment: EndToEndDeployment) -> N
         assert ".terraform.lock.hcl" in gitignore_content
 
 
-@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
@@ -81,7 +78,6 @@ def test_agent_md_generated_after_init(e2e_deployment: EndToEndDeployment) -> No
         assert " }}" not in agent_content, "Should not contain template placeholders"
 
 
-@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",
@@ -108,7 +104,6 @@ def test_troubleshoot_md_generated_after_init(e2e_deployment: EndToEndDeployment
         assert " }}" not in troubleshoot_content, "Should not contain template placeholders"
 
 
-@pytest.mark.cli
 @skip_if_testvars_not_set(
     [
         "JD_E2E_VAR_DOMAIN",

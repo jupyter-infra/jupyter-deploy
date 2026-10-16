@@ -18,8 +18,6 @@ NOT in scope:
   every node by design, so they are excluded from the placement check.
 - Router pod placement (traefik/dex/oauth2-proxy/authmiddleware/web-app) is pinned to the
   routing Karpenter NodePool — covered in test_placement_routing.py, not here.
-
-Marked `full_deployment` — reads a live cluster (no mutation), requires it to exist.
 """
 
 import pytest
@@ -40,7 +38,6 @@ ADDON_CONTROLLERS = [
 ]
 
 
-@pytest.mark.full_deployment
 @pytest.mark.usefixtures("kubernetes_cluster_login")
 @pytest.mark.parametrize("namespace,selector,description", ADDON_CONTROLLERS)
 def test_addon_controllers_run_on_platform_mng(
@@ -52,7 +49,6 @@ def test_addon_controllers_run_on_platform_mng(
     assert_pods_on_node_pool(namespace, selector, PLATFORM_ROLE_LABEL, f"{description} controller")
 
 
-@pytest.mark.full_deployment
 @pytest.mark.usefixtures("kubernetes_cluster_login")
 def test_operator_runs_on_platform_mng(e2e_deployment: EndToEndDeployment) -> None:
     """The workspace operator (controller-manager) is pinned to the platform MNG."""

@@ -17,8 +17,7 @@ overrides:
   # cluster_name_prefix: jupyter-deploy-eks
   # region: us-west-2
   # kubernetes_version: "1.36"
-  # workspace_rbac_namespaces:
-  #   - default
+  # workspace_namespaces: []
   # admin_role_names: []
   # admin_user_names: []
   # cluster_log_retention_days: 30
@@ -43,8 +42,15 @@ overrides:
   # workspaces_idle_shutdown_timeout_min: 15
   # workspace_app_jupyterlab_use: true
   # workspace_app_jupyterlab_app_type: jupyterlab
-  # workspace_app_jupyterlab_image_name: jupyterlab-v0.1.0
+  # workspace_app_jupyterlab_image_name: jupyterlab-v0.4.0
   # workspace_app_jupyterlab_image_build: v1
+  # workspace_app_claude_code_version: 2.1.287
+  # workspace_app_codex_version: 0.162.1
+  # workspace_bedrock_enabled: true
+  # workspace_bedrock_inference_scope: geo
+  # workspace_bedrock_model_patterns:
+  #   - anthropic.claude-*
+  #   - openai.gpt-*
   # platform_instance_types:
   #   - m5.large
   # platform_disk_size_gb: 50

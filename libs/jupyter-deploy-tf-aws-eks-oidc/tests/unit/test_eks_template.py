@@ -308,3 +308,25 @@ def test_platform_layers_gated_by_platform_barrier() -> None:
         "they can be destroyed while the service releases that depend on them are still "
         "uninstalling. Add them to the aggregator in platform.tf."
     )
+
+
+def test_helm_releases_take_namespace_from_release_namespaces() -> None:
+    """Every helm_release MUST set `namespace = local.release_namespaces.<key>`.
+
+    workspace_namespaces refuses any name in local.release_namespaces (workspaces.tf),
+    so a release installing into a namespace outside that map could be claimed as a
+    workspace namespace, letting Terraform own and later delete a platform namespace.
+    """
+    engine_dir = TEMPLATE_PATH / "engine"
+    offenders: list[str] = []
+    for tf_file in sorted(engine_dir.glob("*.tf")):
+        for rtype, rname, body in _iter_resource_blocks(tf_file.read_text()):
+            if rtype != "helm_release":
+                continue
+            match = re.search(r"^\s*namespace\s*=\s*(\S+)", body, re.MULTILINE)
+            if not match or not match.group(1).startswith("local.release_namespaces."):
+                offenders.append(f"{tf_file.name}: helm_release.{rname}")
+    assert not offenders, (
+        f"helm_release(s) {offenders} must set namespace = local.release_namespaces.<key>; "
+        "add the namespace to local.release_namespaces in helm.tf if it is new."
+    )

@@ -58,22 +58,22 @@ output "workspace_shared_namespace" {
 
 output "kube_system_namespace" {
   description = "The kube-system namespace, where core add-on DaemonSets (vpc-cni, kube-proxy) run."
-  value       = "kube-system"
+  value       = local.release_namespaces.kube_system
 }
 
 output "karpenter_namespace" {
   description = "Kubernetes namespace for the Karpenter controller and NodePool resources."
-  value       = "karpenter"
+  value       = local.release_namespaces.karpenter
 }
 
 output "keda_namespace" {
   description = "Kubernetes namespace for the KEDA operator."
-  value       = "keda"
+  value       = local.release_namespaces.keda
 }
 
 output "monitoring_namespace" {
   description = "Kubernetes namespace for Prometheus and monitoring components."
-  value       = "monitoring"
+  value       = local.release_namespaces.monitoring
 }
 
 output "workspace_base_url" {
@@ -138,7 +138,12 @@ output "workspace_patch_stop" {
 
 output "server_default_scope" {
   description = "Default Kubernetes namespace for workspace resources."
-  value       = var.workspace_rbac_namespaces[0]
+  value       = local.workspace_ns_names[0]
+}
+
+output "workspace_bedrock_roles" {
+  description = "JSON-encoded map of workspace namespace to the IAM role ARN granting its workspaces Bedrock; namespaces without Bedrock are absent."
+  value       = jsonencode({ for ns in local.workspace_bedrock_namespaces : ns => module.workspace_bedrock_role[ns].role_arn })
 }
 
 output "acm_certificate_arn" {

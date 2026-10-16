@@ -8,7 +8,12 @@ from pytest_jupyter_deploy.cli import JDCliError
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 
 
-def _build_exec_cmd(args: list[str], name: str | None = None, scope: str | None = None) -> list[str]:
+def build_server_exec_cmd(args: list[str], name: str | None = None, scope: str | None = None) -> list[str]:
+    """Return the `jd server exec` argv running ``args`` on a server.
+
+    The CLI joins ``args`` with spaces and re-splits them: pass ``[shlex.join(argv)]`` to keep an
+    argument that holds spaces whole.
+    """
     cmd = ["jupyter-deploy", "server", "exec"]
     if name is not None:
         cmd.extend(["--name", name])
@@ -25,7 +30,7 @@ def verify_file_exists_on_server(
     """Verify that a file exists on the server."""
     try:
         result = e2e_deployment.cli.run_command(
-            _build_exec_cmd(["stat", "--format=%F", file_path], name=name, scope=scope)
+            build_server_exec_cmd(["stat", "--format=%F", file_path], name=name, scope=scope)
         )
     except JDCliError as e:
         raise AssertionError(f"Expected file {file_path} to exist on server, but stat failed: {e}") from e
@@ -39,7 +44,7 @@ def verify_dir_exists_on_server(
     """Verify that a directory exists on the server."""
     try:
         result = e2e_deployment.cli.run_command(
-            _build_exec_cmd(["stat", "--format=%F", dir_path], name=name, scope=scope)
+            build_server_exec_cmd(["stat", "--format=%F", dir_path], name=name, scope=scope)
         )
     except JDCliError as e:
         raise AssertionError(f"Expected directory {dir_path} to exist on server, but stat failed: {e}") from e
@@ -52,7 +57,7 @@ def verify_file_or_dir_does_not_exist_on_server(
 ) -> None:
     """Verify that a file or directory does not exist on the server."""
     try:
-        result = e2e_deployment.cli.run_command(_build_exec_cmd(["stat", file_path], name=name, scope=scope))
+        result = e2e_deployment.cli.run_command(build_server_exec_cmd(["stat", file_path], name=name, scope=scope))
         # If stat succeeded, the file exists - this is unexpected
         raise AssertionError(
             f"Expected file {file_path} to not exist on server, but stat succeeded with output: {result.stdout}"
@@ -117,4 +122,4 @@ def upload_file_on_server(
         f"open('{target_path}', 'wb').write(data)\""
     )
 
-    e2e_deployment.cli.run_command(_build_exec_cmd([python_cmd], name=name, scope=scope))
+    e2e_deployment.cli.run_command(build_server_exec_cmd([python_cmd], name=name, scope=scope))

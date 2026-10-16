@@ -1,6 +1,8 @@
 output "instance_profile_name" {
   description = "Name of the instance profile to assign to the EC2 instance."
-  value       = aws_iam_instance_profile.server_instance_profile.name
+  # Sourced from the time_sleep trigger (not the resource directly) so consumers wait for
+  # the IAM propagation delay before using the name — see time_sleep in main.tf.
+  value = time_sleep.instance_profile_propagation.triggers["instance_profile_name"]
 }
 
 output "execution_role_name" {

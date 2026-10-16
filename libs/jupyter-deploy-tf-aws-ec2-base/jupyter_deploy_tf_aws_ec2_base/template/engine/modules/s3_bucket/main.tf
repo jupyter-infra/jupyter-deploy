@@ -40,6 +40,17 @@ resource "aws_s3_bucket_public_access_block" "deployment_bucket" {
 resource "aws_s3_object" "script_files" {
   for_each = var.script_files
 
+  # Writes must not race the bucket-level configuration. Referencing only the bucket id lets
+  # terraform upload these in parallel with `aws_s3_bucket_versioning` enabling versioning on a
+  # brand-new bucket, and AWS asks callers to let a first-time enablement settle before issuing
+  # writes: when they overlap, the post-create GetObjectTagging read can return 404 and fail the
+  # apply. Ordering after the encryption config also guarantees the KMS default is in force before
+  # any object exists.
+  depends_on = [
+    aws_s3_bucket_versioning.deployment_bucket,
+    aws_s3_bucket_server_side_encryption_configuration.deployment_bucket,
+  ]
+
   bucket       = aws_s3_bucket.deployment_bucket.id
   key          = each.key
   content      = each.value.content

@@ -869,8 +869,12 @@ ci-e2e-eks-deploy project_dir="sandbox-e2e" ci_dir="sandbox-ci":
 # Deploying in-container means a pypi-mode image deploys the PUBLISHED package, not the
 # runner's workspace code. Tests run separately afterwards via `just test-e2e-jupyterlab`.
 #
-# Usage: just ci-e2e-jupyterlab-deploy <project-dir>
-ci-e2e-jupyterlab-deploy project_dir="sandbox-e2e":
+# `options` are appended to the deploy's test-e2e options, e.g. image=jupyter-deploy-e2e-cli to
+# deploy with the CLI release image instead of the template E2E image.
+#
+# Usage: just ci-e2e-jupyterlab-deploy <project-dir> [options]
+# Example: just ci-e2e-jupyterlab-deploy sandbox-e2e image=jupyter-deploy-e2e-cli
+ci-e2e-jupyterlab-deploy project_dir="sandbox-e2e" options="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -904,7 +908,9 @@ ci-e2e-jupyterlab-deploy project_dir="sandbox-e2e":
     # partial state up to the store even on failure).
     echo "=== deploy + verify (pytest fresh-deploy) ==="
     DEPLOY_RC=0
-    just test-e2e-jupyterlab {{project_dir}} "test_deployment" "skip-sync=true" || DEPLOY_RC=$?
+    DEPLOY_OPTS="skip-sync=true"
+    if [ -n "{{options}}" ]; then DEPLOY_OPTS="$DEPLOY_OPTS,{{options}}"; fi
+    just test-e2e-jupyterlab {{project_dir}} "test_deployment" "$DEPLOY_OPTS" || DEPLOY_RC=$?
 
     # Emit the deployment_id so the caller can scope teardown to THIS deployment (parallel
     # runs each reap only their own). Written to $GITHUB_OUTPUT in CI.
@@ -1062,6 +1068,21 @@ test-e2e-cli project_dir test_filter="" options="":
         CLI_OPTS="$CLI_OPTS,{{options}}"
     fi
     just test-e2e "{{project_dir}}" "{{test_filter}}" "$CLI_OPTS" tf-aws-ec2-base
+
+# Run jupyterlab CLI functional tests (proxy marker) against an existing deployment.
+# Mirrors test-e2e-cli, but selects `proxy` instead of `cli`: the generic CLI paths are already
+# gated by the base/eks cli sets, so this template contributes only the code it alone reaches
+# (`jd proxy`, `jd open` in proxy mode, the connect-info AWS calls).
+# Usage: just test-e2e-cli-jupyterlab <project-dir> [test-filter] [options]
+test-e2e-cli-jupyterlab project_dir test_filter="" options="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # marker= goes LAST: test-e2e reads it with `marker=[^,]+`, so a trailing comma would truncate it
+    CLI_OPTS="skip-sync=true,image=jupyter-deploy-e2e-cli"
+    if [ -n "{{options}}" ]; then
+        CLI_OPTS="$CLI_OPTS,{{options}}"
+    fi
+    just test-e2e "{{project_dir}}" "{{test_filter}}" "$CLI_OPTS,marker=proxy" tf-aws-ec2-jupyterlab
 
 # Run EKS OIDC CLI functional tests (cli marker) against an existing deployment
 # Mirrors test-e2e-cli but targets the tf-aws-eks-oidc template.

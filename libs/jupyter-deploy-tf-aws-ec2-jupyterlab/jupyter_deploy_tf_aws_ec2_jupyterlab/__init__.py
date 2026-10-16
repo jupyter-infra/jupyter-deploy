@@ -5,4 +5,4 @@ local client proxy over pinned self-signed TLS with AWS-identity (STS) authentic
 AWS credentials are the only prerequisite.
 """
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"

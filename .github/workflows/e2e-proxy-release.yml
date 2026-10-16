@@ -1,0 +1,156 @@
+name: E2E release gate (client proxy)
+
+# Live gate for a client-proxy release. The proxy's PR gate is offline (unit + functional against a
+# trustme origin); this is where the candidate meets a real jupyterlab deployment before it ships.
+# Builds an image with the proxy pinned from Test PyPI and the CLI + template from prod PyPI
+# (pyproject.proxy-release.toml), fresh-deploys, runs the `proxy` marker (jd proxy, jd open, the
+# auth sidecar through the proxy, a notebook + kernel websocket through it), then tears down.
+#
+# Same teardown rule as e2e-jupyterlab-fresh.yml: destroy only when every job passed; a failure
+# leaves the deployment up for a retry, and e2e-reap-stale.yml destroys it within 12h.
+on:
+  workflow_call:
+    inputs:
+      pkg-version:
+        description: "Client-proxy version to pin from Test PyPI (from the build job)"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+# ECR slot 8 is the release repo, shared with the jupyterlab template release gate; the same group
+# as e2e-jupyterlab-fresh.yml's slot-8 runs, so the two releases serialize instead of racing on it.
+concurrency:
+  group: e2e-jupyterlab-8
+  cancel-in-progress: false
+
+jobs:
+  build-image:
+    name: "Build E2E image"
+    uses: ./.github/workflows/e2e-build-image.yml
+    secrets: inherit
+    with:
+      oauth-app-num: "8"
+      install-mode: pypi
+      install-variant: proxy-release
+      pkg-version: ${{ inputs.pkg-version }}
+      template: jupyterlab
+
+  # The recipe emits deployment_id to $GITHUB_OUTPUT even when the deploy fails.
+  deploy:
+    name: "Deploy + verify"
+    needs: [build-image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      deployment-id: ${{ steps.deploy.outputs.deployment_id }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+          role-duration-seconds: 7200
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Pull pre-built E2E image
+        run: just ci-e2e-base-pull 8 ${{ needs.build-image.outputs.ecr-tag }}
+
+      - name: Seed .env
+        run: just env-setup-jupyterlab
+
+      - name: Deploy + verify (jd init / config / up, in-session)
+        id: deploy
+        run: just ci-e2e-jupyterlab-deploy sandbox-e2e
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-proxy-release-deploy
+          path: test-results/
+          if-no-files-found: ignore
+
+  test:
+    name: "Proxy tests"
+    needs: [build-image, deploy]
+    if: needs.deploy.result == 'success'
+    uses: ./.github/workflows/e2e-jupyterlab-job.yml
+    secrets: inherit
+    with:
+      ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
+      ecr-slot: "8"
+      deployment-id: ${{ needs.deploy.outputs.deployment-id }}
+      marker: "proxy"
+      job-name: "Proxy tests"
+      timeout-minutes: 60
+
+  destroy:
+    name: "Teardown deployment"
+    needs: [deploy, test]
+    if: >-
+      always()
+      && needs.deploy.outputs.deployment-id != ''
+      && needs.deploy.result == 'success'
+      && needs.test.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+          role-duration-seconds: 7200
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Teardown deployment
+        run: just find-takedown-jupyterlab sandbox-e2e ${{ needs.deploy.outputs.deployment-id }}

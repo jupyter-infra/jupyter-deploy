@@ -1,4 +1,4 @@
-"""Helpers to tune a jupyter-k8s WorkspaceTemplate at test time.
+"""Helpers to read and tune jupyter-k8s WorkspaceTemplates at test time.
 
 The template's idle-timeout floor (`spec.idleShutdownOverrides.minIdleTimeoutInMinutes`)
 is an infrastructure-as-code-managed value: it renders from a deploy-time variable
@@ -51,3 +51,19 @@ def set_min_idle_timeout(template: str, namespace: str, minutes: int) -> None:
         patch,
         check=True,
     )
+
+
+def list_template_names(namespace: str, as_user: str | None = None, as_groups: list[str] | None = None) -> set[str]:
+    """Return the names of the WorkspaceTemplates in a namespace, optionally as an impersonated identity."""
+    result = run_kubectl(
+        "get",
+        "workspacetemplates",
+        "-n",
+        namespace,
+        "-o",
+        "jsonpath={.items[*].metadata.name}",
+        as_user=as_user,
+        as_groups=as_groups,
+        check=True,
+    )
+    return set(result.stdout.split())

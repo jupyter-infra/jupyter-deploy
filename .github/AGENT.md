@@ -7,10 +7,11 @@
 | `ci.yml` | push/PR | Lint + unit tests + client-proxy functional tests |
 | `lint.yml`, `test.yml`, `functional-test.yml` | `workflow_call` | Reusable lint / unit-test / client-proxy functional-test jobs |
 | `release-cli.yml` | `workflow_dispatch` | Release `jupyter-deploy` CLI to PyPI — pre-publish smoke gate (local wheel) → Test PyPI → E2E gate → PyPI |
-| `release-proxy.yml` | `workflow_dispatch` | Release `jupyter-deploy-client-proxy` to PyPI — functional gate → Test PyPI → PyPI (no live-deploy E2E; cloud-blind) |
+| `release-proxy.yml` | `workflow_dispatch` | Release `jupyter-deploy-client-proxy` to PyPI — functional gate → Test PyPI → live jupyterlab E2E gate (`e2e-proxy-release.yml`) → PyPI |
 | `release-base.yml` | `workflow_dispatch` | Release `jupyter-deploy-tf-aws-ec2-base` to PyPI (with E2E gate) |
 | `release-plugin.yml` | `workflow_dispatch` | Release `pytest-jupyter-deploy` to PyPI |
-| `e2e-cli.yml` | `workflow_call` | CLI release E2E gate — smoke tests (bare/aws/aws-k8s/aws-proxy) + functional tests against base app #2 and EKS app #5 |
+| `e2e-cli.yml` | `workflow_call` | CLI release E2E gate — smoke tests (bare/aws/aws-k8s/aws-proxy) + functional tests against base app #2, EKS app #5, and a fresh jupyterlab deploy (`proxy` marker, aws-proxy image) |
+| `e2e-proxy-release.yml` | `workflow_call` | Client-proxy release E2E gate — proxy from Test PyPI, CLI + jupyterlab template from prod PyPI (`pyproject.proxy-release.toml`); fresh-deploys on ECR slot 8, runs the `proxy` marker, tears down on success |
 | `release-eks-oidc.yml` | `workflow_dispatch` | Release `jupyter-deploy-tf-aws-eks-oidc` to PyPI (with E2E gate) |
 | `e2e-base.yml` | `workflow_dispatch` | E2E tests against an existing deployment |
 | `e2e-base-fresh.yml` | `workflow_dispatch` / `workflow_call` | Deploy from scratch + full E2E chain; `install-mode` / `install-variant` / `pkg-version` are dispatch inputs too, so a manual run can install from PyPI like the release gate or the canary |
@@ -58,6 +59,9 @@ mode determines what actually gets deployed:
 - **pypi + canary** (scheduled canary) — CLI from prod PyPI, unpinned; the template from prod PyPI, pinned
   to `pkg-version` when given (the canary passes the version it found on PyPI, the fallback passes none);
   the `pytest-jupyter-deploy` harness from the checkout, since the tests import their fixtures from it.
+- **pypi + proxy-release** (jupyterlab only, client-proxy release gate) — the client proxy pinned
+  from Test PyPI (`pkg-version`), CLI + template from prod PyPI. Any variant other than `canary`
+  renders `.github/e2e-<template>/pyproject.<variant>.toml` with the release placeholders.
   Renders `.github/e2e-<template>/pyproject.canary.toml`.
 
 The E2E image is **template-shared** (one `.github/e2e-shared/Dockerfile`, used by base,
@@ -101,6 +105,9 @@ until `e2e-reap-stale.yml` destroys it — that is deliberate, and is why the re
 
 Lessons from coordinated plugin/CLI/template releases — read before releasing:
 
+- **`release-cli.yml` and `release-proxy.yml` take a `dry-run` input.** It runs every gate, Test PyPI
+  publish included, and skips only the prod publish and the GitHub Release. Use it to exercise the
+  release gates from a branch; the Test PyPI version is still consumed.
 - **Release order for coupled changes: plugin → proxy → CLI → templates.** The CLI's `[proxy]`
   extra pins `jupyter-deploy-client-proxy>=0.1.1`; publish the proxy (a final, non-pre-release
   version) **before** a CLI release so the CLI's `[proxy]` extra resolves from prod PyPI. A template's
@@ -135,6 +142,18 @@ Lessons from coordinated plugin/CLI/template releases — read before releasing:
     Concurrency is keyed per slot (`e2e-jupyterlab-<slot>`) so the three run in parallel.
     **Requires a `sandbox-ci` redeploy** (`jd up` on the CI project) before the jupyterlab
     E2E workflows can resolve `ecr_repository_url_7..9`.
+
+- **The proxy and CLI gates each fresh-deploy jupyterlab too.** The proxy gate
+  (`e2e-proxy-release.yml`) tests the candidate against the PUBLISHED CLI + template, and it can't
+  be skipped. **A proxy release must work with the published CLI:** the gate enforces it, and users
+  who upgrade the proxy run it against an older CLI (the CLI only pins
+  `jupyter-deploy-client-proxy>=0.1.1`). Dispatching `e2e-jupyterlab-fresh.yml` in workspace mode
+  tests a proxy change that needs an unreleased CLI, but can't release it: a breaking proxy change
+  needs a coordinated plan. The CLI gate's `jupyterlab-functional-test` deploys with the CLI under
+  test and the workspace template. Both select the `proxy` marker (proxy, open, auth, application, undeployed-project
+  files), so a new non-mutating proxy-path test file needs `pytestmark = pytest.mark.proxy` to be
+  gated. Don't mark jupyterlab tests `cli`: a `cli` test name may live in one template suite only
+  (`tests/unit/test_cli_marker_uniqueness.py`), and the generic CLI paths belong to base/eks. Both tear down only on success; `e2e-reap-stale.yml` reaps failed runs.
 
 ## Testing Workflow Changes
 

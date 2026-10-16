@@ -307,7 +307,7 @@ jobs:
       ecr-tag: ${{ needs.build-image.outputs.ecr-tag }}
       marker: mutating and not gpu
       mutate: true
-      timeout-minutes: 90
+      timeout-minutes: 120
 
   # GPU tests in their own job so a flake elsewhere never forces re-running the
   # GPU hour and vice versa. The module enables the GPU pool itself (two

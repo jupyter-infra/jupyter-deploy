@@ -11,6 +11,9 @@ locals {
   source_files = sort(tolist(fileset(var.source_dir, "**")))
   source_hash  = sha256(join("", [for f in local.source_files : filesha256("${var.source_dir}/${f}")]))
 
+  # Sorted so the rendered command, and the build trigger, are stable.
+  build_arg_flags = join(" ", [for k in sort(keys(var.build_args)) : "--build-arg \"${k}=${var.build_args[k]}\""])
+
   buildspec = <<-YAML
     version: 0.2
     phases:
@@ -19,7 +22,7 @@ locals {
           - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REPO_URL
       build:
         commands:
-          - docker build -t $ECR_REPO_URL:$IMAGE_TAG .
+          - docker build ${local.build_arg_flags} -t $ECR_REPO_URL:$IMAGE_TAG .
           - docker tag $ECR_REPO_URL:$IMAGE_TAG $ECR_REPO_URL:latest
       post_build:
         commands:
@@ -68,6 +71,7 @@ resource "null_resource" "build_trigger" {
     image_tag    = var.image_build
     project_name = module.build.project_name
     source_hash  = local.source_hash
+    build_args   = local.build_arg_flags
   }
 
   provisioner "local-exec" {

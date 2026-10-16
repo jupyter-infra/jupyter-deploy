@@ -12,10 +12,10 @@ NOT trigger it (a live WebSocket, a transient refresh failure, a disabled timeou
 
 import asyncio
 import tempfile
-import time
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 from jupyter_deploy_client_proxy.constants import REFRESH_FAILED_EXIT_CODE
@@ -29,6 +29,31 @@ from jupyter_deploy_client_proxy.server.proxy import JupyterDeployClientProxy
 def _proxy(tmp: str, **overrides: object) -> JupyterDeployClientProxy:
     config = JupyterDeployClientProxyConfig(token_argv=["true"], log_dir=Path(tmp) / "logs", **overrides)
     return JupyterDeployClientProxy(config)
+
+
+class _FakeClock:
+    """Stands in for both `time.monotonic` and `asyncio.sleep` in the proxy module.
+
+    Time moves only when the test calls ``advance``, so a slow or stalled process cannot make the
+    watchdog see a window elapse that the test did not mean to elapse.
+    """
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def monotonic(self) -> float:
+        return self.now
+
+    async def sleep(self, delay: float) -> None:
+        deadline = self.now + delay
+        while self.now < deadline:
+            await asyncio.sleep(0)
+
+    async def advance(self, seconds: float) -> None:
+        self.now += seconds
+        # Let every sleeper whose deadline passed wake up and act before the test asserts.
+        for _ in range(10):
+            await asyncio.sleep(0)
 
 
 class TestRefreshFailureShutdown(unittest.IsolatedAsyncioTestCase):
@@ -107,22 +132,27 @@ class TestIdleWatchdog(unittest.IsolatedAsyncioTestCase):
 
     async def test_activity_defers_shutdown(self) -> None:
         # Stamps at a quarter of the window, four times, so the run spans more than one whole window
-        # and the deadline has to keep moving rather than firing on the original one.
+        # and the deadline has to keep moving rather than firing on the original one; then goes quiet
+        # for a full window, which must fire it.
         #
-        # The margins are deliberately wide: this races a real clock, and an earlier version stamping
-        # every 50ms against a 100ms window flaked under the full suite, where event-loop jitter can
-        # swallow a margin that small. Scheduling would have to slip by most of a second to break it
-        # now. `time.monotonic` is the same clock the watchdog reads.
+        # Runs on a fake clock. Against the real one, a process stall of a second between the stamp in
+        # __init__ and the watchdog's first read (seen under the full suite) fired the shutdown before
+        # the test could stamp at all.
         timeout = 1.0
-        with tempfile.TemporaryDirectory() as tmp:
+        clock = _FakeClock()
+        with tempfile.TemporaryDirectory() as tmp, patch("jupyter_deploy_client_proxy.server.proxy.time", clock):
             proxy = _proxy(tmp, idle_timeout_seconds=timeout)
-            task = asyncio.create_task(proxy._idle_loop())
-            for _ in range(4):
-                await asyncio.sleep(timeout / 4)
-                proxy._last_activity = time.monotonic()
-                self.assertFalse(proxy.shutdown_requested.is_set())
-            task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+            # Only the watchdog's sleeps go onto the fake clock; __init__ above needs the real asyncio.
+            with patch("jupyter_deploy_client_proxy.server.proxy.asyncio", SimpleNamespace(sleep=clock.sleep)):
+                task = asyncio.create_task(proxy._idle_loop())
+                for _ in range(4):
+                    await clock.advance(timeout / 4)
+                    proxy._last_activity = clock.monotonic()
+                    self.assertFalse(proxy.shutdown_requested.is_set())
+
+                await clock.advance(timeout)
+                self.assertTrue(proxy.shutdown_requested.is_set())
+                await asyncio.wait_for(task, timeout=2)
             await proxy._logger.close()
 
     async def test_open_websocket_holds_the_proxy_up(self) -> None:

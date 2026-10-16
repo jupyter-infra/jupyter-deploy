@@ -4,6 +4,7 @@
 # default wholesale, so the full single-entry list is restated here.
 workspaceTemplates:
   - name: jupyterlab
+    namespace: default
     isDefault: "true"
     displayName: JupyterLab
     description: "JupyterLab workspace with persistent EBS storage"

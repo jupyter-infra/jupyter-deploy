@@ -11,7 +11,7 @@
 # does one-shot list/get for its dropdowns, not an informer-style watch. Lands in
 # {{ .Release.Namespace }} — the shared namespace the release is installed into
 # (var.workspace_shared_namespace) — unlike the workspace Role, which is pinned to the
-# explicit .Values.namespaces loop.
+# explicit .Values.namespaceGrants loop.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -32,10 +32,8 @@ roleRef:
   kind: Role
   name: github-shared-discovery-reader
 subjects:
-{{- range $org := .Values.orgs }}
-{{- range $team := $org.teams }}
+{{- range $group := .Values.allowedGroups }}
   - apiGroup: rbac.authorization.k8s.io
     kind: Group
-    name: {{ $.Values.oidcGroupPrefix }}{{ $org.name }}:{{ $team }}
-{{- end }}
+    name: {{ $.Values.oidcGroupPrefix }}{{ $group }}
 {{- end }}

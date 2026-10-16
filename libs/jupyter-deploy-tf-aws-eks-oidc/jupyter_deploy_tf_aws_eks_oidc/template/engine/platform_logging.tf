@@ -14,9 +14,9 @@
 
 locals {
   # Namespaces whose pod logs Fluent Bit ships (see fluentbit-values.yaml.tftpl).
-  # Platform = router + operator; workspaces = the shared + RBAC namespaces.
+  # Platform = router + operator; workspaces = the shared + workspace namespaces.
   logging_platform_namespaces  = distinct([var.workspace_router_namespace, var.workspace_operator_namespace])
-  logging_workspace_namespaces = distinct(concat([var.workspace_shared_namespace], var.workspace_rbac_namespaces))
+  logging_workspace_namespaces = distinct(concat([var.workspace_shared_namespace], local.workspace_ns_names))
 }
 
 resource "kubernetes_service_account_v1" "fluent_bit" {
@@ -24,7 +24,7 @@ resource "kubernetes_service_account_v1" "fluent_bit" {
 
   metadata {
     name      = "fluent-bit"
-    namespace = "kube-system"
+    namespace = local.release_namespaces.kube_system
     labels = {
       "app.kubernetes.io/managed-by" = "jupyter-deploy"
     }
@@ -46,7 +46,7 @@ resource "aws_eks_pod_identity_association" "fluent_bit" {
   count = var.enable_component_logging ? 1 : 0
 
   cluster_name    = module.eks_cluster.cluster_name
-  namespace       = "kube-system"
+  namespace       = local.release_namespaces.kube_system
   service_account = "fluent-bit"
   role_arn        = module.fluentbit_role[0].role_arn
 }
@@ -58,7 +58,7 @@ resource "helm_release" "fluent_bit" {
   repository = "https://aws.github.io/eks-charts"
   chart      = "aws-for-fluent-bit"
   version    = var.fluentbit_chart_version
-  namespace  = "kube-system"
+  namespace  = local.release_namespaces.kube_system
 
   # Don't block the apply on the DaemonSet becoming Ready. A bad Fluent Bit config
   # crashloops the pods, and with wait=true a helm UPGRADE deadlocks — it never commits

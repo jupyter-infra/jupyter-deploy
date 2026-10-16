@@ -1,6 +1,6 @@
 [project]
 name = "jupyter-deploy-tf-aws-ec2-jupyterlab"
-version = "0.1.1"
+version = "0.1.2"
 description = "Terraform template to deploy a single-user JupyterLab on an AWS EC2 instance, accessed via a local proxy with AWS-identity auth."
 readme = "README.md"
 authors = [
@@ -102,7 +102,8 @@ testpaths = [
 ]
 markers = [
     "e2e: End-to-end tests using playwright (deselect with '-m \"not e2e\"')",
-    "cli: Non-mutating CLI tests for release validation (select with '-m cli')",
+    "cli: Non-mutating CLI tests for the CLI release gate; unused here, since base/eks own the generic CLI paths and this template's own ones are marked proxy",
+    "proxy: Non-mutating tests of the local proxy path (jd proxy, jd open, auth sidecar, app through the proxy) for the proxy and CLI release gates (select with '-m proxy')",
     "gpu: Mutating tests that provision a GPU instance (deselect with '-m \"not gpu\"')",
 ]
 

@@ -548,5 +548,119 @@ jobs:
       - name: Run EKS CLI functional tests
         run: just test-e2e-cli-eks sandbox-e2e
 
-  # No cleanup job needed — all cli-marked tests are read-only (terraform state
-  # queries, local history reads, config in temp dirs). None start the host.
+  # No cleanup job needed for the two jobs above — all cli-marked tests are read-only
+  # (terraform state queries, local history reads, config in temp dirs). None start the host.
+
+  # --- jupyterlab functional tests (aws-proxy image against a FRESH deployment) ---
+  # Runs in parallel with the base/eks jobs. jupyterlab has no OAuth app or cert quota, so
+  # rather than restore a long-lived app it deploys fresh with the CLI under test, runs the
+  # proxy marker (`jd proxy` / `jd open` and the auth sidecar through it — the CLI code only this
+  # template reaches; base/eks cover the rest), then tears down in a separate job.
+
+  jupyterlab-functional-test:
+    name: "jupyterlab functional test (proxy marker)"
+    needs: [smoke-gate, build-image-aws-proxy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      deployment-id: ${{ steps.deploy.outputs.deployment_id }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+          role-duration-seconds: 7200
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Pull aws-proxy image
+        run: just ci-e2e-cli-pull aws-proxy
+
+      - name: Seed .env
+        run: just env-setup-jupyterlab
+
+      # Emits deployment_id even when the deploy fails, so the teardown job can scope to it.
+      - name: Deploy + verify (jd init / config / up, in-session)
+        id: deploy
+        run: just ci-e2e-jupyterlab-deploy sandbox-e2e image=jupyter-deploy-e2e-cli
+
+      - name: Run jupyterlab CLI functional tests
+        run: just test-e2e-cli-jupyterlab sandbox-e2e
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-cli-jupyterlab
+          path: test-results/
+          if-no-files-found: ignore
+
+  # Teardown ONLY on success, from a fresh runner (the test job's project dir carries the
+  # container's terraform plugin-cache symlinks, which break a host-side `jd down`). A failed run
+  # leaves the deployment up for inspection; e2e-reap-stale.yml destroys it within 12h.
+  jupyterlab-functional-teardown:
+    name: "jupyterlab teardown"
+    needs: [jupyterlab-functional-test]
+    if: >-
+      always()
+      && needs.jupyterlab-functional-test.result == 'success'
+      && needs.jupyterlab-functional-test.outputs.deployment-id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: e2e
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV and Python
+        uses: ./.github/actions/install-uv
+        with:
+          python-version: "3.13"
+
+      - name: Install just
+        uses: ./.github/actions/install-just
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::997498698382:role/jupyter-infra-ci-e2e-6a3e2625
+          aws-region: us-west-2
+          role-duration-seconds: 7200
+
+      - name: Restore CI project
+        run: just ci-restore sandbox-ci
+
+      - name: Teardown deployment
+        run: just find-takedown-jupyterlab sandbox-e2e ${{ needs.jupyterlab-functional-test.outputs.deployment-id }}

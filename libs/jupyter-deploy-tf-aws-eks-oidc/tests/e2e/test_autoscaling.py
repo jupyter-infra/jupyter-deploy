@@ -17,7 +17,7 @@ from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_delete_workspace,
 )
 
-from .conftest import WORKSPACE_NAMESPACE, WORKSPACES_DIR
+from .constants import WORKSPACE_NAMESPACE, WORKSPACES_DIR
 
 
 def _kubectl_stdout(*args: str) -> str:

@@ -67,15 +67,15 @@ Two variables control who may access the cluster:
 
 - `oauth_allowed_teams` — GitHub teams that may sign in, each in `org:team` format
   (e.g. `my-org:data-science`). Only members of these teams can authenticate.
-- `workspace_rbac_namespaces` — the Kubernetes namespaces in which those teams can
-  create and manage workspaces.
+- `workspace_namespaces` — optional mapping of Kubernetes namespaces to the teams that can
+  create and manage workspaces in each. Leave it empty to let every allowed team use the
+  `default` namespace.
 
 ```bash
 # pass each team as a separate flag
 jd config \
   --oauth-allowed-teams my-org:data-science \
-  --oauth-allowed-teams my-org:ml-platform \
-  --workspace-rbac-namespaces default
+  --oauth-allowed-teams my-org:ml-platform
 ```
 
 You can also set these in `variables.yaml`. If you later change the teams or

@@ -1,0 +1,10 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-ns-bedrock-a
+  namespace: e2e-ns-a
+spec:
+  displayName: "E2E NS Bedrock A"
+  desiredStatus: Running
+  ownershipType: Public
+  accessType: Public

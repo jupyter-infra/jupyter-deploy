@@ -1,0 +1,10 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-ns-single-to-multi
+  namespace: default
+spec:
+  displayName: "E2E NS Single To Multi"
+  desiredStatus: Running
+  ownershipType: Public
+  accessType: Public

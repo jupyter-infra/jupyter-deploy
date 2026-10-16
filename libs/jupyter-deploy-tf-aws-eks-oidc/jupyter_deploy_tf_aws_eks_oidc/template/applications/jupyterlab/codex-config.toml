@@ -1,0 +1,8 @@
+# System config; a user's ~/.codex/config.toml overrides it. Credentials and region
+# come from the AWS SDK chain (EKS Pod Identity, AWS_REGION). The model, an inference
+# profile ID, is rendered at build time from the installed release's catalog (see the Dockerfile).
+model_provider = "amazon-bedrock-runtime"
+model = "@CODEX_MODEL@"
+# Hosted web search is a Bedrock Mantle feature, unavailable on bedrock-runtime.
+web_search = "disabled"
+check_for_update_on_startup = false
