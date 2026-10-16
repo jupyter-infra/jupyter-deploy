@@ -331,8 +331,9 @@ class JupyterDeployStatusRuleV1(BaseModel):
     The first rule whose `all` matchers hold against the resource JSON names the status.
     `detail` is a path, in the same syntax as the matchers, whose value `jd server status` prints
     in parentheses after the display word, collapsed to one line; a path that does not resolve to a
-    non-blank string prints nothing. `detail` has no effect in `pool-status-rules`, whose result carries
-    the display word only.
+    non-blank string prints nothing. `detail-display` maps a resolved detail value to the text printed
+    instead; values not in the map print as they are. Neither has an effect in `pool-status-rules`,
+    whose result carries the display word only.
 
     Example YAML:
         - display: Starting
@@ -340,12 +341,17 @@ class JupyterDeployStatusRuleV1(BaseModel):
           - path: .status.conditions[type=Progressing].status
             equals: "True"
           detail: .status.conditions[type=Progressing].reason
+          detail-display:
+            WaitingForNode: waiting for node
+            PullingImage: pulling image
+            StartingContainer: starting container
     """
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
     display: str
     all: list[JupyterDeployStatusRuleMatchV1]
     detail: str | None = None
+    detail_display: dict[str, str] = Field(default_factory=dict, alias="detail-display")
 
 
 class JupyterDeployProjectStoreV1(BaseModel):

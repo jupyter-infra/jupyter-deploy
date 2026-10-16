@@ -140,8 +140,8 @@ class TestServerStatusCmd(unittest.TestCase):
         self.assertIn("Server status: Running\n", stdout)
 
     def test_prints_the_detail_in_parentheses_after_the_display_word(self) -> None:
-        stdout = self.invoke_status_with(ResourceStatus(display="Starting", detail="WaitingForNode"))
-        self.assertIn("Server status: Starting (WaitingForNode)\n", stdout)
+        stdout = self.invoke_status_with(ResourceStatus(display="Starting", detail="waiting for node"))
+        self.assertIn("Server status: Starting (waiting for node)\n", stdout)
 
     # The detail is an operator reason in the shipped manifest, but a template may point it at any text,
     # so the message-shaped values below pin what the line does with markup, width and control characters.

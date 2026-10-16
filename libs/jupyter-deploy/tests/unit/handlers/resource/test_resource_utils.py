@@ -215,6 +215,14 @@ class TestEvaluateStatusRules(unittest.TestCase):
             detail=".status.conditions[type=Progressing].message",
         ),
     ]
+    PHRASE_RULES = [
+        JupyterDeployStatusRuleV1(
+            display="Starting",
+            all=[JupyterDeployStatusRuleMatchV1(path=".status.conditions[type=Progressing].status", equals="True")],
+            detail=".status.conditions[type=Progressing].reason",
+            detail_display={"WaitingForNode": "waiting for node", "ResourcesNotReady": ""},
+        ),
+    ]
 
     @staticmethod
     def progressing_workspace(reason: str, message: str | None = None) -> str:
@@ -253,6 +261,24 @@ class TestEvaluateStatusRules(unittest.TestCase):
     def test_detail_is_none_for_a_missing_value(self) -> None:
         self.assertEqual(
             evaluate_status_rules(self.progressing_workspace("WaitingForNode"), self.MESSAGE_RULES),
+            ResourceStatus(display="Starting"),
+        )
+
+    def test_detail_display_maps_the_value(self) -> None:
+        self.assertEqual(
+            evaluate_status_rules(self.progressing_workspace("WaitingForNode"), self.PHRASE_RULES),
+            ResourceStatus(display="Starting", detail="waiting for node"),
+        )
+
+    def test_detail_display_leaves_an_unmapped_value_as_is(self) -> None:
+        self.assertEqual(
+            evaluate_status_rules(self.progressing_workspace("PullingImage"), self.PHRASE_RULES),
+            ResourceStatus(display="Starting", detail="PullingImage"),
+        )
+
+    def test_detail_display_mapped_to_blank_gives_none(self) -> None:
+        self.assertEqual(
+            evaluate_status_rules(self.progressing_workspace("ResourcesNotReady"), self.PHRASE_RULES),
             ResourceStatus(display="Starting"),
         )
 

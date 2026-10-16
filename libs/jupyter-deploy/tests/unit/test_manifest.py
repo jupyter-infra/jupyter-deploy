@@ -768,6 +768,20 @@ class TestJupyterDeployStatusRuleV1(unittest.TestCase):
                 {**self.RULE, "detail": [".status.conditions[type=Progressing].reason"]}
             )
 
+    def test_detail_display_defaults_to_empty(self) -> None:
+        rule = JupyterDeployStatusRuleV1.model_validate(self.RULE)
+        self.assertEqual(rule.detail_display, {})
+
+    def test_parses_detail_display_through_its_alias(self) -> None:
+        rule = JupyterDeployStatusRuleV1.model_validate(
+            {**self.RULE, "detail-display": {"WaitingForNode": "waiting for node"}}
+        )
+        self.assertEqual(rule.detail_display, {"WaitingForNode": "waiting for node"})
+
+    def test_rejects_a_detail_display_that_is_not_a_mapping(self) -> None:
+        with self.assertRaises(ValidationError):
+            JupyterDeployStatusRuleV1.model_validate({**self.RULE, "detail-display": ["waiting for node"]})
+
     def test_accepts_unknown_keys(self) -> None:
         """Unknown keys parse, so a manifest can carry fields an older CLI does not know."""
         rule = JupyterDeployStatusRuleV1.model_validate({**self.RULE, "hints": ["check the image name"]})

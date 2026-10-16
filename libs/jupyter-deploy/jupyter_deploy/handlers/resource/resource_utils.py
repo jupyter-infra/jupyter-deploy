@@ -125,8 +125,9 @@ def resolve_path(resource: dict[str, Any], path: str) -> str | None:
 def evaluate_status_rules(resource_json: str, rules: list[JupyterDeployStatusRuleV1]) -> ResourceStatus:
     """Return the display word of the first rule whose matchers all hold, with the value of its detail path.
 
-    The detail is collapsed to one line and is None when the rule has no path or the path resolves to
-    no string or a blank one. Unparseable input or no matching rule gives "Unknown" with no detail.
+    The detail is the value the rule's `detail-display` maps the resolved string to, or the string itself,
+    collapsed to one line; it is None when the rule has no path or the result is blank. Unparseable input
+    or no matching rule gives "Unknown" with no detail.
     """
     try:
         resource = json.loads(resource_json)
@@ -140,8 +141,9 @@ def evaluate_status_rules(resource_json: str, rules: list[JupyterDeployStatusRul
         if all(resolve_path(resource, m.path) == m.equals for m in rule.all):
             detail = None
             if rule.detail:
+                raw = resolve_path(resource, rule.detail) or ""
                 # the CLI prints the value inline after the display word, and a condition message may span lines
-                detail = " ".join((resolve_path(resource, rule.detail) or "").split()) or None
+                detail = " ".join(rule.detail_display.get(raw, raw).split()) or None
             return ResourceStatus(display=rule.display, detail=detail)
 
     return ResourceStatus(display="Unknown")
