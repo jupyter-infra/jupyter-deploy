@@ -17,6 +17,11 @@ on:
         required: false
         type: string
         default: ""
+      artifact-name:
+        description: "Suffix for this job's test-results artifact (must be unique within a run)"
+        required: false
+        type: string
+        default: ""
       marker:
         description: "Pytest marker to select (e.g. mutating); defaults to all e2e tests"
         required: false
@@ -148,7 +153,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ inputs.test-file-filter || 'non-mutating' }}
+          name: test-results-${{ inputs.artifact-name || inputs.test-file-filter || 'non-mutating' }}
           path: test-results/
           if-no-files-found: ignore
 
