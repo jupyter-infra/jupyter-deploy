@@ -1037,7 +1037,7 @@ variable "workspace_app_jupyterlab_image_name" {
     upgrade builds into a new repo while previous images stay available for
     running workspaces.
 
-    Example: jupyterlab-v0.4.0
+    Example: jupyterlab-v0.4.1
   EOT
   type        = string
 }
