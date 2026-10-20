@@ -38,3 +38,10 @@ overrides:
   # additional_ebs_mounts: []
   # additional_efs_mounts: []
   # ebs_snapshot_ids: {}
+  # claude_code_version: 2.1.302
+  # codex_version: 0.163.0
+  # bedrock_enabled: false
+  # bedrock_inference_scope: geo
+  # bedrock_model_patterns:
+  #   - anthropic.claude-*
+  #   - openai.gpt-*
