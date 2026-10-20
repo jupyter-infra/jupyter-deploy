@@ -135,6 +135,41 @@ re-applies the same list rather than reverting it.
 Editing those variables and running `jd up` also reconciles the allowlist, but restarts the whole
 application. Prefer the commands above for routine access changes.
 
+### Use the coding agents
+
+The Jupyter image ships the **Claude Code** (`claude`) and **Codex** (`codex`) coding agents,
+configured to call Amazon Bedrock with the EC2 instance role credentials. Bedrock access is off by
+default. To turn it on, set `bedrock_enabled` in the `overrides:` section of `variables.yaml`, then
+apply the change:
+
+```yaml
+overrides:
+  bedrock_enabled: true
+```
+
+```bash
+jd config
+jd up
+```
+
+Both agents then work in a JupyterLab terminal with no setup: run `claude` or `codex`.
+
+> **Important:** Bedrock enables a third-party model (Anthropic Claude, OpenAI GPT) on its first invocation in an
+> AWS account, through AWS Marketplace, and the instance role holds no AWS Marketplace permissions.
+> Before using the agents, enable each model in Bedrock for your account and region: submit the
+> Anthropic first-time-use form, then send one prompt to each model from the Bedrock console
+> playground. Calls fail with `AccessDeniedException` until then.
+
+`bedrock_inference_scope` selects the cross-region inference profiles the agents call: `geo` (the
+default) keeps requests within the deployment region's geography, `global` lets Bedrock serve them
+from any commercial region. Bedrock offers the OpenAI models through US and global inference
+profiles only: outside the US, **Codex** needs `global`.
+
+`bedrock_model_patterns` lists the Bedrock model IDs the instance role may invoke, as IAM wildcards
+without the inference profile prefix. The default allows both agents: `anthropic.claude-*` and
+`openai.gpt-*`. `claude_code_version` and `codex_version` pin the agents installed in the image;
+changing either one rebuilds the image on the next `jd up`.
+
 ### Temporarily stop/start your EC2 instance
 
 ```bash
@@ -302,6 +337,11 @@ The template creates an IAM role for the EC2 instance with permissions for SSM, 
 deployment S3 bucket, write access to the certificate-pin SSM parameter, and (optionally) EFS
 access.
 
+With `bedrock_enabled` set to `true`, the role may also invoke the Bedrock models matching
+`bedrock_model_patterns`, through the deployment region's inference profiles that
+`bedrock_inference_scope` selects. The instance requires IMDSv2 with a hop limit of 2, so that the
+Jupyter container can read the role credentials.
+
 The template creates no secrets: authentication relies on short-lived AWS-identity tokens minted
 locally, so there is no OAuth client secret or certificate secret to store.
 
@@ -325,6 +365,9 @@ startup document. The EC2 instance configuration scripts `cloudinit.sh.tftpl` an
 | `pyproject.jupyter.toml` | Python dependencies for the Jupyter environment |
 | `pyproject.kernel.toml` | Python dependencies for an additional Jupyter kernel |
 | `jupyter_server_config.py` | Jupyter server settings |
+| `claude-managed-settings.json` | Claude Code system settings (Bedrock, no auto-update) |
+| `codex-config.toml` | Codex system configuration (Bedrock provider and model) |
+| `pick-codex-model.py` | Picks the Codex model from the Codex release's catalog at image build |
 | `auth-sidecar/` | Go sources and Dockerfile for the AWS-identity token validator |
 | `dockerfile.logrotator` | Log rotation sidecar container |
 | `logrotator-start.sh.tftpl` | Logrotate configuration |
@@ -393,6 +436,11 @@ The template provides one variable preset:
 | additional_ebs_mounts | `list(map(string))` | `[]` | Elastic block stores to mount on the notebook home directory |
 | additional_efs_mounts | `list(map(string))` | `[]` | Elastic file systems to mount on the notebook home directory |
 | ebs_snapshot_ids | `map(string)` | `{}` | Map of volume name to the EBS snapshot id to create that volume from |
+| claude_code_version | `string` | `2.1.302` | The Claude Code version installed in the Jupyter image |
+| codex_version | `string` | `0.163.0` | The Codex CLI version installed in the Jupyter image |
+| bedrock_enabled | `bool` | `false` | Whether the instance role may invoke Amazon Bedrock models, for Claude Code and Codex |
+| bedrock_inference_scope | `string` | `geo` | The Bedrock inference profiles to use: `geo` (the region's geography) or `global` |
+| bedrock_model_patterns | `list(string)` | `["anthropic.claude-*", "openai.gpt-*"]` | The Bedrock model IDs the instance role may invoke, as IAM wildcards without the inference profile prefix |
 
 ### Outputs
 
