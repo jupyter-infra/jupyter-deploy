@@ -10,6 +10,13 @@ overrides:
   # additional_efs_mounts: []
   # ami_id: null
   # availability_zone: any
+  # bedrock_enabled: false
+  # bedrock_inference_scope: geo
+  # bedrock_model_patterns:
+  #   - anthropic.claude-*
+  #   - openai.gpt-*
+  # claude_code_version: 2.1.302
+  # codex_version: 0.163.0
   # custom_tags: {}
   # ebs_snapshot_ids: {}
   # iam_role_names_allowlist: []
