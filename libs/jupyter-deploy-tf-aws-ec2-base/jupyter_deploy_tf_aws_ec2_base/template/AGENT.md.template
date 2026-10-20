@@ -79,6 +79,51 @@ jd up
 Once `ebs_snapshot_ids` is set, do NOT clear or hand-edit it — `snapshot_id` forces replacement, so
 "tidying" the map recreates live volumes empty.
 
+### Coding agents (Claude Code, Codex) on Amazon Bedrock
+
+The jupyter image ships `claude` and `codex`, configured to call Amazon Bedrock. Bedrock access is
+off by default: set `bedrock_enabled: true` in `overrides:` of `variables.yaml`, then run `jd config`
+and `jd up`. The instance role then gets a policy limited to Bedrock inference, and the jupyter
+container reads its credentials from the instance metadata service.
+
+IMPORTANT: every user of the app shares the instance role, and therefore the same Bedrock
+credentials. Bedrock usage is not attributable per user: CloudTrail records every call under the
+instance role. Make sure the deployer accepts that before enabling Bedrock.
+
+The variables:
+- `bedrock_enabled` attaches the Bedrock policy to the instance role
+- `bedrock_model_patterns` lists the models the role may invoke (IAM wildcards)
+- `bedrock_inference_scope` is `geo` (requests stay in the region's geography) or `global`;
+  Codex has no geographic profile outside the US, so it needs `global` there
+- `claude_code_version` and `codex_version` pin the CLIs in the image; each CLI's default model
+  follows its version (Codex's is the one its release recommends for the inference profile prefix,
+  set at image build time)
+
+Verify from the jupyter container, headless (no first-run dialogs):
+
+```bash
+jd server exec -- "claude -p 'Reply with OK'"
+jd server exec -- "codex exec --skip-git-repo-check 'Reply with OK'"
+```
+
+IMPORTANT: in an account that never used a model, the first invocation enables it, through an AWS
+Marketplace subscription that the instance role cannot start, and accepts the model provider's
+EULA. Anthropic models also need a one-time first-time-use form with the deployer's company details.
+The deployer must enable each model in Bedrock for the account and region, for example by sending
+one prompt from the Bedrock console playground. These are the deployer's decisions: never invoke a
+model, accept an agreement or submit the form on their behalf.
+
+Troubleshooting:
+- **AccessDeniedException on every model, or Codex reports no model**: `bedrock_enabled` is
+  `false`. Set it to `true`, then run `jd config` and `jd up`.
+- **AccessDeniedException naming a model or inference profile**: the model is outside
+  `bedrock_model_patterns`, or its inference profile is outside `bedrock_inference_scope` (Codex
+  outside the US needs `global`).
+- **Codex's model reads `unset: ...`**: the deployment gives Codex no model to use; the placeholder
+  in `/etc/codex/config.toml` names the variable to change.
+- **AccessDeniedException on a model the patterns allow**: the model was never enabled in the
+  account and region; see above.
+
 ### View the full terraform logs
 
 {{ history-logs-instructions }}
@@ -140,6 +185,8 @@ The EC2 instance runs the docker services.
 - `/opt/docker/docker-startup.sh` - Docker services startup script
 - `/opt/docker/dockerfile.jupyter` - Jupyter container Dockerfile
 - `/opt/docker/traefik.yml` - Traefik reverse proxy configuration
+- `/opt/docker/claude-managed-settings.json`, `/opt/docker/codex-config.toml` - Coding agent system
+  configs, copied in the jupyter image to `/etc/claude-code/managed-settings.json` and `/etc/codex/config.toml`
 
 ### TLS certificates
 - `/opt/docker/acme.json` - TLS certs issued by Let's Encrypt
