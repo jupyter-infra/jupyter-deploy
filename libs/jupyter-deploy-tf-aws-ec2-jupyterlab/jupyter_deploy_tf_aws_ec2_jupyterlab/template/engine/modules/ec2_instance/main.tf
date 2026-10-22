@@ -122,6 +122,14 @@ resource "aws_instance" "ec2_jupyter_server" {
   # instance to reach SSM/S3/STS and for the client proxy to dial it; there is no EIP.
   associate_public_ip_address = true
 
+  # IMDSv2 only. A hop limit of 2, not the default 1, lets the jupyter container (on a docker
+  # bridge network, one hop further) read the instance role credentials for Bedrock.
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
   tags = merge(
     var.combined_tags,
     {

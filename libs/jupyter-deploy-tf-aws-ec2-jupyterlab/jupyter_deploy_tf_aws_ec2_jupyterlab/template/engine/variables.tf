@@ -527,3 +527,100 @@ variable "ebs_snapshot_ids" {
   EOT
   type        = map(string)
 }
+
+variable "claude_code_version" {
+  description = <<-EOT
+    The Claude Code version installed in the jupyter image.
+
+    Changing it rebuilds the image on the next `jd up`.
+
+    Example: 2.1.302
+  EOT
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+$", var.claude_code_version))
+    error_message = "claude_code_version must be an exact version (e.g. 2.1.302)."
+  }
+}
+
+variable "codex_version" {
+  description = <<-EOT
+    The Codex CLI version installed in the jupyter image.
+
+    Changing it rebuilds the image on the next `jd up`.
+
+    Example: 0.163.0
+  EOT
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+$", var.codex_version))
+    error_message = "codex_version must be an exact version (e.g. 0.163.0)."
+  }
+}
+
+variable "bedrock_enabled" {
+  description = <<-EOT
+    Whether the instance role may call Amazon Bedrock, so that Claude Code and
+    Codex work out of the box in a JupyterLab terminal.
+
+    When enabled, the instance role gets a policy limited to Bedrock inference on
+    the models matching bedrock_model_patterns. The jupyter container reads the
+    instance role credentials from the instance metadata service.
+
+    Bedrock enables a model on its first invocation in the account, which takes AWS
+    Marketplace permissions the instance role does not have: invoke each model once as
+    an admin (e.g. in the Bedrock console playground) before using it here. Anthropic
+    models also require the one-time first-time-use form.
+
+    Recommended: false
+  EOT
+  type        = bool
+}
+
+variable "bedrock_inference_scope" {
+  description = <<-EOT
+    Where Bedrock may serve the coding agents' requests from.
+
+    "geo" uses the cross-region inference profiles of the deployment region's
+    geography (e.g. us.anthropic.* in us-west-2): requests stay within that geography.
+    "global" uses the global inference profiles (global.anthropic.*): more capacity,
+    but requests may be served from any commercial region.
+
+    Bedrock offers the OpenAI models through US and global inference profiles only:
+    outside the US, Codex needs "global".
+
+    Recommended: geo
+  EOT
+  type        = string
+
+  validation {
+    condition     = contains(["geo", "global"], var.bedrock_inference_scope)
+    error_message = "bedrock_inference_scope must be \"geo\" or \"global\"."
+  }
+}
+
+variable "bedrock_model_patterns" {
+  description = <<-EOT
+    Bedrock model IDs the instance role may invoke, as IAM wildcard patterns without
+    the inference profile prefix (e.g. "anthropic.claude-sonnet-*").
+
+    Covers both Claude Code (anthropic.*) and Codex (openai.*) models. Claude Code picks
+    its default model per release, which the patterns must keep allowed; Codex uses the
+    best model its release offers among the allowed ones.
+
+    Example: ["anthropic.claude-*", "openai.gpt-*"]
+  EOT
+  type        = list(string)
+
+  validation {
+    condition     = length(var.bedrock_model_patterns) > 0
+    error_message = "bedrock_model_patterns must list at least one pattern; disable bedrock_enabled to grant none."
+  }
+
+  validation {
+    condition     = alltrue([for p in var.bedrock_model_patterns : can(regex("^[a-z0-9][a-z0-9.*:-]*$", p))])
+    error_message = "bedrock_model_patterns entries must be model IDs or IAM wildcards (lowercase letters, digits, '.', '-', ':', '*'), without an inference profile prefix or ARN."
+  }
+}

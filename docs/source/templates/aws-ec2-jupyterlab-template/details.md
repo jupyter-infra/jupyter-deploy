@@ -51,6 +51,11 @@ The template creates an IAM role for the EC2 instance with permissions for SSM, 
 deployment S3 bucket, write access to the certificate-pin SSM parameter, and (optionally) EFS
 access.
 
+With `bedrock_enabled` set to `true`, the role may also invoke the Bedrock models matching
+`bedrock_model_patterns`, through the deployment region's inference profiles that
+`bedrock_inference_scope` selects. The instance requires IMDSv2 with a hop limit of 2, so that the
+Jupyter container can read the role credentials.
+
 The template creates no secrets: authentication relies on short-lived AWS-identity tokens minted
 locally, so there is no OAuth client secret or certificate secret to store.
 
@@ -74,6 +79,9 @@ startup document. The EC2 instance configuration scripts `cloudinit.sh.tftpl` an
 | `pyproject.jupyter.toml` | Python dependencies for the Jupyter environment |
 | `pyproject.kernel.toml` | Python dependencies for an additional Jupyter kernel |
 | `jupyter_server_config.py` | Jupyter server settings |
+| `claude-managed-settings.json` | Claude Code system settings (Bedrock, no auto-update) |
+| `codex-config.toml` | Codex system configuration (Bedrock provider and model) |
+| `pick-codex-model.py` | Picks the Codex model from the Codex release's catalog at image build |
 | `auth-sidecar/` | Go sources and Dockerfile for the AWS-identity token validator |
 | `dockerfile.logrotator` | Log rotation sidecar container |
 | `logrotator-start.sh.tftpl` | Logrotate configuration |
@@ -142,6 +150,11 @@ The template provides one variable preset:
 | additional_ebs_mounts | `list(map(string))` | `[]` | Elastic block stores to mount on the notebook home directory |
 | additional_efs_mounts | `list(map(string))` | `[]` | Elastic file systems to mount on the notebook home directory |
 | ebs_snapshot_ids | `map(string)` | `{}` | Map of volume name to the EBS snapshot id to create that volume from |
+| claude_code_version | `string` | `2.1.302` | The Claude Code version installed in the Jupyter image |
+| codex_version | `string` | `0.163.0` | The Codex CLI version installed in the Jupyter image |
+| bedrock_enabled | `bool` | `false` | Whether the instance role may invoke Amazon Bedrock models, for Claude Code and Codex |
+| bedrock_inference_scope | `string` | `geo` | The Bedrock inference profiles to use: `geo` (the region's geography) or `global` |
+| bedrock_model_patterns | `list(string)` | `["anthropic.claude-*", "openai.gpt-*"]` | The Bedrock model IDs the instance role may invoke, as IAM wildcards without the inference profile prefix |
 
 ## Outputs
 

@@ -16,6 +16,19 @@ data "local_file" "jupyter_server_config_uv" {
   filename = "${path.module}/../services/jupyter/jupyter_server_config.py"
 }
 
+# Coding agent config, shared by both flavors through the flat deployment-docker bundle
+data "local_file" "claude_managed_settings" {
+  filename = "${path.module}/../services/jupyter/claude-managed-settings.json"
+}
+
+data "local_file" "codex_config" {
+  filename = "${path.module}/../services/jupyter/codex-config.toml"
+}
+
+data "local_file" "pick_codex_model" {
+  filename = "${path.module}/../services/jupyter/pick-codex-model.py"
+}
+
 # Files for the Pixi environment
 data "local_file" "dockerfile_jupyter_pixi" {
   filename = "${path.module}/../services/jupyter-pixi/dockerfile.jupyter.pixi"
@@ -109,6 +122,11 @@ locals {
   kernel_pyproject_content      = var.jupyter_package_manager == "pixi" ? local.kernel_pixi_content : local.kernel_uv_content
   jupyter_toml_filename         = var.jupyter_package_manager == "pixi" ? "pixi.jupyter.toml" : "pyproject.jupyter.toml"
 
+  # Codex's model is the best one its release offers for the profile prefix among the
+  # allowed models; empty patterns mean Codex has no model to use. Gated on the flag so
+  # a disabled deployment never consults Codex's catalog at image build.
+  codex_model_patterns = var.bedrock_enabled && local.bedrock_codex_allowed ? join(",", var.bedrock_model_patterns) : ""
+
   # Compute hash of all files that affect docker compose image builds (jupyter, auth-sidecar, log-rotator)
   build_affecting_files = [
     local.dockerfile_content,
@@ -117,6 +135,14 @@ locals {
     local.jupyter_reset_content,
     local.jupyter_server_config_content,
     local.kernel_pyproject_content,
+    data.local_file.claude_managed_settings.content,
+    data.local_file.codex_config.content,
+    data.local_file.pick_codex_model.content,
+    # Build args the compose file passes to the jupyter image.
+    var.claude_code_version,
+    var.codex_version,
+    local.bedrock_profile_prefix,
+    local.codex_model_patterns,
     data.local_file.dockerfile_logrotator.content,
     local.logrotator_start_file,
     data.local_file.auth_sidecar_dockerfile.content,
@@ -147,6 +173,11 @@ locals {
     efs_mounts     = module.volumes.resolved_efs_mounts
     has_gpu        = module.ami_al2023.has_gpu
     has_neuron     = module.ami_al2023.has_neuron
+
+    claude_code_version    = var.claude_code_version
+    codex_version          = var.codex_version
+    bedrock_profile_prefix = local.bedrock_profile_prefix
+    codex_model_patterns   = local.codex_model_patterns
   })
   traefik_config_file         = data.local_file.traefik_yml.content
   traefik_dynamic_config_file = data.local_file.traefik_dynamic_yml.content
@@ -163,7 +194,7 @@ locals {
 locals {
   # Lists of filenames for SSM document downloads
   deployment_scripts_filenames = ["check-status-internal.sh", "get-status.sh", "update-server.sh", "generate-cert.sh", "update-allowlist.sh", "get-allowlist.sh"]
-  deployment_docker_filenames  = ["docker-compose.yml", "traefik.yml", "traefik-dynamic.yml", "dockerfile.jupyter", "jupyter-start.sh", "jupyter-reset.sh", "pyproject.kernel.toml", "jupyter_server_config.py", "dockerfile.logrotator", "logrotator-start.sh", "fluent-bit.conf", "parsers.conf", ".build-manifest"]
+  deployment_docker_filenames  = ["docker-compose.yml", "traefik.yml", "traefik-dynamic.yml", "dockerfile.jupyter", "jupyter-start.sh", "jupyter-reset.sh", "pyproject.kernel.toml", "jupyter_server_config.py", "claude-managed-settings.json", "codex-config.toml", "pick-codex-model.py", "dockerfile.logrotator", "logrotator-start.sh", "fluent-bit.conf", "parsers.conf", ".build-manifest"]
   # auth-sidecar sources live under a subdir so the compose build context is ./auth-sidecar
   deployment_sidecar_filenames = ["Dockerfile", "main.go", "go.mod"]
 
@@ -226,6 +257,18 @@ locals {
     }
     "deployment-docker/jupyter_server_config.py" = {
       content      = local.jupyter_server_config_content
+      content_type = "text/x-python"
+    }
+    "deployment-docker/claude-managed-settings.json" = {
+      content      = data.local_file.claude_managed_settings.content
+      content_type = "application/json"
+    }
+    "deployment-docker/codex-config.toml" = {
+      content      = data.local_file.codex_config.content
+      content_type = "text/plain"
+    }
+    "deployment-docker/pick-codex-model.py" = {
+      content      = data.local_file.pick_codex_model.content
       content_type = "text/x-python"
     }
     "deployment-docker/traefik.yml" = {
@@ -376,6 +419,9 @@ DOC
     fileexists("${path.module}/../services/jupyter/jupyter_server_config.py"),
     fileexists("${path.module}/../services/jupyter/pyproject.jupyter.toml"),
     fileexists("${path.module}/../services/jupyter/pyproject.kernel.toml"),
+    fileexists("${path.module}/../services/jupyter/claude-managed-settings.json"),
+    fileexists("${path.module}/../services/jupyter/codex-config.toml"),
+    fileexists("${path.module}/../services/jupyter/pick-codex-model.py"),
     fileexists("${path.module}/../services/jupyter-pixi/dockerfile.jupyter.pixi"),
     fileexists("${path.module}/../services/jupyter-pixi/jupyter-start-pixi.sh"),
     fileexists("${path.module}/../services/jupyter-pixi/jupyter-reset-pixi.sh"),
@@ -404,6 +450,9 @@ DOC
     length(data.local_file.jupyter_server_config_uv.content) > 0,
     length(data.local_file.pyproject_jupyter.content) > 0,
     length(data.local_file.pyproject_kernel_uv.content) > 0,
+    length(data.local_file.claude_managed_settings.content) > 0,
+    length(data.local_file.codex_config.content) > 0,
+    length(data.local_file.pick_codex_model.content) > 0,
     length(data.local_file.dockerfile_jupyter_pixi.content) > 0,
     length(data.local_file.jupyter_start_pixi.content) > 0,
     length(data.local_file.jupyter_reset_pixi.content) > 0,

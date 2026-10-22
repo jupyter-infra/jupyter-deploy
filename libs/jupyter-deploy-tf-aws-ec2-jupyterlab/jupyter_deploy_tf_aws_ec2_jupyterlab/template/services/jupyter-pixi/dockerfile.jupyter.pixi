@@ -1,8 +1,25 @@
+ARG CLAUDE_CODE_VERSION
+ARG CODEX_VERSION
+
+# Coding agent CLIs. The npm packages wrap native binaries but need a newer node
+# than trixie ships, so install them here and copy the prefix (plus node, for the
+# codex launcher) into the final image.
+FROM node:22-trixie-slim AS ai-clis
+ARG CLAUDE_CODE_VERSION
+ARG CODEX_VERSION
+RUN test -n "$CLAUDE_CODE_VERSION" && test -n "$CODEX_VERSION" && \
+    npm install -g --prefix /opt/ai-clis \
+      "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+      "@openai/codex@${CODEX_VERSION}" && \
+    npm cache clean --force
+
 FROM ghcr.io/astral-sh/uv:python3.13-trixie-slim
 
 ARG SERVICE_GID
 ARG DOCKER_GID
 ARG SERVICE_UID
+ARG CODEX_PROFILE_PREFIX
+ARG CODEX_MODEL_PATTERNS
 
 USER root
 
@@ -14,10 +31,14 @@ RUN groupadd -g ${DOCKER_GID} docker && \
 RUN useradd -m -s /bin/bash -u ${SERVICE_UID} -g ${SERVICE_GID} -G docker jovyan
 
 # system dependencies
+# git for the coding agents' repo awareness; procps (ps) for the Codex TUI,
+# which tracks its background app-server by pid.
 RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     ca-certificates \
     curl \
-    gnupg
+    git \
+    gnupg \
+    procps
 
 # docker
 RUN install -m 0755 -d /etc/apt/keyrings && \
@@ -54,6 +75,35 @@ COPY pixi.jupyter.toml /opt/pixi/jupyter/pixi.toml
 WORKDIR /opt/pixi/jupyter
 RUN pixi install
 
+# coding agents, installed outside /home/jovyan, which the data volume mounts over.
+# Both CLIs reach Bedrock with the instance role credentials (IMDS); the region and
+# inference profile prefix come from the docker-compose environment.
+COPY --from=ai-clis /usr/local/bin/node /usr/local/bin/node
+COPY --from=ai-clis /opt/ai-clis /opt/ai-clis
+RUN ln -s /opt/ai-clis/bin/claude /usr/local/bin/claude && \
+    ln -s /opt/ai-clis/bin/codex /usr/local/bin/codex
+COPY claude-managed-settings.json /etc/claude-code/managed-settings.json
+COPY codex-config.toml /etc/codex/config.toml
+# Codex's model: the best one this Codex release offers for the inference profile prefix among
+# the models IAM allows, so it follows the pinned version. Where Codex has no model to use, an
+# explicit placeholder makes its error name the fix: without a model line it would fall back to
+# a built-in default that IAM denies. With a usable prefix and allowed models, finding no model
+# fails the build.
+COPY pick-codex-model.py /tmp/pick-codex-model.py
+RUN unset_model() { sed -i "s|@CODEX_MODEL@|unset: $1|" /etc/codex/config.toml; } && \
+    if [ -z "$CODEX_MODEL_PATTERNS" ]; then \
+      unset_model "bedrock_enabled is false or no openai model allowed by bedrock_model_patterns"; \
+    elif [ "$CODEX_PROFILE_PREFIX" != "us" ] && [ "$CODEX_PROFILE_PREFIX" != "global" ]; then \
+      unset_model "no ${CODEX_PROFILE_PREFIX:-geographic} OpenAI inference profiles, set bedrock_inference_scope to global"; \
+    else \
+      model="$(codex debug models | python3 /tmp/pick-codex-model.py "$CODEX_PROFILE_PREFIX" "$CODEX_MODEL_PATTERNS")" && \
+      if [ -z "$model" ]; then \
+        echo "codex debug models lists no ${CODEX_PROFILE_PREFIX}. model allowed by ${CODEX_MODEL_PATTERNS}" >&2; exit 1; \
+      fi && \
+      sed -i "s|@CODEX_MODEL@|${model}|" /etc/codex/config.toml; \
+    fi && \
+    rm /tmp/pick-codex-model.py
+
 # start-up scripts
 COPY jupyter-start.sh /usr/local/bin/
 COPY jupyter-reset.sh /usr/local/bin/
@@ -61,7 +111,7 @@ COPY jupyter-reset.sh /usr/local/bin/
 # dirs ownership
 RUN chmod -R a+r /opt/pixi
 RUN chmod -R a+r /opt/uv
-RUN chmod -R a+r /etc/jupyter
+RUN chmod -R a+r /etc/jupyter /etc/claude-code /etc/codex
 RUN chmod +x /usr/local/bin/jupyter-start.sh
 RUN chmod +x /usr/local/bin/jupyter-reset.sh
 RUN chown -R jovyan:jovyan /home/jovyan

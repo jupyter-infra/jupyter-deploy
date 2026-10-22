@@ -117,6 +117,14 @@ resource "aws_instance" "ec2_jupyter_server" {
   key_name               = var.key_pair_name
   iam_instance_profile   = var.instance_profile_name
 
+  # IMDSv2 only. A hop limit of 2, not the default 1, lets the jupyter container (on a docker
+  # bridge network, one hop further) read the instance role credentials for Bedrock.
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
   tags = merge(
     var.combined_tags,
     {

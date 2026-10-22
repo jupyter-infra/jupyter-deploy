@@ -11,6 +11,10 @@ services:
         - SERVICE_UID=$${SERVICE_UID}
         - SERVICE_GID=$${SERVICE_GID}
         - DOCKER_GID=$${DOCKER_GID}
+        - CLAUDE_CODE_VERSION=${claude_code_version}
+        - CODEX_VERSION=${codex_version}
+        - CODEX_PROFILE_PREFIX=${bedrock_profile_prefix}
+        - CODEX_MODEL_PATTERNS=${codex_model_patterns}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8888/lab/favicon.ico"]
@@ -29,6 +33,7 @@ services:
       - web
     environment:
       - AWS_REGION=${aws_region}
+      - ANTHROPIC_BEDROCK_REGION_PREFIX=${bedrock_profile_prefix}
     depends_on:
       - fluent-bit
     labels:
