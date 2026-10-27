@@ -117,8 +117,9 @@ class TestPickCodexModel(unittest.TestCase):
         )
         fake.chmod(0o755)
 
-    def _run(self, prefix: str, patterns: str, **env: str) -> tuple[int, str, str]:
-        self.config.write_text('model_provider = "amazon-bedrock-runtime"\nmodel = "@CODEX_MODEL@"\n')
+    def _run(self, prefix: str, patterns: str, reset: bool = True, **env: str) -> tuple[int, str, str]:
+        if reset:
+            self.config.write_text('model_provider = "amazon-bedrock-runtime"\nmodel = "@CODEX_MODEL@"\n')
         result = subprocess.run(
             [sys.executable, "-I", str(self.SCRIPT), prefix, patterns, str(self.config)],
             env={**os.environ, "PATH": f"{self.tmp}{os.pathsep}{os.environ['PATH']}", **env},
@@ -145,8 +146,10 @@ class TestPickCodexModel(unittest.TestCase):
         self.assertFalse(self.codex_called())
 
     def test_empty_prefix_names_geographic(self) -> None:
-        _, cfg, _ = self._run("", "openai.gpt-*")
+        rc, cfg, _ = self._run("", "openai.gpt-*")
+        self.assertEqual(rc, 0)
         self.assertIn("unset: no geographic OpenAI", cfg)
+        self.assertFalse(self.codex_called())
 
     def test_usable_prefix_picks_lowest_priority(self) -> None:
         rc, cfg, _ = self._run("us", "openai.gpt-*")
@@ -168,12 +171,20 @@ class TestPickCodexModel(unittest.TestCase):
         rc, cfg, _ = self._run("us", "openai.gpt-*", CODEX_BIN=str(pinned))
         self.assertEqual(rc, 0)
         self.assertIn('model = "us.openai.gpt-5-codex"', cfg)
+        self.assertTrue(self.codex_called())
 
     def test_no_matching_model_fails_the_build(self) -> None:
         rc, cfg, err = self._run("us", "openai.o3-*")
         self.assertEqual(rc, 1)
         self.assertIn("codex debug models lists no us. model allowed by openai.o3-*", err)
         self.assertIn("@CODEX_MODEL@", cfg)
+
+    def test_missing_placeholder_fails_the_build(self) -> None:
+        self._run("us", "openai.gpt-*")
+        rc, cfg, err = self._run("us", "openai.gpt-*", reset=False)
+        self.assertEqual(rc, 1)
+        self.assertIn("has no @CODEX_MODEL@ placeholder", err)
+        self.assertIn('model = "us.openai.gpt-5-codex"', cfg)
 
 
 class TestBedrockIam(unittest.TestCase):

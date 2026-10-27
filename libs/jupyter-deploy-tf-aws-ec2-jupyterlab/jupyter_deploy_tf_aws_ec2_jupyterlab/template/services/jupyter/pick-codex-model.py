@@ -28,7 +28,7 @@ def pick() -> str:
     if prefix not in ("us", "global"):
         return f"unset: no {prefix or 'geographic'} OpenAI inference profiles, set bedrock_inference_scope to global"
     catalog = subprocess.run(
-        [os.environ.get("CODEX_BIN", "codex"), "debug", "models"], capture_output=True, text=True, check=True
+        [os.environ.get("CODEX_BIN", "codex"), "debug", "models"], stdout=subprocess.PIPE, text=True, check=True
     )
     dotted = f"{prefix}."
     allowed = [
@@ -43,4 +43,7 @@ def pick() -> str:
 
 
 config = Path(config_path)
-config.write_text(config.read_text().replace("@CODEX_MODEL@", pick()))
+text = config.read_text()
+if "@CODEX_MODEL@" not in text:
+    sys.exit(f"{config} has no @CODEX_MODEL@ placeholder")
+config.write_text(text.replace("@CODEX_MODEL@", pick()))
