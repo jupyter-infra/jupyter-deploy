@@ -122,8 +122,8 @@ resource "aws_instance" "ec2_jupyter_server" {
   # instance to reach SSM/S3/STS and for the client proxy to dial it; there is no EIP.
   associate_public_ip_address = true
 
-  # IMDSv2 only. A hop limit of 2, not the default 1, lets the jupyter container (on a docker
-  # bridge network, one hop further) read the instance role credentials for Bedrock.
+  # IMDSv2 only. Hop limit 2 (default 1) reaches the bedrock-sidecar (assumes the bedrock-app role)
+  # one docker-bridge hop away; the jupyter network is firewalled off IMDS anyway.
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
