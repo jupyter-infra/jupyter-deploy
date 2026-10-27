@@ -9,3 +9,8 @@ output "execution_role_name" {
   description = "Name of the IAM role for the EC2 instance."
   value       = aws_iam_role.execution_role.name
 }
+
+output "execution_role_arn" {
+  description = "ARN of the IAM role for the EC2 instance."
+  value       = aws_iam_role.execution_role.arn
+}

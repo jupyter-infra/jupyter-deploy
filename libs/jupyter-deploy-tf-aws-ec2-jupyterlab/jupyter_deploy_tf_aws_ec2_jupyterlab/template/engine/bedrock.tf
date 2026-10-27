@@ -1,7 +1,8 @@
 # Bedrock access for the coding agents (Claude Code, Codex) in the jupyter image.
 # Both call bedrock-runtime in the deployment region through cross-region inference
-# profiles, with the instance role credentials the jupyter container reads from IMDS
-# (hop limit 2, see modules/ec2_instance), so one IAM policy covers both.
+# profiles, so one IAM policy covers both. The policy sits on a dedicated role the
+# instance role may assume: the jupyter container never holds the instance role, only
+# this Bedrock-only one, so a prompt-injected agent cannot reach the host's AWS grants.
 locals {
   # The cross-region inference profile prefix of the deployment region's geography,
   # as Claude Code derives it from AWS_REGION. Pinned on both clients
@@ -87,6 +88,26 @@ resource "aws_iam_policy" "bedrock_inference" {
   name_prefix = "bedrock-inference-"
   tags        = local.combined_tags
   policy      = data.aws_iam_policy_document.bedrock_inference.json
+}
+
+data "aws_iam_policy_document" "bedrock_app_trust" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "AWS"
+      identifiers = [module.ec2_iam_role.execution_role_arn]
+    }
+  }
+}
+
+resource "aws_iam_role" "bedrock_app" {
+  count                 = var.bedrock_enabled ? 1 : 0
+  name_prefix           = "bedrock-app-"
+  description           = "Bedrock inference for the coding agents in the jupyter container; assumed by the instance role."
+  assume_role_policy    = data.aws_iam_policy_document.bedrock_app_trust.json
+  max_session_duration  = 3600
+  force_detach_policies = true
+  tags                  = local.combined_tags
 
   lifecycle {
     precondition {
@@ -103,8 +124,29 @@ resource "aws_iam_policy" "bedrock_inference" {
 
 resource "aws_iam_role_policy_attachment" "bedrock_inference" {
   count      = var.bedrock_enabled ? 1 : 0
-  role       = module.ec2_iam_role.execution_role_name
+  role       = aws_iam_role.bedrock_app[0].name
   policy_arn = aws_iam_policy.bedrock_inference[0].arn
+}
+
+data "aws_iam_policy_document" "assume_bedrock_app" {
+  count = var.bedrock_enabled ? 1 : 0
+  statement {
+    actions   = ["sts:AssumeRole"]
+    resources = [aws_iam_role.bedrock_app[0].arn]
+  }
+}
+
+resource "aws_iam_policy" "assume_bedrock_app" {
+  count       = var.bedrock_enabled ? 1 : 0
+  name_prefix = "assume-bedrock-app-"
+  tags        = local.combined_tags
+  policy      = data.aws_iam_policy_document.assume_bedrock_app[0].json
+}
+
+resource "aws_iam_role_policy_attachment" "assume_bedrock_app" {
+  count      = var.bedrock_enabled ? 1 : 0
+  role       = module.ec2_iam_role.execution_role_name
+  policy_arn = aws_iam_policy.assume_bedrock_app[0].arn
 }
 
 # Bedrock offers the OpenAI models through US and global inference profiles only.

@@ -131,7 +131,6 @@ class TestBedrockIam(unittest.TestCase):
 
         self.assertEqual(policy["count"], "${var.bedrock_enabled ? 1 : 0}")
         self.assertEqual(attachment["count"], "${var.bedrock_enabled ? 1 : 0}")
-        self.assertEqual(attachment["role"], "${module.ec2_iam_role.execution_role_name}")
 
         locals_ = {k: v for block in bedrock_tf["locals"] for k, v in block.items()}
         self.assertIn(
@@ -154,6 +153,35 @@ class TestBedrockIam(unittest.TestCase):
             conditions = {c["variable"]: c for c in statement.get("condition", [])}
             self.assertIn("bedrock:InferenceProfileArn", conditions, statement["sid"])
             self.assertEqual(conditions["bedrock:InferenceProfileArn"]["values"], "${local.bedrock_profile_arns}")
+
+    def test_app_role_is_gated_and_trusts_the_instance_role(self) -> None:
+        tf = _hcl(ENGINE_PATH / "bedrock.tf")
+        resources = {(t, n): body for r in tf["resource"] for t, named in r.items() for n, body in named.items()}
+        role = resources[("aws_iam_role", "bedrock_app")]
+        self.assertEqual(role["count"], "${var.bedrock_enabled ? 1 : 0}")
+        self.assertEqual(role["name_prefix"], "bedrock-app-")
+        self.assertEqual(role["max_session_duration"], 3600)
+        self.assertEqual(
+            resources[("aws_iam_role_policy_attachment", "bedrock_inference")]["role"],
+            "${aws_iam_role.bedrock_app[0].name}",
+        )
+        self.assertEqual(
+            resources[("aws_iam_role_policy_attachment", "assume_bedrock_app")]["role"],
+            "${module.ec2_iam_role.execution_role_name}",
+        )
+        self.assertEqual(resources[("aws_iam_policy", "assume_bedrock_app")]["name_prefix"], "assume-bedrock-app-")
+        data = {(t, n): body for d in tf["data"] for t, named in d.items() for n, body in named.items()}
+        trust = data[("aws_iam_policy_document", "bedrock_app_trust")]
+        self.assertEqual(
+            trust["statement"][0]["principals"][0]["identifiers"], ["${module.ec2_iam_role.execution_role_arn}"]
+        )
+        self.assertEqual(
+            data[("aws_iam_policy_document", "assume_bedrock_app")]["statement"][0]["actions"], ["sts:AssumeRole"]
+        )
+
+    def test_instance_role_module_exports_its_arn(self) -> None:
+        outputs = _hcl(ENGINE_PATH / "modules" / "ec2_iam_role" / "outputs.tf")["output"]
+        self.assertIn("execution_role_arn", {k for o in outputs for k in o})
 
 
 class TestInstanceMetadata(unittest.TestCase):
