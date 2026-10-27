@@ -1,0 +1,2 @@
+[default]
+credential_process = /bin/cat /run/bedrock-creds/credentials.json

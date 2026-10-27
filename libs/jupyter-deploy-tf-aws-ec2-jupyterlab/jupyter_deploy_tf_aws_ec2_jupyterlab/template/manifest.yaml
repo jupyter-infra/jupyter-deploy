@@ -50,6 +50,7 @@ services:
 - jupyter
 - traefik
 - auth-sidecar
+- bedrock-sidecar
 volumes:
   # Volume identity is the mount path the user sees in the app: `home`, `home/<mount_point>`.
   # Every field below references a values: entry or a path -- no terraform identifiers appear here, so a

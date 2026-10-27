@@ -275,3 +275,78 @@ class TestInstanceMetadata(unittest.TestCase):
 
         self.assertEqual(metadata_options["http_tokens"], "required")
         self.assertEqual(metadata_options["http_put_response_hop_limit"], 2)
+
+
+class TestBedrockSidecarWiring(unittest.TestCase):
+    """The credential sidecar only exists when Bedrock is enabled, and every consumer knows its name."""
+
+    AWS_CONFIG = "[default]\ncredential_process = /bin/cat /run/bedrock-creds/credentials.json\n"
+
+    def test_compose_sidecar_block_is_gated_and_mounts_credentials(self) -> None:
+        text = (SERVICES_PATH / "docker-compose.yml.tftpl").read_text()
+        self.assertIn("%{ if bedrock_enabled ~}", text)
+        sidecar = re.search(r"^  bedrock-sidecar:\n(.*?)^  \S", text, re.S | re.M)
+        assert sidecar is not None, "no bedrock-sidecar service in docker-compose"
+        for snippet in (
+            "build:\n      context: ./bedrock-sidecar",
+            "container_name: bedrock-sidecar",
+            "BEDROCK_APP_ROLE_ARN=${bedrock_app_role_arn}",
+            "- bedrock-creds:/creds",
+            'test: ["CMD", "/refresh.sh", "-healthcheck"]',
+            'tag: "docker.bedrock-sidecar"',
+        ):
+            self.assertIn(snippet, sidecar.group(1))
+        jupyter = re.search(r"^  jupyter:\n(.*?)^  \S", text, re.S | re.M)
+        assert jupyter is not None
+        self.assertIn("- bedrock-creds:/run/bedrock-creds:ro", jupyter.group(1))
+        self.assertIn("AWS_CONFIG_FILE=/etc/aws/config", jupyter.group(1))
+        self.assertIn("volumes:\n  bedrock-creds:", text)
+
+    def test_dockerfiles_bake_the_aws_config(self) -> None:
+        for dockerfile in DOCKERFILES:
+            with self.subTest(dockerfile=dockerfile.name):
+                self.assertIn("COPY aws-config /etc/aws/config", _instructions(dockerfile))
+        self.assertEqual((SERVICES_PATH / "jupyter" / "aws-config").read_text(), self.AWS_CONFIG)
+
+    def test_services_tf_passes_sidecar_inputs(self) -> None:
+        text = (ENGINE_PATH / "services.tf").read_text()
+        for snippet in (
+            "bedrock_enabled      = var.bedrock_enabled",
+            'bedrock_app_role_arn = var.bedrock_enabled ? aws_iam_role.bedrock_app[0].arn : ""',
+            '"deployment-docker/bedrock-sidecar/Dockerfile"',
+            '"deployment-docker/bedrock-sidecar/refresh.sh"',
+            "deployment-docker/aws-config",
+        ):
+            self.assertIn(snippet, text)
+
+    def test_image_build_inputs_cover_versions_flag_and_sidecar(self) -> None:
+        match = re.search(r"build_affecting_files = \[(.*?)\n  \]", (ENGINE_PATH / "services.tf").read_text(), re.S)
+        assert match is not None, "no build_affecting_files list in services.tf"
+        for snippet in (
+            "var.claude_code_version",
+            "var.codex_version",
+            "var.bedrock_enabled",
+            "local.bedrock_profile_prefix",
+            "local.codex_model_patterns",
+            "bedrock_sidecar_dockerfile.content",
+            "bedrock_sidecar_refresh.content",
+            "aws_config.content",
+        ):
+            self.assertIn(snippet, match.group(1))
+
+    def test_status_requires_sidecar_only_when_enabled(self) -> None:
+        text = (SERVICES_PATH / "commands" / "check-status-internal.sh").read_text()
+        self.assertIn('REQUIRED_CONTAINERS+=("bedrock-sidecar")', text)
+        self.assertIn("BEDROCK_ENABLED", text)
+
+    def test_commands_and_manifest_know_the_sidecar(self) -> None:
+        commands = (ENGINE_PATH / "commands.tf").read_text()
+        for document in ("ssm_server_update", "ssm_server_logs"):
+            with self.subTest(document=document):
+                body = re.search(rf"{document}\s*=\s*<<DOC\n(.*?)\nDOC", commands, re.S)
+                assert body is not None, f"no {document} heredoc"
+                self.assertIn("      - bedrock-sidecar\n", body.group(1))
+        self.assertIn("- bedrock-sidecar", (TEMPLATE_PATH / "manifest.yaml").read_text())
+        self.assertIn(
+            "Match               docker.bedrock-sidecar", (SERVICES_PATH / "fluent-bit" / "fluent-bit.conf").read_text()
+        )

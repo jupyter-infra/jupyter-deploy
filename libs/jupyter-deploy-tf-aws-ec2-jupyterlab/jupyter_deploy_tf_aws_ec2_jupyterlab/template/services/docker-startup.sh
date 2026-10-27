@@ -42,6 +42,7 @@ JUPYTER_MEM_LIMIT_MB=${JUPYTER_MEM_LIMIT_MB}
 JUPYTER_MEM_RESERVATION_MB=${JUPYTER_MEM_RESERVATION_MB}
 ROLE_NAME_ALLOWLIST=${ROLE_NAME_ALLOWLIST}
 USER_NAME_ALLOWLIST=${USER_NAME_ALLOWLIST}
+BEDROCK_ENABLED=$(grep -q 'container_name: bedrock-sidecar' docker-compose.yml && echo true || echo false)
 EOFENV
 echo "Saved environment file /opt/docker/.env"
 

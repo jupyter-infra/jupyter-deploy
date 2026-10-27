@@ -102,6 +102,19 @@ data "local_file" "auth_sidecar_go_mod" {
   filename = "${path.module}/../services/auth-sidecar/go.mod"
 }
 
+# Bedrock credential sidecar (assumes the app role, publishes credentials for the jupyter container)
+data "local_file" "bedrock_sidecar_dockerfile" {
+  filename = "${path.module}/../services/bedrock-sidecar/Dockerfile"
+}
+
+data "local_file" "bedrock_sidecar_refresh" {
+  filename = "${path.module}/../services/bedrock-sidecar/refresh.sh"
+}
+
+data "local_file" "aws_config" {
+  filename = "${path.module}/../services/jupyter/aws-config"
+}
+
 locals {
   pyproject_jupyter_content = data.local_file.pyproject_jupyter.content
 
@@ -143,6 +156,11 @@ locals {
     var.codex_version,
     local.bedrock_profile_prefix,
     local.codex_model_patterns,
+    # The flag adds or removes the sidecar service and the jupyter mount in the compose file.
+    var.bedrock_enabled,
+    data.local_file.aws_config.content,
+    data.local_file.bedrock_sidecar_dockerfile.content,
+    data.local_file.bedrock_sidecar_refresh.content,
     data.local_file.dockerfile_logrotator.content,
     local.logrotator_start_file,
     data.local_file.auth_sidecar_dockerfile.content,
@@ -178,6 +196,9 @@ locals {
     codex_version          = var.codex_version
     bedrock_profile_prefix = local.bedrock_profile_prefix
     codex_model_patterns   = local.codex_model_patterns
+
+    bedrock_enabled      = var.bedrock_enabled
+    bedrock_app_role_arn = var.bedrock_enabled ? aws_iam_role.bedrock_app[0].arn : ""
   })
   traefik_config_file         = data.local_file.traefik_yml.content
   traefik_dynamic_config_file = data.local_file.traefik_dynamic_yml.content
@@ -194,9 +215,11 @@ locals {
 locals {
   # Lists of filenames for SSM document downloads
   deployment_scripts_filenames = ["check-status-internal.sh", "get-status.sh", "update-server.sh", "generate-cert.sh", "update-allowlist.sh", "get-allowlist.sh"]
-  deployment_docker_filenames  = ["docker-compose.yml", "traefik.yml", "traefik-dynamic.yml", "dockerfile.jupyter", "jupyter-start.sh", "jupyter-reset.sh", "pyproject.kernel.toml", "jupyter_server_config.py", "claude-managed-settings.json", "codex-config.toml", "pick-codex-model.py", "dockerfile.logrotator", "logrotator-start.sh", "fluent-bit.conf", "parsers.conf", ".build-manifest"]
+  deployment_docker_filenames  = ["docker-compose.yml", "traefik.yml", "traefik-dynamic.yml", "dockerfile.jupyter", "jupyter-start.sh", "jupyter-reset.sh", "pyproject.kernel.toml", "jupyter_server_config.py", "claude-managed-settings.json", "codex-config.toml", "pick-codex-model.py", "dockerfile.logrotator", "logrotator-start.sh", "fluent-bit.conf", "parsers.conf", ".build-manifest", "aws-config"]
   # auth-sidecar sources live under a subdir so the compose build context is ./auth-sidecar
   deployment_sidecar_filenames = ["Dockerfile", "main.go", "go.mod"]
+  # bedrock-sidecar sources live under a subdir so the compose build context is ./bedrock-sidecar
+  deployment_bedrock_sidecar_filenames = ["Dockerfile", "refresh.sh"]
 
   all_script_files = {
     # Startup scripts (docker-startup only, cloudinit stays in SSM)
@@ -299,6 +322,19 @@ locals {
       content      = local.images_build_hash
       content_type = "text/plain"
     }
+    "deployment-docker/aws-config" = {
+      content      = data.local_file.aws_config.content
+      content_type = "text/plain"
+    }
+    # Bedrock sidecar build context (compose builds ./bedrock-sidecar)
+    "deployment-docker/bedrock-sidecar/Dockerfile" = {
+      content      = data.local_file.bedrock_sidecar_dockerfile.content
+      content_type = "text/plain"
+    }
+    "deployment-docker/bedrock-sidecar/refresh.sh" = {
+      content      = data.local_file.bedrock_sidecar_refresh.content
+      content_type = "text/plain"
+    }
     # Auth sidecar build context (compose builds ./auth-sidecar)
     "deployment-docker/auth-sidecar/Dockerfile" = {
       content      = data.local_file.auth_sidecar_dockerfile.content
@@ -380,7 +416,7 @@ mainSteps:
       runCommand:
         - |
           BUCKET="${module.s3_bucket.bucket_name}"
-          mkdir -p /opt/docker/auth-sidecar
+          mkdir -p /opt/docker/auth-sidecar /opt/docker/bedrock-sidecar
 
           for file in ${join(" ", local.deployment_docker_filenames)}; do
             aws s3 cp s3://$BUCKET/deployment-docker/$file /opt/docker/$file
@@ -388,6 +424,10 @@ mainSteps:
 
           for file in ${join(" ", local.deployment_sidecar_filenames)}; do
             aws s3 cp s3://$BUCKET/deployment-docker/auth-sidecar/$file /opt/docker/auth-sidecar/$file
+          done
+
+          for file in ${join(" ", local.deployment_bedrock_sidecar_filenames)}; do
+            aws s3 cp s3://$BUCKET/deployment-docker/bedrock-sidecar/$file /opt/docker/bedrock-sidecar/$file
           done
 
           aws s3 cp s3://$BUCKET/deployment-scripts/docker-startup.sh /opt/docker/docker-startup.sh
@@ -422,6 +462,9 @@ DOC
     fileexists("${path.module}/../services/jupyter/claude-managed-settings.json"),
     fileexists("${path.module}/../services/jupyter/codex-config.toml"),
     fileexists("${path.module}/../services/jupyter/pick-codex-model.py"),
+    fileexists("${path.module}/../services/jupyter/aws-config"),
+    fileexists("${path.module}/../services/bedrock-sidecar/Dockerfile"),
+    fileexists("${path.module}/../services/bedrock-sidecar/refresh.sh"),
     fileexists("${path.module}/../services/jupyter-pixi/dockerfile.jupyter.pixi"),
     fileexists("${path.module}/../services/jupyter-pixi/jupyter-start-pixi.sh"),
     fileexists("${path.module}/../services/jupyter-pixi/jupyter-reset-pixi.sh"),
@@ -453,6 +496,9 @@ DOC
     length(data.local_file.claude_managed_settings.content) > 0,
     length(data.local_file.codex_config.content) > 0,
     length(data.local_file.pick_codex_model.content) > 0,
+    length(data.local_file.aws_config.content) > 0,
+    length(data.local_file.bedrock_sidecar_dockerfile.content) > 0,
+    length(data.local_file.bedrock_sidecar_refresh.content) > 0,
     length(data.local_file.dockerfile_jupyter_pixi.content) > 0,
     length(data.local_file.jupyter_start_pixi.content) > 0,
     length(data.local_file.jupyter_reset_pixi.content) > 0,

@@ -71,6 +71,9 @@ RUN ln -s /opt/ai-clis/bin/claude /usr/local/bin/claude && \
     ln -s /opt/ai-clis/bin/codex /usr/local/bin/codex
 COPY claude-managed-settings.json /etc/claude-code/managed-settings.json
 COPY codex-config.toml /etc/codex/config.toml
+# The SDK reads the app role's credentials through this file; docker-compose only points
+# AWS_CONFIG_FILE at it when Bedrock is enabled, so a disabled deployment keeps the default chain.
+COPY aws-config /etc/aws/config
 # Codex's model is pinned at build from the installed release's catalog so it follows the pinned
 # version and the models IAM allows; the script documents the placeholder and failure cases.
 COPY pick-codex-model.py /tmp/pick-codex-model.py
@@ -83,7 +86,7 @@ COPY jupyter-reset.sh /usr/local/bin/
 
 # dirs ownership and visibility
 RUN chmod -R a+r /opt/uv
-RUN chmod -R a+r /etc/jupyter /etc/claude-code /etc/codex
+RUN chmod -R a+r /etc/jupyter /etc/claude-code /etc/codex /etc/aws
 RUN chmod +x /usr/local/bin/jupyter-start.sh
 RUN chmod +x /usr/local/bin/jupyter-reset.sh
 RUN chown -R jovyan:jovyan /home/jovyan

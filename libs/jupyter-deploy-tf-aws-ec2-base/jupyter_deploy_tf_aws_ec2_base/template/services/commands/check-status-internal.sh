@@ -4,6 +4,8 @@ set -e
 exec > >(tee -a /var/log/jupyter-deploy/check-status.log) 2>&1
 
 REQUIRED_CONTAINERS=("jupyter" "traefik" "oauth")
+# docker-startup.sh records whether the compose file carries the credential sidecar.
+grep -qs '^BEDROCK_ENABLED=true$' /opt/docker/.env && REQUIRED_CONTAINERS+=("bedrock-sidecar")
 ACME_FILE="/opt/docker/acme.json"
 STARTED_FLAG="/opt/docker/started.txt"
 STATUS_STATE_FILE="/var/run/check-status-state"

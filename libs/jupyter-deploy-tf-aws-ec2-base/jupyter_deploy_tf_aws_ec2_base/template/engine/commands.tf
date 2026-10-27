@@ -152,13 +152,14 @@ parameters:
       - restart
   service:
     type: String
-    description: "The service to act on (all, jupyter, traefik or oauth)."
+    description: "The service to act on (all, jupyter, traefik, oauth or bedrock-sidecar)."
     default: all
     allowedValues:
       - all
       - jupyter
       - traefik
       - oauth
+      - bedrock-sidecar
 mainSteps:
   - action: aws:runShellScript
     name: UpdateServer
@@ -173,12 +174,13 @@ description: Returns the container logs.
 parameters:
   service:
     type: String
-    description: "The service whose logs to print on (jupyter, traefik or oauth)."
+    description: "The service whose logs to print (jupyter, traefik, oauth or bedrock-sidecar)."
     default: jupyter
     allowedValues:
       - jupyter
       - traefik
       - oauth
+      - bedrock-sidecar
   extra:
     type: String
     description: "The additional parameters to pass to docker logs."

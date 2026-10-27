@@ -1,6 +1,7 @@
-# System config; a user's ~/.codex/config.toml overrides it. Credentials and region
-# come from the AWS SDK chain (the instance role through IMDS, AWS_REGION). The model, an
-# inference profile ID, is rendered at build time from the installed release's catalog (see the dockerfile).
+# System config; a user's ~/.codex/config.toml overrides it. Credentials are the bedrock-app
+# role's, read through the credential_process in AWS_CONFIG_FILE (/etc/aws/config, fed by the
+# bedrock-sidecar container); the region is AWS_REGION. The model, an inference profile ID, is
+# rendered at build time from the installed release's catalog (see the dockerfile).
 model_provider = "amazon-bedrock-runtime"
 model = "@CODEX_MODEL@"
 # Hosted web search is a Bedrock Mantle feature, unavailable on bedrock-runtime.

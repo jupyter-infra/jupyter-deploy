@@ -39,6 +39,9 @@ services:
     environment:
       - AWS_REGION=${aws_region}
       - ANTHROPIC_BEDROCK_REGION_PREFIX=${bedrock_profile_prefix}
+%{ if bedrock_enabled ~}
+      - AWS_CONFIG_FILE=/etc/aws/config
+%{ endif ~}
     depends_on:
       - fluent-bit
     labels:
@@ -56,6 +59,9 @@ services:
     volumes:
       - /mnt/jupyter-data:/home/jovyan
       - /var/run/docker.sock:/var/run/docker.sock
+%{ if bedrock_enabled ~}
+      - bedrock-creds:/run/bedrock-creds:ro
+%{ endif ~}
 %{ if length(ebs_mounts) > 0 ~}
 %{ for ebs in ebs_mounts ~}
       - /home/jovyan/${ebs.mount_point}:/home/jovyan/${ebs.mount_point}
@@ -214,6 +220,48 @@ services:
       - web
     environment:
       - TZ=UTC
+%{ if bedrock_enabled ~}
+  bedrock-sidecar:
+    build:
+      context: ./bedrock-sidecar
+      dockerfile: Dockerfile
+    container_name: bedrock-sidecar
+    restart: unless-stopped
+    mem_limit: "256M"
+    mem_reservation: "64M"
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        # Connect to fluent-bit asynchronously and buffer: without this, docker BLOCKS the
+        # container's start until :24224 is reachable, so a `docker compose up` that recreates
+        # fluent-bit alongside its dependents deadlocks (each waits on a fluent-bit that is briefly
+        # down). It also prevents a running container from stalling on stdout if fluent-bit restarts.
+        fluentd-async: "true"
+        tag: "docker.bedrock-sidecar"
+    depends_on:
+      - fluent-bit
+    healthcheck:
+      # Healthy iff the published credentials expire more than 5 min out; the loop refreshes every
+      # 15 min, so a stuck loop turns unhealthy long before the hour-long session actually ends.
+      test: ["CMD", "/refresh.sh", "-healthcheck"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - web
+    environment:
+      - BEDROCK_APP_ROLE_ARN=${bedrock_app_role_arn}
+      - AWS_REGION=${aws_region}
+    volumes:
+      - bedrock-creds:/creds
+# The sidecar publishes the app role's credentials here; jupyter mounts it read-only.
+volumes:
+  bedrock-creds:
+%{ endif ~}
 networks:
   web:
     name: web

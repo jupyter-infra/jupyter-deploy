@@ -169,6 +169,7 @@ class TestSidecarImage(unittest.TestCase):
             [
                 "FROM public.ecr.aws/aws-cli/aws-cli:latest",
                 "COPY refresh.sh /refresh.sh",
+                "RUN chmod 755 /refresh.sh",
                 'ENTRYPOINT ["/refresh.sh"]',
             ],
         )
