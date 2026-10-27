@@ -385,3 +385,14 @@ class TestJupyterNetworkIsolation(unittest.TestCase):
         drop = f"-s {self.SUBNET} -d 169.254.169.254 -j DROP"
         self.assertIn(f"iptables -C DOCKER-USER {drop} 2>/dev/null || iptables -I DOCKER-USER 1 {drop}", text)
         self.assertLess(text.index("169.254.169.254"), text.index("docker compose up"))
+
+    def test_imds_rule_survives_reboot(self) -> None:
+        cloudinit = (SERVICES_PATH / "cloudinit.sh.tftpl").read_text()
+        startup = (SERVICES_PATH / "docker-startup.sh").read_text()
+        rule = re.compile(r"iptables -C DOCKER-USER .*? \|\| iptables -I DOCKER-USER 1 .*?-j DROP")
+        self.assertIn("/etc/systemd/system/docker.service.d/imds-block.conf", cloudinit)
+        self.assertIn("systemctl daemon-reload", cloudinit)
+        in_cloudinit, in_startup = rule.findall(cloudinit), rule.findall(startup)
+        self.assertEqual(in_cloudinit, in_startup)
+        self.assertEqual(len(in_cloudinit), 1)
+        self.assertIn(f"ExecStartPost=/bin/sh -c '{in_cloudinit[0]}'", cloudinit)
