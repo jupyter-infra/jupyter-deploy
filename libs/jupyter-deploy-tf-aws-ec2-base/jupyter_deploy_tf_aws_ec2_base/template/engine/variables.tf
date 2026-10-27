@@ -700,22 +700,30 @@ variable "codex_version" {
 
 variable "bedrock_enabled" {
   description = <<-EOT
-    Whether the instance role may call Amazon Bedrock, so that Claude Code and
-    Codex work out of the box in a JupyterLab terminal.
+    Whether Claude Code and Codex, shipped in the jupyter image, may call Amazon
+    Bedrock from a JupyterLab terminal.
 
-    When enabled, the instance role gets a policy limited to Bedrock inference on
-    the models matching bedrock_model_patterns. The jupyter container reads the
-    instance role credentials from the instance metadata service.
+    When enabled, the deployment creates a bedrock-app IAM role that only a policy
+    limited to Bedrock inference on the models matching bedrock_model_patterns is
+    attached to. A bedrock-sidecar container assumes it from the instance role every
+    15 minutes and writes the credentials to /run/bedrock-creds/credentials.json,
+    which the jupyter container mounts read-only and reads through credential_process.
+    The jupyter container is cut off from the instance role, so boto3 and the AWS CLI
+    inside it default to the bedrock-app role: a notebook that relied on the instance
+    role's permissions no longer has them.
 
-    Every user of the app shares the instance role: Bedrock usage is not
+    When disabled, there is no sidecar and no credentials file: claude fails with a
+    credentials error and codex with `unset: bedrock_enabled is false`.
+
+    Every user of the app shares the bedrock-app role: Bedrock usage is not
     attributable per user.
 
     Bedrock enables a model on its first invocation in the account, which takes AWS
-    Marketplace permissions the instance role does not have: invoke each model once as
+    Marketplace permissions the bedrock-app role does not have: invoke each model once as
     an admin (e.g. in the Bedrock console playground) before using it here. Anthropic
     models also require the one-time first-time-use form.
 
-    Recommended: false
+    Recommended: true
   EOT
   type        = bool
 }
@@ -744,7 +752,7 @@ variable "bedrock_inference_scope" {
 
 variable "bedrock_model_patterns" {
   description = <<-EOT
-    Bedrock model IDs the instance role may invoke, as IAM wildcard patterns without
+    Bedrock model IDs the bedrock-app role may invoke, as IAM wildcard patterns without
     the inference profile prefix (e.g. "anthropic.claude-sonnet-*").
 
     Covers both Claude Code (anthropic.*) and Codex (openai.*) models. Claude Code picks

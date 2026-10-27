@@ -40,7 +40,7 @@ overrides:
   # ebs_snapshot_ids: {}
   # claude_code_version: 2.1.302
   # codex_version: 0.163.0
-  # bedrock_enabled: false
+  # bedrock_enabled: true
   # bedrock_inference_scope: geo
   # bedrock_model_patterns:
   #   - anthropic.claude-*

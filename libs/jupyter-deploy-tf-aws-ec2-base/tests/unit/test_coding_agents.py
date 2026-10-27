@@ -81,13 +81,19 @@ class TestCodingAgentsImage(unittest.TestCase):
 
 
 class TestCodingAgentsDefaults(unittest.TestCase):
-    def test_bedrock_is_opt_in_and_codex_supports_bedrock(self) -> None:
+    def test_bedrock_is_on_by_default_and_codex_supports_bedrock(self) -> None:
         defaults = _hcl(ENGINE_PATH / "presets" / "defaults-all.tfvars")
 
-        self.assertIs(defaults["bedrock_enabled"], False)
+        self.assertIs(defaults["bedrock_enabled"], True)
         # Codex reaches Bedrock through its amazon-bedrock-runtime provider from 0.128.0.
         codex_version = tuple(int(part) for part in defaults["codex_version"].split("."))
         self.assertGreaterEqual(codex_version, (0, 128, 0))
+
+    def test_variable_descriptions_do_not_mention_imds(self) -> None:
+        # The jupyter container cannot reach IMDS: a description that still says so is stale.
+        variables_tf = (ENGINE_PATH / "variables.tf").read_text()
+        for stale in ("metadata service", "IMDS", "instance role credentials"):
+            self.assertNotIn(stale, variables_tf)
 
 
 class TestPickCodexModel(unittest.TestCase):

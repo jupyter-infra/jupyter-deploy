@@ -10,7 +10,7 @@ overrides:
   # additional_efs_mounts: []
   # ami_id: null
   # availability_zone: any
-  # bedrock_enabled: false
+  # bedrock_enabled: true
   # bedrock_inference_scope: geo
   # bedrock_model_patterns:
   #   - anthropic.claude-*

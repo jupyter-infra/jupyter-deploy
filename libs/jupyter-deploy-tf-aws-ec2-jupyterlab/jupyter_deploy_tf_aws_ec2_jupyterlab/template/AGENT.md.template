@@ -113,12 +113,21 @@ re-applies the same list (a no-op) rather than reverting a runtime change.
 
 ### Coding agents (Claude Code, Codex) on Amazon Bedrock
 
-The jupyter image ships `claude` and `codex`, configured to call Amazon Bedrock. Bedrock access is
-off by default: set `bedrock_enabled: true` in `overrides:` of `variables.yaml`, then run `jd config`
-and `jd up`. The instance role then gets a policy limited to Bedrock inference, and the jupyter
-container reads its credentials from the instance metadata service. The variables:
-- `bedrock_enabled` attaches the Bedrock policy to the instance role
-- `bedrock_model_patterns` lists the models the role may invoke (IAM wildcards)
+The jupyter image ships `claude` and `codex`, configured to call Amazon Bedrock, and Bedrock access
+is on by default. The credentials are those of the `bedrock-app` IAM role, which only the Bedrock
+inference policy is attached to: the `bedrock-sidecar` container assumes it from the instance role
+every 15 minutes and writes the credentials to `/run/bedrock-creds/credentials.json`, which the
+jupyter container mounts read-only and reads through `credential_process`
+(`AWS_CONFIG_FILE=/etc/aws/config`). The jupyter container cannot reach the instance metadata service
+(IMDS is blocked on its docker network), so `boto3` and the AWS CLI inside it default to the
+`bedrock-app` role, not the instance role: a notebook that relied on the instance role's permissions
+no longer has them.
+
+The variables:
+- `bedrock_enabled` creates the `bedrock-app` role and the `bedrock-sidecar`; with `false` there is
+  no sidecar and no credentials file, so `claude` fails with a credentials error and `codex` with
+  `unset: bedrock_enabled is false`
+- `bedrock_model_patterns` lists the models the `bedrock-app` role may invoke (IAM wildcards)
 - `bedrock_inference_scope` is `geo` (requests stay in the region's geography) or `global`;
   Codex has no geographic profile outside the US, so it needs `global` there
 - `claude_code_version` and `codex_version` pin the CLIs in the image; each CLI's default model
@@ -133,15 +142,17 @@ jd server exec -- "codex exec --skip-git-repo-check 'Reply with OK'"
 ```
 
 IMPORTANT: in an account that never used a model, the first invocation enables it, through an AWS
-Marketplace subscription that the instance role cannot start, and accepts the model provider's
+Marketplace subscription that the `bedrock-app` role cannot start, and accepts the model provider's
 EULA. Anthropic models also need a one-time first-time-use form with the deployer's company details.
 The deployer must enable each model in Bedrock for the account and region, for example by sending
 one prompt from the Bedrock console playground. These are the deployer's decisions: never invoke a
 model, accept an agreement or submit the form on their behalf.
 
 Troubleshooting:
-- **AccessDeniedException on every model, or Codex reports no model**: `bedrock_enabled` is
-  `false`. Set it to `true`, then run `jd config` and `jd up`.
+- **No `/run/bedrock-creds/credentials.json`, or `Unable to locate credentials`**: the
+  `bedrock-sidecar` container is down; see `jd server logs -s bedrock-sidecar` and `jd server status`.
+- **`claude` fails with a credentials error, Codex's model reads `unset: bedrock_enabled is false`**:
+  `bedrock_enabled` is `false`. Set it to `true`, then run `jd config` and `jd up`.
 - **AccessDeniedException naming a model or inference profile**: the model is outside
   `bedrock_model_patterns`, or its inference profile is outside `bedrock_inference_scope` (Codex
   outside the US needs `global`).
@@ -212,6 +223,9 @@ The EC2 instance runs the docker services.
 - `/opt/docker/auth-sidecar/` - Auth sidecar sources (Go STS-identity token validator) + Dockerfile
 - `/opt/docker/claude-managed-settings.json`, `/opt/docker/codex-config.toml` - Coding agent system
   configs, copied in the jupyter image to `/etc/claude-code/managed-settings.json` and `/etc/codex/config.toml`
+- `/opt/docker/aws-config` - AWS config of the jupyter container, copied in the image to `/etc/aws/config`
+  (`credential_process` reading `/run/bedrock-creds/credentials.json`)
+- `/opt/docker/bedrock-sidecar/` - Bedrock sidecar sources (`refresh.sh` assumes the `bedrock-app` role) + Dockerfile
 
 ### TLS certificate
 - `/mnt/jupyter-data/.jupyter-deploy-tls/{cert.pem,key.pem}` - Self-signed cert + private key, persisted on the EBS data volume
