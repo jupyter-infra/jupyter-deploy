@@ -251,6 +251,22 @@ class TestBedrockIam(unittest.TestCase):
         self.assertIn("execution_role_arn", {k for o in outputs for k in o})
 
 
+class TestBedrockPrefix(unittest.TestCase):
+    def test_region_table(self) -> None:
+        locals_ = {k: v for block in _hcl(ENGINE_PATH / "bedrock.tf")["locals"] for k, v in block.items()}
+        self.assertEqual(
+            locals_["bedrock_region_prefixes"],
+            {"ap-northeast-1": "jp", "ap-northeast-3": "jp", "ap-southeast-2": "au", "ca-central-1": "us"},
+        )
+        expr = locals_["bedrock_geo_prefix"]
+        self.assertIn("lookup(local.bedrock_region_prefixes, var.region", expr)
+        self.assertNotIn("apac", expr)
+
+    def test_other_ap_regions_have_no_geo_prefix(self) -> None:
+        text = (ENGINE_PATH / "bedrock.tf").read_text()
+        self.assertNotIn('startswith(var.region, "ap-")', text)
+
+
 class TestInstanceMetadata(unittest.TestCase):
     def test_imds_hop_limit_allows_containers(self) -> None:
         main_tf = _hcl(ENGINE_PATH / "modules" / "ec2_instance" / "main.tf")

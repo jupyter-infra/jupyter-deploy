@@ -5,6 +5,16 @@
 # this Bedrock-only one, so a prompt-injected agent cannot reach the host's AWS grants.
 # Every user of the app shares that role: Bedrock usage is not attributable per user.
 locals {
+  # Claude models are offered in Asia-Pacific only on the jp., au. and global. profiles
+  # (no "apac."), and ca-central-1 uses the us. profiles, so those regions are listed
+  # explicitly. Other ap-* regions get no geo prefix: only the global scope works there.
+  bedrock_region_prefixes = {
+    "ap-northeast-1" = "jp"
+    "ap-northeast-3" = "jp"
+    "ap-southeast-2" = "au"
+    "ca-central-1"   = "us"
+  }
+
   # The cross-region inference profile prefix of the deployment region's geography,
   # as Claude Code derives it from AWS_REGION. Pinned on both clients
   # (ANTHROPIC_BEDROCK_REGION_PREFIX, the Codex model) so they and the IAM grants
@@ -14,9 +24,7 @@ locals {
   bedrock_geo_prefix = (
     data.aws_partition.current.partition == "aws-us-gov" ? "us-gov" :
     data.aws_partition.current.partition != "aws" ? "" :
-    startswith(var.region, "us-") ? "us" :
-    startswith(var.region, "eu-") ? "eu" :
-    startswith(var.region, "ap-") ? "apac" : ""
+    lookup(local.bedrock_region_prefixes, var.region, startswith(var.region, "us-") ? "us" : startswith(var.region, "eu-") ? "eu" : "")
   )
   bedrock_profile_prefix = var.bedrock_inference_scope == "global" ? "global" : local.bedrock_geo_prefix
 
