@@ -63,32 +63,18 @@ COPY pyproject.jupyter.toml /opt/uv/jupyter/pyproject.toml
 RUN uv sync --directory /opt/uv/jupyter
 
 # coding agents, installed outside /home/jovyan, which the data volume mounts over.
-# Both CLIs reach Bedrock with the instance role credentials (IMDS); the region and
-# inference profile prefix come from the docker-compose environment.
+# Both CLIs reach Bedrock with a Bedrock-only role's credentials, handed to the container read-only;
+# the region and inference profile prefix come from the docker-compose environment.
 COPY --from=ai-clis /usr/local/bin/node /usr/local/bin/node
 COPY --from=ai-clis /opt/ai-clis /opt/ai-clis
 RUN ln -s /opt/ai-clis/bin/claude /usr/local/bin/claude && \
     ln -s /opt/ai-clis/bin/codex /usr/local/bin/codex
 COPY claude-managed-settings.json /etc/claude-code/managed-settings.json
 COPY codex-config.toml /etc/codex/config.toml
-# Codex's model: the best one this Codex release offers for the inference profile prefix among
-# the models IAM allows, so it follows the pinned version. Where Codex has no model to use, an
-# explicit placeholder makes its error name the fix: without a model line it would fall back to
-# a built-in default that IAM denies. With a usable prefix and allowed models, finding no model
-# fails the build.
+# Codex's model is pinned at build from the installed release's catalog so it follows the pinned
+# version and the models IAM allows; the script documents the placeholder and failure cases.
 COPY pick-codex-model.py /tmp/pick-codex-model.py
-RUN unset_model() { sed -i "s|@CODEX_MODEL@|unset: $1|" /etc/codex/config.toml; } && \
-    if [ -z "$CODEX_MODEL_PATTERNS" ]; then \
-      unset_model "bedrock_enabled is false or no openai model allowed by bedrock_model_patterns"; \
-    elif [ "$CODEX_PROFILE_PREFIX" != "us" ] && [ "$CODEX_PROFILE_PREFIX" != "global" ]; then \
-      unset_model "no ${CODEX_PROFILE_PREFIX:-geographic} OpenAI inference profiles, set bedrock_inference_scope to global"; \
-    else \
-      model="$(codex debug models | python3 /tmp/pick-codex-model.py "$CODEX_PROFILE_PREFIX" "$CODEX_MODEL_PATTERNS")" && \
-      if [ -z "$model" ]; then \
-        echo "codex debug models lists no ${CODEX_PROFILE_PREFIX}. model allowed by ${CODEX_MODEL_PATTERNS}" >&2; exit 1; \
-      fi && \
-      sed -i "s|@CODEX_MODEL@|${model}|" /etc/codex/config.toml; \
-    fi && \
+RUN python3 /tmp/pick-codex-model.py "$CODEX_PROFILE_PREFIX" "$CODEX_MODEL_PATTERNS" /etc/codex/config.toml && \
     rm /tmp/pick-codex-model.py
 
 # startup scripts

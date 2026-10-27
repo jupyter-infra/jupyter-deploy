@@ -5,9 +5,11 @@ these tests pin each side to what the others expect.
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
@@ -101,23 +103,77 @@ class TestPickCodexModel(unittest.TestCase):
         ]
     }
 
-    def _pick(self, prefix: str, patterns: str) -> str:
+    def setUp(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = Path(tmp.name)
+        self.config = self.tmp / "config.toml"
+        self.called = self.tmp / "codex-called"
+        # The fake codex records the call and only answers `debug models`, as the real one is invoked.
+        fake = self.tmp / "codex"
+        fake.write_text(
+            f'#!/bin/sh\ntouch "{self.called}"\n[ "$1 $2" = "debug models" ] || exit 2\n'
+            f"cat <<'EOF'\n{json.dumps(self.CATALOG)}\nEOF\n"
+        )
+        fake.chmod(0o755)
+
+    def _run(self, prefix: str, patterns: str, **env: str) -> tuple[int, str, str]:
+        self.config.write_text('model_provider = "amazon-bedrock-runtime"\nmodel = "@CODEX_MODEL@"\n')
         result = subprocess.run(
-            [sys.executable, "-I", str(self.SCRIPT), prefix, patterns],
-            input=json.dumps(self.CATALOG),
+            [sys.executable, "-I", str(self.SCRIPT), prefix, patterns, str(self.config)],
+            env={**os.environ, "PATH": f"{self.tmp}{os.pathsep}{os.environ['PATH']}", **env},
             capture_output=True,
             text=True,
-            check=True,
         )
-        return result.stdout
+        return result.returncode, self.config.read_text(), result.stderr
 
-    def test_picks_lowest_priority_allowed_model(self) -> None:
-        self.assertEqual(self._pick("us", "openai.gpt-*"), "us.openai.gpt-5-codex\n")
-        self.assertEqual(self._pick("us", "openai.gpt-5"), "us.openai.gpt-5\n")
-        self.assertEqual(self._pick("us", "openai.gpt-unranked"), "us.openai.gpt-unranked\n")
-        self.assertEqual(self._pick("us", "openai.gpt-nullprio"), "us.openai.gpt-nullprio\n")
-        self.assertEqual(self._pick("eu", "openai.gpt-*"), "")
-        self.assertEqual(self._pick("us", "openai.o3-*"), "")
+    def codex_called(self) -> bool:
+        return self.called.exists()
+
+    def test_empty_patterns_leave_model_unset_with_reason(self) -> None:
+        rc, cfg, _ = self._run("us", "")
+        self.assertEqual(rc, 0)
+        self.assertIn(
+            'model = "unset: bedrock_enabled is false or no openai model allowed by bedrock_model_patterns"', cfg
+        )
+        self.assertFalse(self.codex_called())
+
+    def test_non_us_prefix_leaves_model_unset_with_reason(self) -> None:
+        rc, cfg, _ = self._run("eu", "openai.gpt-*")
+        self.assertEqual(rc, 0)
+        self.assertIn('model = "unset: no eu OpenAI inference profiles, set bedrock_inference_scope to global"', cfg)
+        self.assertFalse(self.codex_called())
+
+    def test_empty_prefix_names_geographic(self) -> None:
+        _, cfg, _ = self._run("", "openai.gpt-*")
+        self.assertIn("unset: no geographic OpenAI", cfg)
+
+    def test_usable_prefix_picks_lowest_priority(self) -> None:
+        rc, cfg, _ = self._run("us", "openai.gpt-*")
+        self.assertEqual(rc, 0)
+        self.assertIn('model = "us.openai.gpt-5-codex"', cfg)
+        self.assertTrue(self.codex_called())
+        _, cfg, _ = self._run("global", "openai.gpt-*")
+        self.assertIn('model = "global.openai.gpt-oss-120b"', cfg)
+
+    def test_null_priority_ranks_last(self) -> None:
+        _, cfg, _ = self._run("us", "openai.gpt-nullprio,openai.gpt-unranked,openai.gpt-5")
+        self.assertIn('model = "us.openai.gpt-5"', cfg)
+        _, cfg, _ = self._run("us", "openai.gpt-nullprio")
+        self.assertIn('model = "us.openai.gpt-nullprio"', cfg)
+
+    def test_codex_bin_overrides_path(self) -> None:
+        pinned = self.tmp / "codex-pinned"
+        (self.tmp / "codex").rename(pinned)
+        rc, cfg, _ = self._run("us", "openai.gpt-*", CODEX_BIN=str(pinned))
+        self.assertEqual(rc, 0)
+        self.assertIn('model = "us.openai.gpt-5-codex"', cfg)
+
+    def test_no_matching_model_fails_the_build(self) -> None:
+        rc, cfg, err = self._run("us", "openai.o3-*")
+        self.assertEqual(rc, 1)
+        self.assertIn("codex debug models lists no us. model allowed by openai.o3-*", err)
+        self.assertIn("@CODEX_MODEL@", cfg)
 
 
 class TestBedrockIam(unittest.TestCase):
