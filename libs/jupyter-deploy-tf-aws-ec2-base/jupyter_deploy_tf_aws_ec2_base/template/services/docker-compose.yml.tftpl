@@ -30,10 +30,12 @@ services:
         fluentd-address: "localhost:24224"
         tag: "docker.jupyter"
     networks:
-      - web
+      - jupyter
     environment:
       - AWS_REGION=${aws_region}
       - ANTHROPIC_BEDROCK_REGION_PREFIX=${bedrock_profile_prefix}
+      # Fail fast on a missing credential instead of hanging on IMDS probes the network drops.
+      - AWS_EC2_METADATA_DISABLED=true
 %{ if bedrock_enabled ~}
       - AWS_CONFIG_FILE=/etc/aws/config
 %{ endif ~}
@@ -41,6 +43,7 @@ services:
       - fluent-bit
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=jupyter"
       - "traefik.http.routers.jupyter.rule=Host(`${full_domain}`)"
       - "traefik.http.routers.jupyter.entrypoints=websecure"
       - "traefik.http.routers.jupyter.tls.certresolver=letsencrypt"
@@ -208,6 +211,7 @@ services:
       - ./acme.json:/acme.json
     networks:
       - web
+      - jupyter
     environment:
       - AWS_REGION=${aws_region}
   fluent-bit:
@@ -294,3 +298,10 @@ networks:
   web:
     name: web
     driver: bridge
+  # Fixed subnet so the host firewall rule in docker-startup.sh can match jupyter's traffic.
+  jupyter:
+    name: jupyter
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.250.0/24

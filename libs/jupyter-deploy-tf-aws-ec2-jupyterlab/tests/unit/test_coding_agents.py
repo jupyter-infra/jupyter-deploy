@@ -350,3 +350,38 @@ class TestBedrockSidecarWiring(unittest.TestCase):
         self.assertIn(
             "Match               docker.bedrock-sidecar", (SERVICES_PATH / "fluent-bit" / "fluent-bit.conf").read_text()
         )
+
+
+class TestJupyterNetworkIsolation(unittest.TestCase):
+    """User code in the jupyter container must not be able to borrow the instance role from IMDS."""
+
+    SUBNET = "172.30.250.0/24"
+
+    def setUp(self) -> None:
+        self.compose = (SERVICES_PATH / "docker-compose.yml.tftpl").read_text()
+        self.jupyter = self._service("jupyter")
+        self.traefik = self._service("traefik")
+
+    def _service(self, name: str) -> str:
+        match = re.search(rf"^  {name}:\n(.*?)^  \S", self.compose, re.S | re.M)
+        assert match is not None, f"no {name} service"
+        return match.group(1)
+
+    def test_jupyter_is_isolated_on_its_own_network(self) -> None:
+        self.assertIn("networks:\n      - jupyter\n", self.jupyter)
+        self.assertNotIn("- web", self.jupyter)
+        self.assertIn("AWS_EC2_METADATA_DISABLED=true", self.jupyter)
+        network = "  jupyter:\n    name: jupyter\n    driver: bridge\n    ipam:\n      config:\n"
+        network += f"        - subnet: {self.SUBNET}"
+        self.assertIn(network, self.compose)
+
+    def test_traefik_bridges_both_networks(self) -> None:
+        self.assertIn("network: web", (SERVICES_PATH / "traefik" / "traefik.yml").read_text())
+        self.assertIn("traefik.docker.network=jupyter", self.jupyter)
+        self.assertIn("networks:\n      - web\n      - jupyter\n", self.traefik)
+
+    def test_imds_rule_is_idempotent(self) -> None:
+        text = (SERVICES_PATH / "docker-startup.sh").read_text()
+        drop = f"-s {self.SUBNET} -d 169.254.169.254 -j DROP"
+        self.assertIn(f"iptables -C DOCKER-USER {drop} 2>/dev/null || iptables -I DOCKER-USER 1 {drop}", text)
+        self.assertLess(text.index("169.254.169.254"), text.index("docker compose up"))
