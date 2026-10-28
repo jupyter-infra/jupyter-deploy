@@ -100,43 +100,6 @@ re-applies the same list rather than reverting it.
 Editing those variables and running `jd up` also reconciles the allowlist, but restarts the whole
 application. Prefer the commands above for routine access changes.
 
-## Use the coding agents
-
-The Jupyter image ships the **Claude Code** (`claude`) and **Codex** (`codex`) coding agents,
-configured to call Amazon Bedrock with the EC2 instance role credentials. Bedrock access is off by
-default. To turn it on, set `bedrock_enabled` in the `overrides:` section of `variables.yaml`, then
-apply the change:
-
-```yaml
-overrides:
-  bedrock_enabled: true
-```
-
-```bash
-jd config
-jd up
-```
-
-Both agents then work in a JupyterLab terminal with no setup: run `claude` or `codex`.
-
-```{important}
-Bedrock enables a third-party model (Anthropic Claude, OpenAI GPT) on its first invocation in an
-AWS account, through AWS Marketplace, and the instance role holds no AWS Marketplace permissions.
-Before using the agents, enable each model in Bedrock for your account and region: submit the
-Anthropic first-time-use form, then send one prompt to each model from the Bedrock console
-playground. Calls fail with `AccessDeniedException` until then.
-```
-
-`bedrock_inference_scope` selects the cross-region inference profiles the agents call: `geo` (the
-default) keeps requests within the deployment region's geography, `global` lets Bedrock serve them
-from any commercial region. Bedrock offers the OpenAI models through US and global inference
-profiles only: outside the US, **Codex** needs `global`.
-
-`bedrock_model_patterns` lists the Bedrock model IDs the instance role may invoke, as IAM wildcards
-without the inference profile prefix. The default allows both agents: `anthropic.claude-*` and
-`openai.gpt-*`. `claude_code_version` and `codex_version` pin the agents installed in the image;
-changing either one rebuilds the image on the next `jd up`.
-
 ## Temporarily stop/start your EC2 instance
 
 ```bash

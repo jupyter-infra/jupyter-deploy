@@ -24,6 +24,7 @@ authenticates and authorizes each request based on your AWS credentials.
 
 prerequisites
 user-guide
+bedrock-integration
 architecture
 details
 ```

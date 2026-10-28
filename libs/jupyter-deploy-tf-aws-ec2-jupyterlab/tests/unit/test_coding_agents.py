@@ -19,6 +19,7 @@ from jupyter_deploy.engine.terraform.tf_varfiles import parse_dot_tfvars_to_dict
 from jupyter_deploy_tf_aws_ec2_jupyterlab.template import TEMPLATE_PATH
 
 SERVICES_PATH: Path = TEMPLATE_PATH / "services"
+DOCS_DIR: Path = Path(__file__).resolve().parents[4] / "docs" / "source" / "templates" / "aws-ec2-jupyterlab-template"
 ENGINE_PATH: Path = TEMPLATE_PATH / "engine"
 DOCKERFILES: list[Path] = [
     SERVICES_PATH / "jupyter" / "dockerfile.jupyter",
@@ -414,3 +415,14 @@ class TestJupyterNetworkIsolation(unittest.TestCase):
         self.assertEqual(in_cloudinit, in_startup)
         self.assertEqual(len(in_cloudinit), 1)
         self.assertIn(f"ExecStartPost=/bin/sh -c '{in_cloudinit[0]}'", cloudinit)
+
+
+class TestBedrockDocs(unittest.TestCase):
+    def test_bedrock_page_in_toctree(self) -> None:
+        toctree = re.search(r"```\{toctree\}\n(.*?)```", (DOCS_DIR / "index.md").read_text(), re.S)
+        assert toctree is not None, "no toctree in index.md"
+        self.assertIn("\nbedrock-integration\n", toctree.group(1))
+        self.assertTrue((DOCS_DIR / "bedrock-integration.md").exists())
+        # Everything Bedrock lives on its own page; the user guide stays install/deploy/open.
+        self.assertNotIn("Use the coding agents", (DOCS_DIR / "user-guide.md").read_text())
+        self.assertIn("bedrock-app", (DOCS_DIR / "details.md").read_text())

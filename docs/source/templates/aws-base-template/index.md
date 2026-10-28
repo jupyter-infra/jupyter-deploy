@@ -19,6 +19,7 @@ When you navigate to the application URL in your web browser, you connect to the
 
 prerequisites
 user-guide
+bedrock-integration
 architecture
 details
 ```

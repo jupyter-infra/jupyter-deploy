@@ -32,10 +32,16 @@ EBS volumes cannot cross availability zones, so changing `availability_zone` on 
 
 The template creates an IAM role for the EC2 instance with permissions for SSM, Route 53, S3, and (optionally) EFS access.
 
-With `bedrock_enabled` set to `true`, the role may also invoke the Bedrock models matching
-`bedrock_model_patterns`, through the deployment region's inference profiles that
-`bedrock_inference_scope` selects. The instance requires IMDSv2 with a hop limit of 2, so that the
-Jupyter container can read the role credentials.
+With `bedrock_enabled` set to `true` (the default), the template also creates a `bedrock-app` IAM
+role that only the Bedrock inference policy is attached to: it may invoke the models matching
+`bedrock_model_patterns` through the inference profiles that `bedrock_inference_scope` selects, and
+only the instance role may assume it. A `bedrock-sidecar` container assumes it every 15 minutes and
+publishes the credentials to a file that the Jupyter container mounts read-only. The Jupyter
+container runs on its own docker network, which a host firewall rule cuts off from the instance
+metadata service, so code in the container holds the `bedrock-app` credentials and never the
+instance role's. The instance requires IMDSv2 with a hop limit of 2 so that the sidecar and Traefik
+(Route 53 ACME), one docker-bridge hop away, can read the instance role credentials. A container
+holding `/var/run/docker.sock` can bypass the firewall rule; that is tracked separately.
 
 The template creates two AWS Secrets Manager secrets:
 - One to store the OAuth App client secret
@@ -62,6 +68,9 @@ The template creates an SSM startup document that orchestrates instance configur
 | `claude-managed-settings.json` | Claude Code system settings (Bedrock, no auto-update) |
 | `codex-config.toml` | Codex system configuration (Bedrock provider and model) |
 | `pick-codex-model.py` | Picks the Codex model from the Codex release's catalog at image build |
+| `bedrock-sidecar/Dockerfile` | Bedrock credential sidecar image (AWS CLI) |
+| `bedrock-sidecar/refresh.sh` | Assumes the `bedrock-app` role every 15 minutes and publishes its credentials |
+| `aws-config` | AWS config of the Jupyter container: reads the published credentials through `credential_process` |
 | `dockerfile.logrotator` | Log rotation sidecar container |
 | `logrotator-start.sh.tftpl` | Logrotate configuration |
 | `fluent-bit.conf` | Fluent-bit log collection configuration |
@@ -142,9 +151,9 @@ The template provides two variable presets:
 | ebs_snapshot_ids | `map(string)` | `{}` | Map of volume name to the EBS snapshot to create it from; written by `jd config --restore-volumes` |
 | claude_code_version | `string` | `2.1.302` | The Claude Code version installed in the Jupyter image |
 | codex_version | `string` | `0.163.0` | The Codex CLI version installed in the Jupyter image |
-| bedrock_enabled | `bool` | `false` | Whether the instance role may invoke Amazon Bedrock models, for Claude Code and Codex |
+| bedrock_enabled | `bool` | `true` | Whether Claude Code and Codex may call Amazon Bedrock, through the `bedrock-app` role |
 | bedrock_inference_scope | `string` | `geo` | The Bedrock inference profiles to use: `geo` (the region's geography) or `global` |
-| bedrock_model_patterns | `list(string)` | `["anthropic.claude-*", "openai.gpt-*"]` | The Bedrock model IDs the instance role may invoke, as IAM wildcards without the inference profile prefix |
+| bedrock_model_patterns | `list(string)` | `["anthropic.claude-*", "openai.gpt-*"]` | The Bedrock model IDs the `bedrock-app` role may invoke, as IAM wildcards without the inference profile prefix |
 
 ## Outputs
 
