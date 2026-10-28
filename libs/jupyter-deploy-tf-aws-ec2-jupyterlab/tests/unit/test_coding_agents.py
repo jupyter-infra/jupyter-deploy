@@ -390,8 +390,13 @@ class TestJupyterNetworkIsolation(unittest.TestCase):
     def test_imds_rule_is_idempotent(self) -> None:
         text = (SERVICES_PATH / "docker-startup.sh").read_text()
         drop = f"-s {self.ADDRESS}/32 -d 169.254.169.254 -j DROP"
-        self.assertIn(f"iptables -C DOCKER-USER {drop} 2>/dev/null || iptables -I DOCKER-USER 1 {drop}", text)
-        self.assertLess(text.index("169.254.169.254"), text.index("docker compose up"))
+        insert = f"iptables -C DOCKER-USER {drop} 2>/dev/null || iptables -I DOCKER-USER 1 {drop}"
+        self.assertIn(insert, text)
+        # Stale subnet-wide rule from an earlier revision must be removed before the scoped one is added.
+        stale = f"iptables -D DOCKER-USER -s {self.SUBNET} -d 169.254.169.254 -j DROP 2>/dev/null || true"
+        self.assertIn(stale, text)
+        self.assertLess(text.index(stale), text.index(insert))
+        self.assertLess(text.index(insert), text.index("docker compose up"))
 
     def test_compose_up_removes_orphans(self) -> None:
         # Flipping bedrock_enabled off re-renders the compose file without the sidecar; without this

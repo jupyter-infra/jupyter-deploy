@@ -83,6 +83,9 @@ fi
 # holds only the app role's credentials. Bypassable from a container with /var/run/docker.sock
 # (tracked separately). The network is IPv4-only, so there is no IPv6 route to fd00:ec2::254 to block.
 # A missing DOCKER-USER chain deliberately aborts the boot (fail closed) rather than start jupyter unblocked.
+# An earlier revision blocked the whole subnet, which also caught traefik; in-place updates re-run this
+# script without a reboot, so the stale rule has to go explicitly.
+iptables -D DOCKER-USER -s 172.30.250.0/24 -d 169.254.169.254 -j DROP 2>/dev/null || true
 iptables -C DOCKER-USER -s 172.30.250.10/32 -d 169.254.169.254 -j DROP 2>/dev/null || iptables -I DOCKER-USER 1 -s 172.30.250.10/32 -d 169.254.169.254 -j DROP
 
 echo "Starting docker compose"
