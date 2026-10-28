@@ -362,6 +362,7 @@ class TestJupyterNetworkIsolation(unittest.TestCase):
     """User code in the jupyter container must not be able to borrow the instance role from IMDS."""
 
     SUBNET = "172.30.250.0/24"
+    ADDRESS = "172.30.250.10"
 
     def setUp(self) -> None:
         self.compose = (SERVICES_PATH / "docker-compose.yml.tftpl").read_text()
@@ -374,7 +375,7 @@ class TestJupyterNetworkIsolation(unittest.TestCase):
         return match.group(1)
 
     def test_jupyter_is_isolated_on_its_own_network(self) -> None:
-        self.assertIn("networks:\n      - jupyter\n", self.jupyter)
+        self.assertIn(f"networks:\n      jupyter:\n        ipv4_address: {self.ADDRESS}\n", self.jupyter)
         self.assertNotIn("- web", self.jupyter)
         self.assertIn("AWS_EC2_METADATA_DISABLED=true", self.jupyter)
         network = "  jupyter:\n    name: jupyter\n    driver: bridge\n    ipam:\n      config:\n"
@@ -388,7 +389,7 @@ class TestJupyterNetworkIsolation(unittest.TestCase):
 
     def test_imds_rule_is_idempotent(self) -> None:
         text = (SERVICES_PATH / "docker-startup.sh").read_text()
-        drop = f"-s {self.SUBNET} -d 169.254.169.254 -j DROP"
+        drop = f"-s {self.ADDRESS}/32 -d 169.254.169.254 -j DROP"
         self.assertIn(f"iptables -C DOCKER-USER {drop} 2>/dev/null || iptables -I DOCKER-USER 1 {drop}", text)
         self.assertLess(text.index("169.254.169.254"), text.index("docker compose up"))
 

@@ -79,11 +79,11 @@ else
     TIMEOUT_RETRY=60   # 1 minute for retry
 fi
 
-# Jupyter's network (fixed subnet 172.30.250.0/24 in docker-compose.yml) cannot reach IMDS: user code
+# Jupyter's fixed address (172.30.250.10, set in docker-compose.yml) cannot reach IMDS: user code
 # holds only the app role's credentials. Bypassable from a container with /var/run/docker.sock
 # (tracked separately). The network is IPv4-only, so there is no IPv6 route to fd00:ec2::254 to block.
 # A missing DOCKER-USER chain deliberately aborts the boot (fail closed) rather than start jupyter unblocked.
-iptables -C DOCKER-USER -s 172.30.250.0/24 -d 169.254.169.254 -j DROP 2>/dev/null || iptables -I DOCKER-USER 1 -s 172.30.250.0/24 -d 169.254.169.254 -j DROP
+iptables -C DOCKER-USER -s 172.30.250.10/32 -d 169.254.169.254 -j DROP 2>/dev/null || iptables -I DOCKER-USER 1 -s 172.30.250.10/32 -d 169.254.169.254 -j DROP
 
 echo "Starting docker compose"
 if ! docker compose up -d --force-recreate --remove-orphans $SHOULD_BUILD --wait --wait-timeout $TIMEOUT_FIRST; then

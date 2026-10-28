@@ -20,13 +20,15 @@ credentials are within five minutes of expiry; `jd server status` then reports `
 The `jupyter` container mounts the volume read-only at
 `/run/bedrock-creds/credentials.json` and reads it through `credential_process` in `/etc/aws/config`.
 
-The `jupyter` container runs on its own docker network. A `DOCKER-USER` firewall rule on the host,
-re-applied on every docker start, drops its traffic to the instance metadata service, and
+The `jupyter` container holds a fixed address on its own docker network. A `DOCKER-USER` firewall
+rule on the host, re-applied on every docker start, drops that address's traffic to the instance
+metadata service, and
 `AWS_EC2_METADATA_DISABLED` makes the AWS SDKs fail fast rather than probe it. The default AWS SDK
 credential chain in the container, which the agents and `boto3` use, therefore resolves to the
 `bedrock-app` credentials and not the instance role's. The instance keeps IMDSv2 with a hop limit
 of 2 so that the sidecar and Traefik (Route 53 ACME), one docker-bridge hop away, can still read
-the instance role credentials. This isolation covers the credential chain, not a deliberate user:
+the instance role credentials: Traefik shares the `jupyter` network to route to the container but
+keeps its own address there, which the rule does not match. This isolation covers the credential chain, not a deliberate user:
 the `jupyter` container still mounts `/var/run/docker.sock`, through which a user can reach the
 host and therefore the instance role. Removing that mount is tracked separately.
 

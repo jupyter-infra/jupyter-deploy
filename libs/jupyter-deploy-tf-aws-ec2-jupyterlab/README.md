@@ -307,9 +307,10 @@ role carrying only the Bedrock inference policy: it may invoke the models matchi
 `bedrock_model_patterns` through the inference profiles that `bedrock_inference_scope` selects, and
 only the instance role may assume it. A `bedrock-sidecar` container assumes it every 15 minutes and
 publishes the credentials to a file that the Jupyter container mounts read-only. The Jupyter
-container runs on its own docker network, which a host firewall rule cuts off from the instance
-metadata service, so the default AWS SDK credential chain in the container (the agents, `boto3`)
-resolves to the `bedrock-app` credentials and not the instance role's. The instance requires IMDSv2
+container holds a fixed address on its own docker network, and a host firewall rule cuts that
+address off from the instance metadata service, so the default AWS SDK credential chain in the
+container (the agents, `boto3`) resolves to the `bedrock-app` credentials and not the instance
+role's. The instance requires IMDSv2
 with a hop limit of 2 so that the sidecar, one docker-bridge hop away, can read the instance role
 credentials. The Jupyter container still mounts `/var/run/docker.sock`, through which a user can
 reach the host and therefore the instance role; removing that mount is tracked separately.

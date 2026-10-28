@@ -30,7 +30,8 @@ services:
         fluentd-address: "localhost:24224"
         tag: "docker.jupyter"
     networks:
-      - jupyter
+      jupyter:
+        ipv4_address: 172.30.250.10
     environment:
       - AWS_REGION=${aws_region}
       - ANTHROPIC_BEDROCK_REGION_PREFIX=${bedrock_profile_prefix}
@@ -298,7 +299,9 @@ networks:
   web:
     name: web
     driver: bridge
-  # Fixed subnet so the host firewall rule in docker-startup.sh can match jupyter's traffic.
+  # Fixed subnet so jupyter can hold the fixed address that the host firewall rule in
+  # docker-startup.sh matches. Traefik shares this network to route to jupyter, but keeps its
+  # own address on it, so the rule leaves its IMDS traffic alone.
   jupyter:
     name: jupyter
     driver: bridge

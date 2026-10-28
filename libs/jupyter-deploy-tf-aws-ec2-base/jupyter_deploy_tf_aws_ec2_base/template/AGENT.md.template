@@ -87,7 +87,7 @@ inference policy is attached to: the `bedrock-sidecar` container assumes it from
 every 15 minutes and writes the credentials to `/run/bedrock-creds/credentials.json`, which the
 jupyter container mounts read-only and reads through `credential_process`
 (`AWS_CONFIG_FILE=/etc/aws/config`). The jupyter container cannot reach the instance metadata service
-(IMDS is blocked on its docker network), so `boto3` and the AWS CLI inside it default to the
+(IMDS is blocked for its docker network address), so `boto3` and the AWS CLI inside it default to the
 `bedrock-app` role, not the instance role: a notebook that relied on the instance role's permissions
 no longer has them.
 
