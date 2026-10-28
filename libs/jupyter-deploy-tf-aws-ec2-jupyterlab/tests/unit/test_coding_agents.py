@@ -392,6 +392,18 @@ class TestJupyterNetworkIsolation(unittest.TestCase):
         self.assertIn(f"iptables -C DOCKER-USER {drop} 2>/dev/null || iptables -I DOCKER-USER 1 {drop}", text)
         self.assertLess(text.index("169.254.169.254"), text.index("docker compose up"))
 
+    def test_compose_up_removes_orphans(self) -> None:
+        # Flipping bedrock_enabled off re-renders the compose file without the sidecar; without this
+        # flag the old container keeps running (and keeps the app role's credentials) across the update.
+        ups = [
+            line
+            for line in (SERVICES_PATH / "docker-startup.sh").read_text().splitlines()
+            if "docker compose up" in line
+        ]
+        self.assertEqual(len(ups), 3)
+        for line in ups:
+            self.assertIn("--remove-orphans", line)
+
     def test_imds_rule_survives_reboot(self) -> None:
         cloudinit = (SERVICES_PATH / "cloudinit.sh.tftpl").read_text()
         startup = (SERVICES_PATH / "docker-startup.sh").read_text()

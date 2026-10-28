@@ -86,16 +86,16 @@ fi
 iptables -C DOCKER-USER -s 172.30.250.0/24 -d 169.254.169.254 -j DROP 2>/dev/null || iptables -I DOCKER-USER 1 -s 172.30.250.0/24 -d 169.254.169.254 -j DROP
 
 echo "Starting docker compose"
-if ! docker compose up -d --force-recreate $SHOULD_BUILD --wait --wait-timeout $TIMEOUT_FIRST; then
+if ! docker compose up -d --force-recreate --remove-orphans $SHOULD_BUILD --wait --wait-timeout $TIMEOUT_FIRST; then
     echo "First attempt failed, trying with cleanup..."
     docker compose down || true
     docker system prune -f --volumes || true
 
-    if ! docker compose up -d --force-recreate $SHOULD_BUILD --wait --wait-timeout $TIMEOUT_RETRY; then
+    if ! docker compose up -d --force-recreate --remove-orphans $SHOULD_BUILD --wait --wait-timeout $TIMEOUT_RETRY; then
         echo "Second attempt failed, restarting Docker daemon..."
         systemctl restart docker
         sleep 10
-        docker compose up -d --force-recreate $SHOULD_BUILD --wait --wait-timeout $TIMEOUT_RETRY
+        docker compose up -d --force-recreate --remove-orphans $SHOULD_BUILD --wait --wait-timeout $TIMEOUT_RETRY
     fi
 fi
 echo "docker compose complete"
