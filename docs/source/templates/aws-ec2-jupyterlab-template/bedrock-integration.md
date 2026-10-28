@@ -84,7 +84,8 @@ The `geo` prefix follows the deployment region:
 | `ap-northeast-1`, `ap-northeast-3` | `jp.` |
 | `ap-southeast-2` | `au.` |
 | `us-gov-*` | `us-gov.` |
-| other regions | none: use `global` |
+| other commercial regions | `global.` (with a plan-time warning; set `global` to silence it) |
+| isolated partitions | none: Bedrock is unavailable |
 
 Bedrock offers the OpenAI models through `us.` and `global.` profiles only. Outside the US,
 **Codex** needs `global`.

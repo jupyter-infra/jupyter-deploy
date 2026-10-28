@@ -273,6 +273,16 @@ class TestBedrockPrefix(unittest.TestCase):
         text = (ENGINE_PATH / "bedrock.tf").read_text()
         self.assertNotIn('startswith(var.region, "ap-")', text)
 
+    def test_regions_without_geo_prefix_fall_back_to_global(self) -> None:
+        hcl = _hcl(ENGINE_PATH / "bedrock.tf")
+        locals_ = {k: v for block in hcl["locals"] for k, v in block.items()}
+        # A commercial region with no geo prefix must plan, not fail; isolated partitions still fail closed.
+        self.assertIn('partition == "aws" ? "global" : ""', locals_["bedrock_profile_prefix"])
+        checks = {k: v for block in hcl["check"] for k, v in block.items()}
+        (assertion,) = checks["bedrock_geo_fallback"]["assert"]
+        self.assertTrue(assertion["condition"].startswith("${!var.bedrock_enabled || "))
+        self.assertIn('local.bedrock_geo_prefix != ""', assertion["condition"])
+
 
 class TestInstanceMetadata(unittest.TestCase):
     def test_imds_hop_limit_allows_containers(self) -> None:

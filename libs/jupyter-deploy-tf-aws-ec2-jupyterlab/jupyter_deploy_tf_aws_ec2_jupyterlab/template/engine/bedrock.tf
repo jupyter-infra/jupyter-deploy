@@ -6,7 +6,8 @@
 locals {
   # Claude models are offered in Asia-Pacific only on the jp., au. and global. profiles
   # (no "apac."), and ca-central-1 uses the us. profiles, so those regions are listed
-  # explicitly. Other ap-* regions get no geo prefix: only the global scope works there.
+  # explicitly. Other ap-* regions get no geo prefix and fall back to the global
+  # profiles with a plan-time warning (check "bedrock_geo_fallback").
   bedrock_region_prefixes = {
     "ap-northeast-1" = "jp"
     "ap-northeast-3" = "jp"
@@ -25,7 +26,11 @@ locals {
     data.aws_partition.current.partition != "aws" ? "" :
     lookup(local.bedrock_region_prefixes, var.region, startswith(var.region, "us-") ? "us" : startswith(var.region, "eu-") ? "eu" : "")
   )
-  bedrock_profile_prefix = var.bedrock_inference_scope == "global" ? "global" : local.bedrock_geo_prefix
+  bedrock_profile_prefix = (
+    var.bedrock_inference_scope == "global" ? "global" :
+    local.bedrock_geo_prefix != "" ? local.bedrock_geo_prefix :
+    data.aws_partition.current.partition == "aws" ? "global" : ""
+  )
 
   # Codex only reaches OpenAI models, which a pattern must allow. A literal prefix
   # check: patterns like "op*" are not worth a glob engine.
@@ -120,7 +125,7 @@ resource "aws_iam_role" "bedrock_app" {
   lifecycle {
     precondition {
       condition     = local.bedrock_profile_prefix != ""
-      error_message = "${var.region} has no geographic Bedrock inference profiles: set bedrock_inference_scope to \"global\", or disable bedrock_enabled."
+      error_message = "${var.region} (${data.aws_partition.current.partition}) has no Bedrock cross-region inference profiles: disable bedrock_enabled."
     }
     precondition {
       # Global profiles route to commercial regions only.
@@ -155,6 +160,13 @@ resource "aws_iam_role_policy_attachment" "assume_bedrock_app" {
   count      = var.bedrock_enabled ? 1 : 0
   role       = module.ec2_iam_role.execution_role_name
   policy_arn = aws_iam_policy.assume_bedrock_app[0].arn
+}
+
+check "bedrock_geo_fallback" {
+  assert {
+    condition     = !var.bedrock_enabled || var.bedrock_inference_scope == "global" || local.bedrock_geo_prefix != ""
+    error_message = "${var.region} has no geographic Bedrock inference profiles, so the coding agents use the global ones. Set bedrock_inference_scope to \"global\" to make that explicit."
+  }
 }
 
 # Bedrock offers the OpenAI models through US and global inference profiles only.
