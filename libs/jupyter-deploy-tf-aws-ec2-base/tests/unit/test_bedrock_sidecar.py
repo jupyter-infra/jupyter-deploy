@@ -70,7 +70,8 @@ class TestRefreshScript(unittest.TestCase):
             **os.environ,
             "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
             "BEDROCK_APP_ROLE_ARN": ROLE_ARN,
-            "REFRESH_INTERVAL_S": "1",
+            # Longer than any _run_loop: the kill lands in `sleep`, never between the .tmp write and the mv.
+            "REFRESH_INTERVAL_S": "60",
             "CREDS_FILE": str(self.creds),
         }
 
