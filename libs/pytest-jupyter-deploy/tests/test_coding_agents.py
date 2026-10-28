@@ -220,11 +220,15 @@ class TestBedrockProbeLoop(unittest.TestCase):
         start = _server_argv(deployment, "run_command", call=0)
         self.assertEqual(start[:2], ["sh", "-c"])
         cleanup, launch = start[2].split("; ", 1)
-        self.assertEqual(cleanup, f"rm -f {coding_agents.BEDROCK_PROBE_LOG} {coding_agents.BEDROCK_PROBE_STOP}")
+        self.assertEqual(
+            cleanup,
+            f"rm -f {coding_agents.BEDROCK_PROBE_LOG} {coding_agents.BEDROCK_PROBE_STOP} {coding_agents.BEDROCK_PROBE_ERR}",
+        )
         words = shlex.split(launch)
         self.assertEqual(words[:7], ["nohup", "uv", "run", "--with", "boto3", "python", "-c"])
         self.assertEqual(words[8:10], [coding_agents.BEDROCK_PROBE_LOG, coding_agents.BEDROCK_PROBE_STOP])
         self.assertEqual(words[-1], "&")
+        self.assertIn(f"2>{coding_agents.BEDROCK_PROBE_ERR}", words)
         encoded = re.search(r"b64decode\('([^']+)'\)", words[7])
         assert encoded is not None
         self.assertEqual(base64.b64decode(encoded.group(1)).decode(), coding_agents.BEDROCK_PROBE_LOOP_SCRIPT)
@@ -232,11 +236,18 @@ class TestBedrockProbeLoop(unittest.TestCase):
         sleep.assert_not_called()
 
     @patch("pytest_jupyter_deploy.coding_agents.time.sleep")
-    def test_start_fails_when_nothing_is_logged(self, sleep: Mock) -> None:
+    def test_start_fails_with_the_loops_stderr_when_nothing_is_logged(self, sleep: Mock) -> None:
         deployment = Mock()
-        deployment.cli.run_command.side_effect = [Mock(), _exec_failure(1)]  # launch ok; cat: no file yet
-        with self.assertRaises(AssertionError):
+        # launch ok; cat log: no file yet; cat err: uv's complaint
+        deployment.cli.run_command.side_effect = [
+            Mock(),
+            _exec_failure(1),
+            Mock(stdout=_exec_output("No solution found")),
+        ]
+        with self.assertRaises(AssertionError) as ctx:
             coding_agents.start_bedrock_probe_loop(deployment, timeout_s=0)
+        self.assertIn("No solution found", str(ctx.exception))
+        self.assertEqual(_server_argv(deployment, "run_command", call=2), ["cat", coding_agents.BEDROCK_PROBE_ERR])
 
     @patch("pytest_jupyter_deploy.coding_agents.time.sleep")
     def test_stop_touches_the_stop_file_waits_for_exit_and_returns_the_log(self, sleep: Mock) -> None:

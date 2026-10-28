@@ -68,6 +68,7 @@ print(json.dumps({
 
 BEDROCK_PROBE_LOG = "/tmp/bedrock-probe.log"
 BEDROCK_PROBE_STOP = "/tmp/bedrock-probe.stop"
+BEDROCK_PROBE_ERR = "/tmp/bedrock-probe.err"
 # Matches the loop's argv (the log path) but not its own text, so a wrapper shell echoing the
 # pattern never counts as the loop.
 _BEDROCK_PROBE_PROCESS_PATTERN = "bedrock-probe[.]log"
@@ -304,16 +305,20 @@ def start_bedrock_probe_loop(e2e_deployment: EndToEndDeployment, timeout_s: int 
             minute on a cold cache, hence the generous default).
     """
     encoded = base64.b64encode(BEDROCK_PROBE_LOOP_SCRIPT.encode()).decode()
+    stderr = "(unavailable)"
     script = (
-        f"rm -f {BEDROCK_PROBE_LOG} {BEDROCK_PROBE_STOP}; "
+        f"rm -f {BEDROCK_PROBE_LOG} {BEDROCK_PROBE_STOP} {BEDROCK_PROBE_ERR}; "
         f"nohup uv run --with boto3 python -c \"import base64; exec(base64.b64decode('{encoded}'))\" "
-        f"{BEDROCK_PROBE_LOG} {BEDROCK_PROBE_STOP} </dev/null >/dev/null 2>&1 &"
+        f"{BEDROCK_PROBE_LOG} {BEDROCK_PROBE_STOP} </dev/null >/dev/null 2>{BEDROCK_PROBE_ERR} &"
     )
     e2e_deployment.cli.run_command(build_server_exec_cmd([shlex.join(["sh", "-c", script])]))
     deadline = time.monotonic() + timeout_s
     while not _probe_lines(e2e_deployment):
         if time.monotonic() >= deadline:
-            raise AssertionError(f"bedrock probe loop logged nothing within {timeout_s}s")
+            # The stderr tells a uv/PyPI/region failure apart without a redeploy.
+            with contextlib.suppress(JDCliError):
+                stderr = _exec_stdout(e2e_deployment, ["cat", BEDROCK_PROBE_ERR])
+            raise AssertionError(f"bedrock probe loop logged nothing within {timeout_s}s; its stderr:\n{stderr}")
         time.sleep(5)
 
 

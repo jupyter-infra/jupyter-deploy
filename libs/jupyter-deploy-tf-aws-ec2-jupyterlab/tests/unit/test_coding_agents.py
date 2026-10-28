@@ -16,13 +16,22 @@ from pathlib import Path
 from typing import Any
 
 from jupyter_deploy.engine.terraform.tf_varfiles import parse_dot_tfvars_to_dict
-from jupyter_deploy_tf_aws_eks_oidc.template import TEMPLATE_PATH as EKS_TEMPLATE_PATH
 
 from jupyter_deploy_tf_aws_ec2_jupyterlab.template import TEMPLATE_PATH
 
 SERVICES_PATH: Path = TEMPLATE_PATH / "services"
 DOCS_DIR: Path = Path(__file__).resolve().parents[4] / "docs" / "source" / "templates" / "aws-ec2-jupyterlab-template"
 ENGINE_PATH: Path = TEMPLATE_PATH / "engine"
+# The eks image shares the Codex picker; no package dependency on eks, so reach it through the repo layout.
+EKS_PICKER: Path = (
+    TEMPLATE_PATH.parents[2]
+    / "jupyter-deploy-tf-aws-eks-oidc"
+    / "jupyter_deploy_tf_aws_eks_oidc"
+    / "template"
+    / "applications"
+    / "jupyterlab"
+    / "pick-codex-model.py"
+)
 DOCKERFILES: list[Path] = [
     SERVICES_PATH / "jupyter" / "dockerfile.jupyter",
     SERVICES_PATH / "jupyter-pixi" / "dockerfile.jupyter.pixi",
@@ -169,11 +178,7 @@ class TestPickCodexModel(unittest.TestCase):
         self.assertIn("set workspace_bedrock_inference_scope to global", cfg)
 
     def test_eks_copy_is_identical(self) -> None:
-        self.assertTrue(
-            filecmp.cmp(
-                self.SCRIPT, EKS_TEMPLATE_PATH / "applications" / "jupyterlab" / self.SCRIPT.name, shallow=False
-            )
-        )
+        self.assertTrue(filecmp.cmp(self.SCRIPT, EKS_PICKER, shallow=False))
 
     def test_usable_prefix_picks_lowest_priority(self) -> None:
         rc, cfg, _ = self._run("us", "openai.gpt-*")
