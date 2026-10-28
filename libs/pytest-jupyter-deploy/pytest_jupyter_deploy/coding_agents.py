@@ -66,6 +66,37 @@ print(json.dumps({
 }))
 """
 
+BEDROCK_PROBE_LOG = "/tmp/bedrock-probe.log"
+BEDROCK_PROBE_STOP = "/tmp/bedrock-probe.stop"
+# Matches the loop's argv (the log path) but not its own text, so a wrapper shell echoing the
+# pattern never counts as the loop.
+_BEDROCK_PROBE_PROCESS_PATTERN = "bedrock-probe[.]log"
+
+# Runs INSIDE the jupyter container in the background (argv: log_file stop_file) with one SDK
+# session built up front, as a user's long-running kernel would hold it across a credential
+# rotation. Appends ``ok <time>`` or ``fail <time> <error>`` every 10 s until the stop file exists.
+BEDROCK_PROBE_LOOP_SCRIPT = """
+import os
+import sys
+import time
+from datetime import datetime, timezone
+
+import boto3
+
+log_file, stop_file = sys.argv[1], sys.argv[2]
+bedrock = boto3.Session(region_name=os.environ["AWS_REGION"]).client("bedrock")
+while not os.path.exists(stop_file):
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        bedrock.list_foundation_models()
+        line = f"ok {now}"
+    except Exception as e:
+        line = f"fail {now} {e}"
+    with open(log_file, "a") as f:
+        print(line, file=f)
+    time.sleep(10)
+"""
+
 # Matches the agent's own processes by argv[0] (the codex launcher runs under node, so its
 # argv[0] is node and the native binary's is a path), and never pgrep's own pattern argument.
 _AGENT_PROCESS_PATTERNS = {"claude": "(^|/)claude( |$)", "codex": "(^|/)codex( |$)"}
@@ -243,3 +274,59 @@ def ask_agent_expecting_failure(e2e_deployment: EndToEndDeployment, argv: list[s
 
 def restart_service(e2e_deployment: EndToEndDeployment, name: str) -> None:
     e2e_deployment.cli.run_command(["jupyter-deploy", "server", "restart", "--service", name])
+
+
+def _probe_lines(e2e_deployment: EndToEndDeployment) -> list[str]:
+    try:
+        stdout = _exec_stdout(e2e_deployment, ["cat", BEDROCK_PROBE_LOG])
+    except JDCliError:
+        return []  # not written yet
+    return [line for line in stdout.splitlines() if line.startswith(("ok ", "fail "))]
+
+
+def _probe_loop_running(e2e_deployment: EndToEndDeployment) -> bool:
+    try:
+        e2e_deployment.cli.run_command(
+            build_server_exec_cmd([shlex.join(["pgrep", "-f", _BEDROCK_PROBE_PROCESS_PATTERN])])
+        )
+    except JDCliError as e:
+        if isinstance(e.__cause__, subprocess.CalledProcessError) and e.__cause__.returncode == 1:
+            return False
+        raise
+    return True
+
+
+def start_bedrock_probe_loop(e2e_deployment: EndToEndDeployment, timeout_s: int = 120) -> None:
+    """Start ``BEDROCK_PROBE_LOOP_SCRIPT`` detached in the jupyter container; return once it logged its first probe.
+
+    Raises:
+        AssertionError: If nothing is logged within ``timeout_s`` (``uv run --with boto3`` can take a
+            minute on a cold cache, hence the generous default).
+    """
+    encoded = base64.b64encode(BEDROCK_PROBE_LOOP_SCRIPT.encode()).decode()
+    script = (
+        f"rm -f {BEDROCK_PROBE_LOG} {BEDROCK_PROBE_STOP}; "
+        f"nohup uv run --with boto3 python -c \"import base64; exec(base64.b64decode('{encoded}'))\" "
+        f"{BEDROCK_PROBE_LOG} {BEDROCK_PROBE_STOP} </dev/null >/dev/null 2>&1 &"
+    )
+    e2e_deployment.cli.run_command(build_server_exec_cmd([shlex.join(["sh", "-c", script])]))
+    deadline = time.monotonic() + timeout_s
+    while not _probe_lines(e2e_deployment):
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"bedrock probe loop logged nothing within {timeout_s}s")
+        time.sleep(5)
+
+
+def stop_bedrock_probe_loop(e2e_deployment: EndToEndDeployment, timeout_s: int = 20) -> list[str]:
+    """Stop the probe loop and return its log lines (``ok <time>`` / ``fail <time> <error>``).
+
+    Raises:
+        AssertionError: If the loop is still running after ``timeout_s``.
+    """
+    _exec_stdout(e2e_deployment, ["touch", BEDROCK_PROBE_STOP])
+    deadline = time.monotonic() + timeout_s
+    while _probe_loop_running(e2e_deployment):
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"bedrock probe loop still running {timeout_s}s after {BEDROCK_PROBE_STOP}")
+        time.sleep(2)
+    return _probe_lines(e2e_deployment)

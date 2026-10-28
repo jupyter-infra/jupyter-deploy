@@ -14,6 +14,7 @@ project that turned it off). The ordered ones are the Bedrock half of the mutati
 ``constants.py`` for why each applies inline and the next test is its restore.
 """
 
+import time
 from datetime import UTC, datetime
 
 import pytest
@@ -30,6 +31,8 @@ from pytest_jupyter_deploy.coding_agents import (
     imds_reachable,
     read_app_credentials,
     restart_service,
+    start_bedrock_probe_loop,
+    stop_bedrock_probe_loop,
     wait_for_rotated_app_credentials,
 )
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
@@ -42,6 +45,9 @@ from .constants import (
     ORDER_MUTATING_BEDROCK_GLOBAL,
     ORDER_MUTATING_BEDROCK_OFF,
 )
+
+# Long enough for several probes on the swapped credentials file.
+PROBE_AFTER_ROTATION_S = 60
 
 
 def _assert_both_agents_answer(e2e_deployment: EndToEndDeployment) -> None:
@@ -86,12 +92,24 @@ def test_app_role_is_bedrock_only(e2e_deployment: EndToEndDeployment, bedrock_en
 
 
 def test_app_credentials_rotate(e2e_deployment: EndToEndDeployment, bedrock_enabled_project: None) -> None:
-    """A sidecar restart publishes a new key the agents pick up without their own restart."""
+    """A sidecar restart publishes a new key the agents pick up without their own restart.
+
+    A probe loop holding one boto3 session runs across the rotation. STS does not revoke the old
+    key, so this cannot show the new one is in use; it shows a long-lived SDK session keeps working
+    through the file swap (no partial read, no permission change).
+    """
     before = read_app_credentials(e2e_deployment)
     assert credentials_expiration(before) > datetime.now(UTC), before["Expiration"]
 
-    restart_service(e2e_deployment, BEDROCK_SIDECAR_SERVICE)
-    after = wait_for_rotated_app_credentials(e2e_deployment, before["AccessKeyId"])
+    start_bedrock_probe_loop(e2e_deployment)
+    try:
+        restart_service(e2e_deployment, BEDROCK_SIDECAR_SERVICE)
+        after = wait_for_rotated_app_credentials(e2e_deployment, before["AccessKeyId"])
+        time.sleep(PROBE_AFTER_ROTATION_S)
+    finally:
+        probes = stop_bedrock_probe_loop(e2e_deployment)
+    assert len(probes) >= 3, probes
+    assert not [p for p in probes if p.startswith("fail")], probes
     assert credentials_expiration(after) > datetime.now(UTC), after["Expiration"]
     assert CANARY in ask_claude_code(e2e_deployment)
 
@@ -123,6 +141,8 @@ def test_bedrock_off_removes_the_sidecar_and_the_agents_fail_clearly(e2e_deploym
     e2e_deployment.ensure_deployed()
     e2e_deployment.ensure_deployed_with_overrides({"bedrock_enabled": False})
     e2e_deployment.ensure_server_running()
+    # The isolation is unconditional; this catches a later change that gates it on the flag.
+    assert not imds_reachable(e2e_deployment)
 
     claude_failure = ask_agent_expecting_failure(e2e_deployment, ["claude", "-p", CANARY_PROMPT])
     assert "credentials" in claude_failure.lower(), claude_failure

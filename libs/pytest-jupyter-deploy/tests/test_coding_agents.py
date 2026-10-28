@@ -18,9 +18,9 @@ def _exec_failure(returncode: int) -> JDCliError:
     return error
 
 
-def _server_argv(deployment: Mock, method: str = "run_exec_with_retry") -> list[str]:
+def _server_argv(deployment: Mock, method: str = "run_exec_with_retry", call: int = -1) -> list[str]:
     """The argv the server runs: `jd server exec` joins its trailing args with spaces, then shlex-splits."""
-    cmd = getattr(deployment.cli, method).call_args.args[0]
+    cmd = getattr(deployment.cli, method).call_args_list[call].args[0]
     return shlex.split(" ".join(cmd[cmd.index("--") + 1 :]))
 
 
@@ -201,3 +201,58 @@ class TestRestartService(unittest.TestCase):
         deployment.cli.run_command.assert_called_once_with(
             ["jupyter-deploy", "server", "restart", "--service", "bedrock-sidecar"]
         )
+
+
+class TestBedrockProbeLoop(unittest.TestCase):
+    LOG_LINES = "ok 2026-10-28T10:00:00+00:00\nfail 2026-10-28T10:00:10+00:00 boom"
+
+    def test_script_is_valid_and_probes_bedrock(self) -> None:
+        compile(coding_agents.BEDROCK_PROBE_LOOP_SCRIPT, "<probe>", "exec")
+        self.assertIn("list_foundation_models", coding_agents.BEDROCK_PROBE_LOOP_SCRIPT)
+
+    @patch("pytest_jupyter_deploy.coding_agents.time.sleep")
+    def test_start_detaches_the_loop_then_waits_for_its_first_line(self, sleep: Mock) -> None:
+        deployment = Mock()
+        deployment.cli.run_command.return_value.stdout = _exec_output("ok 2026-10-28T10:00:00+00:00")
+
+        coding_agents.start_bedrock_probe_loop(deployment)
+
+        start = _server_argv(deployment, "run_command", call=0)
+        self.assertEqual(start[:2], ["sh", "-c"])
+        cleanup, launch = start[2].split("; ", 1)
+        self.assertEqual(cleanup, f"rm -f {coding_agents.BEDROCK_PROBE_LOG} {coding_agents.BEDROCK_PROBE_STOP}")
+        words = shlex.split(launch)
+        self.assertEqual(words[:7], ["nohup", "uv", "run", "--with", "boto3", "python", "-c"])
+        self.assertEqual(words[8:10], [coding_agents.BEDROCK_PROBE_LOG, coding_agents.BEDROCK_PROBE_STOP])
+        self.assertEqual(words[-1], "&")
+        encoded = re.search(r"b64decode\('([^']+)'\)", words[7])
+        assert encoded is not None
+        self.assertEqual(base64.b64decode(encoded.group(1)).decode(), coding_agents.BEDROCK_PROBE_LOOP_SCRIPT)
+        self.assertEqual(_server_argv(deployment, "run_command", call=1), ["cat", coding_agents.BEDROCK_PROBE_LOG])
+        sleep.assert_not_called()
+
+    @patch("pytest_jupyter_deploy.coding_agents.time.sleep")
+    def test_start_fails_when_nothing_is_logged(self, sleep: Mock) -> None:
+        deployment = Mock()
+        deployment.cli.run_command.side_effect = [Mock(), _exec_failure(1)]  # launch ok; cat: no file yet
+        with self.assertRaises(AssertionError):
+            coding_agents.start_bedrock_probe_loop(deployment, timeout_s=0)
+
+    @patch("pytest_jupyter_deploy.coding_agents.time.sleep")
+    def test_stop_touches_the_stop_file_waits_for_exit_and_returns_the_log(self, sleep: Mock) -> None:
+        deployment = Mock()
+        deployment.cli.run_command.side_effect = [Mock(), _exec_failure(1), Mock(stdout=_exec_output(self.LOG_LINES))]
+
+        lines = coding_agents.stop_bedrock_probe_loop(deployment)
+
+        self.assertEqual(lines, self.LOG_LINES.splitlines())
+        self.assertEqual(_server_argv(deployment, "run_command", call=0), ["touch", coding_agents.BEDROCK_PROBE_STOP])
+        self.assertEqual(_server_argv(deployment, "run_command", call=1), ["pgrep", "-f", "bedrock-probe[.]log"])
+        self.assertEqual(_server_argv(deployment, "run_command", call=2), ["cat", coding_agents.BEDROCK_PROBE_LOG])
+        sleep.assert_not_called()
+
+    @patch("pytest_jupyter_deploy.coding_agents.time.sleep")
+    def test_stop_fails_when_the_loop_does_not_exit(self, sleep: Mock) -> None:
+        deployment = Mock()  # pgrep keeps matching
+        with self.assertRaises(AssertionError):
+            coding_agents.stop_bedrock_probe_loop(deployment, timeout_s=0)
