@@ -43,24 +43,10 @@ RUN ln -s /opt/ai-clis/bin/claude /usr/local/bin/claude && \
     ln -s /opt/ai-clis/bin/codex /usr/local/bin/codex
 COPY claude-managed-settings.json /etc/claude-code/managed-settings.json
 COPY codex-config.toml /etc/codex/config.toml
-# Codex's model: the best one this Codex release offers for the inference profile prefix among
-# the models IAM allows, so it follows the pinned version. Where Codex has no model to use, an
-# explicit placeholder makes its error name the fix: without a model line it would fall back to
-# a built-in default that IAM denies. With a usable prefix and allowed models, finding no model
-# fails the build.
+# Codex's model is pinned at build from the installed release's catalog so it follows the pinned
+# version and the models IAM allows; the script documents the placeholder and failure cases.
 COPY pick-codex-model.py /tmp/pick-codex-model.py
-RUN unset_model() { sed -i "s|@CODEX_MODEL@|unset: $1|" /etc/codex/config.toml; } && \
-    if [ -z "$CODEX_MODEL_PATTERNS" ]; then \
-      unset_model "no openai model allowed by workspace_bedrock_model_patterns"; \
-    elif [ "$CODEX_PROFILE_PREFIX" != "us" ] && [ "$CODEX_PROFILE_PREFIX" != "global" ]; then \
-      unset_model "no ${CODEX_PROFILE_PREFIX:-geographic} OpenAI inference profiles, set workspace_bedrock_inference_scope to global"; \
-    else \
-      model="$(codex debug models | python3 /tmp/pick-codex-model.py "$CODEX_PROFILE_PREFIX" "$CODEX_MODEL_PATTERNS")" && \
-      if [ -z "$model" ]; then \
-        echo "codex debug models lists no ${CODEX_PROFILE_PREFIX}. model allowed by ${CODEX_MODEL_PATTERNS}" >&2; exit 1; \
-      fi && \
-      sed -i "s|@CODEX_MODEL@|${model}|" /etc/codex/config.toml; \
-    fi && \
+RUN python3 /tmp/pick-codex-model.py "$CODEX_PROFILE_PREFIX" "$CODEX_MODEL_PATTERNS" /etc/codex/config.toml workspace_ && \
     rm /tmp/pick-codex-model.py
 
 COPY jupyter-start.sh /usr/local/bin/

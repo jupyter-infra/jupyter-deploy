@@ -4,6 +4,7 @@ The image build, the IAM grants and the instance metadata settings only meet on 
 these tests pin each side to what the others expect.
 """
 
+import filecmp
 import json
 import os
 import re
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from jupyter_deploy.engine.terraform.tf_varfiles import parse_dot_tfvars_to_dict
+from jupyter_deploy_tf_aws_eks_oidc.template import TEMPLATE_PATH as EKS_TEMPLATE_PATH
 
 from jupyter_deploy_tf_aws_ec2_base.template import TEMPLATE_PATH
 
@@ -124,11 +126,11 @@ class TestPickCodexModel(unittest.TestCase):
         )
         fake.chmod(0o755)
 
-    def _run(self, prefix: str, patterns: str, reset: bool = True, **env: str) -> tuple[int, str, str]:
+    def _run(self, prefix: str, patterns: str, *extra: str, reset: bool = True, **env: str) -> tuple[int, str, str]:
         if reset:
             self.config.write_text('model_provider = "amazon-bedrock-runtime"\nmodel = "@CODEX_MODEL@"\n')
         result = subprocess.run(
-            [sys.executable, "-I", str(self.SCRIPT), prefix, patterns, str(self.config)],
+            [sys.executable, "-I", str(self.SCRIPT), prefix, patterns, str(self.config), *extra],
             env={**os.environ, "PATH": f"{self.tmp}{os.pathsep}{os.environ['PATH']}", **env},
             capture_output=True,
             text=True,
@@ -157,6 +159,21 @@ class TestPickCodexModel(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("unset: no geographic OpenAI", cfg)
         self.assertFalse(self.codex_called())
+
+    def test_variable_prefix_names_the_callers_variables(self) -> None:
+        # The eks image shares this script but its variables are workspace_bedrock_*.
+        _, cfg, _ = self._run("us", "", "workspace_")
+        self.assertIn("workspace_bedrock_enabled is false", cfg)
+        self.assertIn("allowed by workspace_bedrock_model_patterns", cfg)
+        _, cfg, _ = self._run("eu", "openai.gpt-*", "workspace_")
+        self.assertIn("set workspace_bedrock_inference_scope to global", cfg)
+
+    def test_eks_copy_is_identical(self) -> None:
+        self.assertTrue(
+            filecmp.cmp(
+                self.SCRIPT, EKS_TEMPLATE_PATH / "applications" / "jupyterlab" / self.SCRIPT.name, shallow=False
+            )
+        )
 
     def test_usable_prefix_picks_lowest_priority(self) -> None:
         rc, cfg, _ = self._run("us", "openai.gpt-*")
