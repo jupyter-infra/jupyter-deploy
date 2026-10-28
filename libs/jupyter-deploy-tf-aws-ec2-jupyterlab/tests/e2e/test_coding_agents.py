@@ -147,6 +147,7 @@ def test_agents_answer_on_pixi_after_instance_swap(e2e_deployment: EndToEndDeplo
 @pytest.mark.mutating
 def test_bedrock_off_removes_the_sidecar_and_the_agents_fail_clearly(e2e_deployment: EndToEndDeployment) -> None:
     """Apply: Bedrock off. No sidecar, no credentials, both agents fail on the missing model, app stays up."""
+    e2e_deployment.ensure_deployed()
     e2e_deployment.ensure_deployed_with_overrides({"bedrock_enabled": False})
     e2e_deployment.ensure_server_running()
 
@@ -167,6 +168,7 @@ def test_bedrock_off_removes_the_sidecar_and_the_agents_fail_clearly(e2e_deploym
 @pytest.mark.mutating
 def test_bedrock_global_scope_answers(e2e_deployment: EndToEndDeployment) -> None:
     """Apply: Bedrock back on with global inference profiles; restores the sidecar after the off apply."""
+    e2e_deployment.ensure_deployed()
     e2e_deployment.ensure_deployed_with_overrides({"bedrock_enabled": True, "bedrock_inference_scope": "global"})
     e2e_deployment.ensure_server_running()
     assert _region_prefix(e2e_deployment) == "global"
@@ -177,6 +179,7 @@ def test_bedrock_global_scope_answers(e2e_deployment: EndToEndDeployment) -> Non
 @pytest.mark.mutating
 def test_bedrock_defaults_restored(e2e_deployment: EndToEndDeployment) -> None:
     """Apply: back to the defaults (geo scope); ends the on -> off -> on round trip."""
+    e2e_deployment.ensure_deployed()
     e2e_deployment.ensure_deployed_with(
         ["--reset-variable", "bedrock_inference_scope", "--reset-variable", "bedrock_enabled"]
     )

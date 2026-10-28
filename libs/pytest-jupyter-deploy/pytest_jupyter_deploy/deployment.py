@@ -480,6 +480,9 @@ class EndToEndDeployment:
 
     def get_variables_yaml_path(self) -> Path:
         """Get the path to the variables.yaml file."""
+        # project_dir only exists once the suite config is loaded; an override writer may be the
+        # first call on a fresh deployment object (idempotent, like the `cli` property).
+        self.suite_config.load()
         return self.suite_config.project_dir / jd_constants.VARIABLES_FILENAME
 
     def get_variables_config(self) -> JupyterDeployVariablesConfig:
