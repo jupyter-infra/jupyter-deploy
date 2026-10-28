@@ -131,8 +131,12 @@ def test_app_credentials_rotate(e2e_deployment: EndToEndDeployment, bedrock_enab
 @pytest.mark.gpu
 @skip_if_testvars_not_set(["JD_E2E_GPU_INSTANCE", "JD_E2E_LARGER_LOG_RETENTION_DAYS"])
 def test_agents_answer_on_pixi_after_instance_swap(e2e_deployment: EndToEndDeployment) -> None:
-    """Right after apply #1: the pixi image ships the agents too, and the new instance got credentials."""
-    assert e2e_deployment.get_str_variable_value("jupyter_package_manager") == "pixi", "run after apply #1"
+    """Right after apply #1: the pixi image ships the agents too, and the new instance got credentials.
+
+    Skips rather than fails without apply #1 so the module stays runnable on its own (`-k test_coding_agents`).
+    """
+    if e2e_deployment.get_str_variable_value("jupyter_package_manager") != "pixi":
+        pytest.skip("apply #1 (GPU + pixi) did not run before this test; run the whole suite")
     if not e2e_deployment.get_bool_variable_value("bedrock_enabled"):
         pytest.skip("bedrock_enabled is false on this project")
     e2e_deployment.ensure_server_running()
