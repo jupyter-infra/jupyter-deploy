@@ -169,7 +169,7 @@ def read_app_credentials(e2e_deployment: EndToEndDeployment) -> dict[str, Any]:
 
 
 def credentials_expiration(credentials: dict[str, Any]) -> datetime:
-    """Parse the ``Expiration`` of a credentials file (ISO-8601 with ``Z``, as the AWS CLI writes it)."""
+    """Parse the ``Expiration`` of a credentials file (ISO-8601 with an offset, ``+00:00`` as the AWS CLI writes it)."""
     return datetime.fromisoformat(credentials["Expiration"])
 
 

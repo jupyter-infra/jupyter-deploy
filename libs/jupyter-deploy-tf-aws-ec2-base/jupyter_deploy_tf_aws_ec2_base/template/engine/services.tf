@@ -154,8 +154,6 @@ locals {
     var.codex_version,
     local.bedrock_profile_prefix,
     local.codex_model_patterns,
-    # The flag adds or removes the sidecar service and the jupyter mount in the compose file.
-    var.bedrock_enabled,
     data.local_file.aws_config.content,
     data.local_file.bedrock_sidecar_dockerfile.content,
     data.local_file.bedrock_sidecar_refresh.content,

@@ -326,13 +326,12 @@ class TestBedrockSidecarWiring(unittest.TestCase):
         ):
             self.assertIn(snippet, text)
 
-    def test_image_build_inputs_cover_versions_flag_and_sidecar(self) -> None:
+    def test_image_build_inputs_cover_versions_model_selection_and_sidecar(self) -> None:
         match = re.search(r"build_affecting_files = \[(.*?)\n  \]", (ENGINE_PATH / "services.tf").read_text(), re.S)
         assert match is not None, "no build_affecting_files list in services.tf"
         for snippet in (
             "var.claude_code_version",
             "var.codex_version",
-            "var.bedrock_enabled",
             "local.bedrock_profile_prefix",
             "local.codex_model_patterns",
             "bedrock_sidecar_dockerfile.content",

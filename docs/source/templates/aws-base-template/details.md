@@ -38,10 +38,12 @@ role carrying only the Bedrock inference policy: it may invoke the models matchi
 only the instance role may assume it. A `bedrock-sidecar` container assumes it every 15 minutes and
 publishes the credentials to a file that the Jupyter container mounts read-only. The Jupyter
 container runs on its own docker network, which a host firewall rule cuts off from the instance
-metadata service, so code in the container holds the `bedrock-app` credentials and never the
-instance role's. The instance requires IMDSv2 with a hop limit of 2 so that the sidecar and Traefik
-(Route 53 ACME), one docker-bridge hop away, can read the instance role credentials. A container
-holding `/var/run/docker.sock` can bypass the firewall rule; that is tracked separately.
+metadata service, so the default AWS SDK credential chain in the container (the agents, `boto3`)
+resolves to the `bedrock-app` credentials and not the instance role's. The instance requires IMDSv2
+with a hop limit of 2 so that the sidecar and Traefik (Route 53 ACME), one docker-bridge hop away,
+can read the instance role credentials. The Jupyter container still mounts `/var/run/docker.sock`,
+through which a user can reach the host and therefore the instance role; removing that mount is
+tracked separately.
 
 The template creates two AWS Secrets Manager secrets:
 - One to store the OAuth App client secret

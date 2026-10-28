@@ -22,11 +22,13 @@ The `jupyter` container mounts the volume read-only at
 
 The `jupyter` container runs on its own docker network. A `DOCKER-USER` firewall rule on the host,
 re-applied on every docker start, drops its traffic to the instance metadata service, and
-`AWS_EC2_METADATA_DISABLED` makes the AWS SDKs fail fast rather than probe it. Code in the
-container therefore holds the `bedrock-app` credentials and never the instance role's. The instance
-keeps IMDSv2 with a hop limit of 2 so that the sidecar and Traefik (Route 53 ACME), one
-docker-bridge hop away, can still read the instance role credentials. A container holding
-`/var/run/docker.sock` can bypass the firewall rule; that is tracked separately.
+`AWS_EC2_METADATA_DISABLED` makes the AWS SDKs fail fast rather than probe it. The default AWS SDK
+credential chain in the container, which the agents and `boto3` use, therefore resolves to the
+`bedrock-app` credentials and not the instance role's. The instance keeps IMDSv2 with a hop limit
+of 2 so that the sidecar and Traefik (Route 53 ACME), one docker-bridge hop away, can still read
+the instance role credentials. This isolation covers the credential chain, not a deliberate user:
+the `jupyter` container still mounts `/var/run/docker.sock`, through which a user can reach the
+host and therefore the instance role. Removing that mount is tracked separately.
 
 ### AWS credentials in notebooks
 
@@ -38,6 +40,14 @@ to read the deployment S3 bucket, no longer has them.
 Every user of the app shares the `bedrock-app` role, and therefore the same Bedrock credentials.
 Bedrock usage is not attributable per user: AWS CloudTrail records every call under that role.
 ```
+
+### Use your own AWS credentials
+
+With Bedrock enabled, the `jupyter` container sets `AWS_CONFIG_FILE=/etc/aws/config`, so the AWS
+SDKs and CLI do not read `~/.aws/config` and `AWS_PROFILE` cannot select a profile from it. A
+`~/.aws/credentials` file still takes precedence over the `bedrock-app` role. To use the profiles in
+`~/.aws/config`, run `export AWS_CONFIG_FILE=$HOME/.aws/config` in the terminal, or set it in the
+notebook's environment; that shell or kernel then no longer sees the `bedrock-app` credentials.
 
 ## Enable the models in your account
 
