@@ -146,6 +146,14 @@ def _exec_stdout(e2e_deployment: EndToEndDeployment, argv: list[str], timeout_s:
     ).stdout
 
 
+def exec_stdout_value(stdout: str) -> str:
+    """Return the one value a `jd server exec` printed, skipping the rich rules around it."""
+    for line in stdout.splitlines():
+        if line.strip() and not line.startswith("─"):
+            return line.strip()
+    raise AssertionError(f"No value in server exec output:\n{stdout}")
+
+
 def _json_line(stdout: str) -> dict[str, Any]:
     for line in stdout.splitlines():
         if line.startswith("{"):
@@ -198,8 +206,12 @@ def imds_reachable(e2e_deployment: EndToEndDeployment) -> bool:
     ]
     try:
         e2e_deployment.cli.run_command(build_server_exec_cmd([shlex.join(argv)]))
-    except JDCliError:
-        return False
+    except JDCliError as e:
+        # Only curl's own "could not connect" exits mean unreachable (28 timeout, 7 refused); a
+        # missing curl or a dead host must not pass as "blocked".
+        if isinstance(e.__cause__, subprocess.CalledProcessError) and e.__cause__.returncode in (7, 28):
+            return False
+        raise
     return True
 
 

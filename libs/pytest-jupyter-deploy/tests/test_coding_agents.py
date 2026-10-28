@@ -152,6 +152,15 @@ class TestWaitForRotatedAppCredentials(unittest.TestCase):
             coding_agents.wait_for_rotated_app_credentials(deployment, "ASIA1", timeout_s=0)
 
 
+class TestExecStdoutValue(unittest.TestCase):
+    def test_returns_the_value_between_the_rules(self) -> None:
+        self.assertEqual(coding_agents.exec_stdout_value(_exec_output("global")), "global")
+
+    def test_raises_when_only_rules_were_printed(self) -> None:
+        with self.assertRaises(AssertionError):
+            coding_agents.exec_stdout_value(_exec_output(""))
+
+
 class TestImdsReachable(unittest.TestCase):
     def test_reachable_when_curl_exits_zero(self) -> None:
         deployment = Mock()
@@ -161,10 +170,19 @@ class TestImdsReachable(unittest.TestCase):
         self.assertIn("http://169.254.169.254/latest/api/token", argv)
         self.assertIn("X-aws-ec2-metadata-token-ttl-seconds: 60", argv)
 
-    def test_unreachable_when_curl_fails(self) -> None:
+    def test_unreachable_when_curl_times_out_or_is_refused(self) -> None:
+        for returncode in (28, 7):
+            with self.subTest(returncode=returncode):
+                deployment = Mock()
+                deployment.cli.run_command.side_effect = _exec_failure(returncode)
+                self.assertFalse(coding_agents.imds_reachable(deployment))
+
+    def test_raises_when_the_check_itself_fails(self) -> None:
+        # 127: curl missing from the image must not read as "IMDS blocked".
         deployment = Mock()
-        deployment.cli.run_command.side_effect = _exec_failure(28)
-        self.assertFalse(coding_agents.imds_reachable(deployment))
+        deployment.cli.run_command.side_effect = _exec_failure(127)
+        with self.assertRaises(JDCliError):
+            coding_agents.imds_reachable(deployment)
 
 
 class TestAskAgentExpectingFailure(unittest.TestCase):

@@ -47,6 +47,8 @@ ORDER_MUTATING_VOLUME_SWAPS = _MUTATING_BASE + 30  # 40
 
 # Rides on apply #1 (no apply of its own): the coding agents must still answer on the pixi image
 # right after the instance swap, i.e. the sidecar re-published credentials on the new instance.
+# Shares ordinal 11 with test_run_gpu_notebook on purpose: both only need to follow apply #1, and
+# alphabetical file order decides between them.
 ORDER_CODING_AGENTS_AFTER_GPU_PIXI = ORDER_MUTATING_GPU_PIXI + 1  # 11
 
 # Applies #5-#7 (test_coding_agents.py): Bedrock on -> off -> on with global inference scope ->

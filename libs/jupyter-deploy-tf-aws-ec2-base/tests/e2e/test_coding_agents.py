@@ -26,6 +26,7 @@ from pytest_jupyter_deploy.coding_agents import (
     ask_claude_code,
     ask_codex,
     credentials_expiration,
+    exec_stdout_value,
     imds_reachable,
     read_app_credentials,
     restart_service,
@@ -50,7 +51,7 @@ def _assert_both_agents_answer(e2e_deployment: EndToEndDeployment) -> None:
 
 def _region_prefix(e2e_deployment: EndToEndDeployment) -> str:
     result = e2e_deployment.cli.run_command(build_server_exec_cmd(["printenv", "ANTHROPIC_BEDROCK_REGION_PREFIX"]))
-    return result.stdout.split()[-1]
+    return exec_stdout_value(result.stdout)
 
 
 # --------------------------------------------------------------------------- Bedrock on (default)
