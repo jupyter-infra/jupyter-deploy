@@ -220,10 +220,8 @@ class TestBedrockProbeLoop(unittest.TestCase):
         start = _server_argv(deployment, "run_command", call=0)
         self.assertEqual(start[:2], ["sh", "-c"])
         cleanup, launch = start[2].split("; ", 1)
-        self.assertEqual(
-            cleanup,
-            f"rm -f {coding_agents.BEDROCK_PROBE_LOG} {coding_agents.BEDROCK_PROBE_STOP} {coding_agents.BEDROCK_PROBE_ERR}",
-        )
+        files = (coding_agents.BEDROCK_PROBE_LOG, coding_agents.BEDROCK_PROBE_STOP, coding_agents.BEDROCK_PROBE_ERR)
+        self.assertEqual(cleanup, "rm -f " + " ".join(files))
         words = shlex.split(launch)
         self.assertEqual(words[:7], ["nohup", "uv", "run", "--with", "boto3", "python", "-c"])
         self.assertEqual(words[8:10], [coding_agents.BEDROCK_PROBE_LOG, coding_agents.BEDROCK_PROBE_STOP])
