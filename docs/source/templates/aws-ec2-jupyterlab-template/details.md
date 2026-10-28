@@ -52,7 +52,7 @@ deployment S3 bucket, write access to the certificate-pin SSM parameter, and (op
 access.
 
 With `bedrock_enabled` set to `true` (the default), the template also creates a `bedrock-app` IAM
-role that only the Bedrock inference policy is attached to: it may invoke the models matching
+role carrying only the Bedrock inference policy: it may invoke the models matching
 `bedrock_model_patterns` through the inference profiles that `bedrock_inference_scope` selects, and
 only the instance role may assume it. A `bedrock-sidecar` container assumes it every 15 minutes and
 publishes the credentials to a file that the Jupyter container mounts read-only. The Jupyter

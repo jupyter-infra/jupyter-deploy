@@ -15,8 +15,9 @@ only principal that may assume it.
 
 A `bedrock-sidecar` container (the AWS CLI image and a shell loop) assumes the `bedrock-app` role
 from the instance role every 15 minutes and writes the credentials atomically to a docker volume.
-Role chaining caps each session at one hour, so a sidecar that stops refreshing turns unhealthy
-long before the credentials expire. The `jupyter` container mounts the volume read-only at
+Role chaining caps each session at one hour. The sidecar's health check fails once the published
+credentials are within five minutes of expiry; `jd server status` then reports `OUT_OF_SERVICE`.
+The `jupyter` container mounts the volume read-only at
 `/run/bedrock-creds/credentials.json` and reads it through `credential_process` in `/etc/aws/config`.
 
 The `jupyter` container runs on its own docker network. A `DOCKER-USER` firewall rule on the host,
@@ -122,8 +123,9 @@ agents stay installed but fail: `claude` with a credentials error, `codex` repor
 
 - **`jd server status` reports `OUT_OF_SERVICE`**: the `bedrock-sidecar` container is down or
   unhealthy. Read its logs with `jd server logs -s bedrock-sidecar`.
-- **`Unable to locate credentials`, or no `/run/bedrock-creds/credentials.json`**: the sidecar has
-  not published credentials yet, or `bedrock_enabled` is `false`.
+- **`Error when retrieving credentials from custom-process`**: `/run/bedrock-creds/credentials.json`
+  is missing; the sidecar has not published credentials yet.
+- **`Unable to locate credentials`**: `bedrock_enabled` is `false`.
 - **`AccessDeniedException` naming a model or inference profile**: the model is outside
   `bedrock_model_patterns`, or its inference profile is outside `bedrock_inference_scope`
   (**Codex** outside the US needs `global`).

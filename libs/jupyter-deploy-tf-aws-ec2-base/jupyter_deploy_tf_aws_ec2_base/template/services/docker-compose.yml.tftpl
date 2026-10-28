@@ -277,7 +277,7 @@ services:
       - fluent-bit
     healthcheck:
       # Healthy iff the published credentials expire more than 5 min out; the loop refreshes every
-      # 15 min, so a stuck loop turns unhealthy long before the hour-long session actually ends.
+      # 15 min, so a stuck loop turns unhealthy about five minutes before the hour-long session ends.
       test: ["CMD", "/refresh.sh", "-healthcheck"]
       interval: 60s
       timeout: 5s
