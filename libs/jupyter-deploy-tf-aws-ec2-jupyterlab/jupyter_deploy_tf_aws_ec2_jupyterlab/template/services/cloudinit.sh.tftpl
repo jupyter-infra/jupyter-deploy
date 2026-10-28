@@ -30,11 +30,15 @@ if [[ "$OS" == "Amazon Linux" ]]; then
         echo "Docker is already installed"
     fi
 
-    # The IMDS block on jupyter's address is the credential control, so it must outlive reboots: re-add
-    # it every time dockerd starts (docker-startup.sh also adds it for the current boot).
+    # The IMDS block on jupyter's address is the credential control, so it must outlive reboots. On reboot
+    # dockerd restarts the unless-stopped containers while it initialises, before ExecStartPost runs, so
+    # the raw-table rule goes in from ExecStartPre: in place before any container starts and independent
+    # of the DOCKER-USER chain. DOCKER-USER stays as the second layer and covers the dockerd restart retry
+    # path (docker-startup.sh also adds both for the current boot).
     mkdir -p /etc/systemd/system/docker.service.d
     cat > /etc/systemd/system/docker.service.d/imds-block.conf << 'EOF'
 [Service]
+ExecStartPre=/bin/sh -c 'iptables -t raw -C PREROUTING -s 172.30.250.10/32 -d 169.254.169.254 -j DROP 2>/dev/null || iptables -t raw -I PREROUTING 1 -s 172.30.250.10/32 -d 169.254.169.254 -j DROP'
 ExecStartPost=/bin/sh -c 'iptables -C DOCKER-USER -s 172.30.250.10/32 -d 169.254.169.254 -j DROP 2>/dev/null || iptables -I DOCKER-USER 1 -s 172.30.250.10/32 -d 169.254.169.254 -j DROP'
 EOF
     systemctl daemon-reload

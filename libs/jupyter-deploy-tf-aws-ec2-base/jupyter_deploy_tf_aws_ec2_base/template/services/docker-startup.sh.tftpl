@@ -116,6 +116,8 @@ fi
 # script without a reboot, so the stale rule has to go explicitly.
 iptables -D DOCKER-USER -s 172.30.250.0/24 -d 169.254.169.254 -j DROP 2>/dev/null || true
 iptables -C DOCKER-USER -s 172.30.250.10/32 -d 169.254.169.254 -j DROP 2>/dev/null || iptables -I DOCKER-USER 1 -s 172.30.250.10/32 -d 169.254.169.254 -j DROP
+# The raw-table rule is the boot-time layer (imds-block.conf); in-place updates do not reboot, so add it here too.
+iptables -t raw -C PREROUTING -s 172.30.250.10/32 -d 169.254.169.254 -j DROP 2>/dev/null || iptables -t raw -I PREROUTING 1 -s 172.30.250.10/32 -d 169.254.169.254 -j DROP
 
 echo "Starting docker compose"
 if ! docker compose up -d --force-recreate --remove-orphans $SHOULD_BUILD --wait --wait-timeout $TIMEOUT_FIRST; then
