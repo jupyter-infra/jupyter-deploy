@@ -4,7 +4,8 @@ Test Execution Order
 ====================
 
 1. **Deployment test** (order=1) — verifies the app is reachable the moment `jd up` finishes.
-2. **Mutating tests** (order >= 10) — two in-place `jd up` cycles on the SAME deployment.
+2. **Mutating tests** (order >= 10) — in-place `jd up` cycles on the SAME deployment: the two
+   instance swaps, the zone swap, then the Bedrock round trip.
 3. **Non-ordered tests** — run LAST (pytest-order runs positive-ordinal tests first).
 
 The mutating ordinals are load-bearing, not cosmetic: this suite deliberately mutates ONE
@@ -35,6 +36,18 @@ ORDER_MUTATING_CPU_UV = _MUTATING_BASE + 10  # 20
 # anyway because it leaves the deployment in a different zone, and because a zone swap is the most
 # expensive thing in the suite -- a failure here should not cost the cheaper coverage.
 ORDER_MUTATING_VOLUME_SWAPS = _MUTATING_BASE + 20  # 30
+
+# Rides on apply #1 (no apply of its own): the coding agents must still answer on the pixi image
+# right after the instance swap, i.e. the sidecar re-published credentials on the new instance.
+ORDER_CODING_AGENTS_AFTER_GPU_PIXI = ORDER_MUTATING_GPU_PIXI + 1  # 11
+
+# Applies #4-#6 (test_coding_agents.py): Bedrock on -> off -> on with global inference scope ->
+# back to the defaults. Each test applies its own change inline and the NEXT one is its restore,
+# so there is no teardown `finally` and the chain is only valid run in this order. After the zone
+# swap because these re-render the services only; a failure here must not cost the swap coverage.
+ORDER_MUTATING_BEDROCK_OFF = _MUTATING_BASE + 30  # 40
+ORDER_MUTATING_BEDROCK_GLOBAL = _MUTATING_BASE + 40  # 50
+ORDER_MUTATING_BEDROCK_GEO = _MUTATING_BASE + 50  # 60
 
 # --------------------------------------------------------------------------- mutating pass
 # Shared by BOTH mutating files: apply #1 provisions the mounts and writes the flags, apply #2

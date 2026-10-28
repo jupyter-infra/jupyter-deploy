@@ -4,11 +4,20 @@ Both run headless (``claude -p``, ``codex exec``), which skips their first-run d
 trust, onboarding). Callers should assert on a token they ask the model for, never on CLI text,
 so that CLI releases cannot break them. ``agent_tui_running`` checks the interactive TUI started
 elsewhere (e.g. in a JupyterLab terminal) is still up, again without reading what it renders.
+
+The ``app_*`` helpers probe the credential path the agents depend on in the EC2 templates: a
+sidecar publishes short-lived credentials of a Bedrock-only role to a file the jupyter container
+reads, and the container itself cannot reach the instance metadata service.
 """
 
+import base64
 import contextlib
+import json
 import shlex
 import subprocess
+import time
+from datetime import datetime
+from typing import Any
 
 from pytest_jupyter_deploy.cli import JDCliError
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
@@ -17,6 +26,45 @@ from pytest_jupyter_deploy.files import build_server_exec_cmd
 CANARY = "JDPONG"
 CANARY_PROMPT = f"Reply with the single word {CANARY} and nothing else."
 AGENT_TIMEOUT_S = 300
+
+BEDROCK_SIDECAR_SERVICE = "bedrock-sidecar"
+APP_CREDENTIALS_PATH = "/run/bedrock-creds/credentials.json"
+
+# Runs INSIDE the jupyter container (`uv run --with boto3 python -c`, argv: bucket [secret_arn]) and
+# resolves credentials through the default chain, so a passing probe proves the jupyter process
+# itself holds the Bedrock-only app role -- not the test runner. Region: the container sets
+# AWS_REGION, which botocore does not read on its own.
+APP_ROLE_PROBE_SCRIPT = """
+import json
+import os
+import sys
+
+import boto3
+from botocore.exceptions import ClientError
+
+
+def denied(call):
+    try:
+        call()
+    except ClientError as e:
+        return e.response["Error"]["Code"] in {"AccessDenied", "AccessDeniedException"}
+    return False
+
+
+session = boto3.Session(region_name=os.environ["AWS_REGION"])
+bucket = sys.argv[1]
+secret_arn = sys.argv[2] if len(sys.argv) > 2 else None
+sts = session.client("sts")
+bedrock = session.client("bedrock")
+s3 = session.client("s3")
+secrets = session.client("secretsmanager")
+print(json.dumps({
+    "arn": sts.get_caller_identity()["Arn"],
+    "bedrock_ok": bool(bedrock.list_foundation_models()["modelSummaries"]),
+    "s3_denied": denied(lambda: s3.list_objects_v2(Bucket=bucket)),
+    "secret_denied": denied(lambda: secrets.get_secret_value(SecretId=secret_arn)) if secret_arn else None,
+}))
+"""
 
 # Matches the agent's own processes by argv[0] (the codex launcher runs under node, so its
 # argv[0] is node and the native binary's is a path), and never pgrep's own pattern argument.
@@ -88,3 +136,98 @@ def stop_agent_tui(
     cmd = build_server_exec_cmd([shlex.join(["pkill", "-f", _AGENT_PROCESS_PATTERNS[agent]])], name=name, scope=scope)
     with contextlib.suppress(JDCliError):
         e2e_deployment.cli.run_exec_with_retry(cmd)
+
+
+def _exec_stdout(e2e_deployment: EndToEndDeployment, argv: list[str], timeout_s: int | None = None) -> str:
+    # rich wraps `jd server exec` output at 80 columns when stdout is not a terminal; a wrapped
+    # session token is not JSON any more.
+    return e2e_deployment.cli.run_command(
+        build_server_exec_cmd([shlex.join(argv)]), timeout_seconds=timeout_s, env={"COLUMNS": "8192"}
+    ).stdout
+
+
+def _json_line(stdout: str) -> dict[str, Any]:
+    for line in stdout.splitlines():
+        if line.startswith("{"):
+            parsed = json.loads(line)
+            assert isinstance(parsed, dict), f"Expected a JSON object, got {parsed!r}"
+            return parsed
+    raise AssertionError(f"No JSON object line in server exec output:\n{stdout}")
+
+
+def read_app_credentials(e2e_deployment: EndToEndDeployment) -> dict[str, Any]:
+    """Return the credentials file the sidecar publishes, as the jupyter container sees it."""
+    return _json_line(_exec_stdout(e2e_deployment, ["cat", APP_CREDENTIALS_PATH]))
+
+
+def credentials_expiration(credentials: dict[str, Any]) -> datetime:
+    """Parse the ``Expiration`` of a credentials file (ISO-8601 with ``Z``, as the AWS CLI writes it)."""
+    return datetime.fromisoformat(credentials["Expiration"])
+
+
+def wait_for_rotated_app_credentials(
+    e2e_deployment: EndToEndDeployment, previous_access_key_id: str, timeout_s: int = 120, interval_s: int = 5
+) -> dict[str, Any]:
+    """Return the credentials once their ``AccessKeyId`` differs from ``previous_access_key_id``.
+
+    Raises:
+        AssertionError: If the sidecar has not published a new key within ``timeout_s``.
+    """
+    deadline = time.monotonic() + timeout_s
+    while True:
+        credentials = read_app_credentials(e2e_deployment)
+        if credentials["AccessKeyId"] != previous_access_key_id:
+            return credentials
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"AccessKeyId {previous_access_key_id} still published after {timeout_s}s")
+        time.sleep(interval_s)
+
+
+def imds_reachable(e2e_deployment: EndToEndDeployment) -> bool:
+    """Return whether the jupyter container can get an IMDSv2 token; the templates must say no."""
+    argv = [
+        "curl",
+        "-sS",
+        "-m",
+        "3",
+        "-X",
+        "PUT",
+        "http://169.254.169.254/latest/api/token",
+        "-H",
+        "X-aws-ec2-metadata-token-ttl-seconds: 60",
+    ]
+    try:
+        e2e_deployment.cli.run_command(build_server_exec_cmd([shlex.join(argv)]))
+    except JDCliError:
+        return False
+    return True
+
+
+def app_role_access(e2e_deployment: EndToEndDeployment, bucket: str, secret_arn: str | None = None) -> dict[str, Any]:
+    """Run ``APP_ROLE_PROBE_SCRIPT`` in the jupyter container and return its JSON report.
+
+    ``bucket`` is a bucket of the deployment the app role must NOT read; ``secret_arn`` likewise
+    (``secret_denied`` is None when no secret is given).
+    """
+    # base64 keeps the multi-line script a single shell word through SSM and `docker exec`.
+    encoded = base64.b64encode(APP_ROLE_PROBE_SCRIPT.encode()).decode()
+    argv = ["uv", "run", "--with", "boto3", "python", "-c", f"import base64; exec(base64.b64decode('{encoded}'))"]
+    argv.append(bucket)
+    if secret_arn is not None:
+        argv.append(secret_arn)
+    return _json_line(_exec_stdout(e2e_deployment, argv, timeout_s=AGENT_TIMEOUT_S))
+
+
+def ask_agent_expecting_failure(e2e_deployment: EndToEndDeployment, argv: list[str]) -> str:
+    """Run an agent command that must fail (e.g. Bedrock disabled) and return its flattened output.
+
+    Raises:
+        AssertionError: If the agent succeeds.
+    """
+    return e2e_deployment.cli.run_command_expecting_failure(
+        build_server_exec_cmd([shlex.join(argv)]), timeout_seconds=AGENT_TIMEOUT_S
+    )
+
+
+def restart_service(e2e_deployment: EndToEndDeployment, name: str) -> None:
+    e2e_deployment.cli.run_command(["jupyter-deploy", "server", "restart", "--service", name])

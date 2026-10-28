@@ -291,9 +291,9 @@ def _restore_group(e2e_deployment: EndToEndDeployment, group: str, names: list[s
 def bedrock_enabled_project(e2e_deployment: EndToEndDeployment, request: pytest.FixtureRequest) -> Iterator[None]:
     """A project with bedrock_enabled set to true.
 
-    Bedrock is off by default, so turning it on changes the project: that only happens where
-    mutating cases may run, and the module restores the previous value afterwards. Elsewhere the
-    module is skipped.
+    That is the default, so this only acts on an existing project that turned it off: there it
+    changes the project, which only happens where mutating cases may run, and the module restores
+    the previous value afterwards. Elsewhere the module is skipped.
     """
     e2e_deployment.ensure_deployed()
     if e2e_deployment.get_bool_variable_value("bedrock_enabled"):
