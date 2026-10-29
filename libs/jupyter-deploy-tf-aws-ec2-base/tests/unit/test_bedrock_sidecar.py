@@ -15,7 +15,12 @@ import subprocess
 import tempfile
 import time
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
+
+import botocore.session
+from botocore.credentials import RefreshableCredentials
 
 from jupyter_deploy_tf_aws_ec2_base.template import TEMPLATE_PATH
 
@@ -182,3 +187,57 @@ class TestSidecarImage(unittest.TestCase):
         for name in ("Dockerfile", "refresh.sh"):
             with self.subTest(file=name):
                 self.assertTrue(filecmp.cmp(SIDECAR_PATH / name, TWIN_SIDECAR_PATH / name, shallow=False))
+
+
+class TestSdkReadsPublishedCredentials(unittest.TestCase):
+    """The sidecar's JSON, the template's ``aws-config`` and botocore meet here, with no network."""
+
+    AWS_CONFIG: Path = TEMPLATE_PATH / "services" / "jupyter" / "aws-config"
+    PUBLISHED_PATH = "/run/bedrock-creds/credentials.json"
+    REMOVED_ENV = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_PROFILE")
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.creds = self.tmp / "credentials.json"
+        config_text = self.AWS_CONFIG.read_text()
+        self.assertIn(self.PUBLISHED_PATH, config_text)
+        config = self.tmp / "config"
+        config.write_text(config_text.replace(self.PUBLISHED_PATH, str(self.creds)))
+        # A developer's own credentials must never satisfy the chain in this test.
+        env = {k: v for k, v in os.environ.items() if k not in self.REMOVED_ENV}
+        env.update(
+            AWS_CONFIG_FILE=str(config),
+            AWS_SHARED_CREDENTIALS_FILE=str(self.tmp / "no-such-file"),
+            AWS_EC2_METADATA_DISABLED="true",
+        )
+        patcher = patch.dict(os.environ, env, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _publish(self, access_key_id: str, expiration: datetime) -> None:
+        # The printf shape of refresh.sh.
+        self.creds.write_text(
+            f'{{"Version": 1, "AccessKeyId": "{access_key_id}", "SecretAccessKey": "SECRETFAKE", '
+            f'"SessionToken": "TOKENFAKE", "Expiration": "{expiration.isoformat()}"}}\n'
+        )
+
+    def test_credentials_are_refreshable_and_reread_before_expiry(self) -> None:
+        first_expiry = datetime.now(UTC).replace(microsecond=0) + timedelta(hours=1)
+        self._publish("ASIAOLD", first_expiry)
+
+        creds = botocore.session.Session().get_credentials()
+
+        assert isinstance(creds, RefreshableCredentials), creds
+        self.assertEqual(creds.method, "custom-process")
+        self.assertEqual(creds.access_key, "ASIAOLD")
+        # botocore exposes the expiry only through this attribute.
+        self.assertEqual(creds._expiry_time, first_expiry)
+
+        # The sidecar rotates while the SDK session lives on: the file is re-read inside botocore's
+        # advisory refresh window, which keeps a long-lived kernel or agent working across rotations.
+        second_expiry = first_expiry + timedelta(minutes=15)
+        self._publish("ASIANEW", second_expiry)
+        creds._expiry_time = datetime.now(UTC) + timedelta(seconds=60)
+        self.assertEqual(creds.get_frozen_credentials().access_key, "ASIANEW")
+        self.assertEqual(creds._expiry_time, second_expiry)
