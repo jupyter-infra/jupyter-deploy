@@ -35,7 +35,10 @@ role. Removing that mount is tracked separately.
 
 `boto3` and the AWS CLI inside the Jupyter container default to the `bedrock-app` role, which can
 only invoke Bedrock models. A notebook that relied on the instance role's permissions, for example
-to read the deployment S3 bucket, no longer has them.
+to read the deployment S3 bucket, no longer has them. This applies on upgrade too: an existing
+deployment's next `jd up` moves `jupyter` onto the isolated network and blocks IMDS whether Bedrock
+is on or off, so notebook code that used the instance role stops working either way (Bedrock on:
+`bedrock-app` only; off: no credentials).
 
 ### Use your own AWS credentials
 
@@ -123,6 +126,10 @@ overrides:
 ```
 
 The deployment then has no `bedrock-app` role, no `bedrock-sidecar` and no credentials file. The
+`jupyter` container is still cut off from the instance metadata service and keeps
+`AWS_EC2_METADATA_DISABLED=true`, so with Bedrock off notebooks and terminals have **no AWS
+credentials at all** from the default chain, not the instance role's; a user who needs AWS access
+there brings their own (see [Use your own AWS credentials](#use-your-own-aws-credentials)). The
 agents stay installed but fail: `claude` with a credentials error, `codex` reporting the model
 `unset: bedrock_enabled is false ...`. Set the variable back to `true` and apply again to restore them.
 
