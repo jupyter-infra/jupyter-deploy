@@ -29,6 +29,11 @@ AGENT_TIMEOUT_S = 300
 
 BEDROCK_SIDECAR_SERVICE = "bedrock-sidecar"
 APP_CREDENTIALS_PATH = "/run/bedrock-creds/credentials.json"
+# Runs INSIDE the jupyter container (argv: credentials file); the secret fields never leave it.
+APP_CREDENTIALS_SUMMARY_SCRIPT = (
+    "import json, sys; d = json.load(open(sys.argv[1])); "
+    'print(json.dumps({k: d[k] for k in ("AccessKeyId", "Expiration")}))'
+)
 
 # Runs INSIDE the jupyter container (`uv run --with boto3 python -c`, argv: bucket [secret_arn]) and
 # resolves credentials through the default chain, so a passing probe proves the jupyter process
@@ -196,8 +201,13 @@ def _json_line(stdout: str) -> dict[str, Any]:
 
 
 def read_app_credentials(e2e_deployment: EndToEndDeployment) -> dict[str, Any]:
-    """Return the credentials file the sidecar publishes, as the jupyter container sees it."""
-    return _json_line(_exec_stdout(e2e_deployment, ["cat", APP_CREDENTIALS_PATH]))
+    """Return the ``AccessKeyId`` and ``Expiration`` of the credentials the sidecar publishes.
+
+    Only those two fields, read as the jupyter container sees the file: a failed ``jd server exec``
+    quotes the whole output in its error and so in the CI log, which must never carry the secret key.
+    """
+    argv = ["python3", "-c", APP_CREDENTIALS_SUMMARY_SCRIPT, APP_CREDENTIALS_PATH]
+    return _json_line(_exec_stdout(e2e_deployment, argv))
 
 
 def credentials_expiration(credentials: dict[str, Any]) -> datetime:

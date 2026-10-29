@@ -2,9 +2,12 @@
 
 import base64
 import json
+import os
 import re
 import shlex
 import subprocess
+import sys
+import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
@@ -116,13 +119,38 @@ class TestAppRoleProbe(unittest.TestCase):
 class TestReadAppCredentials(unittest.TestCase):
     def test_parses_the_json_line_and_widens_the_terminal(self) -> None:
         deployment = Mock()
-        creds = {"Version": 1, "AccessKeyId": "ASIA1", "Expiration": "2026-10-27T12:00:00Z"}
+        creds = {"AccessKeyId": "ASIA1", "Expiration": "2026-10-27T12:00:00Z"}
         deployment.cli.run_command.return_value.stdout = _exec_output(json.dumps(creds))
 
         self.assertEqual(coding_agents.read_app_credentials(deployment), creds)
-        self.assertEqual(_server_argv(deployment, "run_command"), ["cat", coding_agents.APP_CREDENTIALS_PATH])
-        # Without a wide COLUMNS rich folds the session token across lines.
+        self.assertEqual(
+            _server_argv(deployment, "run_command"),
+            ["python3", "-c", coding_agents.APP_CREDENTIALS_SUMMARY_SCRIPT, coding_agents.APP_CREDENTIALS_PATH],
+        )
+        # Without a wide COLUMNS rich folds long lines, and a folded line is not JSON any more.
         self.assertIn("COLUMNS", deployment.cli.run_command.call_args.kwargs["env"])
+
+    def test_summary_script_prints_only_the_key_id_and_expiry(self) -> None:
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            self.addCleanup(os.unlink, f.name)
+            # The sidecar's full format; the two secret fields must not come back.
+            json.dump(
+                {
+                    "Version": 1,
+                    "AccessKeyId": "ASIA1",
+                    "SecretAccessKey": "SECRET",
+                    "SessionToken": "TOKEN",
+                    "Expiration": "2026-10-27T12:00:00+00:00",
+                },
+                f,
+            )
+        out = subprocess.run(
+            [sys.executable, "-I", "-c", coding_agents.APP_CREDENTIALS_SUMMARY_SCRIPT, f.name],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        self.assertEqual(json.loads(out), {"AccessKeyId": "ASIA1", "Expiration": "2026-10-27T12:00:00+00:00"})
 
     def test_expiration_parses_the_cli_zulu_format(self) -> None:
         expiration = coding_agents.credentials_expiration({"Expiration": "2026-10-27T12:00:00Z"})
