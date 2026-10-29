@@ -38,11 +38,13 @@ def pick() -> str:
     catalog = subprocess.run(
         [os.environ.get("CODEX_BIN", "codex"), "debug", "models"], stdout=subprocess.PIPE, text=True, check=True
     )
-    dotted = f"{prefix}."
+    # Codex reaches OpenAI models only; the patterns also allow Claude Code's Anthropic ones.
+    dotted = f"{prefix}.openai."
     allowed = [
         m
         for m in json.loads(catalog.stdout)["models"]
-        if m["slug"].startswith(dotted) and any(fnmatch.fnmatchcase(m["slug"][len(dotted) :], p) for p in patterns)
+        if m["slug"].startswith(dotted)
+        and any(fnmatch.fnmatchcase(m["slug"][len(f"{prefix}.") :], p) for p in patterns)
     ]
     ranked = sorted(allowed, key=lambda m: m["priority"] if isinstance(m.get("priority"), (int, float)) else math.inf)
     if not ranked:

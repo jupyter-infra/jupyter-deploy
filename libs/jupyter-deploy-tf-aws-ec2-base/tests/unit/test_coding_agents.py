@@ -180,6 +180,12 @@ class TestPickCodexModel(unittest.TestCase):
     def test_eks_copy_is_identical(self) -> None:
         self.assertTrue(filecmp.cmp(self.SCRIPT, EKS_PICKER, shallow=False))
 
+    def test_default_patterns_pick_an_openai_model(self) -> None:
+        # The Anthropic entry ranks first in the catalog; Codex cannot use it.
+        rc, cfg, _ = self._run("us", "anthropic.claude-*,openai.gpt-*")
+        self.assertEqual(rc, 0)
+        self.assertIn('model = "us.openai.gpt-5-codex"', cfg)
+
     def test_usable_prefix_picks_lowest_priority(self) -> None:
         rc, cfg, _ = self._run("us", "openai.gpt-*")
         self.assertEqual(rc, 0)
