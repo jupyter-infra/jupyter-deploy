@@ -1,0 +1,175 @@
+# AWS EC2 JupyterLab Template — Bedrock access for coding agents
+
+vars: {
+  d2-config: {
+    layout-engine: elk
+  }
+}
+
+classes: {
+  box: {
+    shape: rectangle
+    style: {
+      bold: true
+      stroke-width: 3
+      font-size: 20
+    }
+  }
+
+  container: {
+    shape: rectangle
+    icon: ../shared/icons/docker.svg
+    icon.near: top-left
+    label.near: top-center
+    style: {
+      fill: "#e3f2fd"
+      stroke: "#1565c0"
+      stroke-width: 3
+      bold: true
+      font-size: 18
+    }
+  }
+
+  role: {
+    shape: rectangle
+    icon: ../shared/icons/iam.svg
+    icon.near: top-left
+    label.near: top-center
+    style: {
+      fill: "#fce4ec"
+      stroke: "#c62828"
+      stroke-width: 3
+      bold: true
+      font-size: 20
+    }
+  }
+
+  green_flow: {
+    style: {
+      stroke: "#2e7d32"
+      stroke-width: 3
+      font-size: 18
+    }
+  }
+
+  red_flow: {
+    style: {
+      stroke: "#c62828"
+      stroke-width: 3
+      stroke-dash: 5
+      font-size: 18
+    }
+  }
+}
+
+direction: right
+
+aws: "AWS Account" {
+  style: {
+    fill: "#fff3e0"
+    stroke: "#e65100"
+    stroke-width: 3
+    bold: true
+    font-size: 20
+  }
+
+  ec2: "EC2 instance" {
+    icon: ../shared/icons/ec2.svg
+    icon.near: top-left
+    label.near: top-center
+    style: {
+      fill: "#fff8e1"
+      stroke: "#e65100"
+      stroke-width: 3
+      bold: true
+      font-size: 20
+    }
+
+    jupyter: "jupyter\nnetwork: jupyter" {
+      class: container
+      style.fill: "#bbdefb"
+
+      agents: "claude, codex" {
+        shape: rectangle
+        icon: ../shared/icons/jupyter.svg
+        style: {
+          fill: "#ffffff"
+          stroke: "#f37726"
+          stroke-width: 2
+          bold: true
+          font-size: 16
+        }
+      }
+    }
+
+    creds: "bedrock-creds\nvolume" {
+      shape: cylinder
+      icon: ../shared/icons/iam-credentials.svg
+      style: {
+        fill: "#e0e0e0"
+        stroke: "#757575"
+        bold: true
+        font-size: 16
+      }
+    }
+
+    sidecar: "bedrock-sidecar\nnetwork: web" {
+      class: container
+    }
+
+    imds: "Instance metadata\n(IMDS)" {
+      class: box
+      style: {
+        fill: "#eeeeee"
+        stroke: "#757575"
+        font-size: 16
+      }
+    }
+  }
+
+  instance_role: "Instance role" {
+    class: role
+    icon.near: center-left
+    label.near: center-right
+    width: 260
+  }
+
+  bedrock_role: "bedrock-app IAM Role" {
+    class: role
+
+    policy: |yaml
+      Effect: Allow
+      Action: bedrock:Invoke*
+      Resource:
+        - us.anthropic.claude-*
+        - us.openai.gpt-*
+    |
+  }
+
+  bedrock: "Amazon Bedrock" {
+    shape: image
+    icon: ../shared/icons/bedrock.svg
+    width: 96
+    height: 96
+    style: {
+      bold: true
+      font-size: 20
+    }
+  }
+}
+
+# Credentials chain
+aws.ec2.sidecar -> aws.ec2.imds: "instance role\ncredentials" {class: green_flow}
+aws.ec2.sidecar -> aws.instance_role: "assume" {class: green_flow}
+aws.instance_role -> aws.bedrock_role: "assume" {class: green_flow}
+aws.ec2.sidecar -> aws.ec2.creds: "writes every 15 min" {class: green_flow}
+aws.ec2.jupyter <- aws.ec2.creds: "read-only" {class: green_flow}
+aws.ec2.jupyter.agents -> aws.bedrock: "InvokeModel" {class: green_flow}
+
+# Blocked
+aws.ec2.jupyter -> aws.ec2.imds: "blocked" {class: red_flow}
+
+# Layout only: keep Bedrock right of the role
+aws.bedrock_role -> aws.bedrock: "" {
+  style.opacity: 0
+}

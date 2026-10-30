@@ -4,6 +4,8 @@ The Jupyter image ships the **Claude Code** (`claude`) and **Codex** (`codex`) c
 to the versions in `claude_code_version` and `codex_version`. Their system configuration points
 them at Amazon Bedrock, and `bedrock_enabled` is `true` by default, so both work in a **JupyterLab**
 terminal with no setup: run `claude` or `codex`.
+![Bedrock access](diagrams/bedrock-access.svg)
+
 
 ## How it works
 
