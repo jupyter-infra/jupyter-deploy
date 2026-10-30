@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+# Apply-time: delete the ebs-sc StorageClass when its volume tags differ from the ones the
+# router chart is about to render, so that `helm upgrade` can recreate it: StorageClass
+# parameters are immutable, and patching them fails the upgrade. See workspace_snapshots.tf.
+
+set -uo pipefail
+
+CLUSTER_NAME="${cluster_name}"
+REGION="${region}"
+STORAGE_CLASS="${storage_class_name}"
+WANTED_TAG_SPECS="${tag_specs}"
+
+tmp_kubeconfig=$(mktemp)
+trap 'rm -f "$tmp_kubeconfig"' EXIT
+if ! aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$REGION" --kubeconfig "$tmp_kubeconfig" > /dev/null 2>&1; then
+    echo "ERROR: Failed to configure kubeconfig for cluster $CLUSTER_NAME." >&2
+    exit 1
+fi
+export KUBECONFIG="$tmp_kubeconfig"
+
+current_context=$(kubectl config current-context 2>/dev/null)
+if [[ "$current_context" != *"$CLUSTER_NAME"* ]] || [[ "$current_context" != *"$REGION"* ]]; then
+    echo "ERROR: kubectl context '$current_context' does not match cluster '$CLUSTER_NAME' in '$REGION'." >&2
+    exit 1
+fi
+
+# Distinguish "absent" from "unreachable": only the former is a no-op.
+if ! out=$(kubectl get storageclass "$STORAGE_CLASS" -o name 2>&1); then
+    if grep -q "NotFound" <<<"$out"; then
+        echo "StorageClass $STORAGE_CLASS does not exist yet, nothing to sync."
+        exit 0
+    fi
+    echo "ERROR: could not read StorageClass $STORAGE_CLASS: $out" >&2
+    exit 1
+fi
+
+current_tag_specs=$(kubectl get storageclass "$STORAGE_CLASS" \
+    -o go-template='{{range $k, $v := .parameters}}{{$k}} {{$v}}{{"\n"}}{{end}}' \
+    | awk '$1 ~ /^tagSpecification_/ {print $2}' | sort | paste -sd ' ' -)
+
+if [ "$current_tag_specs" = "$WANTED_TAG_SPECS" ]; then
+    echo "StorageClass $STORAGE_CLASS already carries the wanted volume tags."
+    exit 0
+fi
+
+echo "StorageClass $STORAGE_CLASS volume tags are '$current_tag_specs', want '$WANTED_TAG_SPECS'."
+echo "Deleting it so the router chart upgrade recreates it (existing volumes are unaffected)..."
+kubectl delete storageclass "$STORAGE_CLASS" --wait=true

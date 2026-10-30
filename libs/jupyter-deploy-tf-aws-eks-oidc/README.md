@@ -216,6 +216,8 @@ A single `jupyter-deploy/role` Kubernetes label drives pod placement: every node
 
 Each workspace gets a dedicated EBS persistent volume mounted at `/home/jovyan`. Data persists across workspace stop/start cycles and pod restarts.
 
+Amazon Data Lifecycle Manager (DLM) snapshots each workspace volume automatically, once a day by default (`workspace_volume_snapshot_interval_hours`), and keeps the latest 7 snapshots of each volume (`workspace_volume_snapshot_retain_count`). Snapshots outlive a deleted workspace; `jd down` deletes them.
+
 ### Custom workspace images
 
 The template optionally creates ECR repositories and a CodeBuild project for building custom workspace images from Dockerfiles in the `applications/` directory.
@@ -236,9 +238,15 @@ The NLB then **re-encrypts** to Traefik, so nothing crosses the VPC in plaintext
 
 The NLB registers only nodes labeled `jupyter-deploy/role=routing` as targets, matching where Traefik runs.
 
+Behind Traefik, every hop to the routing components (Dex, OAuth2 Proxy, Authmiddleware, web UI) also uses TLS 1.3, with certificates from the same private CA.
+
 ### Compute
 
 The template creates a single `platform` EKS managed node group for control-plane-only pods, and Karpenter NodePools for the routing and workspace tiers. The managed node group auto-detects the appropriate EKS-optimized AMI type for its instance type; Karpenter nodes use the `al2023@latest` AMI alias.
+
+### Workspace Storage
+
+Workspace home volumes are EBS volumes from the `ebs-sc` StorageClass. When `workspace_volume_snapshots_enabled = true`, an Amazon Data Lifecycle Manager (DLM) policy snapshots each of them every `workspace_volume_snapshot_interval_hours` and keeps the latest `workspace_volume_snapshot_retain_count`. Snapshots outlive their volume, so you can restore a deleted workspace from them. `jd down` deletes every snapshot of the deployment.
 
 ### Application Images
 
@@ -334,6 +342,9 @@ The template provides two variable presets:
 | workspace_bedrock_enabled | `bool` | `true` | Give workspaces Bedrock credentials for Claude Code and Codex; a `workspace_namespaces` entry opts out with `bedrock = "false"` |
 | workspace_bedrock_inference_scope | `string` | `geo` | Inference profiles workspaces use: `geo` (requests stay in the region's geography) or `global` |
 | workspace_bedrock_model_patterns | `list(string)` | `["anthropic.claude-*", "openai.gpt-*"]` | Bedrock model IDs workspaces may invoke (IAM wildcards) |
+| workspace_volume_snapshots_enabled | `bool` | `true` | Snapshot workspace volumes on a schedule (Data Lifecycle Manager); `jd down` deletes the snapshots |
+| workspace_volume_snapshot_interval_hours | `number` | `24` | Hours between two snapshots of a workspace volume (1, 2, 3, 4, 6, 8, 12 or 24) |
+| workspace_volume_snapshot_retain_count | `number` | `7` | Scheduled snapshots kept per workspace volume |
 | workspace_templates | `list(map(string))` | `[]` | Named workspace template configs that pool entries offer as cards via their `templates` key |
 | enable_default_gpu_pool | `bool` | `false` | Append the built-in `workspace-gpu` entry and its `jupyterlab-gpu` template config; combining it with your own accelerator entries raises a plan-time error |
 | nvidia_device_plugin_version | `string` | `0.20.1` | Version of the NVIDIA device plugin chart (the template installs it when any pool entry sets `accelerator = "nvidia"`) |

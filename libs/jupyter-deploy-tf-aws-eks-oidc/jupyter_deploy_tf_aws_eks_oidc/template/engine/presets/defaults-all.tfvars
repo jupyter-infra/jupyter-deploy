@@ -10,9 +10,9 @@ workspace_operator_namespace     = "jupyter-k8s-system"
 workspace_router_namespace       = "jupyter-k8s-router"
 workspace_shared_namespace       = "jupyter-k8s-shared"
 workspace_operator_chart_oci     = "oci://ghcr.io/jupyter-infra/charts/jupyter-k8s"
-workspace_operator_chart_version = "0.4.0"
+workspace_operator_chart_version = "0.4.1"
 workspace_router_chart_oci       = "oci://ghcr.io/jupyter-infra/charts/jupyter-k8s-aws-oidc"
-workspace_router_chart_version   = "0.3.1"
+workspace_router_chart_version   = "0.3.2"
 traefik_crd_chart_version        = "1.15.0"
 
 cluster_autoscaler_chart_version = "9.59.0"
@@ -31,20 +31,23 @@ workspace_app_jupyterlab_use             = true
 workspace_app_jupyterlab_app_type        = "jupyterlab"
 workspace_app_jupyterlab_image_name      = "jupyterlab-v0.4.1"
 workspace_app_jupyterlab_image_build     = "v1"
-workspace_app_claude_code_version        = "2.1.302"
-workspace_app_codex_version              = "0.163.0"
+workspace_app_claude_code_version        = "2.1.312"
+workspace_app_codex_version              = "0.166.0"
 workspace_bedrock_enabled                = true
 workspace_bedrock_inference_scope        = "geo"
 workspace_bedrock_model_patterns         = ["anthropic.claude-*", "openai.gpt-*"]
+workspace_volume_snapshots_enabled       = true
+workspace_volume_snapshot_interval_hours = 24
+workspace_volume_snapshot_retain_count   = 7
 
 platform_instance_types = ["m5.large"]
 platform_disk_size_gb   = 50
 platform_min_size       = 2
 platform_max_size       = 3
 
-karpenter_version  = "1.15.0"
+karpenter_version  = "1.15.1"
 keda_version       = "2.21.0"
-prometheus_version = "29.37.0"
+prometheus_version = "29.40.0"
 
 routing_max_cpu    = "32"
 routing_max_memory = "128Gi"

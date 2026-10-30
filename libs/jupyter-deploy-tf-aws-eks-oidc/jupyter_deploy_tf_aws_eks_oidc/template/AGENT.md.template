@@ -152,6 +152,25 @@ accept an agreement or submit the form on their behalf.
 
 Changes reach a workspace on its next start.
 
+### Workspace volume snapshots
+
+With `workspace_volume_snapshots_enabled: true` (the default), an Amazon Data Lifecycle Manager
+(DLM) policy snapshots each workspace home volume every `workspace_volume_snapshot_interval_hours`
+and keeps the latest `workspace_volume_snapshot_retain_count` snapshots, so the user can restore a
+deleted workspace or namespace from them. List them with
+`aws ec2 describe-snapshots --owner-ids self --filters Name=tag:DeploymentId,Values=$(jd show -o deployment_id --text)`.
+IMPORTANT: `jd down` deletes every snapshot tagged with the deployment's `DeploymentId`; warn the
+user before a teardown if they may still need one. To keep a snapshot, copy it: the copy carries no
+tags, so neither `jd down` nor the DLM retention rule deletes it.
+
+```bash
+aws ec2 copy-snapshot --source-region <region> --source-snapshot-id <snapshot-id> --description "<why>"
+```
+
+Removing the `DeploymentId` tag (`aws ec2 delete-tags --resources <snapshot-id> --tags Key=DeploymentId`)
+also spares it from `jd down`, but DLM's retention rule still deletes it until the policy is gone, so
+only do it right before the teardown.
+
 ### View the full terraform logs
 
 {{ history-logs-instructions }}

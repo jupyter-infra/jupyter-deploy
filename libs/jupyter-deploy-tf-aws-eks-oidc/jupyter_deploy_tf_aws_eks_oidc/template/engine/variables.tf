@@ -186,7 +186,7 @@ variable "karpenter_version" {
 
     Refer to: https://github.com/aws/karpenter-provider-aws/releases
 
-    Recommended: 1.15.0
+    Recommended: 1.15.1
   EOT
   type        = string
 }
@@ -211,7 +211,7 @@ variable "prometheus_version" {
 
     Refer to: https://github.com/prometheus-community/helm-charts/releases
 
-    Recommended: 29.37.0
+    Recommended: 29.40.0
   EOT
   type        = string
 }
@@ -238,7 +238,9 @@ variable "routing_max_memory" {
 
 variable "workspace_nodepools" {
   description = <<-EOT
-    Workspace Karpenter NodePools, one NodePool + EC2NodeClass pair per entry. Keys: name, instance_families, disk_size_gb, max_cpu, max_memory, accelerator, role, max_gpus, templates.
+    NodePools. Keys: name, instance_families, disk_size_gb, max_cpu, max_memory, accelerator, role, max_gpus, templates.
+
+    Each entry is a workspace Karpenter NodePool + EC2NodeClass pair.
 
     Supports multiple pools (e.g. CPU + GPU).
 
@@ -488,9 +490,10 @@ variable "enable_default_gpu_pool" {
 
 variable "nvidia_device_plugin_version" {
   description = <<-EOT
-    Helm chart version of the NVIDIA device plugin, installed when any
-    workspace_nodepools entry sets accelerator = "nvidia" (the built-in GPU
-    pool does).
+    Helm chart version of the NVIDIA device plugin.
+
+    The template installs it when any workspace_nodepools entry sets
+    accelerator = "nvidia" (the built-in GPU pool does).
 
     Refer to: https://github.com/NVIDIA/k8s-device-plugin/releases
 
@@ -549,7 +552,7 @@ variable "node_expire_after" {
 
 variable "workspace_namespaces" {
   description = <<-EOT
-    Kubernetes namespaces for workspaces, each with the GitHub teams allowed to use it. Keys: name, teams, templates, bedrock.
+    Workspace namespaces with allow-listed GitHub teams. Keys: name, teams, templates, bedrock.
 
     Leave empty to use a single namespace: every workspace lives in "default",
     and every team in oauth_allowed_teams may create workspaces there.
@@ -880,8 +883,9 @@ variable "enable_component_logging" {
 
 variable "component_log_retention_days" {
   description = <<-EOT
-    Retention in days for the CloudWatch log groups of the components, the
-    workspaces and the image builds.
+    Retention in days for the components, workspaces and image builds logs.
+
+    Applies to their CloudWatch log groups.
 
     This is distinct from cluster_log_retention_days, which controls the EKS
     control-plane logs. The component and workspace log groups exist only when
@@ -1100,8 +1104,9 @@ variable "workspace_app_codex_version" {
 
 variable "workspace_bedrock_enabled" {
   description = <<-EOT
-    Whether workspaces get AWS credentials to call Amazon Bedrock, so that Claude
-    Code and Codex work out of the box in a workspace terminal.
+    Whether workspaces get AWS credentials to call Amazon Bedrock.
+
+    Claude Code and Codex then work out of the box in a workspace terminal.
 
     When enabled, each workspace namespace gets its own IAM role, limited to
     Bedrock inference on the models matching workspace_bedrock_model_patterns,
@@ -1143,8 +1148,9 @@ variable "workspace_bedrock_inference_scope" {
 
 variable "workspace_bedrock_model_patterns" {
   description = <<-EOT
-    Bedrock model IDs workspaces may invoke, as IAM wildcard patterns without the
-    inference profile prefix (e.g. "anthropic.claude-sonnet-*").
+    Bedrock model IDs workspaces may invoke, as IAM wildcard patterns.
+
+    Patterns omit the inference profile prefix (e.g. "anthropic.claude-sonnet-*").
 
     Covers both Claude Code (anthropic.*) and Codex (openai.*) models. Claude Code picks
     its default model per release, which the patterns must keep allowed; Codex uses the
@@ -1162,5 +1168,57 @@ variable "workspace_bedrock_model_patterns" {
   validation {
     condition     = alltrue([for p in var.workspace_bedrock_model_patterns : can(regex("^[a-z0-9][a-z0-9.*:-]*$", p))])
     error_message = "workspace_bedrock_model_patterns entries must be model IDs or IAM wildcards (lowercase letters, digits, '.', '-', ':', '*'), without an inference profile prefix or ARN."
+  }
+}
+
+variable "workspace_volume_snapshots_enabled" {
+  description = <<-EOT
+    Whether to snapshot workspace volumes on a schedule.
+
+    An Amazon Data Lifecycle Manager policy snapshots every EBS volume the ebs-sc
+    StorageClass provisions (workspace home volumes) every
+    workspace_volume_snapshot_interval_hours, keeping the latest
+    workspace_volume_snapshot_retain_count per volume. Snapshots outlive their volume,
+    so a deleted workspace or namespace can be restored from them.
+
+    `jd down` deletes every snapshot of this deployment, whatever this value.
+
+    Recommended: true
+  EOT
+  type        = bool
+}
+
+variable "workspace_volume_snapshot_interval_hours" {
+  description = <<-EOT
+    Hours between two snapshots of a workspace volume.
+
+    Applies when workspace_volume_snapshots_enabled is true.
+
+    One of 1, 2, 3, 4, 6, 8, 12 or 24.
+
+    Recommended: 24
+  EOT
+  type        = number
+
+  validation {
+    condition     = contains([1, 2, 3, 4, 6, 8, 12, 24], var.workspace_volume_snapshot_interval_hours)
+    error_message = "workspace_volume_snapshot_interval_hours must be one of 1, 2, 3, 4, 6, 8, 12 or 24."
+  }
+}
+
+variable "workspace_volume_snapshot_retain_count" {
+  description = <<-EOT
+    Number of scheduled snapshots to keep per workspace volume.
+
+    Applies when workspace_volume_snapshots_enabled is true; DLM deletes the oldest
+    snapshot past this count.
+
+    Recommended: 7
+  EOT
+  type        = number
+
+  validation {
+    condition     = var.workspace_volume_snapshot_retain_count >= 1 && var.workspace_volume_snapshot_retain_count <= 1000 && floor(var.workspace_volume_snapshot_retain_count) == var.workspace_volume_snapshot_retain_count
+    error_message = "workspace_volume_snapshot_retain_count must be a whole number between 1 and 1000."
   }
 }

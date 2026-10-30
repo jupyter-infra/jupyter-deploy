@@ -174,12 +174,34 @@ verify_cronjobs_healthy() {
     return 0
 }
 
+# Prints "<updated>/<desired>" and returns 0 once the deployment's latest rollout is
+# complete, as `kubectl rollout status` judges it: the controller observed the latest spec
+# and every pod is updated and available, with no old-ReplicaSet pod left. Availability
+# alone is not enough: after restart_crashed_pods, the OLD pod keeps availableReplicas at
+# spec.replicas while the new one may still crash-loop, so jd up returned mid-rollout (#470).
+rollout_complete() {
+    local deploy=$1 fields generation observed desired total updated available
+    fields=$(kubectl get deployment "$deploy" -n "$ROUTER_NAMESPACE" \
+        -o jsonpath='{.metadata.generation}|{.status.observedGeneration}|{.spec.replicas}|{.status.replicas}|{.status.updatedReplicas}|{.status.availableReplicas}' 2>/dev/null)
+    IFS='|' read -r generation observed desired total updated available <<< "$fields"
+    generation=$${generation:-1}
+    observed=$${observed:-0}
+    desired=$${desired:-1}
+    total=$${total:-0}
+    updated=$${updated:-0}
+    available=$${available:-0}
+
+    echo "$updated/$desired"
+    [ "$observed" -ge "$generation" ] && [ "$updated" -ge "$desired" ] \
+        && [ "$total" -le "$updated" ] && [ "$available" -ge "$updated" ]
+}
+
 wait_for_deployments_ready() {
     local MAX_WAIT_SECONDS=600
     local SLEEP_INTERVAL=15
     local waited=0
 
-    echo "Waiting for routing deployments to become ready..."
+    echo "Waiting for routing deployment rollouts to complete..."
 
     while true; do
         local all_ready=true
@@ -190,42 +212,31 @@ wait_for_deployments_ready() {
                 continue
             fi
 
-            local available
-            local desired
-            available=$(kubectl get deployment "$deploy" -n "$ROUTER_NAMESPACE" \
-                -o jsonpath='{.status.availableReplicas}' 2>/dev/null)
-            desired=$(kubectl get deployment "$deploy" -n "$ROUTER_NAMESPACE" \
-                -o jsonpath='{.spec.replicas}' 2>/dev/null)
-
-            # Default to 0 if empty
-            available=$${available:-0}
-            desired=$${desired:-1}
-
-            if [ "$available" -lt "$desired" ] 2>/dev/null; then
+            local progress
+            if ! progress=$(rollout_complete "$deploy"); then
                 all_ready=false
 
-                # On early attempts, check for CrashLoopBackOff and report
+                # On later attempts, report pods stuck waiting (e.g. CrashLoopBackOff)
                 if [ $waited -gt 0 ]; then
                     local crash_pods
                     crash_pods=$(kubectl get pods -n "$ROUTER_NAMESPACE" -l app="$deploy" \
-                        --field-selector=status.phase!=Running \
-                        -o jsonpath='{range .items[*]}{.metadata.name}: {.status.containerStatuses[0].state.waiting.reason}{"\n"}{end}' 2>/dev/null)
+                        -o jsonpath='{range .items[*]}{range .status.containerStatuses[?(@.state.waiting)]}{.name}: {.state.waiting.reason}{"\n"}{end}{end}' 2>/dev/null)
                     if [ -n "$crash_pods" ]; then
-                        echo "  $deploy: not ready ($available/$desired) — $crash_pods"
+                        echo "  $deploy: rollout in progress ($progress updated) — $crash_pods"
                     else
-                        echo "  $deploy: not ready ($available/$desired)"
+                        echo "  $deploy: rollout in progress ($progress updated)"
                     fi
                 fi
             fi
         done
 
         if [ "$all_ready" = "true" ]; then
-            echo "All routing deployments are ready."
+            echo "All routing deployment rollouts are complete."
             return 0
         fi
 
         if [ $waited -ge $MAX_WAIT_SECONDS ]; then
-            echo "ERROR: Timed out waiting for routing deployments after $${MAX_WAIT_SECONDS}s."
+            echo "ERROR: Timed out waiting for routing deployment rollouts after $${MAX_WAIT_SECONDS}s."
             echo ""
             echo "Your deployment may still succeed once DNS fully propagates."
             echo "Check pod status with: kubectl get pods -n $ROUTER_NAMESPACE"

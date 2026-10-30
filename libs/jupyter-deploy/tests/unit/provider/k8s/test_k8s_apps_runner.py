@@ -28,7 +28,13 @@ class TestK8sAppsRunnerGetDeploymentStatus(unittest.TestCase):
     @patch("jupyter_deploy.provider.k8s.k8s_apps_runner.k8s_apps.get_deployment_status")
     def test_returns_ready_status(self, mock_get_status: Mock, mock_oldest_pod: Mock) -> None:
         mock_get_status.return_value = DeploymentStatus(
-            name="traefik", available=True, ready_replicas=1, total_replicas=1, conditions=[]
+            name="traefik",
+            available=True,
+            ready_replicas=1,
+            total_replicas=1,
+            desired_replicas=1,
+            rolling_out=False,
+            conditions=[],
         )
         mock_oldest_pod.return_value = None
         display_manager: Mock = Mock()
@@ -44,7 +50,13 @@ class TestK8sAppsRunnerGetDeploymentStatus(unittest.TestCase):
     @patch("jupyter_deploy.provider.k8s.k8s_apps_runner.k8s_apps.get_deployment_status")
     def test_returns_degraded_status(self, mock_get_status: Mock, mock_oldest_pod: Mock) -> None:
         mock_get_status.return_value = DeploymentStatus(
-            name="traefik", available=False, ready_replicas=0, total_replicas=1, conditions=[]
+            name="traefik",
+            available=False,
+            ready_replicas=0,
+            total_replicas=1,
+            desired_replicas=1,
+            rolling_out=False,
+            conditions=[],
         )
         mock_oldest_pod.return_value = None
         display_manager: Mock = Mock()
@@ -54,6 +66,50 @@ class TestK8sAppsRunnerGetDeploymentStatus(unittest.TestCase):
 
         self.assertEqual(result["Status"].value, "Degraded")
         self.assertEqual(result["Details"].value, "0/1 replicas")
+
+    @patch("jupyter_deploy.provider.k8s.k8s_apps_runner.k8s_apps.get_deployment_oldest_pod")
+    @patch("jupyter_deploy.provider.k8s.k8s_apps_runner.k8s_apps.get_deployment_status")
+    def test_returns_updating_against_desired_replicas_mid_rollout(
+        self, mock_get_status: Mock, mock_oldest_pod: Mock
+    ) -> None:
+        # A 1-replica rollout has 2 pods (old + surge): report 1/1, not 1/2.
+        mock_get_status.return_value = DeploymentStatus(
+            name="oauth2-proxy",
+            available=True,
+            ready_replicas=1,
+            total_replicas=2,
+            desired_replicas=1,
+            rolling_out=True,
+            conditions=[],
+        )
+        mock_oldest_pod.return_value = None
+        runner = K8sAppsRunner(display_manager=Mock(), api_client=Mock())
+
+        result = runner.execute_instruction("get-deployment-status", _build_args(name="oauth2-proxy"))
+
+        self.assertEqual(result["Status"].value, "Updating")
+        self.assertEqual(result["StatusCategory"].value, StatusCategory.IN_PROGRESS)
+        self.assertEqual(result["Details"].value, "1/1 replicas, rollout in progress")
+
+    @patch("jupyter_deploy.provider.k8s.k8s_apps_runner.k8s_apps.get_deployment_oldest_pod")
+    @patch("jupyter_deploy.provider.k8s.k8s_apps_runner.k8s_apps.get_deployment_status")
+    def test_returns_updating_when_scaling_up(self, mock_get_status: Mock, mock_oldest_pod: Mock) -> None:
+        mock_get_status.return_value = DeploymentStatus(
+            name="traefik",
+            available=True,
+            ready_replicas=2,
+            total_replicas=3,
+            desired_replicas=3,
+            rolling_out=False,
+            conditions=[],
+        )
+        mock_oldest_pod.return_value = None
+        runner = K8sAppsRunner(display_manager=Mock(), api_client=Mock())
+
+        result = runner.execute_instruction("get-deployment-status", _build_args())
+
+        self.assertEqual(result["Status"].value, "Updating")
+        self.assertEqual(result["Details"].value, "2/3 replicas")
 
 
 class TestK8sAppsRunnerGetDeploymentStatusApiError(unittest.TestCase):

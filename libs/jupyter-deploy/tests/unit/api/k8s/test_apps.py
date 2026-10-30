@@ -56,14 +56,21 @@ def _mock_deployment(
     total: int = 1,
     image: str = "traefik:v2.10",
     available: bool = True,
+    desired: int | None = None,
+    updated: int | None = None,
+    generation: int = 1,
+    observed_generation: int = 1,
 ) -> Mock:
     deployment: Mock = Mock()
     deployment.metadata.name = name
-    deployment.spec.replicas = total
+    deployment.metadata.generation = generation
+    deployment.spec.replicas = total if desired is None else desired
     deployment.spec.template.spec.containers = [Mock(image=image)]
     deployment.spec.selector.match_labels = {"app": name}
     deployment.status.replicas = total
     deployment.status.ready_replicas = ready
+    deployment.status.updated_replicas = total if updated is None else updated
+    deployment.status.observed_generation = observed_generation
 
     condition: Mock = Mock()
     condition.type = "Available"
@@ -86,6 +93,37 @@ class TestGetDeploymentStatus(unittest.TestCase):
         self.assertTrue(result.available)
         self.assertEqual(result.ready_replicas, 1)
         self.assertEqual(result.total_replicas, 1)
+        self.assertEqual(result.desired_replicas, 1)
+        self.assertFalse(result.rolling_out)
+
+    def test_rolling_out_while_surge_pod_starts(self) -> None:
+        # 1-replica rollout: the old pod keeps it Available, the new one is not ready yet.
+        mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_deployment.return_value = _mock_deployment(ready=1, total=2, desired=1, updated=1)
+
+        result = get_deployment_status(mock_api, name="oauth2-proxy", namespace="router")
+
+        self.assertTrue(result.available)
+        self.assertEqual(result.desired_replicas, 1)
+        self.assertEqual(result.total_replicas, 2)
+        self.assertTrue(result.rolling_out)
+
+    def test_rolling_out_until_new_spec_observed(self) -> None:
+        # Right after `rollout restart`: the controller has not created the new ReplicaSet yet.
+        mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_deployment.return_value = _mock_deployment(generation=3, observed_generation=2)
+
+        result = get_deployment_status(mock_api, name="dex", namespace="router")
+
+        self.assertTrue(result.rolling_out)
+
+    def test_rolling_out_while_pods_not_updated(self) -> None:
+        mock_api: Mock = Mock(spec=AppsV1Api)
+        mock_api.read_namespaced_deployment.return_value = _mock_deployment(ready=2, total=2, updated=1)
+
+        result = get_deployment_status(mock_api, name="traefik", namespace="router")
+
+        self.assertTrue(result.rolling_out)
 
     def test_returns_not_available_when_degraded(self) -> None:
         mock_api: Mock = Mock(spec=AppsV1Api)
