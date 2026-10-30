@@ -8,7 +8,9 @@ to `claude_code_version` and `codex_version` and pointed at Amazon Bedrock. `bed
 
 A `bedrock-app` IAM role, limited to invoking the allowed models, backs both agents: a `bedrock-sidecar`
 container assumes it and hands short-lived credentials to the `jupyter` container read-only. The
-`jupyter` container cannot reach the instance metadata service, so it never sees the instance role.
+`jupyter` container cannot reach the instance metadata service, so its default credential chain never
+resolves to the instance role. This does not stop a deliberate user: `jupyter` still mounts the Docker
+socket, which reaches the host.
 
 ## AWS credentials in notebooks
 
@@ -61,7 +63,8 @@ overrides:
 ```
 
 Each agent picks its default model per release: **Claude Code**'s default must stay within the
-patterns, and **Codex** uses the best model its release offers among the allowed ones.
+patterns, and **Codex** uses the best model its release offers among the allowed ones; drop the
+`openai.*` pattern and Codex has no model.
 
 ## Pin the agent versions
 

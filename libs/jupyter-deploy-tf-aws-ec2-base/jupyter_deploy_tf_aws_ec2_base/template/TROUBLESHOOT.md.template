@@ -60,6 +60,9 @@ jd server logs -s bedrock-sidecar
 
 ## Enable the Bedrock models in a new account
 
+Agents: do not run the commands in this section. They accept a legal agreement on the deployer's
+behalf; show them to the user instead.
+
 Bedrock enables a third-party model (Anthropic Claude, OpenAI GPT) on its first invocation in an
 account, by subscribing the account through AWS Marketplace. The `bedrock-app` role holds no AWS
 Marketplace permissions, so the agents cannot be that first caller: their calls fail with

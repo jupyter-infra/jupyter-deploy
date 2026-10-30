@@ -118,7 +118,7 @@ Marketplace subscription that the `bedrock-app` role cannot start, and accepts t
 EULA. Anthropic models also need a one-time first-time-use form with the deployer's company details.
 The deployer must enable each model in Bedrock for the account and region, for example by sending
 one prompt from the Bedrock console playground. These are the deployer's decisions: point the user
-to TROUBLESHOOT.md, and never invoke a model, accept an agreement or submit the form on their behalf.
+to TROUBLESHOOT.md, and never enable a model, accept an agreement or submit the form on their behalf.
 
 `./TROUBLESHOOT.md` covers the failure modes (`OUT_OF_SERVICE` sidecar, missing credentials file,
 `AccessDeniedException`, Codex model `unset`) and the AWS CLI commands to enable the models.
