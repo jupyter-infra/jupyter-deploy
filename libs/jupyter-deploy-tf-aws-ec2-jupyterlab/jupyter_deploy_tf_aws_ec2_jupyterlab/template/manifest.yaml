@@ -2,7 +2,7 @@ schema_version: 1
 template:
   name: tf-aws-ec2-jupyterlab
   engine: terraform
-  version: 0.1.2
+  version: 0.2.0
 requirements:
 - name: terraform
 - name: awscli

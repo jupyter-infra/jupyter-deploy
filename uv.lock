@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -1195,7 +1195,7 @@ dev = [
 
 [[package]]
 name = "jupyter-deploy-tf-aws-ec2-base"
-version = "0.6.3"
+version = "0.7.0"
 source = { editable = "libs/jupyter-deploy-tf-aws-ec2-base" }
 dependencies = [
     { name = "boto3" },
@@ -1262,7 +1262,7 @@ dev = [
 
 [[package]]
 name = "jupyter-deploy-tf-aws-ec2-jupyterlab"
-version = "0.1.2"
+version = "0.2.0"
 source = { editable = "libs/jupyter-deploy-tf-aws-ec2-jupyterlab" }
 dependencies = [
     { name = "boto3" },
