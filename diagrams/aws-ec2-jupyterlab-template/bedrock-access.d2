@@ -88,6 +88,7 @@ aws: "AWS Account" {
     jupyter: "jupyter\nnetwork: jupyter" {
       class: container
       style.fill: "#bbdefb"
+      width: 320
 
       agents: "claude, codex" {
         shape: rectangle
@@ -115,6 +116,7 @@ aws: "AWS Account" {
 
     sidecar: "bedrock-sidecar\nnetwork: web" {
       class: container
+      width: 320
     }
 
     imds: "Instance metadata\n(IMDS)" {
@@ -129,13 +131,13 @@ aws: "AWS Account" {
 
   instance_role: "Instance role" {
     class: role
-    icon.near: center-left
-    label.near: center-right
-    width: 260
+    width: 320
+    height: 90
   }
 
   bedrock_role: "bedrock-app IAM Role" {
     class: role
+    width: 380
 
     policy: |yaml
       Effect: Allow
