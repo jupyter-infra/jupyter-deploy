@@ -1,105 +1,57 @@
 # Bedrock Integration
 
 The Jupyter image ships the **Claude Code** (`claude`) and **Codex** (`codex`) coding agents, pinned
-to the versions in `claude_code_version` and `codex_version`. Their system configuration points
-them at Amazon Bedrock, and `bedrock_enabled` is `true` by default, so both work in a **JupyterLab**
-terminal with no setup: run `claude` or `codex`.
+to `claude_code_version` and `codex_version` and pointed at Amazon Bedrock. `bedrock_enabled` is
+`true` by default, so both work in a **JupyterLab** terminal with no setup: run `claude` or `codex`.
+
 ![Bedrock access](diagrams/bedrock-access.svg)
 
+A `bedrock-app` IAM role, limited to invoking the allowed models, backs both agents: a `bedrock-sidecar`
+container assumes it and hands short-lived credentials to the `jupyter` container read-only. The
+`jupyter` container cannot reach the instance metadata service, so it never sees the instance role.
 
-## How it works
+## AWS credentials in notebooks
 
-The deployment creates two IAM roles. The instance role runs the host: SSM, Route 53, the
-deployment S3 bucket, the secrets. The `bedrock-app` role has a single policy attached, which
-allows Bedrock inference on the models matching `bedrock_model_patterns` through the inference
-profiles that `bedrock_inference_scope` selects. Its trust policy names the instance role as the
-only principal that may assume it.
-
-A `bedrock-sidecar` container (the AWS CLI image and a shell loop) assumes the `bedrock-app` role
-from the instance role every 15 minutes and writes the credentials atomically to a docker volume.
-Role chaining caps each session at one hour. The sidecar's health check fails once the published
-credentials are within five minutes of expiry; `jd server status` then reports `OUT_OF_SERVICE`.
-The `jupyter` container mounts the volume read-only at
-`/run/bedrock-creds/credentials.json` and reads it through `credential_process` in `/etc/aws/config`.
-
-The `jupyter` container holds a fixed address on its own docker network. Host firewall rules,
-applied before dockerd starts and again on every docker start, drop that address's traffic to the
-instance metadata service, and
-`AWS_EC2_METADATA_DISABLED` makes the AWS SDKs fail fast rather than probe it. The default AWS SDK
-credential chain in the container, which the agents and `boto3` use, therefore resolves to the
-`bedrock-app` credentials and not the instance role's. The instance keeps IMDSv2 with a hop limit
-of 2 so that the sidecar and Traefik (Route 53 ACME), one docker-bridge hop away, can still read
-the instance role credentials: Traefik shares the `jupyter` network to route to the container but
-keeps its own address there, which the rule does not match. This isolation covers the credential chain, not a deliberate user:
-the `jupyter` container still mounts `/var/run/docker.sock`, through which a user can reach the
-host and therefore the instance role. Removing that mount is tracked separately.
-
-### AWS credentials in notebooks
-
-`boto3` and the AWS CLI inside the Jupyter container default to the `bedrock-app` role, which can
-only invoke Bedrock models. A notebook that relied on the instance role's permissions, for example
-to read the deployment S3 bucket, no longer has them. This applies on upgrade too: an existing
-deployment's next `jd up` moves `jupyter` onto the isolated network and blocks IMDS whether Bedrock
-is on or off, so notebook code that used the instance role stops working either way (Bedrock on:
-`bedrock-app` only; off: no credentials).
+The default AWS credential chain in the `jupyter` container (`boto3`, AWS CLI) resolves to the
+`bedrock-app` role with Bedrock on, and to nothing with it off. Notebook code that relied on the
+instance role stops working, on upgrade too. To use your own profiles, run
+`export AWS_CONFIG_FILE=$HOME/.aws/config`; a `~/.aws/credentials` file always takes precedence.
 
 ```{warning}
 Every user of the app shares the `bedrock-app` role, and therefore the same Bedrock credentials.
 Bedrock usage is not attributable per user: AWS CloudTrail records every call under that role.
 ```
 
-### Use your own AWS credentials
-
-With Bedrock enabled, the `jupyter` container sets `AWS_CONFIG_FILE=/etc/aws/config`, so the AWS
-SDKs and CLI do not read `~/.aws/config` and `AWS_PROFILE` cannot select a profile from it. A
-`~/.aws/credentials` file still takes precedence over the `bedrock-app` role. To use the profiles in
-`~/.aws/config`, run `export AWS_CONFIG_FILE=$HOME/.aws/config` in the terminal, or set it in the
-notebook's environment; that shell or kernel then no longer sees the `bedrock-app` credentials.
-
 ## Enable the models in your account
 
 Bedrock enables a third-party model (Anthropic Claude, OpenAI GPT) on its first invocation in an
-AWS account, by subscribing the account through AWS Marketplace. This is a one-time operation
-in your AWS account.
+AWS account, by subscribing the account through AWS Marketplace, once per account. That invocation
+accepts the provider's EULA: review the terms first.
 
 ```{warning}
 The `bedrock-app` role holds no AWS Marketplace permissions, so an admin must make that first call for each model.
 A call from the agents fails with `AccessDeniedException` until then.
 ```
 
-Invoking a third-party model accepts the provider's EULA: review the terms first. Then, with a
-principal allowed to subscribe through AWS Marketplace, in the deployment's region:
+With a principal allowed to subscribe through AWS Marketplace, in the deployment's region:
 
-1. **Anthropic only**: submit the first-time-use form. Open any Anthropic model in the
-   Bedrock console model catalog and submit your use case details. You submit it once per
-   AWS Organization.
+1. **Anthropic only**: submit the first-time-use form, once per AWS Organization. Open any Anthropic
+   model in the Bedrock console model catalog and submit your use case details.
 2. **Each model**: open the model in the Bedrock console playground and send one prompt.
 3. **Wait**: the agreement can take up to 15 minutes to become available.
 
 ## Choose the inference scope
 
-The agents call Bedrock in the deployment region through cross-region inference profiles.
-`bedrock_inference_scope` selects which ones:
+`bedrock_inference_scope` selects the cross-region inference profiles the agents call Bedrock through:
 
 | Scope | Profiles | Where Bedrock serves requests |
 |---|---|---|
 | `geo` (default) | the region's geography, e.g. `us.` in `us-west-2` | within that geography |
 | `global` | `global.` | any commercial region |
 
-The `geo` prefix follows the deployment region:
-
-| Region | Prefix |
-|---|---|
-| `us-*`, `ca-central-1` | `us.` |
-| `eu-*` | `eu.` |
-| `ap-northeast-1`, `ap-northeast-3` | `jp.` |
-| `ap-southeast-2` | `au.` |
-| `us-gov-*` | `us-gov.` |
-| other commercial regions | `global.` (with a plan-time warning; set `global` to silence it) |
-| isolated partitions | none: Bedrock is unavailable |
-
-Bedrock offers the OpenAI models through `us.` and `global.` profiles only. Outside the US,
-**Codex** needs `global`.
+`geo` maps the region to its geography: `us.`, `eu.`, `jp.` for Tokyo and Osaka, `au.` for Sydney,
+`us-gov.`; other commercial regions fall back to `global.` with a plan-time warning. Bedrock offers
+the OpenAI models through `us.` and `global.` profiles only, so outside the US **Codex** needs `global`.
 
 ## Choose the models
 
@@ -114,9 +66,7 @@ overrides:
 ```
 
 Each agent picks its default model per release: **Claude Code**'s default must stay within the
-patterns, and **Codex** uses the best model its release offers among the allowed ones. **Codex**
-needs an `openai.*` pattern and a `us.` or `global.` prefix; otherwise the image build leaves its
-model unset and `codex` reports why.
+patterns, and **Codex** uses the best model its release offers among the allowed ones.
 
 ## Pin the agent versions
 
@@ -125,31 +75,14 @@ either one rebuilds the image on the next `jd up`.
 
 ## Turn it off
 
-Set `bedrock_enabled` to `false` in the `overrides:` section of `variables.yaml`, then run
-`jd config` and `jd up`:
+Set `bedrock_enabled` to `false` in `variables.yaml`, then run `jd config` and `jd up`:
 
 ```yaml
 overrides:
   bedrock_enabled: false
 ```
 
-The deployment then has no `bedrock-app` role, no `bedrock-sidecar` and no credentials file. The
-`jupyter` container is still cut off from the instance metadata service and keeps
-`AWS_EC2_METADATA_DISABLED=true`, so with Bedrock off notebooks and terminals have **no AWS
-credentials at all** from the default chain, not the instance role's; a user who needs AWS access
-there brings their own (see [Use your own AWS credentials](#use-your-own-aws-credentials)). The
-agents stay installed but fail: `claude` with a credentials error, `codex` reporting the model
-`unset: bedrock_enabled is false ...`. Set the variable back to `true` and apply again to restore them.
+The deployment then has no `bedrock-app` role, no sidecar and no credentials file, so the agents
+fail. Notebooks and terminals get no AWS credentials from the default chain; bring your own as above.
 
-## Troubleshooting
-
-- **`jd server status` reports `OUT_OF_SERVICE`**: the `bedrock-sidecar` container is down or
-  unhealthy. Read its logs with `jd server logs -s bedrock-sidecar`.
-- **`Error when retrieving credentials from custom-process`**: `/run/bedrock-creds/credentials.json`
-  is missing; the sidecar has not published credentials yet.
-- **`Unable to locate credentials`**: `bedrock_enabled` is `false`.
-- **`AccessDeniedException` naming a model or inference profile**: the model is outside
-  `bedrock_model_patterns`, or its inference profile is outside `bedrock_inference_scope`
-  (**Codex** outside the US needs `global`).
-- **`AccessDeniedException` on a model the patterns allow**: the model was never enabled in the
-  account and region; see [Enable the models in your account](#enable-the-models-in-your-account).
+The project's `TROUBLESHOOT.md` covers the failure modes and the AWS CLI commands to enable the models.

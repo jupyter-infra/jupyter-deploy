@@ -26,3 +26,68 @@ To resolve:
   quota, the service code is `ec2` and the quota code is `L-1216C47A`.
 
 {{ request-quota-increase-instructions }}
+
+## Claude Code or Codex cannot reach Bedrock
+
+```bash
+# ask each agent from the jupyter container, headless (no first-run dialogs)
+jd server exec -- "claude -p 'Reply with OK'"
+jd server exec -- "codex exec --skip-git-repo-check 'Reply with OK'"
+
+# the sidecar that publishes the credentials the agents use
+jd server status
+jd server logs -s bedrock-sidecar
+```
+
+- **`jd server status` reports `OUT_OF_SERVICE`**: the `bedrock-sidecar` container is down or
+  unhealthy. Read its logs with `jd server logs -s bedrock-sidecar`.
+- **`Error when retrieving credentials from custom-process`**: `/run/bedrock-creds/credentials.json`
+  is missing; the sidecar has not published credentials yet.
+- **`Unable to locate credentials`**: `bedrock_enabled` is `false`. Set it to `true`, then run
+  `jd config` and `jd up`.
+- **`AccessDeniedException` naming a model or inference profile**: the model is outside
+  `bedrock_model_patterns`, or its inference profile is outside `bedrock_inference_scope` (Codex
+  outside the US needs `global`).
+- **Codex's model reads `unset: ...`**: the deployment gives Codex no model to use; the placeholder
+  in `/etc/codex/config.toml` names the variable to change.
+- **`AccessDeniedException` on a model the patterns allow**: the model was never enabled in the
+  account and region; see below.
+
+## Enable the Bedrock models in a new account
+
+Bedrock enables a third-party model (Anthropic Claude, OpenAI GPT) on its first invocation in an
+account, by subscribing the account through AWS Marketplace. The `bedrock-app` role holds no AWS
+Marketplace permissions, so the agents cannot be that first caller: their calls fail with
+`AccessDeniedException` until an admin enables the model. This is once per account (per AWS
+Organization for the Anthropic form), not per deployment.
+
+Invoking a third-party model, or creating its agreement, accepts the provider's EULA. Review the
+terms first.
+
+Run these with a principal that has `aws-marketplace:Subscribe`, `aws-marketplace:ViewSubscriptions`
+and `aws-marketplace:Unsubscribe`, in the deployment's region, on an account with a payment method:
+
+1. **Anthropic only: submit the first-time-use form.** Open any Anthropic model in the Bedrock
+   console model catalog and submit the use case details, or call
+   `aws bedrock put-use-case-for-model-access`.
+2. **Enable each model the agents use.** Open the model in the Bedrock console playground
+   and send one prompt. Each CLI picks its default model per release: Codex's is the
+   `model` line of `/etc/codex/config.toml` in the jupyter container, and `/model` in `claude` lists
+   Claude Code's.
+   Without the console, create the agreement directly:
+
+   ```bash
+   aws bedrock list-foundation-model-agreement-offers --model-id <model-id> --region <region>
+   aws bedrock create-foundation-model-agreement --model-id <model-id> --offer-token <offer-token> --region <region>
+   ```
+
+3. **Wait for the agreement**, which can take up to 15 minutes; calls fail meanwhile:
+
+   ```bash
+   # expect agreementAvailability.status AVAILABLE (PENDING while it is set up)
+   aws bedrock get-foundation-model-availability --model-id <model-id> --region <region>
+   ```
+
+These `aws bedrock` agreement commands need AWS CLI 2.27.42 or later. An `AccessDeniedException`
+that persists once the status is `AVAILABLE` points to an account-level restriction (SCP, or a model
+that needs additional access from AWS Sales).
