@@ -1,7 +1,7 @@
 """Probe in-cluster network reachability to verify NetworkPolicy enforcement.
 
-Runs a throwaway `curl` pod in a chosen namespace and attempts a TCP/HTTP
-connection to a target Service. A NetworkPolicy that denies the source manifests
+Runs a throwaway `curl` pod in a chosen namespace and attempts an HTTP or HTTPS
+request to a target Service. A NetworkPolicy that denies the source manifests
 as a connection timeout; an allowed source connects (any HTTP status, including
 404, counts as reachable).
 
@@ -22,6 +22,7 @@ _WORKSPACE_SERVICE_FMT = "workspace-{name}-service"
 _CURL_IMAGE = "curlimages/curl:latest"
 # curl exit 28 == operation timeout → the connection was blocked (denied).
 _CURL_TIMEOUT_EXIT = 28
+_SCHEMES = ("http", "https")
 # Default prefix for probe-pod names; a unique suffix is always appended.
 _DEFAULT_POD_PREFIX = "netpol-probe"
 
@@ -65,6 +66,7 @@ def probe_service(
     port: int,
     *,
     from_namespace: str,
+    scheme: str = "http",
     pod_labels: dict[str, str] | None = None,
     connect_timeout_s: int = 8,
     pod_name_prefix: str = _DEFAULT_POD_PREFIX,
@@ -72,7 +74,7 @@ def probe_service(
     """Attempt to reach an in-cluster host:port from a pod in from_namespace.
 
     Runs a one-shot curl pod (optionally carrying pod_labels, e.g. to satisfy or
-    probe a policy's podSelector), connects to http://host:port/, then reads the
+    probe a policy's podSelector), connects to <scheme>://host:port/, then reads the
     container's terminated exit code (not kubectl's, which is unreliable for
     run --rm). The pod is always deleted on the way out.
 
@@ -80,16 +82,29 @@ def probe_service(
     plus a random suffix), so a still-terminating pod from a prior probe never
     collides with this create.
 
+    With scheme "https", curl runs with --insecure: it still negotiates TLS (a
+    listener that only accepts TLS 1.3 must agree on it, and a failed handshake
+    raises), but skips checking the certificate's CA chain and hostname. The
+    targets' certificates are signed by an in-cluster private CA that the curl
+    image does not trust, so verification would fail every allowed probe. The probe
+    asserts NetworkPolicy reachability, not certificate validity; trusting the CA
+    with --cacert would mean mounting it into every probe namespace.
+
     Returns:
         True if the connection was allowed (curl reached the endpoint),
         False if it was denied (connection timed out).
 
     Raises:
+        ValueError: if scheme is neither "http" nor "https".
         RuntimeError: if curl failed for a reason other than a connect timeout
             (e.g. DNS failure, image pull error) — an ambiguous result that must
             not be silently read as "denied".
     """
-    url = f"http://{host}:{port}/"
+    if scheme not in _SCHEMES:
+        raise ValueError(f"unsupported probe scheme '{scheme}', expected one of {_SCHEMES}")
+    url = f"{scheme}://{host}:{port}/"
+    # Full TLS handshake, but no certificate check: the in-cluster CA is not in curl's trust store.
+    tls_args = ["--insecure"] if scheme == "https" else []
     pod_name = _unique_pod_name(pod_name_prefix)
 
     overrides: dict = {"spec": {"restartPolicy": "Never"}}
@@ -119,6 +134,7 @@ def probe_service(
             str(connect_timeout_s),
             "--max-time",
             str(connect_timeout_s * 2),
+            *tls_args,
             url,
         ]
     )
@@ -145,6 +161,7 @@ def probe_service_allowed(
     port: int,
     *,
     from_namespace: str,
+    scheme: str = "http",
     pod_labels: dict[str, str] | None = None,
     attempts: int = 5,
     connect_timeout_s: int = 8,
@@ -166,6 +183,7 @@ def probe_service_allowed(
             host,
             port,
             from_namespace=from_namespace,
+            scheme=scheme,
             pod_labels=pod_labels,
             connect_timeout_s=connect_timeout_s,
             pod_name_prefix=pod_name_prefix,
