@@ -246,7 +246,16 @@ The template creates a single `platform` EKS managed node group for control-plan
 
 ### Workspace Storage
 
-Workspace home volumes are EBS volumes from the `ebs-sc` StorageClass. When `workspace_volume_snapshots_enabled = true`, an Amazon Data Lifecycle Manager (DLM) policy snapshots each of them every `workspace_volume_snapshot_interval_hours` and keeps the latest `workspace_volume_snapshot_retain_count`. Snapshots outlive their volume, so you can restore a deleted workspace from them. `jd down` deletes every snapshot of the deployment.
+The EBS CSI driver provisions each workspace home volume as an EBS volume of the `ebs-sc` StorageClass.
+
+An Amazon Data Lifecycle Manager (DLM) policy snapshots each workspace volume:
+- when `workspace_volume_snapshots_enabled` is `true` (the default)
+- every `workspace_volume_snapshot_interval_hours` hours
+- keeping the latest `workspace_volume_snapshot_retain_count` snapshots of each volume.
+
+Snapshots outlive their volume, so you can restore a deleted workspace from them.
+
+`jd down` deletes the snapshots this policy took, which it tags `SnapshotPolicy = workspace-volumes`, including those from an earlier version of the policy.
 
 ### Application Images
 
