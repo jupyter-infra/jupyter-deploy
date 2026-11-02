@@ -42,3 +42,30 @@ class TestListOfMapVariableDescriptions(unittest.TestCase):
                 listed = [k.strip() for k in first["line"].split("Keys: ", 1)[1].rstrip(".").split(",")]
                 documented = [m["key"] for m in _KEY_LINE.finditer(body)]
                 self.assertEqual(sorted(listed), sorted(documented))
+
+
+# `jd config --help` shows only the first description line, cut at this many characters
+# (str_utils.get_trimmed_header).
+_CLI_HELP_MAX_LENGTH = 120
+
+
+class TestVariableDescriptionHeaders(unittest.TestCase):
+    """The first description line is the variable's `jd config --help` text, so it must read on its own."""
+
+    def setUp(self) -> None:
+        self.variables = {m["name"]: m["body"] for m in _VARIABLE_BLOCK.finditer(VARIABLES_TF.read_text())}
+
+    def test_variables_found(self) -> None:
+        self.assertIn("workspace_bedrock_enabled", self.variables)
+
+    def test_first_line_is_a_complete_sentence(self) -> None:
+        for name, body in self.variables.items():
+            with self.subTest(variable=name):
+                first = _HEREDOC_FIRST_LINE.search(body)
+                self.assertIsNotNone(first, f"{name} must use a <<-EOT description")
+                assert first is not None
+                line = first["line"].strip()
+                self.assertTrue(line.endswith("."), f"{name}: first description line must end a sentence: {line!r}")
+                self.assertLessEqual(
+                    len(line), _CLI_HELP_MAX_LENGTH, f"{name}: first description line exceeds the CLI help length"
+                )

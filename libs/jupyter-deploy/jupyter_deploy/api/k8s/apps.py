@@ -7,10 +7,18 @@ from kubernetes.client import AppsV1Api, CoreV1Api
 
 @dataclass(frozen=True)
 class DeploymentStatus:
+    """Replica counts of a Deployment.
+
+    total_replicas counts every pod of every ReplicaSet (status.replicas), so it includes
+    the surge pods of a rollout; desired_replicas is the target (spec.replicas).
+    """
+
     name: str
     available: bool
     ready_replicas: int
     total_replicas: int
+    desired_replicas: int
+    rolling_out: bool
     conditions: list[dict[str, str]] = field(default_factory=list)
 
 
@@ -74,18 +82,30 @@ def _is_available(conditions: list[dict[str, str]]) -> bool:
 
 
 def get_deployment_status(apps_api: AppsV1Api, name: str, namespace: str) -> DeploymentStatus:
-    """Return replica counts and availability for a Deployment."""
+    """Return replica counts, availability and rollout progress for a Deployment.
+
+    The rollout is in progress, as `kubectl rollout status` sees it, until the controller
+    has observed the latest spec and every pod is an updated one: an old-ReplicaSet pod
+    keeps the Deployment Available while a new one may still be crash-looping.
+    """
     deployment = apps_api.read_namespaced_deployment(name=name, namespace=namespace)
-    deploy_name = (deployment.metadata.name or "") if deployment.metadata else ""
+    metadata = deployment.metadata
+    deploy_name = (metadata.name or "") if metadata else ""
+    generation = (metadata.generation or 0) if metadata else 0
     status = deployment.status
     ready = status.ready_replicas or 0 if status else 0
     total = status.replicas or 0 if status else 0
+    updated = status.updated_replicas or 0 if status else 0
+    observed_generation = status.observed_generation or 0 if status else 0
+    desired = deployment.spec.replicas if deployment.spec and deployment.spec.replicas is not None else 1
     conditions = _parse_conditions(deployment)
     return DeploymentStatus(
         name=deploy_name,
         available=_is_available(conditions),
         ready_replicas=ready,
         total_replicas=total,
+        desired_replicas=desired,
+        rolling_out=observed_generation < generation or updated < desired or total > updated,
         conditions=conditions,
     )
 

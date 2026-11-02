@@ -1422,6 +1422,20 @@ components:
         method: k8s.batch.get-job-logs
       trigger:
         method: k8s.batch.create-job-from-cronjob
+  oauth2-proxy-cert-restart:
+    type: CronJob
+    description: Periodic oauth2-proxy restart to serve its renewed internal TLS certificate
+    scope: workspace_router_namespace
+    query: "app=oauth2-proxy-cert-restart"
+    verbs:
+      status:
+        method: k8s.batch.get-cronjob-status
+      show:
+        method: k8s.batch.get-cronjob
+      logs:
+        method: k8s.batch.get-job-logs
+      trigger:
+        method: k8s.batch.create-job-from-cronjob
   cluster-autoscaler-chart:
     type: HelmRelease
     description: Cluster Autoscaler chart

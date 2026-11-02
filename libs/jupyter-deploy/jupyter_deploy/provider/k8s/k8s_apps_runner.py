@@ -54,13 +54,16 @@ class K8sAppsRunner(InstructionRunner):
         if not status.available:
             status_display = "Degraded"
             status_category = StatusCategory.DEGRADED
-        elif status.ready_replicas < status.total_replicas:
+        elif status.rolling_out or status.ready_replicas < status.desired_replicas:
             status_display = "Updating"
             status_category = StatusCategory.IN_PROGRESS
         else:
             status_display = "Ready"
             status_category = StatusCategory.HEALTHY
-        details = f"{status.ready_replicas}/{status.total_replicas} replicas"
+        # Against spec.replicas: status.replicas counts a rollout's surge pods (1/2 for 1 replica).
+        details = f"{status.ready_replicas}/{status.desired_replicas} replicas"
+        if status.rolling_out:
+            details += ", rollout in progress"
 
         pod_info = k8s_apps.get_deployment_oldest_pod(
             self.apps_api, self.core_api, name=name_arg.value, namespace=scope_arg.value

@@ -113,9 +113,12 @@ resource "helm_release" "workspace_router" {
   # aws-load-balancer-additional-resource-tags annotation) so the DeploymentId tag
   # sweep finds them. Applied when the NLB is created only: the in-tree controller
   # never re-tags an existing one.
+  #
+  # The ebs-sc tags select the workspace volumes to snapshot (workspace_snapshots.tf).
   values = [
     yamlencode({
-      traefik = { additionalResourceTags = local.combined_tags }
+      traefik      = { additionalResourceTags = local.combined_tags }
+      storageClass = { ebs = { additionalResourceTags = local.workspace_volume_tags } }
     })
   ]
 
@@ -292,5 +295,5 @@ resource "helm_release" "workspace_router" {
     },
   ]
 
-  depends_on = [null_resource.platform, helm_release.jupyter_k8s, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup, kubernetes_namespace_v1.shared]
+  depends_on = [null_resource.platform, helm_release.jupyter_k8s, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup, kubernetes_namespace_v1.shared, null_resource.sync_ebs_storage_class]
 }
