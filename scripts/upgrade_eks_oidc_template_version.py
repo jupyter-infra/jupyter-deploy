@@ -53,6 +53,7 @@ def main() -> None:
     for defaults_file in [
         template_path / "engine" / "presets" / "defaults-all.tfvars",
         template_path / "variables.yaml",
+        template_path / "engine" / "variables.tf",
     ]:
         set_app_image_name_version(defaults_file, "jupyterlab", pep440_version)
 
