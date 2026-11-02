@@ -72,8 +72,11 @@ def set_tf_template_version(file_path: Path, new_version: str) -> None:
 
 
 def set_app_image_name_version(file_path: Path, app_name: str, new_version: str) -> None:
-    """Update the `<app_name>-v<version>` default image name in a presets tfvars or variables.yaml."""
-    _substitute(file_path, rf"({re.escape(app_name)}-v)[^\"'\s]+", rf"\g<1>{new_version}")
+    """Update the `<app_name>-v<version>` image name in a presets tfvars, variables.yaml, or variables.tf.
+
+    The digit after `-v` skips a placeholder such as `jupyterlab-v<template version>` in a description.
+    """
+    _substitute(file_path, rf"({re.escape(app_name)}-v)\d[^\"'\s]*", rf"\g<1>{new_version}")
 
 
 def pep440_to_semver(version: str) -> str:
