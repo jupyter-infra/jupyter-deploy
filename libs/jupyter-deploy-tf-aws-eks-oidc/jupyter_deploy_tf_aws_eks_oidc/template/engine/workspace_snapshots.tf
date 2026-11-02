@@ -5,13 +5,19 @@
 # workspace volumes. The ebs-sc StorageClass therefore adds one more tag, which only the volumes
 # it provisions carry, and the lifecycle policy targets that tag.
 #
-# Snapshots copy their volume's tags (DeploymentId and Source among them), which is what
-# null_resource.reap_workspace_volume_snapshots matches on teardown.
+# Snapshots copy their volume's tags (DeploymentId and Source among them), and the policy adds
+# workspace_snapshot_tags, which no volume carries; null_resource.reap_workspace_volume_snapshots
+# matches both on teardown.
 locals {
   # Unconditional, so that toggling workspace_volume_snapshots_enabled never changes the
   # StorageClass parameters (immutable, see null_resource.sync_ebs_storage_class).
   workspace_volume_tags = {
     WorkspaceVolume = random_id.postfix.hex
+  }
+  # Added by the policy to the snapshots it takes, so the reaper matches this policy's snapshots
+  # only. Keep in sync with the reaper's filter, which may only read `self`.
+  workspace_snapshot_tags = {
+    SnapshotPolicy = "workspace-volumes"
   }
   # The chart renders additionalResourceTags as tagSpecification_<n> = "<key>=<value>".
   workspace_volume_tag_specs = join(" ", sort([for k, v in local.workspace_volume_tags : "${k}=${v}"]))
@@ -48,8 +54,9 @@ resource "aws_dlm_lifecycle_policy" "workspace_volumes" {
     target_tags    = local.workspace_volume_tags
 
     schedule {
-      name      = "every-${var.workspace_volume_snapshot_interval_hours}h"
-      copy_tags = true
+      name        = "every-${var.workspace_volume_snapshot_interval_hours}h"
+      copy_tags   = true
+      tags_to_add = local.workspace_snapshot_tags
 
       create_rule {
         interval      = var.workspace_volume_snapshot_interval_hours
@@ -69,6 +76,12 @@ resource "aws_dlm_lifecycle_policy" "workspace_volumes" {
 
 # Destroy-time: delete this deployment's workspace volume snapshots. DLM retains them past
 # the volume's deletion, and nothing else would ever delete them.
+#
+# Matches the SnapshotPolicy tag only this policy adds (local.workspace_snapshot_tags) on top of
+# DeploymentId + Source: every CSI volume carries those, so they alone would also match snapshots
+# other tools take of them, e.g. AWS Backup recovery points, which delete-snapshot refuses,
+# failing every `jd down`, or another DLM policy's. The tag is a literal below rather than a
+# trigger: a changed trigger replaces this resource, which runs the reaper mid-apply.
 #
 # NOT count-gated on workspace_volume_snapshots_enabled: disabling the schedule would destroy
 # this resource, and so delete every existing snapshot. NOT best-effort either, like
@@ -92,6 +105,7 @@ resource "null_resource" "reap_workspace_volume_snapshots" {
       # instead of reading as "no snapshots".
       snapshots=$(aws ec2 describe-snapshots --region "$region" --owner-ids self \
         --filters "Name=tag:DeploymentId,Values=${self.triggers.deployment_id}" "Name=tag:Source,Values=jupyter-deploy" \
+        "Name=tag:SnapshotPolicy,Values=workspace-volumes" \
         --query 'Snapshots[].SnapshotId' --output text)
       for snap in $snapshots; do
         if out=$(aws ec2 delete-snapshot --region "$region" --snapshot-id "$snap" 2>&1); then
