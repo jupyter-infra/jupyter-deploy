@@ -1,6 +1,6 @@
 [project]
 name = "jupyter"
-version = "0.4.1"
+version = "0.4.2"
 description = "JupyterLab workspace image for jupyter-deploy EKS template"
 requires-python = ">=3.13"
 dependencies = [
