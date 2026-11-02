@@ -342,6 +342,37 @@ def test_csi_volume_reaper_outlives_nodes_on_destroy() -> None:
         assert _reaches(graph, holder, reaper), f"{holder} must depend on null_resource.reap_csi_volumes"
 
 
+def test_snapshot_policy_destroyed_before_reaper() -> None:
+    """The DLM policy MUST depend on the snapshot reaper, so on destroy the policy goes first;
+    otherwise DLM can take a snapshot after the reaper listed them, which then survives `jd down`."""
+    graph, _ = _build_depends_on_graph()
+    assert _reaches(
+        graph,
+        "aws_dlm_lifecycle_policy.workspace_volumes",
+        frozenset({"null_resource.reap_workspace_volume_snapshots"}),
+    ), "aws_dlm_lifecycle_policy.workspace_volumes must depend on null_resource.reap_workspace_volume_snapshots"
+
+
+def test_snapshot_reaper_filters_on_the_policy_tag() -> None:
+    """The reaper may only read `self`, so it repeats the SnapshotPolicy tag the DLM policy adds as a
+    literal; a drift would make `jd down` leave every snapshot behind."""
+    content = (TEMPLATE_PATH / "engine" / "workspace_snapshots.tf").read_text()
+    added = re.search(r'^\s*SnapshotPolicy\s*=\s*"([^"]+)"', content, re.MULTILINE)
+    assert added, "local.workspace_snapshot_tags must set SnapshotPolicy"
+    assert f'"Name=tag:SnapshotPolicy,Values={added[1]}"' in content, (
+        f"the snapshot reaper must filter on SnapshotPolicy={added[1]}"
+    )
+
+
+def test_router_chart_waits_for_storage_class_sync() -> None:
+    """The router chart MUST depend on the ebs-sc sync, so a StorageClass with stale parameters is
+    deleted before the chart upgrade; otherwise the upgrade fails on its immutable parameters."""
+    graph, _ = _build_depends_on_graph()
+    assert _reaches(graph, "helm_release.workspace_router", frozenset({"null_resource.sync_ebs_storage_class"})), (
+        "helm_release.workspace_router must depend on null_resource.sync_ebs_storage_class"
+    )
+
+
 def _extract_braced_attribute(body: str, name: str) -> str:
     """Return the `{...}` content of `name = {...}` in body, or "" if absent."""
     m = re.search(rf"\b{name}\s*=\s*\{{", body)
