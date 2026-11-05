@@ -91,12 +91,17 @@ This project:
 ## Requirements
 | Name | Version |
 |---|---|
+| terraform | >= 1.2 |
 | aws | ~> 5.0 |
+| null | >= 3.0 |
+| random | >= 3.0 |
 
 ## Providers
 | Name | Version |
 |---|---|
 | aws | ~> 5.0 |
+| null | >= 3.0 |
+| random | >= 3.0 |
 
 ## Modules
 | Name | Location |
