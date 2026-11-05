@@ -127,6 +127,17 @@ configurable size and retention settings.
 The template provides one variable preset:
 - **`defaults-all.tfvars`**: comprehensive preset with all recommended values
 
+## Requirements
+
+| Name | Version |
+|---|---|
+| terraform | >= 1.5.7 |
+| aws | >= 5.84 |
+| local | >= 2.0 |
+| null | >= 3.0 |
+| random | >= 3.0 |
+| time | >= 0.9 |
+
 ## Terraform Modules
 
 | Name | Location |

@@ -1,6 +1,32 @@
 # Terraform provider configuration
 terraform {
-  required_providers {}
+  # 1.5+: the engine uses `check` blocks (bedrock.tf).
+  required_version = ">= 1.5.7"
+
+  required_providers {
+    aws = {
+      # 5.84+, not 5.0: `neuron_devices` on the aws_ec2_instance_type data source (modules/ami_al2023)
+      # first ships in 5.84.0; older versions fail validation on an unknown attribute.
+      source  = "hashicorp/aws"
+      version = ">= 5.84"
+    }
+    local = {
+      source  = "hashicorp/local"
+      version = ">= 2.0"
+    }
+    null = {
+      source  = "hashicorp/null"
+      version = ">= 3.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.0"
+    }
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.9"
+    }
+  }
 }
 
 provider "aws" {

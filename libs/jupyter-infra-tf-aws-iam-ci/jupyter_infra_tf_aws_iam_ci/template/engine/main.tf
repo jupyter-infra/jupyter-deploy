@@ -1,8 +1,19 @@
 terraform {
+  # 1.2+: validation error messages in variables.tf do not follow the sentence format 1.0/1.1 enforce.
+  required_version = ">= 1.2"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
+    }
+    null = {
+      source  = "hashicorp/null"
+      version = ">= 3.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.0"
     }
   }
 }

@@ -149,6 +149,7 @@ The template provides two variable presets:
 | random | >= 3.0 |
 | time | >= 0.9 |
 | archive | >= 2.0 |
+| null | >= 3.0 |
 
 ## Terraform Modules
 
