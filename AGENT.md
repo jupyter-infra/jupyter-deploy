@@ -312,7 +312,11 @@ Run E2E tests: `just test-e2e-eks-oidc <project-dir> TEST-SELECTOR`
 
 **Prerequisite:** Same as base — pass `ci-dir=<ci-project>` for browser-auth tests.
 
-**IMPORTANT:** Deploy first (`just ci-e2e-eks-deploy`); pytest's 30-min deploy timeout kills `jd up`.
+**IMPORTANT:** Deploy first, then test; pytest's 30-min deploy timeout kills a `jd up` run inside the test session.
+Deploy a local sandbox **on the host, NEVER in the E2E container**: `jd init` into the project dir, render
+`libs/jupyter-deploy-tf-aws-eks-oidc/tests/e2e/configurations/base.yaml` with `envsubst` from `.env` into
+`<project-dir>/variables.yaml`, then `cd <project-dir>` and run `jd config` and `jd up -y` (backgrounded).
+`just ci-e2e-eks-deploy` is for CI runners only: do NOT use it locally.
 
 Examples (for project-dir == sandbox-e2e, ci-dir == sandbox-ci):
 - Run all tests: `just test-e2e-eks-oidc sandbox-e2e "" mutate=true,full-deploy=true,ci-dir=sandbox-ci`
