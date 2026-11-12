@@ -51,16 +51,18 @@ def template_main_tfs() -> dict[str, Path]:
 def declared_constraints(main_tf: Path) -> dict[str, str]:
     """Return the version constraints `main_tf` declares, under `terraform` for `required_version`."""
     with open(main_tf) as f:
-        parsed = strip_hcl2_quotes(hcl2.load(f))
+        parsed = hcl2.load(f)
     constraints: dict[str, str] = {}
     for block in parsed.get("terraform", []):
         if "required_version" in block:
-            constraints["terraform"] = block["required_version"]
+            constraints["terraform"] = strip_hcl2_quotes(block["required_version"])
         for providers in block.get("required_providers", []):
-            for name, spec in providers.items():
+            for name, raw_spec in providers.items():
                 # python-hcl2 v8 keeps comments under dunder keys such as `__inline_comments__`
                 if name.startswith("__"):
                     continue
+                # strip only the spec: strip_hcl2_quotes would turn the `null` provider's name into None
+                spec = strip_hcl2_quotes(raw_spec)
                 if "version" not in spec:
                     raise ValueError(f"{main_tf}: provider `{name}` declares no `version` constraint")
                 constraints[name] = spec["version"]
