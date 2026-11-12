@@ -730,10 +730,9 @@ class JDCli:
             elif is_separator and in_log_section:
                 # End of log section (bottom separator)
                 break
-            elif in_log_section and line.strip():
+            elif in_log_section and line.strip().startswith(line_start_pattern):
                 # Count lines that start with the specified pattern
                 # These are actual log entries (some may be wrapped across multiple lines)
-                if line.strip().startswith(line_start_pattern):
-                    log_entries.append(line)
+                log_entries.append(line)
 
         return log_entries
