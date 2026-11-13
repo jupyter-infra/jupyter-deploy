@@ -93,6 +93,8 @@ RUN apt-get update && \
     libxfixes3 \
     libxrandr2 \
     libxshmfence1 \
+    # Playwright's bundled node driver links against it since playwright 1.65.0
+    libatomic1 \
     fonts-liberation \
     fonts-noto-color-emoji \
     xvfb \

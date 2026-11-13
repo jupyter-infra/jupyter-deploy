@@ -49,7 +49,7 @@ $ jd projects show [OPTIONS] {project_id}
 
 **Arguments**:
 
-* `project_id`: ID of the project to show.  [required]
+* `project_id <str>`: ID of the project to show.  [required]
 
 **Options**:
 
@@ -70,7 +70,7 @@ $ jd projects delete [OPTIONS] {project_id}
 
 **Arguments**:
 
-* `project_id`: ID of the project to delete.  [required]
+* `project_id <str>`: ID of the project to delete.  [required]
 
 **Options**:
 

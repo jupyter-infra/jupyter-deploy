@@ -28,12 +28,12 @@ or pass --path <project-dir>.
 **Usage**:
 
 ```console
-$ jd history list [OPTIONS] {command}:<config|up|down>
+$ jd history list [OPTIONS] {command}
 ```
 
 **Arguments**:
 
-* `command:<config|up|down>`: Command that generated the logs.  [required]
+* `command <config|up|down>`: Command that generated the logs.  [required]
 
 **Options**:
 
@@ -58,12 +58,12 @@ Use --skip/-s to offset the first line returned (from the end of the content).
 **Usage**:
 
 ```console
-$ jd history show [OPTIONS] [command]:<config|up|down>
+$ jd history show [OPTIONS] [command]
 ```
 
 **Arguments**:
 
-* `command:<config|up|down>`: Command that generated the log. If omitted, show latest log from any command.
+* `command <config|up|down>`: Command that generated the log. If omitted, show latest log from any command.
 
 **Options**:
 
@@ -83,12 +83,12 @@ or pass --path <project-dir>.
 **Usage**:
 
 ```console
-$ jd history clear [OPTIONS] {command}:<config|up|down>
+$ jd history clear [OPTIONS] {command}
 ```
 
 **Arguments**:
 
-* `command:<config|up|down>`: Command type to clear: config, up, or down.  [required]
+* `command <config|up|down>`: Command type to clear: config, up, or down.  [required]
 
 **Options**:
 

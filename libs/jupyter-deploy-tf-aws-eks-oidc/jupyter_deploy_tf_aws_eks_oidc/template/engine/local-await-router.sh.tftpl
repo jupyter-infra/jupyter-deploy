@@ -132,6 +132,22 @@ restart_crashed_pods() {
     return 0
 }
 
+# Deletes the routing pods stuck in CrashLoopBackOff so their ReplicaSet recreates them with a
+# fresh backoff. Unlike a rollout restart, this creates no new ReplicaSet, so it cannot leave a
+# rollout half-done.
+reset_crashlooping_pods() {
+    local deploy pods
+    for deploy in $DEPLOYMENTS; do
+        pods=$(kubectl get pods -n "$ROUTER_NAMESPACE" -l app="$deploy" \
+            -o jsonpath='{range .items[*]}{.metadata.name}{" "}{range .status.containerStatuses[*]}{.state.waiting.reason}{end}{"\n"}{end}' 2>/dev/null \
+            | awk '$2 == "CrashLoopBackOff" {print $1}')
+        if [ -n "$pods" ]; then
+            echo "Resetting backoff of crash-looping $deploy pods: $(echo "$pods" | tr '\n' ' ')"
+            echo "$pods" | xargs kubectl delete pod -n "$ROUTER_NAMESPACE" --wait=false 2>&1 || true
+        fi
+    done
+}
+
 # CronJobs with concurrencyPolicy=Forbid silently stop scheduling if a Job is stuck.
 # A single bad image tag can block rotation for days with no visible alert.
 verify_cronjobs_healthy() {
@@ -197,9 +213,17 @@ rollout_complete() {
 }
 
 wait_for_deployments_ready() {
-    local MAX_WAIT_SECONDS=600
+    # On a fresh deploy the pods resolve the domain before ExternalDNS creates the record; the VPC
+    # resolver then caches the NXDOMAIN for the zone's negative TTL (900s for Route53), which a
+    # CoreDNS flush cannot clear. Cover that TTL plus the 300s CrashLoopBackOff cap.
+    local MAX_WAIT_SECONDS=1200
     local SLEEP_INTERVAL=15
     local waited=0
+    # We cannot tell when the cached NXDOMAIN expires, so periodically delete crash-looping pods:
+    # their replacements start with a fresh backoff, which keeps the next retry at most
+    # CRASH_RESET_INTERVAL away instead of up to the 300s backoff cap.
+    local CRASH_RESET_INTERVAL=240
+    local last_crash_reset=$SECONDS
 
     echo "Waiting for routing deployment rollouts to complete..."
 
@@ -244,6 +268,11 @@ wait_for_deployments_ready() {
             echo "  kubectl rollout restart deployment/coredns -n kube-system"
             echo "  kubectl rollout restart deployment -n $ROUTER_NAMESPACE"
             exit 1
+        fi
+
+        if [ $((SECONDS - last_crash_reset)) -ge "$CRASH_RESET_INTERVAL" ]; then
+            reset_crashlooping_pods
+            last_crash_reset=$SECONDS
         fi
 
         echo "Waiting for deployments... ($${waited}s / $${MAX_WAIT_SECONDS}s)"

@@ -33,7 +33,7 @@ $ jd organization set [OPTIONS] {organization}
 
 **Arguments**:
 
-* `organization`: Name of the organization to allowlist.  [required]
+* `organization <str>`: Name of the organization to allowlist.  [required]
 
 **Options**:
 

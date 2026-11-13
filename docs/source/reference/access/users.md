@@ -34,7 +34,7 @@ $ jd users add [OPTIONS] {users}...
 
 **Arguments**:
 
-* `users...`: Name of the users to add to the allowlist.  [required]
+* `users... <list[str]>`: Name of the users to add to the allowlist.  [required]
 
 **Options**:
 
@@ -56,7 +56,7 @@ $ jd users remove [OPTIONS] {users}...
 
 **Arguments**:
 
-* `users...`: Name of the users to remove from the allowlist.  [required]
+* `users... <list[str]>`: Name of the users to remove from the allowlist.  [required]
 
 **Options**:
 
@@ -78,7 +78,7 @@ $ jd users set [OPTIONS] {users}...
 
 **Arguments**:
 
-* `users...`: Names of the users to allowlist.  [required]
+* `users... <list[str]>`: Names of the users to allowlist.  [required]
 
 **Options**:
 

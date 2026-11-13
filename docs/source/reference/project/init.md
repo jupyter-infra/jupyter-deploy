@@ -19,7 +19,7 @@ $ jd init [OPTIONS] [path]
 
 **Arguments**:
 
-* `path`: Path to the directory where the project files will be created. Pass '.' to use your current working directory.
+* `path <path>`: Path to the directory where the project files will be created. Pass '.' to use your current working directory.
 
 **Options**:
 

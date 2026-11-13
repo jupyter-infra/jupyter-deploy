@@ -172,7 +172,7 @@ The template provides two variable presets:
 |---|---|---|---|
 | cluster_name_prefix | `string` | `jupyter-deploy-eks` | Prefix for the EKS cluster name (template appends a unique suffix) |
 | region | `string` | `us-west-2` | AWS region where to deploy the resources |
-| kubernetes_version | `string` | `1.36` | Kubernetes version for the EKS cluster |
+| kubernetes_version | `string` | `1.37` | Kubernetes version for the EKS cluster |
 | domain | `string` | Required | Domain name for workspace URLs (must have a Route 53 hosted zone) |
 | subdomain | `string` | Required | Subdomain prefix for workspace URLs |
 | oauth_app_client_id | `string` | Required | Client ID of the GitHub OAuth app |

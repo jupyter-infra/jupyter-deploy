@@ -1,6 +1,6 @@
 cluster_name_prefix              = "jupyter-deploy-eks"
 region                           = "us-west-2"
-kubernetes_version               = "1.36"
+kubernetes_version               = "1.37"
 workspace_namespaces             = []
 admin_role_names                 = []
 admin_user_names                 = []
@@ -15,7 +15,7 @@ workspace_router_chart_oci       = "oci://ghcr.io/jupyter-infra/charts/jupyter-k
 workspace_router_chart_version   = "0.3.2"
 traefik_crd_chart_version        = "1.15.0"
 
-cluster_autoscaler_chart_version = "9.59.0"
+cluster_autoscaler_chart_version = "9.60.0"
 
 enable_component_logging     = true
 component_log_retention_days = 7
@@ -29,7 +29,7 @@ workspaces_idle_shutdown_timeout_min     = 15
 workspaces_idle_shutdown_timeout_max     = 480
 workspace_app_jupyterlab_use             = true
 workspace_app_jupyterlab_app_type        = "jupyterlab"
-workspace_app_jupyterlab_image_name      = "jupyterlab-v0.4.2"
+workspace_app_jupyterlab_image_name      = "jupyterlab-v0.4.3"
 workspace_app_jupyterlab_image_build     = "v1"
 workspace_app_claude_code_version        = "2.1.312"
 workspace_app_codex_version              = "0.166.0"

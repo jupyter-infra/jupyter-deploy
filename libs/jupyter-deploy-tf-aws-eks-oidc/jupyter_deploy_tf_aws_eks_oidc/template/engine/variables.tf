@@ -37,7 +37,7 @@ variable "kubernetes_version" {
 
     Refer to: https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
 
-    Recommended: 1.36
+    Recommended: 1.37
   EOT
   type        = string
 }
@@ -860,7 +860,7 @@ variable "cluster_autoscaler_chart_version" {
     the cluster's Kubernetes minor version.
     Refer to: https://github.com/kubernetes/autoscaler/releases
 
-    Recommended: 9.59.0
+    Recommended: 9.60.0
   EOT
   type        = string
 }
@@ -1051,7 +1051,7 @@ variable "workspace_app_jupyterlab_image_name" {
     upgrade builds into a new repo while previous images stay available for
     running workspaces.
 
-    Example: jupyterlab-v0.4.2
+    Example: jupyterlab-v0.4.3
   EOT
   type        = string
 }

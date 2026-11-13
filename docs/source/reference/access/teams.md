@@ -34,7 +34,7 @@ $ jd teams add [OPTIONS] {teams}...
 
 **Arguments**:
 
-* `teams...`: Names of the teams to add to the allowlist.  [required]
+* `teams... <list[str]>`: Names of the teams to add to the allowlist.  [required]
 
 **Options**:
 
@@ -56,7 +56,7 @@ $ jd teams remove [OPTIONS] {teams}...
 
 **Arguments**:
 
-* `teams...`: Names of the teams to remove from the allowlist.  [required]
+* `teams... <list[str]>`: Names of the teams to remove from the allowlist.  [required]
 
 **Options**:
 
@@ -78,7 +78,7 @@ $ jd teams set [OPTIONS] {teams}...
 
 **Arguments**:
 
-* `teams...`: Names of the teams to allowlist.  [required]
+* `teams... <list[str]>`: Names of the teams to allowlist.  [required]
 
 **Options**:
 
