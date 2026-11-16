@@ -351,8 +351,8 @@ The template provides two variable presets:
 | additional_ebs_mounts | `list(map(string))` | `[]` | Elastic block stores to mount on the notebook home directory |
 | additional_efs_mounts | `list(map(string))` | `[]` | Elastic file systems to mount on the notebook home directory |
 | ebs_snapshot_ids | `map(string)` | `{}` | Map of volume name to the EBS snapshot to create it from; written by `jd config --restore-volumes` |
-| claude_code_version | `string` | `2.1.302` | The Claude Code version installed in the Jupyter image |
-| codex_version | `string` | `0.163.0` | The Codex CLI version installed in the Jupyter image |
+| claude_code_version | `string` | `2.1.325` | The Claude Code version installed in the Jupyter image |
+| codex_version | `string` | `0.169.0` | The Codex CLI version installed in the Jupyter image |
 | bedrock_enabled | `bool` | `true` | Whether Claude Code and Codex may call Amazon Bedrock, through the `bedrock-app` role |
 | bedrock_inference_scope | `string` | `geo` | The Bedrock inference profiles to use: `geo` (the region's geography) or `global` |
 | bedrock_model_patterns | `list(string)` | `["anthropic.claude-*", "openai.gpt-*"]` | The Bedrock model IDs the `bedrock-app` role may invoke, as IAM wildcards without the inference profile prefix |
