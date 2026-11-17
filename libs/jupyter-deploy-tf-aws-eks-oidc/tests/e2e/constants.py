@@ -51,7 +51,24 @@ NS_ONLY_B_TEAM = "e2e-ns-only-b"
 NS_ONLY_DEFAULT_TEAM = "e2e-ns-only-default"
 NS_REQUIRED_VARS = ["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"]
 NS_RUNNING_TIMEOUT_S = 600
-# Namespace of the router chart (workspace_router_namespace preset).
+# Namespaces of the router chart and of the operator (workspace_router_namespace and
+# workspace_operator_namespace presets): the two the workspace-ingress NetworkPolicy admits.
 ROUTER_NAMESPACE = "jupyter-k8s-router"
+OPERATOR_NAMESPACE = "jupyter-k8s-system"
 WORKSPACE_STOP_PATCH = '{"spec":{"desiredStatus":"Stopped"}}'
 WORKSPACE_START_PATCH = '{"spec":{"desiredStatus":"Running"}}'
+
+# Ordered mutating remote-access cases (test_workspace_remote_access) run as one
+# enable_remote_access on->off window after the namespace modules.
+ORDER_REMOTE_ACCESS = 30
+REMOTE_ACCESS_FLAG = "enable_remote_access"
+VSCODE_TEMPLATE_NAME = "vscode"
+# The VS Code counterpart of the built-in GPU card, offered when both flags are on.
+VSCODE_GPU_TEMPLATE_NAME = "vscode-gpu"
+VSCODE_WORKSPACE = "e2e-vscode-workspace"
+# The aws-oidc chart's WebSocket strategy (engine/workspace_remote_access.tf) and the
+# sidecar it adds to each VS Code workspace pod, listening on SIDECAR_PORT.
+WEBSOCKET_STRATEGY = "websocket-access-strategy"
+SIDECAR_CONTAINER = "ws-proxy"
+SIDECAR_PORT = 8080
+WORKSPACE_APP_PORT = 8888

@@ -21,13 +21,11 @@ from pytest_jupyter_deploy.kubernetes.namespace import get_namespace_labels, tem
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 from pytest_jupyter_deploy.workspaces.network_probe import probe_workspace
 
+from .constants import OPERATOR_NAMESPACE, ROUTER_NAMESPACE
+
 pytestmark = pytest.mark.usefixtures("kubernetes_cluster_login")
 
 NAMESPACE = "default"
-
-# Namespaces the policy allows ingress from (must match defaults-all.tfvars).
-ROUTER_NAMESPACE = "jupyter-k8s-router"
-OPERATOR_NAMESPACE = "jupyter-k8s-system"
 
 # Throwaway namespaces created by the tests.
 PROBE_NAMESPACE = "e2e-netpol-probe"
