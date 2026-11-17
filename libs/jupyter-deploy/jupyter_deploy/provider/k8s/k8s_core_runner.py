@@ -149,11 +149,11 @@ class K8sCoreRunner(InstructionRunner):
 
         self.display_manager.info(f"Getting logs for deployment {name_arg.value} in namespace: {scope_arg.value}")
 
-        pod_name = self._resolve_pod_name(name_arg.value, scope_arg.value)
-        container = container_arg.value if container_arg.value and container_arg.value != "default" else None
+        pod = self._resolve_pod(name_arg.value, scope_arg.value)
+        container = self._container_for(pod, container_arg.value)
 
         verify_kubeconfig_context(expected_cluster_config or None, self._kubeconfig_path)
-        kubectl_cmd = ["kubectl", "logs", pod_name, "--namespace", scope_arg.value]
+        kubectl_cmd = ["kubectl", "logs", pod.name, "--namespace", scope_arg.value]
         if self._kubeconfig_path:
             kubectl_cmd.extend(["--kubeconfig", self._kubeconfig_path])
         if container:
@@ -179,7 +179,7 @@ class K8sCoreRunner(InstructionRunner):
             "Logs": StrResolvedInstructionResult(result_name="Logs", value=logs),
         }
 
-    def _resolve_pod_name(self, deployment_name: str, namespace: str) -> str:
+    def _resolve_pod(self, deployment_name: str, namespace: str) -> k8s_core.PodInfo:
         deployment = self.apps_api.read_namespaced_deployment(name=deployment_name, namespace=namespace)
         match_labels = deployment.spec.selector.match_labels or {}
         label_selector = ",".join(f"{k}={v}" for k, v in match_labels.items())
@@ -188,7 +188,20 @@ class K8sCoreRunner(InstructionRunner):
         pods, _ = k8s_core.list_pods(self.core_api, namespace=namespace, label_selector=label_selector, limit=1)
         if not pods:
             raise ValueError(f"No pods found for deployment {deployment_name} in namespace {namespace}")
-        return pods[0].name
+        return pods[0]
+
+    def _container_for(self, pod: k8s_core.PodInfo, requested: str) -> str | None:
+        """The container a command targets: the requested one, else the first when the pod has several.
+
+        The API server refuses exec and logs on a pod with several containers unless one is
+        named; the main container comes first, sidecars are appended after it.
+        """
+        if requested and requested != "default":
+            return requested
+        if len(pod.containers) > 1:
+            self.display_manager.hint(f"Defaulted container {pod.containers[0]!r} out of: {', '.join(pod.containers)}")
+            return pod.containers[0]
+        return None
 
     def _exec_pod(
         self, resolved_arguments: dict[str, ResolvedInstructionArgument]
@@ -201,14 +214,14 @@ class K8sCoreRunner(InstructionRunner):
         )
         name_arg = retrieve_optional_arg(resolved_arguments, "name", StrResolvedInstructionArgument, "")
 
+        container = container_arg.value if container_arg.value and container_arg.value != "default" else None
         if deployment_name_arg.value:
-            pod_name = self._resolve_pod_name(deployment_name_arg.value, scope_arg.value)
+            pod = self._resolve_pod(deployment_name_arg.value, scope_arg.value)
+            pod_name, container = pod.name, self._container_for(pod, container_arg.value)
         elif name_arg.value:
             pod_name = name_arg.value
         else:
             raise ValueError("Either 'name' (pod name) or 'deployment_name' must be provided")
-
-        container = container_arg.value if container_arg.value and container_arg.value != "default" else None
         command_parts = shlex.split(command_arg.value)
         self.display_manager.info(f"Executing command on pod: {pod_name}")
         result = k8s_core.exec_pod(
@@ -239,14 +252,14 @@ class K8sCoreRunner(InstructionRunner):
             resolved_arguments, "expected_cluster_config", StrResolvedInstructionArgument, ""
         ).value
 
+        container = container_arg.value if container_arg.value and container_arg.value != "default" else None
         if deployment_name_arg.value:
-            pod_name = self._resolve_pod_name(deployment_name_arg.value, scope_arg.value)
+            pod = self._resolve_pod(deployment_name_arg.value, scope_arg.value)
+            pod_name, container = pod.name, self._container_for(pod, container_arg.value)
         elif name_arg.value:
             pod_name = name_arg.value
         else:
             raise ValueError("Either 'name' (pod name) or 'deployment_name' must be provided")
-
-        container = container_arg.value if container_arg.value and container_arg.value != "default" else None
 
         verify_kubeconfig_context(expected_cluster_config or None, self._kubeconfig_path)
         kubectl_cmd = ["kubectl", "exec", "-it", pod_name, "-n", scope_arg.value]

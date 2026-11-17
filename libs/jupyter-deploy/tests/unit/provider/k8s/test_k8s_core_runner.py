@@ -395,6 +395,109 @@ class TestK8sCoreRunner(unittest.TestCase):
             container=None,
         )
 
+    def _runner_with_deployment_pod(self, mock_k8s_core: Mock, containers: tuple[str, ...]) -> K8sCoreRunner:
+        """A runner whose deployment resolves to one pod with the given containers."""
+        runner = self._make_runner()
+        mock_deployment: Mock = Mock()
+        mock_deployment.spec.selector.match_labels = {"app": "ws"}
+        mock_apps_api: Mock = runner.apps_api  # type: ignore[assignment]
+        mock_apps_api.read_namespaced_deployment.return_value = mock_deployment
+        mock_k8s_core.list_pods.return_value = (
+            [PodInfo(name="ws-pod-abc", phase=PodPhase.RUNNING, containers=containers)],
+            None,
+        )
+        return runner
+
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
+    def test_exec_pod_single_container_passes_no_container(self, mock_k8s_core: Mock) -> None:
+        runner = self._runner_with_deployment_pod(mock_k8s_core, ("workspace",))
+        mock_k8s_core.exec_pod.return_value = ExecResult(stdout="", stderr="", returncode=0)
+
+        runner.execute_instruction(
+            instruction_name="exec-pod",
+            resolved_arguments={
+                "deployment_name": StrResolvedInstructionArgument(argument_name="deployment_name", value="my-deploy"),
+                "scope": StrResolvedInstructionArgument(argument_name="scope", value="default"),
+                "command": StrResolvedInstructionArgument(argument_name="command", value="ls"),
+            },
+        )
+
+        self.assertIsNone(mock_k8s_core.exec_pod.call_args.kwargs["container"])
+
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
+    def test_exec_pod_defaults_to_the_first_of_several_containers(self, mock_k8s_core: Mock) -> None:
+        runner = self._runner_with_deployment_pod(mock_k8s_core, ("workspace", "ws-proxy"))
+        mock_k8s_core.exec_pod.return_value = ExecResult(stdout="", stderr="", returncode=0)
+
+        runner.execute_instruction(
+            instruction_name="exec-pod",
+            resolved_arguments={
+                "deployment_name": StrResolvedInstructionArgument(argument_name="deployment_name", value="my-deploy"),
+                "scope": StrResolvedInstructionArgument(argument_name="scope", value="default"),
+                "command": StrResolvedInstructionArgument(argument_name="command", value="ls"),
+                "container": StrResolvedInstructionArgument(argument_name="container", value="default"),
+            },
+        )
+
+        self.assertEqual(mock_k8s_core.exec_pod.call_args.kwargs["container"], "workspace")
+
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
+    def test_exec_pod_requested_container_wins_over_the_default(self, mock_k8s_core: Mock) -> None:
+        runner = self._runner_with_deployment_pod(mock_k8s_core, ("workspace", "ws-proxy"))
+        mock_k8s_core.exec_pod.return_value = ExecResult(stdout="", stderr="", returncode=0)
+
+        runner.execute_instruction(
+            instruction_name="exec-pod",
+            resolved_arguments={
+                "deployment_name": StrResolvedInstructionArgument(argument_name="deployment_name", value="my-deploy"),
+                "scope": StrResolvedInstructionArgument(argument_name="scope", value="default"),
+                "command": StrResolvedInstructionArgument(argument_name="command", value="ls"),
+                "container": StrResolvedInstructionArgument(argument_name="container", value="ws-proxy"),
+            },
+        )
+
+        self.assertEqual(mock_k8s_core.exec_pod.call_args.kwargs["container"], "ws-proxy")
+
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.cmd_utils")
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
+    def test_deployment_logs_defaults_to_the_first_of_several_containers(
+        self, mock_k8s_core: Mock, mock_cmd_utils: Mock
+    ) -> None:
+        runner = self._runner_with_deployment_pod(mock_k8s_core, ("workspace", "ws-proxy"))
+        mock_cmd_utils.run_cmd_and_capture_output.return_value = "log"
+
+        runner.execute_instruction(
+            instruction_name="deployment-logs",
+            resolved_arguments={
+                "name": StrResolvedInstructionArgument(argument_name="name", value="my-deploy"),
+                "scope": StrResolvedInstructionArgument(argument_name="scope", value="default"),
+            },
+        )
+
+        mock_cmd_utils.run_cmd_and_capture_output.assert_called_once_with(
+            ["kubectl", "logs", "ws-pod-abc", "--namespace", "default", "-c", "workspace", "--tail", "1000"]
+        )
+
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.cmd_utils")
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
+    def test_exec_pod_interactive_defaults_to_the_first_of_several_containers(
+        self, mock_k8s_core: Mock, mock_cmd_utils: Mock
+    ) -> None:
+        runner = self._runner_with_deployment_pod(mock_k8s_core, ("workspace", "ws-proxy"))
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (0, False)
+
+        runner.execute_instruction(
+            instruction_name="exec-pod-interactive",
+            resolved_arguments={
+                "deployment_name": StrResolvedInstructionArgument(argument_name="deployment_name", value="my-deploy"),
+                "scope": StrResolvedInstructionArgument(argument_name="scope", value="default"),
+            },
+        )
+
+        mock_cmd_utils.run_cmd_and_pipe_to_terminal.assert_called_once_with(
+            ["kubectl", "exec", "-it", "ws-pod-abc", "-n", "default", "-c", "workspace", "--", "/bin/bash"]
+        )
+
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
     def test_exec_pod_with_name_uses_pod_directly(self, mock_k8s_core: Mock) -> None:
         runner = self._make_runner()

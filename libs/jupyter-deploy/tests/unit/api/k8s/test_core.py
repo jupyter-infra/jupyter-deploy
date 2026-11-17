@@ -34,10 +34,17 @@ def _mock_node_list(nodes: list[Mock], continue_token: str | None = None) -> Moc
     return Mock(items=nodes, metadata=metadata)
 
 
-def _mock_pod(name: str, phase: str = "Running") -> Mock:
+def _mock_container(name: str) -> Mock:
+    container: Mock = Mock()
+    container.name = name
+    return container
+
+
+def _mock_pod(name: str, phase: str = "Running", containers: tuple[str, ...] = ("app",)) -> Mock:
     pod: Mock = Mock()
     pod.metadata.name = name
     pod.status.phase = phase
+    pod.spec.containers = [_mock_container(container) for container in containers]
     return pod
 
 
@@ -141,6 +148,16 @@ class TestListPods(unittest.TestCase):
             namespace="default", label_selector=None, limit=None, _continue=None
         )
 
+    def test_returns_container_names_in_spec_order(self) -> None:
+        mock_api: Mock = Mock(spec=CoreV1Api)
+        mock_api.list_namespaced_pod.return_value = _mock_pod_list(
+            [_mock_pod("pod-1", containers=("workspace", "ws-proxy"))]
+        )
+
+        pods, _ = list_pods(mock_api, namespace="default")
+
+        self.assertEqual(pods[0].containers, ("workspace", "ws-proxy"))
+
     def test_passes_label_selector(self) -> None:
         mock_api: Mock = Mock(spec=CoreV1Api)
         mock_api.list_namespaced_pod.return_value = _mock_pod_list([])
@@ -187,6 +204,7 @@ class TestGetPod(unittest.TestCase):
 
         self.assertEqual(result.name, "pod-1")
         self.assertEqual(result.phase, PodPhase.PENDING)
+        self.assertEqual(result.containers, ("app",))
         mock_api.read_namespaced_pod.assert_called_once_with(name="pod-1", namespace="default")
 
     def test_raises_on_api_error(self) -> None:
