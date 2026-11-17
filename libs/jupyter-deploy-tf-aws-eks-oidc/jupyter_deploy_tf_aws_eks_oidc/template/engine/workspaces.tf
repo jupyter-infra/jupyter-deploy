@@ -1,6 +1,9 @@
 locals {
   access_strategy_name    = "oauth-access-strategy"
   workspace_storage_class = "ebs-sc"
+  # Ports the workspace-ingress NetworkPolicy admits from the router and operator
+  # namespaces: the application port, plus the remote access sidecar's.
+  workspace_ingress_ports = concat([8888], var.enable_remote_access ? [local.remote_access_sidecar_port] : [])
 }
 
 # ── Workspace namespaces ──────────────────────────────────────────────────────
@@ -184,44 +187,74 @@ check "workspace_namespaces_cover_allowed_teams" {
 }
 
 # ── Workspace templates ───────────────────────────────────────────────────────
-# One entry per UI card, rendered by charts/workspace-defaults. The jupyterlab
-# template is the built-in default; the rest come from workspace_templates
-# configs bound to pools through each entry's `templates` key. The entry
-# supplies placement (nodeSelector/toleration on its role), the config supplies
-# shape, idle policy, and card copy; without that pairing, CPU workspaces could
-# bind GPU nodes or GPU pods could land where no device is advertised.
+# One entry per UI card, rendered by charts/workspace-defaults. The base cards,
+# jupyterlab and (with remote access) vscode, are built in; the rest come from
+# workspace_templates configs bound to pools through each entry's `templates`
+# key. The entry supplies placement (nodeSelector/toleration on its role), the
+# config supplies the app, shape, idle policy, and card copy; without that
+# pairing, CPU workspaces could bind GPU nodes or GPU pods could land where no
+# device is advertised.
 locals {
-  jupyterlab_template_values = {
-    name             = "jupyterlab"
-    isDefault        = "true"
-    displayName      = "JupyterLab"
-    description      = "JupyterLab workspace with persistent EBS storage"
-    imageUri         = module.app_jupyterlab[0].image_uri
-    appType          = var.workspace_app_jupyterlab_app_type
-    accessType       = var.workspaces_default_access_type
-    ownershipType    = var.workspaces_default_ownership_type
-    storageClassName = local.workspace_storage_class
-    defaultResources = {
-      requests = { cpu = "500m", memory = "1Gi" }
-      limits   = { cpu = "2", memory = "4Gi" }
+  # What follows the application a card runs; a config picks one through its app
+  # key. workspace_remote_access.tf holds the vscode entry.
+  workspace_apps = {
+    jupyterlab = {
+      displayName    = "JupyterLab"
+      imageUri       = module.app_jupyterlab[0].image_uri
+      appType        = var.workspace_app_jupyterlab_app_type
+      accessStrategy = local.access_strategy_name
+      defaultResources = {
+        requests = { cpu = "500m", memory = "1Gi" }
+        limits   = { cpu = "2", memory = "4Gi" }
+      }
+      resourceBounds = {
+        cpu    = { min = "100m", max = "8" }
+        memory = { min = "256Mi", max = "32Gi" }
+      }
+      readinessProbe = { port = 8888, initialDelaySeconds = 2, periodSeconds = 3, failureThreshold = 30 }
+      # JupyterLab reports its last activity on /api/status.
+      idleDetection = { path = "/api/status", port = 8888, responseBodyPath = "last_activity", format = "RFC3339" }
     }
-    resourceBounds = {
-      cpu    = { min = "100m", max = "8" }
-      memory = { min = "256Mi", max = "32Gi" }
-    }
-    nodeSelector = { "jupyter-deploy/role" = "workspaces" }
-    tolerations = [
-      { key = "jupyter-deploy/role", operator = "Equal", value = "workspaces", effect = "NoSchedule" }
-    ]
-    readinessProbe = { port = 8888, initialDelaySeconds = 2, periodSeconds = 3, failureThreshold = 30 }
-    # Bedrock client config (workspace_bedrock.tf); set in every namespace, as
-    # the clients only lack credentials where Bedrock is off.
-    baseEnv = local.workspace_bedrock_env
-    idleShutdown = {
+    vscode = local.vscode_app
+  }
+
+  # The deployment's idle policy around each app's activity report; null for an app
+  # without one, which renders no idle policy at all.
+  workspace_app_idle = {
+    for app, a in local.workspace_apps : app => a.idleDetection == null ? null : {
       enabled           = var.workspaces_idle_shutdown_enabled
       timeoutMinutes    = var.workspaces_idle_shutdown_timeout_default
       minTimeoutMinutes = var.workspaces_idle_shutdown_timeout_min
       maxTimeoutMinutes = var.workspaces_idle_shutdown_timeout_max
+      detection         = a.idleDetection
+    }
+  }
+
+  # The base cards: each app's adjustable workspace on the "workspaces" role.
+  # jupyterlab is the default template of every namespace.
+  workspace_base_cards = {
+    for app, a in local.workspace_apps : app => {
+      name             = app
+      isDefault        = app == "jupyterlab" ? "true" : "false"
+      displayName      = a.displayName
+      description      = "${a.displayName} workspace with persistent EBS storage"
+      imageUri         = a.imageUri
+      appType          = a.appType
+      accessStrategy   = a.accessStrategy
+      accessType       = var.workspaces_default_access_type
+      ownershipType    = var.workspaces_default_ownership_type
+      storageClassName = local.workspace_storage_class
+      defaultResources = a.defaultResources
+      resourceBounds   = a.resourceBounds
+      nodeSelector     = { "jupyter-deploy/role" = "workspaces" }
+      tolerations = [
+        { key = "jupyter-deploy/role", operator = "Equal", value = "workspaces", effect = "NoSchedule" }
+      ]
+      readinessProbe = a.readinessProbe
+      # Bedrock client config (workspace_bedrock.tf); set in every namespace, as
+      # the clients only lack credentials where Bedrock is off.
+      baseEnv      = local.workspace_bedrock_env
+      idleShutdown = local.workspace_app_idle[app]
     }
   }
 
@@ -262,52 +295,56 @@ locals {
     } if contains(keys(local.workspace_template_configs), name)
   }
 
-  # A config with a cpu pin renders a fixed shape (min == max on every axis:
-  # a GPU workspace owns its node, so cpu/memory choice would only change
-  # which instance Karpenter buys). A config without one inherits the base
-  # jupyterlab shape through the shared local, so the two cannot drift.
-  workspace_pool_templates = {
-    for name, b in local.workspace_template_bindings : name => {
-      name             = name
-      isDefault        = "false"
-      displayName      = lookup(b.config, "display_name", name)
-      description      = lookup(b.config, "description", "JupyterLab workspace on the ${b.pools[0]} pool")
-      imageUri         = module.app_jupyterlab[0].image_uri
-      appType          = var.workspace_app_jupyterlab_app_type
-      accessType       = var.workspaces_default_access_type
-      ownershipType    = var.workspaces_default_ownership_type
-      storageClassName = local.workspace_storage_class
-      defaultResources = contains(keys(b.config), "cpu") ? {
-        requests = merge(
-          { cpu = b.config["cpu"], memory = b.config["memory"] },
-          contains(keys(b.config), "gpus") ? { "nvidia.com/gpu" = b.config["gpus"] } : {},
-        )
-        limits = merge(
-          { cpu = b.config["cpu"], memory = b.config["memory"] },
-          contains(keys(b.config), "gpus") ? { "nvidia.com/gpu" = b.config["gpus"] } : {},
-        )
-      } : local.jupyterlab_template_values.defaultResources
-      resourceBounds = contains(keys(b.config), "cpu") ? merge(
-        {
-          cpu    = { min = b.config["cpu"], max = b.config["cpu"] }
-          memory = { min = b.config["memory"], max = b.config["memory"] }
-        },
-        contains(keys(b.config), "gpus") ? { "nvidia.com/gpu" = { min = b.config["gpus"], max = b.config["gpus"] } } : {},
-      ) : local.jupyterlab_template_values.resourceBounds
-      nodeSelector = { "jupyter-deploy/role" = b.role }
-      tolerations = [
-        { key = "jupyter-deploy/role", operator = "Equal", value = b.role, effect = "NoSchedule" }
-      ]
-      readinessProbe = { port = 8888, initialDelaySeconds = 2, periodSeconds = 3, failureThreshold = 30 }
-      baseEnv        = local.jupyterlab_template_values.baseEnv
-      idleShutdown = {
-        enabled           = var.workspaces_idle_shutdown_enabled
-        timeoutMinutes    = tonumber(lookup(b.config, "idle_minutes", var.workspaces_idle_shutdown_timeout_default))
-        minTimeoutMinutes = var.workspaces_idle_shutdown_timeout_min
-        maxTimeoutMinutes = var.workspaces_idle_shutdown_timeout_max
-      }
-    }
+  workspace_template_apps = {
+    for name, b in local.workspace_template_bindings : name => lookup(b.config, "app", "jupyterlab")
   }
+
+  # A config starts from its app's base card and overrides the identity, the
+  # placement and the idle timeout. A config with a cpu pin also renders a fixed
+  # shape (min == max on every axis: a GPU workspace owns its node, so cpu/memory
+  # choice would only change which instance Karpenter buys).
+  workspace_pool_templates = {
+    for name, b in local.workspace_template_bindings : name => merge(
+      local.workspace_base_cards[local.workspace_template_apps[name]],
+      contains(keys(b.config), "cpu") ? {
+        defaultResources = {
+          requests = merge(
+            { cpu = b.config["cpu"], memory = b.config["memory"] },
+            contains(keys(b.config), "gpus") ? { "nvidia.com/gpu" = b.config["gpus"] } : {},
+          )
+          limits = merge(
+            { cpu = b.config["cpu"], memory = b.config["memory"] },
+            contains(keys(b.config), "gpus") ? { "nvidia.com/gpu" = b.config["gpus"] } : {},
+          )
+        }
+        resourceBounds = merge(
+          {
+            cpu    = { min = b.config["cpu"], max = b.config["cpu"] }
+            memory = { min = b.config["memory"], max = b.config["memory"] }
+          },
+          contains(keys(b.config), "gpus") ? { "nvidia.com/gpu" = { min = b.config["gpus"], max = b.config["gpus"] } } : {},
+        )
+      } : {},
+      {
+        name         = name
+        isDefault    = "false"
+        displayName  = lookup(b.config, "display_name", name)
+        description  = lookup(b.config, "description", "${local.workspace_apps[local.workspace_template_apps[name]].displayName} workspace on the ${b.pools[0]} pool")
+        nodeSelector = { "jupyter-deploy/role" = b.role }
+        tolerations = [
+          { key = "jupyter-deploy/role", operator = "Equal", value = b.role, effect = "NoSchedule" }
+        ]
+        idleShutdown = local.workspace_app_idle[local.workspace_template_apps[name]] == null ? null : merge(
+          local.workspace_app_idle[local.workspace_template_apps[name]],
+          { timeoutMinutes = tonumber(lookup(b.config, "idle_minutes", var.workspaces_idle_shutdown_timeout_default)) },
+        )
+      },
+    )
+  }
+
+  workspace_template_vscode_configs = [
+    for t in local.workspace_templates_effective : t["name"] if lookup(t, "app", "jupyterlab") == "vscode"
+  ]
 
   # One copy of each offered template per workspace namespace, so a template
   # never changes namespace and the shared namespace holds access strategies
@@ -315,11 +352,11 @@ locals {
   # precondition on helm_release.workspace_defaults.
   workspace_templates_placed = flatten([
     for ns in local.workspace_ns_names : concat(
-      # Every namespace gets the built-in CPU jupyterlab card as its default
-      # template: the operator webhook needs exactly one default per namespace for
-      # workspaces created without a templateRef. Revisit once more app types
-      # exist, e.g. to let a namespace pick its own default instead.
-      [merge(local.jupyterlab_template_values, { namespace = ns })],
+      # Every namespace gets the base cards. jupyterlab is the default template the
+      # operator webhook needs, exactly one per namespace, for workspaces created
+      # without a templateRef.
+      [merge(local.workspace_base_cards.jupyterlab, { namespace = ns })],
+      var.enable_remote_access ? [merge(local.workspace_base_cards.vscode, { namespace = ns })] : [],
       [
         for name in sort(local.workspace_ns_template_requests[ns]) :
         merge(local.workspace_pool_templates[name], { namespace = ns })
@@ -508,6 +545,7 @@ resource "helm_release" "workspace_defaults" {
   values = [
     yamlencode({
       workspaceTemplates = local.workspace_templates_placed
+      networkPolicy      = { ports = local.workspace_ingress_ports }
     })
   ]
 
@@ -561,7 +599,12 @@ resource "helm_release" "workspace_defaults" {
     }
     precondition {
       condition     = length(distinct([for t in local.workspace_templates_effective : t["name"]])) == length(local.workspace_templates_effective)
-      error_message = "workspace_templates names must be unique, including the built-in \"jupyterlab-gpu\" config injected by enable_default_gpu_pool."
+      error_message = "workspace_templates names must be unique, including the configs enable_default_gpu_pool injects (\"jupyterlab-gpu\", and \"vscode-gpu\" with enable_remote_access)."
+    }
+    precondition {
+      # The WebSocket access strategy a VS Code card references exists only with the flag.
+      condition     = var.enable_remote_access || length(local.workspace_template_vscode_configs) == 0
+      error_message = "workspace_templates configs with app = \"vscode\" need enable_remote_access = true: ${join(", ", local.workspace_template_vscode_configs)}."
     }
     precondition {
       condition     = alltrue([for name, b in local.workspace_template_bindings : length(b.roles) == 1])
