@@ -132,6 +132,10 @@ class TestWorkspaceTemplatesValidation(unittest.TestCase):
         result = self._plan('[{name = "vscode-p", app = "vscode", gpus = "1", cpu = "8", memory = "32Gi"}]')
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_jupyterlab_config_accepts_idle_minutes(self) -> None:
+        result = self._plan('[{name = "jupyterlab-p", idle_minutes = "30"}]')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_vscode_config_refuses_idle_minutes(self) -> None:
         result = self._plan('[{name = "vscode-p", app = "vscode", idle_minutes = "30"}]')
         self.assertNotEqual(result.returncode, 0)
