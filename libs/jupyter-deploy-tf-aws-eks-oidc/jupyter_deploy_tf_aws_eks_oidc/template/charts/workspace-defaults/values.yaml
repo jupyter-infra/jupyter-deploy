@@ -20,8 +20,9 @@ accessStrategy:
 #     requests/limits and min/max (extended keys like nvidia.com/gpu included)
 #   nodeSelector/tolerations                                 - placement; must match
 #     the role of the Karpenter pool the template targets
-#   readinessProbe                                           - port and timings; with
-#     path set the kubelet probes HTTP GET on it, otherwise a TCP connect
+#   readinessProbe                                           - timings plus either
+#     port, a TCP connect from the node, or command, run inside the container (the
+#     only way to probe a server bound to the pod's loopback interface)
 #   idleShutdown                                             - optional idle policy;
 #     detection names the app's HTTP endpoint and the JSON field holding its last
 #     activity; an entry without idleShutdown renders no idle policy

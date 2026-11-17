@@ -32,10 +32,10 @@ spec:
   # operator does not flip status.condition[Available]=True before the server is
   # up. Complements the access-strategy startupProbe.
   defaultReadinessProbe:
-    {{- if .readinessProbe.path }}
-    httpGet:
-      path: {{ .readinessProbe.path }}
-      port: {{ .readinessProbe.port }}
+    {{- if .readinessProbe.command }}
+    exec:
+      command:
+        {{- .readinessProbe.command | toYaml | nindent 8 }}
     {{- else }}
     tcpSocket:
       port: {{ .readinessProbe.port }}

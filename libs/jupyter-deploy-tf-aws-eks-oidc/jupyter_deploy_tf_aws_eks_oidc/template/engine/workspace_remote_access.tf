@@ -13,6 +13,9 @@ locals {
   remote_access_strategy_name = "websocket-access-strategy"
   # The sidecar's listen port, accessStrategy.webSocket.port in the aws-oidc chart.
   remote_access_sidecar_port = 8080
+  # The SSH server's loopback port: the image's entrypoint runs it there and the chart's
+  # accessStrategy.webSocket.targetPort defaults to it.
+  remote_access_ssh_port = 2222
 
   vscode_app = {
     displayName    = "VS Code"
@@ -30,9 +33,14 @@ locals {
       cpu    = { min = "100m", max = "8" }
       memory = { min = "2Gi", max = "32Gi" }
     }
-    # The SSH server binds the pod's loopback interface, which the kubelet cannot
-    # reach: readiness is the sidecar's own check of that target.
-    readinessProbe = { port = local.remote_access_sidecar_port, path = "/health/target", initialDelaySeconds = 2, periodSeconds = 3, failureThreshold = 30 }
+    # The SSH server binds the pod's loopback interface, which the kubelet's TCP probe
+    # cannot reach from the node, so the probe connects from inside the container.
+    readinessProbe = {
+      command             = ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/${local.remote_access_ssh_port}"]
+      initialDelaySeconds = 2
+      periodSeconds       = 3
+      failureThreshold    = 30
+    }
     # Nothing in the pod reports editor activity yet, so the card carries no idle policy.
     idleDetection = null
   }

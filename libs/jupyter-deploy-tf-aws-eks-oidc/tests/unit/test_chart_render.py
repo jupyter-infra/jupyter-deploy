@@ -438,12 +438,12 @@ class TestWorkspaceDefaultsRemoteAccessRender(unittest.TestCase):
             {"name": "websocket-access-strategy", "namespace": "jupyter-k8s-shared"},
         )
 
-    def test_vscode_readiness_probe_is_http_get_on_the_sidecar_port(self) -> None:
-        """The SSH server binds loopback, so readiness is the sidecar's check of it, not a TCP connect."""
+    def test_vscode_readiness_probe_connects_to_the_loopback_ssh_port_from_inside(self) -> None:
+        """The SSH server binds loopback, which a TCP probe from the node cannot reach."""
         self.assertEqual(
             self.vscode["spec"]["defaultReadinessProbe"],
             {
-                "httpGet": {"path": "/health/target", "port": 8080},
+                "exec": {"command": ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/2222"]},
                 "initialDelaySeconds": 2,
                 "periodSeconds": 3,
                 "failureThreshold": 30,

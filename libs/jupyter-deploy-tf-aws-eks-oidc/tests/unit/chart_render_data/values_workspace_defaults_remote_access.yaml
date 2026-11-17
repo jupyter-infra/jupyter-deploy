@@ -1,8 +1,8 @@
 # The enable_remote_access render: the two base cards of workspaces.tf in one
 # namespace (jupyterlab as in values_workspace_defaults_default.yaml, vscode from
-# vscode_app in workspace_remote_access.tf) and the sidecar port on the ingress
-# policy. Keep in sync with workspace_base_cards, vscode_app and
-# workspace_ingress_ports.
+# vscode_app in workspace_remote_access.tf, its readiness an exec probe) and the
+# sidecar port on the ingress policy. Keep in sync with workspace_base_cards,
+# vscode_app and workspace_ingress_ports.
 workspaceTemplates:
   - name: jupyterlab
     namespace: default
@@ -84,8 +84,7 @@ workspaceTemplates:
         value: workspaces
         effect: NoSchedule
     readinessProbe:
-      port: 8080
-      path: /health/target
+      command: ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/2222"]
       initialDelaySeconds: 2
       periodSeconds: 3
       failureThreshold: 30
