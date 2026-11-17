@@ -175,9 +175,10 @@ def test_enable_remote_access_offers_the_vscode_cards(
     """Enabling the flag builds the image and offers the VS Code card and a pool-bound VS Code config on the strategy.
 
     With a workspace_namespaces mapping, a namespace offers only the configs its entry lists, so
-    the default namespace's entry gets the pool-bound config too.
+    the default namespace's entry gets the pool-bound config, and the GPU card when the pool is on.
     """
     e2e_deployment.ensure_deployed()
+    gpu_pool = e2e_deployment.get_bool_variable_value(GPU_POOL_FLAG)
     configs = e2e_deployment.get_list_of_maps_variable_value("workspace_templates")
     pools = e2e_deployment.get_list_of_maps_variable_value("workspace_nodepools")
     namespaces = e2e_deployment.get_list_of_maps_variable_value("workspace_namespaces")
@@ -187,11 +188,12 @@ def test_enable_remote_access_offers_the_vscode_cards(
         "workspace_nodepools": pools_offering(pools, VSCODE_SMALL_TEMPLATE),
     }
     if namespaces:
+        offered = [VSCODE_SMALL_TEMPLATE, *([VSCODE_GPU_TEMPLATE_NAME] if gpu_pool else [])]
         overrides["workspace_namespaces"] = [
             {
                 **entry,
                 "templates": ",".join(
-                    dict.fromkeys([*[t for t in entry.get("templates", "").split(",") if t], VSCODE_SMALL_TEMPLATE])
+                    dict.fromkeys([*[t for t in entry.get("templates", "").split(",") if t], *offered])
                 ),
             }
             if entry["name"] == WORKSPACE_NAMESPACE
@@ -216,7 +218,6 @@ def test_enable_remote_access_offers_the_vscode_cards(
     assert not resource_absent("workspaceaccessstrategies", WEBSOCKET_STRATEGY, shared_namespace), (
         f"{WEBSOCKET_STRATEGY} missing from {shared_namespace}"
     )
-    gpu_pool = e2e_deployment.get_bool_variable_value(GPU_POOL_FLAG)
     assert (VSCODE_GPU_TEMPLATE_NAME in list_template_names(WORKSPACE_NAMESPACE)) is gpu_pool, (
         f"{VSCODE_GPU_TEMPLATE_NAME} must be offered exactly when {GPU_POOL_FLAG} is on (it is {gpu_pool})"
     )
