@@ -48,3 +48,43 @@ locals {
     memory       = local.gpu_template_builtin.memory
   }
 }
+
+# Orphan detect + repair for the WebSocket strategy, as workspaces.tf does for the
+# OAuth one: an operator release replacement cascade-deletes it with the CRDs (#270).
+data "kubernetes_resource" "websocket_access_strategy" {
+  count = var.enable_remote_access ? 1 : 0
+
+  api_version = "workspace.jupyter.org/v1alpha1"
+  kind        = "WorkspaceAccessStrategy"
+  metadata {
+    name      = local.remote_access_strategy_name
+    namespace = var.workspace_shared_namespace
+  }
+
+  depends_on = [helm_release.workspace_router, kubernetes_namespace_v1.shared]
+}
+
+resource "null_resource" "repair_websocket_access_strategy" {
+  count = var.enable_remote_access ? 1 : 0
+
+  triggers = {
+    present = data.kubernetes_resource.websocket_access_strategy[0].object == null ? "missing" : "present"
+    script = templatefile("${path.module}/local-repair-cr.sh.tftpl", {
+      cluster_name      = local.cluster_name
+      region            = var.region
+      release_name      = "jupyter-k8s-aws-oidc"
+      release_namespace = var.workspace_router_namespace
+      cr_kind           = "WorkspaceAccessStrategy"
+      cr_name           = local.remote_access_strategy_name
+      cr_namespace      = var.workspace_shared_namespace
+    })
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    quiet       = true
+    command     = self.triggers.script
+  }
+
+  depends_on = [helm_release.workspace_router, kubernetes_namespace_v1.shared]
+}
