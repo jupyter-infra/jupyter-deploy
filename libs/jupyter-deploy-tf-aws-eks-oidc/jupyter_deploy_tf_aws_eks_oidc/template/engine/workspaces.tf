@@ -1,9 +1,10 @@
 locals {
   access_strategy_name    = "oauth-access-strategy"
   workspace_storage_class = "ebs-sc"
-  # Ports the workspace-ingress NetworkPolicy admits from the router and operator
-  # namespaces: the application port, plus the remote access sidecar's.
-  workspace_ingress_ports = concat([8888], var.enable_remote_access ? [local.remote_access_sidecar_port] : [])
+  # Ports the workspace-ingress NetworkPolicy admits: the application port from the
+  # router and operator namespaces, plus the remote access sidecar's from the router.
+  workspace_ingress_router_ports   = concat([8888], var.enable_remote_access ? [local.remote_access_sidecar_port] : [])
+  workspace_ingress_operator_ports = [8888]
 }
 
 # ── Workspace namespaces ──────────────────────────────────────────────────────
@@ -546,7 +547,10 @@ resource "helm_release" "workspace_defaults" {
   values = [
     yamlencode({
       workspaceTemplates = local.workspace_templates_placed
-      networkPolicy      = { ports = local.workspace_ingress_ports }
+      networkPolicy = {
+        routerPorts   = local.workspace_ingress_router_ports
+        operatorPorts = local.workspace_ingress_operator_ports
+      }
     })
   ]
 

@@ -89,7 +89,11 @@ networkPolicy:
   routerNamespace: jupyter-k8s-router
   # -- Namespace of the operator that probes workspaces for idle detection.
   operatorNamespace: jupyter-k8s-system
-  # -- Workspace pod ports allowed for ingress: the application port, plus the port
+  # -- Workspace pod ports the router may reach: the application port, plus the port
   # of the remote access sidecar when a template carries one.
-  ports:
+  routerPorts:
+    - 8888
+  # -- Workspace pod ports the operator may reach: the application port its idle
+  # detection probes.
+  operatorPorts:
     - 8888

@@ -22,7 +22,7 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: {{ $.Values.networkPolicy.routerNamespace }}
       ports:
-        {{- range $.Values.networkPolicy.ports }}
+        {{- range $.Values.networkPolicy.routerPorts }}
         - port: {{ . }}
           protocol: TCP
         {{- end }}
@@ -32,7 +32,7 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: {{ $.Values.networkPolicy.operatorNamespace }}
       ports:
-        {{- range $.Values.networkPolicy.ports }}
+        {{- range $.Values.networkPolicy.operatorPorts }}
         - port: {{ . }}
           protocol: TCP
         {{- end }}

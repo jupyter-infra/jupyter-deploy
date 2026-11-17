@@ -1,8 +1,8 @@
 # The enable_remote_access render: the two base cards of workspaces.tf in one
 # namespace (jupyterlab as in values_workspace_defaults_default.yaml, vscode from
 # vscode_app in workspace_remote_access.tf, its readiness an exec probe) and the
-# sidecar port on the ingress policy. Keep in sync with workspace_base_cards,
-# vscode_app and workspace_ingress_ports.
+# sidecar port on the router's ingress rule. Keep in sync with workspace_base_cards,
+# vscode_app and workspace_ingress_router_ports.
 workspaceTemplates:
   - name: jupyterlab
     namespace: default
@@ -90,6 +90,8 @@ workspaceTemplates:
       failureThreshold: 30
     idleShutdown: null
 networkPolicy:
-  ports:
+  routerPorts:
     - 8888
     - 8080
+  operatorPorts:
+    - 8888

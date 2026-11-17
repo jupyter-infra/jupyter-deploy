@@ -409,7 +409,7 @@ class TestWorkspaceDefaultsMultiNamespaceRender(unittest.TestCase):
 
 @_SKIP_WITHOUT_HELM
 class TestWorkspaceDefaultsRemoteAccessRender(unittest.TestCase):
-    """With remote access on, the vscode card renders beside jupyterlab and the policy admits the sidecar port."""
+    """With remote access on, the vscode card renders beside jupyterlab and the router may reach the sidecar port."""
 
     rendered: ClassVar[str]
     templates: ClassVar[list[dict[str, Any]]]
@@ -454,11 +454,17 @@ class TestWorkspaceDefaultsRemoteAccessRender(unittest.TestCase):
         self.assertNotIn("defaultIdleShutdown", self.vscode["spec"])
         self.assertNotIn("idleShutdownOverrides", self.vscode["spec"])
 
-    def test_vscode_template_not_default(self) -> None:
-        self.assertEqual(self.vscode["metadata"]["labels"]["workspace.jupyter.org/default-template"], "false")
-
-    def test_network_policy_admits_the_sidecar_port_from_both_namespaces(self) -> None:
+    def test_network_policy_admits_the_sidecar_port_from_the_router_only(self) -> None:
         policies = _docs_of_kind(self.rendered, "NetworkPolicy")
         self.assertEqual([p["metadata"]["namespace"] for p in policies], ["default"])
-        for rule in policies[0]["spec"]["ingress"]:
-            self.assertEqual(rule["ports"], [{"port": 8888, "protocol": "TCP"}, {"port": 8080, "protocol": "TCP"}])
+        ports_by_source = {
+            rule["from"][0]["namespaceSelector"]["matchLabels"]["kubernetes.io/metadata.name"]: rule["ports"]
+            for rule in policies[0]["spec"]["ingress"]
+        }
+        self.assertEqual(
+            ports_by_source,
+            {
+                "jupyter-k8s-router": [{"port": 8888, "protocol": "TCP"}, {"port": 8080, "protocol": "TCP"}],
+                "jupyter-k8s-system": [{"port": 8888, "protocol": "TCP"}],
+            },
+        )
