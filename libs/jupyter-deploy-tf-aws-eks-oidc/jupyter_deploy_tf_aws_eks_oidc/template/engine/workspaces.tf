@@ -200,6 +200,7 @@ locals {
   workspace_apps = {
     jupyterlab = {
       displayName    = "JupyterLab"
+      description    = "JupyterLab workspace with persistent EBS storage"
       imageUri       = module.app_jupyterlab[0].image_uri
       appType        = var.workspace_app_jupyterlab_app_type
       accessStrategy = local.access_strategy_name
@@ -237,7 +238,7 @@ locals {
       name             = app
       isDefault        = app == "jupyterlab" ? "true" : "false"
       displayName      = a.displayName
-      description      = "${a.displayName} workspace with persistent EBS storage"
+      description      = a.description
       imageUri         = a.imageUri
       appType          = a.appType
       accessStrategy   = a.accessStrategy

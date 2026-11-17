@@ -16,6 +16,7 @@ locals {
 
   vscode_app = {
     displayName    = "VS Code"
+    description    = "Workspace for VS Code, Cursor or Kiro over SSH, with persistent EBS storage"
     imageUri       = one(module.app_vscode[*].image_uri)
     appType        = "vscode"
     accessStrategy = local.remote_access_strategy_name
@@ -42,7 +43,7 @@ locals {
     name         = "vscode-gpu"
     app          = "vscode"
     display_name = "VS Code GPU"
-    description  = "VS Code workspace with one NVIDIA GPU and persistent EBS storage"
+    description  = "Workspace for VS Code, Cursor or Kiro over SSH, with one NVIDIA GPU and persistent EBS storage"
     gpus         = local.gpu_template_builtin.gpus
     cpu          = local.gpu_template_builtin.cpu
     memory       = local.gpu_template_builtin.memory
