@@ -299,6 +299,21 @@ def kubectl_poll_workspace_status(
     )
 
 
+def kubectl_get_workspace_pod(name: str, namespace: str = "default") -> dict[str, Any]:
+    """The pod of a workspace as JSON, found by the workspace-name label the operator sets on it.
+
+    Raises:
+        LookupError: If no pod carries the label
+    """
+    result = run_kubectl(
+        "get", "pods", "-n", namespace, "-l", f"workspace.jupyter.org/workspace-name={name}", "-o", "json", check=True
+    )
+    pods: list[dict[str, Any]] = json.loads(result.stdout)["items"]
+    if not pods:
+        raise LookupError(f"no pod of workspace {name} in namespace {namespace}")
+    return pods[0]
+
+
 def kubectl_request_workspace_connection(
     name: str,
     namespace: str = "default",

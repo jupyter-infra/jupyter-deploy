@@ -1,4 +1,4 @@
-"""Unit tests for the workspaces.kubectl connection request."""
+"""Unit tests for the workspaces.kubectl pod lookup and connection request."""
 
 import json
 import subprocess
@@ -7,9 +7,34 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import Mock, patch
 
-from pytest_jupyter_deploy.workspaces.kubectl import kubectl_request_workspace_connection
+from pytest_jupyter_deploy.workspaces.kubectl import kubectl_get_workspace_pod, kubectl_request_workspace_connection
 
 _RESPONSE = {"status": {"workspaceConnectionUrl": "wss://example.test/workspaces/team-a/ws1/ssh-ws?token=t"}}
+
+
+def _kubectl_json(payload: Any) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(payload), stderr="")
+
+
+class TestKubectlGetWorkspacePod(unittest.TestCase):
+    @patch("pytest_jupyter_deploy.workspaces.kubectl.run_kubectl")
+    def test_returns_the_pod_carrying_the_workspace_label(self, mock_run_kubectl: Mock) -> None:
+        pod = {"metadata": {"name": "workspace-ws1-abc"}, "status": {"containerStatuses": []}}
+        mock_run_kubectl.return_value = _kubectl_json({"items": [pod]})
+
+        self.assertEqual(kubectl_get_workspace_pod("ws1", "team-a"), pod)
+        self.assertEqual(
+            mock_run_kubectl.call_args.args,
+            ("get", "pods", "-n", "team-a", "-l", "workspace.jupyter.org/workspace-name=ws1", "-o", "json"),
+        )
+        self.assertTrue(mock_run_kubectl.call_args.kwargs["check"])
+
+    @patch("pytest_jupyter_deploy.workspaces.kubectl.run_kubectl")
+    def test_raises_when_no_pod_carries_the_label(self, mock_run_kubectl: Mock) -> None:
+        mock_run_kubectl.return_value = _kubectl_json({"items": []})
+
+        with self.assertRaises(LookupError):
+            kubectl_get_workspace_pod("ws1")
 
 
 class TestKubectlRequestWorkspaceConnection(unittest.TestCase):
@@ -20,7 +45,7 @@ class TestKubectlRequestWorkspaceConnection(unittest.TestCase):
         def capture(*args: str, **kwargs: Any) -> subprocess.CompletedProcess[str]:
             # The body file lives only for the call.
             bodies.append(json.loads(Path(args[args.index("-f") + 1]).read_text()))
-            return subprocess.CompletedProcess(args=[], returncode=0, stdout=json.dumps(_RESPONSE), stderr="")
+            return _kubectl_json(_RESPONSE)
 
         mock_run_kubectl.side_effect = capture
         out = kubectl_request_workspace_connection(
