@@ -1,6 +1,6 @@
 # Two-template list mirroring the workspaces.tf locals (jupyterlab plus the
 # binding of the built-in jupyterlab-gpu config to the built-in GPU pool),
-# dummy images. Keep in sync with jupyterlab_template_values /
+# dummy images. Keep in sync with workspace_base_cards /
 # workspace_pool_templates and gpu_template_builtin in platform_karpenter.tf.
 workspaceTemplates:
   - name: jupyterlab
@@ -10,6 +10,7 @@ workspaceTemplates:
     description: "JupyterLab workspace with persistent EBS storage"
     imageUri: docker.io/test/jupyterlab:latest
     appType: jupyterlab
+    accessStrategy: oauth-access-strategy
     accessType: OwnerOnly
     ownershipType: OwnerOnly
     storageClassName: ebs-sc
@@ -44,6 +45,11 @@ workspaceTemplates:
       timeoutMinutes: 60
       minTimeoutMinutes: 15
       maxTimeoutMinutes: 480
+      detection:
+        path: /api/status
+        port: 8888
+        responseBodyPath: last_activity
+        format: RFC3339
   - name: jupyterlab-gpu
     namespace: default
     isDefault: "false"
@@ -51,6 +57,7 @@ workspaceTemplates:
     description: "JupyterLab workspace with one NVIDIA GPU and persistent EBS storage"
     imageUri: docker.io/test/jupyterlab:latest
     appType: jupyterlab
+    accessStrategy: oauth-access-strategy
     accessType: OwnerOnly
     ownershipType: OwnerOnly
     storageClassName: ebs-sc
@@ -90,3 +97,8 @@ workspaceTemplates:
       timeoutMinutes: 60
       minTimeoutMinutes: 15
       maxTimeoutMinutes: 480
+      detection:
+        path: /api/status
+        port: 8888
+        responseBodyPath: last_activity
+        format: RFC3339
