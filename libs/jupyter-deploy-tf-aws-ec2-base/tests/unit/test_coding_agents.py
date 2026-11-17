@@ -62,7 +62,7 @@ class TestCodingAgentsImage(unittest.TestCase):
                 instructions = _instructions(dockerfile)
                 text = "\n".join(instructions)
 
-                self.assertIn("FROM node:22-trixie-slim AS ai-clis", text)
+                self.assertIn("FROM node:26-trixie-slim AS ai-clis", text)
                 install = next(i for i in instructions if "npm install" in i)
                 self.assertIn("--prefix /opt/ai-clis", install)
                 self.assertIn('"@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"', install)

@@ -4,7 +4,7 @@ ARG CODEX_VERSION
 # Coding agent CLIs. The npm packages wrap native binaries but need a newer node
 # than trixie ships, so install them here and copy the prefix (plus node, for the
 # codex launcher) into the final image.
-FROM node:22-trixie-slim AS ai-clis
+FROM node:26-trixie-slim AS ai-clis
 ARG CLAUDE_CODE_VERSION
 ARG CODEX_VERSION
 RUN test -n "$CLAUDE_CODE_VERSION" && test -n "$CODEX_VERSION" && \
@@ -38,6 +38,8 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     curl \
     git \
     gnupg \
+    # node 26, copied from the ai-clis stage for the codex launcher, links against it
+    libatomic1 \
     procps
 
 # docker

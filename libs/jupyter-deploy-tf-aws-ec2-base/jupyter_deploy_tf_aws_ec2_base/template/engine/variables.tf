@@ -672,13 +672,13 @@ variable "claude_code_version" {
 
     Changing it rebuilds the image on the next `jd up`.
 
-    Example: 2.1.302
+    Example: 2.1.325
   EOT
   type        = string
 
   validation {
     condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+$", var.claude_code_version))
-    error_message = "claude_code_version must be an exact version (e.g. 2.1.302)."
+    error_message = "claude_code_version must be an exact version (e.g. 2.1.325)."
   }
 }
 
@@ -688,13 +688,13 @@ variable "codex_version" {
 
     Changing it rebuilds the image on the next `jd up`.
 
-    Example: 0.163.0
+    Example: 0.169.0
   EOT
   type        = string
 
   validation {
     condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+$", var.codex_version))
-    error_message = "codex_version must be an exact version (e.g. 0.163.0)."
+    error_message = "codex_version must be an exact version (e.g. 0.169.0)."
   }
 }
 
