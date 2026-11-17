@@ -4,6 +4,9 @@ import json
 import subprocess
 import time
 from pathlib import Path
+from typing import Any
+
+from pytest_jupyter_deploy.kubernetes.kubectl import run_kubectl
 
 
 def kubectl_apply_workspace(
@@ -288,3 +291,11 @@ def kubectl_poll_workspace_status(
     raise TimeoutError(
         f"Workspace '{name}' did not reach status '{target_status}' within {timeout_s}s (last: {last_status})"
     )
+
+
+def kubectl_list_workspace_pods(name: str, namespace: str = "default") -> list[dict[str, Any]]:
+    """Return the JSON of the live pods backing a workspace, terminating pods excluded."""
+    result = run_kubectl(
+        "get", "pods", "-n", namespace, "-l", f"workspace.jupyter.org/workspace-name={name}", "-o", "json", check=True
+    )
+    return [pod for pod in json.loads(result.stdout)["items"] if "deletionTimestamp" not in pod["metadata"]]
