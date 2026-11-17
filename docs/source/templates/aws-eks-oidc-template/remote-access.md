@@ -38,8 +38,9 @@ Bump `workspace_app_vscode_image_build` to rebuild the image, as
 
 No SSH key is created or distributed. The SSH server binds the pod's loopback interface, so
 nothing outside the pod reaches it, and the workspace-ingress NetworkPolicy admits the sidecar
-port only from the router and operator namespaces, as it does the application port. The host
-key persists in the workspace's home volume, so a restart keeps its fingerprint.
+port from the router namespace only; the operator namespace keeps the application port it
+probes for idle detection. The host key persists in the workspace's home volume, so a restart
+keeps its fingerprint.
 
 ## Connect from your machine
 
