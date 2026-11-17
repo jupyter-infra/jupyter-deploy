@@ -47,15 +47,16 @@ def main() -> None:
     set_manifest_version(template_path / "manifest.yaml", semver_version)
     set_tf_template_version(template_path / "engine" / "main.tf", semver_version)
 
-    # The jupyterlab app, and its image name, track the template version, so each release
-    # builds into a new ECR repository. PEP 440, like the app's pyproject.toml.
+    # The jupyterlab app, and both app image names, track the template version, so each
+    # release builds into new ECR repositories. PEP 440, like the app's pyproject.toml.
     set_toml_version(template_path / "applications" / "jupyterlab" / "pyproject.toml", pep440_version)
     for defaults_file in [
         template_path / "engine" / "presets" / "defaults-all.tfvars",
         template_path / "variables.yaml",
         template_path / "engine" / "variables.tf",
     ]:
-        set_app_image_name_version(defaults_file, "jupyterlab", pep440_version)
+        for app_name in ("jupyterlab", "vscode"):
+            set_app_image_name_version(defaults_file, app_name, pep440_version)
 
     chart_dirs = ["workspace-defaults", "github-rbac"]
     for chart_dir in chart_dirs:
