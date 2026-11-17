@@ -491,9 +491,9 @@ variable "enable_default_gpu_pool" {
     Whether to provision the built-in default GPU workspace stack.
 
     When true, the template appends the built-in workspace-gpu entry to
-    workspace_nodepools and its jupyterlab-gpu config to workspace_templates
-    (plus vscode-gpu when enable_remote_access is on): one GPU pool, the
-    NVIDIA device plugin, and one GPU workspace card per application.
+    workspace_nodepools and its jupyterlab-gpu config to workspace_templates,
+    and the vscode-gpu config as well when enable_remote_access is on: one GPU
+    pool, the NVIDIA device plugin, and one GPU workspace card per application.
     Combining the flag with your own accelerator entries is a plan-time
     error: configure GPU support either through this flag or through
     workspace_nodepools + workspace_templates, not both. Delete GPU
@@ -1132,12 +1132,13 @@ variable "enable_remote_access" {
     enable_default_gpu_pool is on). Each VS Code workspace runs an SSH server on
     its pod's loopback interface and a sidecar that relays the SSH stream from the
     HTTPS ingress to it; the operator signs a short-lived token per connection and
-    the router verifies it. Users connect from their machine with the
+    the auth middleware verifies it. Users connect from their machine with the
     kubectl-workspace plugin: https://github.com/jupyter-infra/kubectl-workspace
 
-    Turning it on restarts the operator and the auth middleware once and no
-    workspace. Turning it off removes the VS Code cards: delete the VS Code
-    workspaces first, a template a live workspace uses cannot be removed.
+    Turning it on restarts the operator and the auth middleware once; running
+    workspaces keep running. Turning it off removes the VS Code cards; delete the
+    VS Code workspaces first, since a template a live workspace uses cannot be
+    removed.
 
     Recommended: false
   EOT

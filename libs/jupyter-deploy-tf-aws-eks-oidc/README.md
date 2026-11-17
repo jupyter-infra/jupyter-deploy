@@ -264,7 +264,7 @@ The template creates infrastructure for building custom workspace images:
 - **CodeBuild project** — Builds Dockerfiles from the `applications/` directory and pushes to ECR.
 - **IAM role** — CodeBuild service role with permissions for ECR push and CloudWatch Logs.
 
-The JupyterLab image is built on the first deploy. With `enable_remote_access = true`, the template also builds the VS Code image, whose workspaces users open over SSH from VS Code, Cursor or Kiro.
+The template builds the JupyterLab image on the first deploy. With `enable_remote_access = true`, it also builds the VS Code image, whose workspaces users open over SSH from VS Code, Cursor or Kiro.
 
 ### IAM
 
@@ -350,7 +350,7 @@ The template provides two variable presets:
 | workspace_app_jupyterlab_image_build | `string` | `v1` | Build tag (increment to trigger rebuild) |
 | workspace_app_claude_code_version | `string` | See preset | Claude Code version installed in the JupyterLab image |
 | workspace_app_codex_version | `string` | See preset | Codex CLI version installed in the JupyterLab image |
-| enable_remote_access | `bool` | `false` | Offer VS Code cards whose workspaces users open in VS Code, Cursor or Kiro over SSH with the `kubectl workspace` plugin; builds the VS Code image |
+| enable_remote_access | `bool` | `false` | Build the VS Code image and offer VS Code cards whose workspaces users open in VS Code, Cursor or Kiro over SSH with the `kubectl workspace` plugin |
 | workspace_app_vscode_image_name | `string` | See preset | ECR repository name for the VS Code image |
 | workspace_app_vscode_image_build | `string` | `v1` | Build tag (increment to trigger rebuild) |
 | workspace_bedrock_enabled | `bool` | `true` | Give workspaces Bedrock credentials for Claude Code and Codex; a `workspace_namespaces` entry opts out with `bedrock = "false"` |

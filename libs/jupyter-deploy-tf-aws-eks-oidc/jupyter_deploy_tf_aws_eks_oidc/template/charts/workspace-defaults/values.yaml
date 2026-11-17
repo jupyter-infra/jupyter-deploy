@@ -14,7 +14,7 @@ accessStrategy:
 #     template lands in; workspaces use the templates of their own namespace
 #   name/isDefault/displayName/description/imageUri/appType - identity + card copy
 #   accessStrategy                                           - optional strategy name
-#     replacing accessStrategy.name (e.g. the WebSocket strategy of SSH workspaces)
+#     replacing accessStrategy.name (e.g. the WebSocket strategy of VS Code workspaces)
 #   accessType/ownershipType/storageClassName               - workspace defaults
 #   defaultResources/resourceBounds                          - per-resource-key
 #     requests/limits and min/max (extended keys like nvidia.com/gpu included)

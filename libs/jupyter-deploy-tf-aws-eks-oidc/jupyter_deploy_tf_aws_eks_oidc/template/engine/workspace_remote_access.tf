@@ -1,13 +1,10 @@
-# Remote access (jupyter-k8s#509): VS Code and other desktop editors reach a workspace
-# over SSH carried through the HTTPS ingress. The aws-oidc chart's WebSocket access
-# strategy adds a sidecar to each VS Code workspace pod that relays the stream to the
-# SSH server in the workspace container; the operator signs a token per connection and
-# the auth middleware verifies it (both turned on in helm.tf). This file holds the
-# workspace side: the VS Code card values that workspaces.tf places, and the repair of
-# the strategy should an operator upgrade orphan it.
+# Remote access (jupyter-k8s#509): the workspace side of SSH over the HTTPS ingress, the
+# VS Code card values that workspaces.tf places and the repair of the WebSocket access
+# strategy an operator upgrade can orphan. helm.tf turns on the strategy, the token
+# signing and its verification.
 locals {
-  # One release of jupyter-infra/workspace-websocket-proxy ships the sidecar image and
-  # the SSH server image, so both pins move together.
+  # One build of jupyter-infra/workspace-websocket-proxy publishes the sidecar image and
+  # the SSH server image under the same tag, so both pins move together.
   remote_access_release       = "v0.1.0-rc.2"
   remote_access_server_image  = "ghcr.io/jupyter-infra/remote-access-server:${local.remote_access_release}"
   remote_access_strategy_name = "websocket-access-strategy"

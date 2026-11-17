@@ -270,7 +270,8 @@ resource "helm_release" "workspace_router" {
         name  = "authmiddleware.enableBearerAuth"
         value = "true"
       },
-      # Chart 0.3.2 pins a sidecar tag GHCR never published (jupyter-k8s-aws fix pending).
+      # Chart 0.3.2's default sidecar tag was never published to GHCR; drop this with the
+      # chart bump to a release that defaults to a published tag.
       {
         name  = "accessStrategy.webSocket.image.imageTag"
         value = local.remote_access_release

@@ -195,8 +195,8 @@ check "workspace_namespaces_cover_allowed_teams" {
 # pairing, CPU workspaces could bind GPU nodes or GPU pods could land where no
 # device is advertised.
 locals {
-  # What follows the application a card runs; a config picks one through its app
-  # key. workspace_remote_access.tf holds the vscode entry.
+  # Per-application card values; a config picks one through its app key.
+  # workspace_remote_access.tf holds the vscode entry.
   workspace_apps = {
     jupyterlab = {
       displayName    = "JupyterLab"

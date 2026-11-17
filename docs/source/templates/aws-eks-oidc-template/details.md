@@ -64,8 +64,9 @@ The JupyterLab image ships the Claude Code and Codex CLIs, at the versions pinne
 Bedrock with the workspace's own credentials; see [Bedrock access](#bedrock-access).
 
 With `enable_remote_access = true`, the template also builds the VS Code image from
-`applications/vscode/`: the same base and coding agents, with the SSH server of the remote
-access stack as the main process instead of JupyterLab. See [Remote Access](remote-access.md).
+`applications/vscode/`: the same base and coding agents, with the SSH server from the
+[workspace-websocket-proxy](https://github.com/jupyter-infra/workspace-websocket-proxy) project as
+the main process instead of JupyterLab. See [Remote Access](remote-access.md).
 
 ## Access and Permissions
 
@@ -218,7 +219,7 @@ The template provides two variable presets:
 | workspace_app_jupyterlab_image_build | `string` | `v1` | Build tag (increment to trigger rebuild) |
 | workspace_app_claude_code_version | `string` | See preset | Claude Code version installed in the JupyterLab image |
 | workspace_app_codex_version | `string` | See preset | Codex CLI version installed in the JupyterLab image |
-| enable_remote_access | `bool` | `false` | Offer VS Code cards whose workspaces users open in VS Code, Cursor or Kiro over SSH with the `kubectl workspace` plugin; builds the VS Code image |
+| enable_remote_access | `bool` | `false` | Build the VS Code image and offer VS Code cards whose workspaces users open in VS Code, Cursor or Kiro over SSH with the `kubectl workspace` plugin |
 | workspace_app_vscode_image_name | `string` | See preset | ECR repository name for the VS Code image |
 | workspace_app_vscode_image_build | `string` | `v1` | Build tag (increment to trigger rebuild) |
 | workspace_bedrock_enabled | `bool` | `true` | Give workspaces Bedrock credentials for Claude Code and Codex; a `workspace_namespaces` entry opts out with `bedrock = "false"` |

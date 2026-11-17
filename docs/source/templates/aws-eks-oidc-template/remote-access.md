@@ -2,22 +2,24 @@
 
 With the `enable_remote_access` template variable set to `true`, users open workspaces in
 **VS Code**, **Cursor** or **Kiro** running on their own machine, over SSH. The template then
-builds a second workspace image and offers a **VS Code** card in every workspace namespace,
-plus a **VS Code GPU** card when `enable_default_gpu_pool` is on.
+builds a second workspace image, the VS Code image, and offers a VS Code card in every
+workspace namespace, plus a VS Code GPU card when `enable_default_gpu_pool` is on.
 
 A workspace created from a VS Code card runs an SSH server on its pod's loopback interface and
 a `ws-proxy` sidecar that relays the SSH stream between the HTTPS entry point and that server.
-The editor installs its own remote server in the workspace on first connect. The image ships
-the same **Claude Code** and **Codex** agents as the JupyterLab image, so a terminal in the
-editor has them with no setup; see [Bedrock Integration](bedrock-integration.md).
+The VS Code image ships the same **Claude Code** and **Codex** agents as the JupyterLab image,
+so a terminal in the editor has them with no setup; see
+[Bedrock Integration](bedrock-integration.md).
+
+Set the flag in the `overrides:` block of `variables.yaml`, then run `jd config` and `jd up`:
 
 ```yaml
 overrides:
   enable_remote_access: true
 ```
 
-Then run `jd config` and `jd up`. The first apply builds the image, a few minutes in AWS
-CodeBuild, and restarts the operator and Authmiddleware once; running workspaces keep running.
+The first apply builds the VS Code image, a few minutes in AWS CodeBuild, and restarts the
+operator and Authmiddleware once; running workspaces keep running.
 Bump `workspace_app_vscode_image_build` to rebuild the image, as
 `workspace_app_jupyterlab_image_build` does for JupyterLab.
 
@@ -30,20 +32,20 @@ Bump `workspace_app_vscode_image_build` to rebuild the image, as
 2. The operator checks that the user may reach the workspace, signs a token that lives five
    minutes, and answers with a `wss://` URL for the workspace.
 3. The plugin opens a WebSocket to that URL through the Network Load Balancer and Traefik, with
-   the token in the `Authorization` header. **Authmiddleware** verifies the token, Traefik
+   the token in the `Authorization` header. Authmiddleware verifies the token, Traefik
    forwards the stream to the workspace's `ws-proxy` sidecar, and the sidecar bridges it to the
    SSH server on `127.0.0.1:2222`.
 
-No SSH key is created or distributed. The SSH server binds the pod's loopback interface, so only
-the sidecar reaches it, and the workspace-ingress NetworkPolicy admits the sidecar port from the
-router namespace only, plus the operator namespace like the application port. The host key
-persists in the workspace's home volume, so a restart keeps its fingerprint.
+No SSH key is created or distributed. The SSH server binds the pod's loopback interface, so
+nothing outside the pod reaches it, and the workspace-ingress NetworkPolicy admits the sidecar
+port only from the router and operator namespaces, as it does the application port. The host
+key persists in the workspace's home volume, so a restart keeps its fingerprint.
 
 ## Connect from your machine
 
 Install the [kubectl-workspace](https://github.com/jupyter-infra/kubectl-workspace) plugin and
-configure `kubectl` for the cluster, the way the [Web UI](web-ui.md)'s kubectl access page sets
-it up. Then install the SSH configuration entry once per cluster and open workspaces from it:
+configure `kubectl` for the cluster, the way the kubectl access page of the [Web UI](web-ui.md)
+sets it up. Then install the SSH configuration entry once per cluster and open workspaces from it:
 
 ```bash
 # once per cluster
@@ -62,8 +64,8 @@ on first connect. Refer to the plugin's README for the editor setup and the comm
 ## Logs and shell access
 
 A VS Code workspace pod holds two containers, `workspace` and the `ws-proxy` sidecar. `jd server
-logs`, `jd server exec` and `jd server connect` act on `workspace` and say so; pass
-`--service ws-proxy` for the sidecar's logs.
+logs`, `jd server exec` and `jd server connect` act on `workspace` and print the container they
+picked; pass `--service ws-proxy` for the sidecar's logs.
 
 ## Limits
 

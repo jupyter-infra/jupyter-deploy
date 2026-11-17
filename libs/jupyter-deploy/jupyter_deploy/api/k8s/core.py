@@ -31,7 +31,7 @@ class NodeInfo:
 class PodInfo:
     name: str
     phase: PodPhase
-    # Container names in spec order; the first is the pod's main container.
+    # Container names in spec order.
     containers: tuple[str, ...] = ()
 
 

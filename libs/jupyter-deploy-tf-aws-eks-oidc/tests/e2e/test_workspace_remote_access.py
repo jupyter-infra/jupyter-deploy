@@ -1,11 +1,7 @@
 """E2E tests for remote access (VS Code, Cursor or Kiro over SSH) on the EKS OIDC template.
 
-One enable_remote_access off->on->off window. With the flag off, a VS Code config is refused
-at plan. Turning the flag on (jd config + jd up) offers the VS Code card on the WebSocket
-strategy and opens the sidecar port; a workspace from the card runs with the sidecar, answers
-the jd server commands, and hands a team member an SSH connection the way the kubectl-workspace
-plugin gets one; a deleted strategy comes back on the next apply; turning the flag off removes
-the card again. remote_access_flag_guard restores the flag if a case leaves the window open.
+The cases run in order as one enable_remote_access off->on->off window, each flip a jd config
+plus jd up; remote_access_flag_guard restores the flag if a case leaves it flipped.
 """
 
 import base64
@@ -99,8 +95,8 @@ def _vscode_image_uri(e2e_deployment: EndToEndDeployment) -> str:
 def _websocket_upgrade_status(url: str, token: str | None) -> int:
     """HTTP status of the WebSocket upgrade on the connection URL, the request the plugin makes.
 
-    The token travels in the Authorization header as the plugin sends it; the response is not read
-    past its status line, so a 101 leaves the session closed by the client.
+    The token travels in the Authorization header as the plugin sends it. The response is not read
+    past its status line; after a 101 the client closes the session without using it.
     """
     parsed = urlparse(url)
     headers = {
@@ -192,9 +188,8 @@ def test_vscode_workspace_runs_with_the_sidecar_and_hands_out_an_ssh_connection(
 ) -> None:
     """A workspace from the VS Code card runs with the sidecar, and a team member gets a wss URL to it.
 
-    The connection request runs as a member of the workspace RBAC team, the identity the plugin
-    uses. The upgrade request the URL leads to is answered 101 with the token and refused without.
-    The sidecar port is reachable from the operator namespace and not from a co-tenant pod.
+    The jd server commands reach the workspace container of the two-container pod. The connection
+    request runs as a member of the workspace RBAC team, the identity the plugin uses.
     """
     e2e_deployment.ensure_deployed()
     with contextlib.suppress(Exception):
@@ -207,7 +202,6 @@ def test_vscode_workspace_runs_with_the_sidecar_and_hands_out_an_ssh_connection(
         containers = _workspace_pod_containers(VSCODE_WORKSPACE, WORKSPACE_NAMESPACE)
         assert containers.get(SIDECAR_CONTAINER) is True, f"{SIDECAR_CONTAINER} missing or not ready: {containers}"
 
-        # The jd server commands pick the workspace container of the two-container pod.
         e2e_deployment.cli.wait_for_workspace_pod_exec_ready(VSCODE_WORKSPACE, scope=WORKSPACE_NAMESPACE, timeout_s=60)
         for tool in IMAGE_TOOLS:
             e2e_deployment.cli.run_exec_with_retry(
