@@ -243,6 +243,15 @@ class TestVariablesYaml(unittest.TestCase):
             self.DEFAULTS_ALL_TFVARS["enable_default_gpu_pool"], False, "enable_default_gpu_pool must default to false"
         )
 
+    def test_remote_access_flag_off_in_preset(self) -> None:
+        """enable_remote_access must default to false so existing deployments see zero deltas."""
+        self.assertIn(
+            "enable_remote_access", self.DEFAULTS_ALL_TFVARS, "enable_remote_access must be set in defaults-all.tfvars"
+        )
+        self.assertIs(
+            self.DEFAULTS_ALL_TFVARS["enable_remote_access"], False, "enable_remote_access must default to false"
+        )
+
     def test_preset_nodepools_carry_only_base_keys(self) -> None:
         """Preset pool entries must not carry the optional GPU keys.
 

@@ -1,5 +1,6 @@
 """Tests for the template module."""
 
+import filecmp
 import re
 from pathlib import Path
 
@@ -45,6 +46,19 @@ def test_mandatory_template_files_exist() -> None:
 
         assert full_path.exists(), f"missing file: {relative_path}"
         assert full_path.is_file(), f"not a file: {relative_path}"
+
+
+# The vscode image installs the coding agents the way the jupyterlab image does, from copies of
+# these files: the build module zips one directory per image, so the copies must not drift.
+SHARED_APPLICATION_FILES: list[str] = ["claude-managed-settings.json", "codex-config.toml", "pick-codex-model.py"]
+
+
+def test_vscode_image_shares_the_coding_agent_files_of_the_jupyterlab_image() -> None:
+    applications = TEMPLATE_PATH / "applications"
+    for name in SHARED_APPLICATION_FILES:
+        assert filecmp.cmp(applications / "jupyterlab" / name, applications / "vscode" / name, shallow=False), (
+            f"applications/vscode/{name} differs from applications/jupyterlab/{name}"
+        )
 
 
 def test_chart_versions_match_template_version() -> None:

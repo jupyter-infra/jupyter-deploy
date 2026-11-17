@@ -18,7 +18,7 @@ def pep440_to_semver(version: str) -> str:
 
 def test_version_consistency() -> None:
     """Test that version numbers are consistent across pyproject.toml, __init__.py, manifest.yaml, main.tf,
-    the jupyterlab app and its default image name."""
+    the jupyterlab app and the default image names."""
     project_path = Path(__file__).parent.parent.parent
 
     with open(project_path / "pyproject.toml", "rb") as f:
@@ -54,22 +54,23 @@ def test_version_consistency() -> None:
         f"Version mismatch: pyproject.toml ({pyproject_version} -> {semver_version}) != main.tf ({main_tf_version})"
     )
 
-    # The jupyterlab app, and the default image name that carries its version, follow the
-    # template, so each release builds into a new ECR repository.
+    # The jupyterlab app, and the default image names that carry the version, follow the
+    # template, so each release builds into new ECR repositories.
     template_path = project_path / "jupyter_deploy_tf_aws_eks_oidc" / "template"
     with open(template_path / "applications" / "jupyterlab" / "pyproject.toml", "rb") as f:
         app_version = tomllib.load(f)["project"]["version"]
     assert pyproject_version == app_version, (
         f"Version mismatch: pyproject.toml ({pyproject_version}) != jupyterlab app ({app_version})"
     )
-    for defaults_file in [
-        template_path / "engine" / "presets" / "defaults-all.tfvars",
-        template_path / "variables.yaml",
-    ]:
-        # [^"'\s]+ so a pre-release version (0.5.0rc1) still matches.
-        image_name_match = re.search(r"jupyterlab-v([^\"'\s]+)", defaults_file.read_text())
-        assert image_name_match is not None, f"Could not find the jupyterlab-v<version> image name in {defaults_file}"
-        assert pyproject_version == image_name_match.group(1), (
-            f"Version mismatch: pyproject.toml ({pyproject_version})"
-            f" != {defaults_file.name} image name (jupyterlab-v{image_name_match.group(1)})"
-        )
+    for app in ("jupyterlab", "vscode"):
+        for defaults_file in [
+            template_path / "engine" / "presets" / "defaults-all.tfvars",
+            template_path / "variables.yaml",
+        ]:
+            # [^"'\s]+ so a pre-release version (0.5.0rc1) still matches.
+            image_name_match = re.search(rf"{app}-v([^\"'\s]+)", defaults_file.read_text())
+            assert image_name_match is not None, f"Could not find the {app}-v<version> image name in {defaults_file}"
+            assert pyproject_version == image_name_match.group(1), (
+                f"Version mismatch: pyproject.toml ({pyproject_version})"
+                f" != {defaults_file.name} image name ({app}-v{image_name_match.group(1)})"
+            )
