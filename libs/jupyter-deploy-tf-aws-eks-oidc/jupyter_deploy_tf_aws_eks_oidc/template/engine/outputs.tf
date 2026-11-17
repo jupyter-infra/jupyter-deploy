@@ -106,6 +106,11 @@ output "jupyterlab_image_tag" {
   value       = try(module.app_jupyterlab[0].image_tag, "")
 }
 
+output "vscode_image_uri" {
+  description = "ECR image URI for the VS Code workspace image; empty unless enable_remote_access is true."
+  value       = try(module.app_vscode[0].image_uri, "")
+}
+
 output "kubeconfig_path" {
   description = "Path to the local kubeconfig file for this cluster."
   value       = abspath("${path.root}/.kube/config")

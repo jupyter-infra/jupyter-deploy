@@ -1102,6 +1102,53 @@ variable "workspace_app_codex_version" {
   }
 }
 
+variable "enable_remote_access" {
+  description = <<-EOT
+    Whether users can open workspaces in VS Code and other desktop editors over SSH.
+
+    When true, the template builds the vscode workspace image and offers a VS Code
+    card in every workspace namespace (plus a VS Code GPU card when
+    enable_default_gpu_pool is on). Each VS Code workspace runs an SSH server on
+    its pod's loopback interface and a sidecar that relays the SSH stream from the
+    HTTPS ingress to it; the operator signs a short-lived token per connection and
+    the router verifies it. Users connect from their machine with the
+    kubectl-workspace plugin: https://github.com/jupyter-infra/kubectl-workspace
+
+    Turning it on restarts the operator and the auth middleware once and no
+    workspace. Turning it off removes the VS Code cards: delete the VS Code
+    workspaces first, a template a live workspace uses cannot be removed.
+
+    Recommended: false
+  EOT
+  type        = bool
+}
+
+variable "workspace_app_vscode_image_name" {
+  description = <<-EOT
+    The ECR repository name for the VS Code workspace image.
+
+    Changing this value creates a new ECR repository. The default,
+    'vscode-v<template version>', follows each template release, so an
+    upgrade builds into a new repo while previous images stay available for
+    running workspaces. Used when enable_remote_access is true.
+
+    Example: vscode-v0.4.3
+  EOT
+  type        = string
+}
+
+variable "workspace_app_vscode_image_build" {
+  description = <<-EOT
+    The build tag for the VS Code workspace image.
+
+    Increment this to trigger a rebuild of the same application version
+    (e.g. to pick up dependency updates or Dockerfile changes).
+
+    Example: v1
+  EOT
+  type        = string
+}
+
 variable "workspace_bedrock_enabled" {
   description = <<-EOT
     Whether workspaces get AWS credentials to call Amazon Bedrock.
