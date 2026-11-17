@@ -9,6 +9,7 @@ maintainer_roles              = ["Admin"]
 create_review_resources       = false
 publish_repo                  = "jupyter-deploy"
 review_repos                  = []
+review_trust_workflow_refs    = []
 bedrock_inference_profile_ids = ["us.anthropic.claude-*"]
 bedrock_foundation_model_arns = ["arn:aws:bedrock:us-*::foundation-model/anthropic.claude-*"]
 review_resource_prefix        = "jupyter-infra-review"

@@ -22,12 +22,19 @@ resource "aws_iam_role" "this" {
           StringEquals = {
             "${var.oidc_provider_url}:aud" = "sts.amazonaws.com"
           }
-          StringLike = {
-            "${var.oidc_provider_url}:sub" = [
-              for repo in local.trust_repos :
-              "repo:${var.github_org}/${repo}:${var.oidc_trust_subject}"
-            ]
-          }
+          # With oidc_job_workflow_refs set, the token must also come from a
+          # job running one of the pinned reusable workflows.
+          StringLike = merge(
+            {
+              "${var.oidc_provider_url}:sub" = [
+                for repo in local.trust_repos :
+                "repo:${var.github_org}/${repo}:${var.oidc_trust_subject}"
+              ]
+            },
+            length(var.oidc_job_workflow_refs) > 0 ? {
+              "${var.oidc_provider_url}:job_workflow_ref" = var.oidc_job_workflow_refs
+            } : {}
+          )
         }
       }
     ]

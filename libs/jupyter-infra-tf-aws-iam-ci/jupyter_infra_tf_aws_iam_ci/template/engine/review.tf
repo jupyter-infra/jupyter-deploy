@@ -106,8 +106,8 @@ resource "aws_iam_policy" "review_run" {
 
   lifecycle {
     precondition {
-      condition     = length(var.review_repos) > 0
-      error_message = "review_repos must be non-empty when create_review_resources is true."
+      condition     = length(var.review_repos) > 0 || length(var.review_trust_workflow_refs) > 0
+      error_message = "review_repos or review_trust_workflow_refs must be non-empty when create_review_resources is true."
     }
   }
 }
@@ -128,16 +128,21 @@ module "role_review_publish" {
 }
 
 # Run role — assumed by consumer repos to pull the image and run reviews.
+# Two trust modes: with review_trust_workflow_refs set, any repo in the org may
+# assume the role, but only from a job running one of the pinned reusable
+# workflows (job_workflow_ref claim), so onboarding needs no terraform change;
+# otherwise trust is the per-repo review_repos allowlist.
 module "role_review_run" {
   count  = local.review_count
   source = "./modules/iam_role"
 
-  role_name          = "${var.review_resource_prefix}-run-${local.doc_postfix}"
-  oidc_provider_arn  = local.oidc_provider_arn
-  oidc_provider_url  = local.oidc_provider_url
-  github_org         = var.github_org
-  github_repos       = var.review_repos
-  oidc_trust_subject = "environment:review"
-  policy_arns        = [aws_iam_policy.review_run[0].arn]
-  tags               = local.default_tags
+  role_name              = "${var.review_resource_prefix}-run-${local.doc_postfix}"
+  oidc_provider_arn      = local.oidc_provider_arn
+  oidc_provider_url      = local.oidc_provider_url
+  github_org             = var.github_org
+  github_repos           = length(var.review_trust_workflow_refs) > 0 ? ["*"] : var.review_repos
+  oidc_trust_subject     = "environment:review"
+  oidc_job_workflow_refs = var.review_trust_workflow_refs
+  policy_arns            = [aws_iam_policy.review_run[0].arn]
+  tags                   = local.default_tags
 }
