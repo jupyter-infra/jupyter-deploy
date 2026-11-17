@@ -78,24 +78,34 @@ resource "helm_release" "jupyter_k8s" {
   namespace        = local.release_namespaces.operator
   create_namespace = true
 
-  set = [
-    {
-      name  = "certManager.enable"
-      value = "true"
-    },
-    {
-      name  = "crd.enable"
-      value = "true"
-    },
-    {
-      name  = "workspaceTemplates.defaultNamespace"
-      value = var.workspace_shared_namespace
-    },
-    {
-      name  = "manager.nodeSelector.jupyter-deploy/role"
-      value = "platform"
-    },
-  ]
+  set = concat(
+    [
+      {
+        name  = "certManager.enable"
+        value = "true"
+      },
+      {
+        name  = "crd.enable"
+        value = "true"
+      },
+      {
+        name  = "workspaceTemplates.defaultNamespace"
+        value = var.workspace_shared_namespace
+      },
+      {
+        name  = "manager.nodeSelector.jupyter-deploy/role"
+        value = "platform"
+      },
+    ],
+    # Remote access (workspace_remote_access.tf): the operator signs the connection
+    # tokens of the WebSocket access strategy with a rotated in-cluster secret.
+    var.enable_remote_access ? [
+      {
+        name  = "extensionApi.jwtSecret.enable"
+        value = "true"
+      },
+    ] : [],
+  )
 
   depends_on = [null_resource.platform, helm_release.traefik_crds, kubernetes_namespace_v1.shared, aws_eks_node_group.platform]
 }
@@ -249,6 +259,23 @@ resource "helm_release" "workspace_router" {
         value = "false"
       },
     ],
+    # Remote access (workspace_remote_access.tf): the WebSocket access strategy with
+    # its sidecar, and the bearer-auth handler that verifies the connection tokens.
+    var.enable_remote_access ? [
+      {
+        name  = "accessStrategy.createWebSocket"
+        value = "true"
+      },
+      {
+        name  = "authmiddleware.enableBearerAuth"
+        value = "true"
+      },
+      # Chart 0.3.2 pins a sidecar tag GHCR never published (jupyter-k8s-aws fix pending).
+      {
+        name  = "accessStrategy.webSocket.image.imageTag"
+        value = local.remote_access_release
+      },
+    ] : [],
     # Workspace namespaces the web app offers: the default one, plus the rest of
     # workspace_namespaces (also discovered by their workspaces-enabled label).
     [
