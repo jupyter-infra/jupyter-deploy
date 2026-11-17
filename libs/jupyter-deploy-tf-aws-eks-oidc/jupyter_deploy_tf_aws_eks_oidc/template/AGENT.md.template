@@ -225,6 +225,23 @@ The JupyterLab image installs the coding agent CLIs at the versions passed as Do
 since `/home/jovyan` is the data volume). Codex's model is rendered into its config at build time
 from the installed release's own catalog (`codex debug models`, see `pick-codex-model.py`).
 
+### Remote access: VS Code, Cursor or Kiro over SSH
+
+With `enable_remote_access: true`, the template builds a second workspace image from
+`applications/vscode/`, the JupyterLab image's base and coding agents with the SSH server as the
+main process, and offers a VS Code card in every workspace namespace, plus VS Code GPU with
+`enable_default_gpu_pool`. The aws-oidc chart's WebSocket access strategy adds a `ws-proxy`
+sidecar to each VS Code workspace pod; the operator signs a five-minute token per connection and
+Authmiddleware verifies it. Users connect with the kubectl-workspace plugin
+(https://github.com/jupyter-infra/kubectl-workspace): `kubectl workspace ssh-config --write` once
+per cluster, then `kubectl workspace open <workspace> --editor <vscode|cursor|kiro>`.
+
+VS Code workspaces have no idle shutdown yet, since nothing in the pod reports editor activity, so
+`workspace_templates` configs with `app: vscode` refuse `idle_minutes`. The Web UI's Open button
+leads to the browser URL, which nothing answers in a VS Code workspace. Turning the flag off removes
+the VS Code cards: delete the VS Code workspaces first, `jd config` refuses to remove a template a
+live workspace uses.
+
 ### Charts directory
 
 `./charts/` contains local Helm charts:
