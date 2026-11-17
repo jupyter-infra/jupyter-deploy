@@ -32,6 +32,7 @@ from .constants import (
     WORKSPACE_NAMESPACE,
     WORKSPACES_DIR,
 )
+from .overrides import pools_offering, restore_overrides, snapshot_overrides
 
 
 @pytest.fixture
@@ -269,11 +270,7 @@ def namespace_base_values(e2e_deployment: EndToEndDeployment, restored_namespace
     if gpu_flag.lower() == "true":
         offered.append("jupyterlab-gpu")
 
-    # A config renders only where a pool offers it, so the first CPU pool offers the small one.
-    pools_with_small = [dict(p) for p in pools]
-    cpu_pool = next(p for p in pools_with_small if not p.get("accelerator"))
-    cpu_offered = [t for t in cpu_pool.get("templates", "").split(",") if t]
-    cpu_pool["templates"] = ",".join(dict.fromkeys([*cpu_offered, NS_SMALL_TEMPLATE]))
+    pools_with_small = pools_offering(pools, NS_SMALL_TEMPLATE)
 
     allowed_teams = e2e_deployment.get_list_str_variable_value("oauth_allowed_teams")
     synthetic = [f"{org}:{t}" for t in (NS_ONLY_A_TEAM, NS_ONLY_B_TEAM, NS_ONLY_DEFAULT_TEAM)]
@@ -293,14 +290,8 @@ def namespace_base_values(e2e_deployment: EndToEndDeployment, restored_namespace
 def restored_namespace_mapping(e2e_deployment: EndToEndDeployment) -> Generator[None, None, None]:
     """Snapshot the mapping variables and the allowlist; after the module, restore them and redeploy."""
     e2e_deployment.ensure_deployed()
-    snapshot = {key: e2e_deployment.read_override_value(key) for key in _NAMESPACE_MAPPING_VARIABLES}
+    snapshot = snapshot_overrides(e2e_deployment, _NAMESPACE_MAPPING_VARIABLES)
     allowed_teams = e2e_deployment.get_list_str_variable_value("oauth_allowed_teams")
     yield
     e2e_deployment.update_required_value("oauth_allowed_teams", allowed_teams)
-    reset_args: list[str] = []
-    for key, value in snapshot.items():
-        if value is None:
-            reset_args += ["--reset-variable", key]
-        else:
-            e2e_deployment.update_override_value(key, value)
-    e2e_deployment.ensure_deployed_with(reset_args)
+    restore_overrides(e2e_deployment, snapshot)

@@ -22,7 +22,8 @@ SEEDED_WORKSPACES = ["e2e-jupyterlab-other-public", "e2e-jupyterlab-other-privat
 # enable_default_gpu_pool on->off window; the ordinal keeps them contiguous.
 ORDER_GPU = 10
 # Ordered mutating workspace-namespace cases: the single -> multi migration module
-# first, then test_workspace_namespaces, which applies one mapping for all its cases.
+# first, then test_workspace_namespaces, which applies one mapping for all its cases;
+# together they take the ordinals 20 to 30.
 ORDER_NAMESPACES = 20
 
 GPU_POOL_FLAG = "enable_default_gpu_pool"
@@ -60,12 +61,21 @@ WORKSPACE_START_PATCH = '{"spec":{"desiredStatus":"Running"}}'
 
 # Ordered mutating remote-access cases (test_workspace_remote_access) run as one
 # enable_remote_access off->on->off window after the namespace modules.
-ORDER_REMOTE_ACCESS = 30
+ORDER_REMOTE_ACCESS = 40
 REMOTE_ACCESS_FLAG = "enable_remote_access"
 VSCODE_TEMPLATE_NAME = "vscode"
 # The VS Code counterpart of the built-in GPU card, offered when both flags are on.
 VSCODE_GPU_TEMPLATE_NAME = "vscode-gpu"
 VSCODE_WORKSPACE = "e2e-vscode-workspace"
+# A pool-bound VS Code config the first CPU pool offers during the window, pinned to a small shape.
+VSCODE_SMALL_TEMPLATE = "e2e-vscode-small"
+VSCODE_SMALL_TEMPLATE_CONFIG = {
+    "name": VSCODE_SMALL_TEMPLATE,
+    "app": "vscode",
+    "cpu": "1",
+    "memory": "2Gi",
+    "display_name": "E2E VS Code Small",
+}
 # The aws-oidc chart's WebSocket strategy (engine/workspace_remote_access.tf) and the
 # sidecar it adds to each VS Code workspace pod, listening on SIDECAR_PORT.
 WEBSOCKET_STRATEGY = "websocket-access-strategy"
