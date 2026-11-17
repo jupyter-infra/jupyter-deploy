@@ -1,5 +1,11 @@
+import os
 import re
+import shutil
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
+from typing import ClassVar
 
 from jupyter_deploy_tf_aws_eks_oidc.template import TEMPLATE_PATH
 
@@ -68,4 +74,85 @@ class TestVariableDescriptionHeaders(unittest.TestCase):
                 self.assertTrue(line.endswith("."), f"{name}: first description line must end a sentence: {line!r}")
                 self.assertLessEqual(
                     len(line), _CLI_HELP_MAX_LENGTH, f"{name}: first description line exceeds the CLI help length"
+                )
+
+
+_TERRAFORM = shutil.which("terraform")
+
+# CI must never skip these silently; laptops without terraform may.
+_SKIP_WITHOUT_TERRAFORM = unittest.skipIf(_TERRAFORM is None and not os.environ.get("CI"), "terraform not installed")
+
+
+def _variable_block(name: str) -> str:
+    match = next(m for m in _VARIABLE_BLOCK.finditer(VARIABLES_TF.read_text()) if m["name"] == name)
+    return match.group(0) + "\n"
+
+
+def _terraform(cwd: str, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["terraform", *args, "-no-color", "-input=false"],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "TF_IN_AUTOMATION": "1"},
+    )
+
+
+def _diagnostic_text(result: subprocess.CompletedProcess[str]) -> str:
+    """Terraform wraps and boxes its diagnostics; one line of plain text matches a message whole."""
+    return re.sub(r"\s+", " ", result.stderr.replace("│", ""))
+
+
+@_SKIP_WITHOUT_TERRAFORM
+class TestWorkspaceTemplatesValidation(unittest.TestCase):
+    """The workspace_templates validation rules, evaluated by terraform.
+
+    The block's conditions reference only the variable itself, so a root module made of that
+    one block plans with no provider and no credentials.
+    """
+
+    root: ClassVar[tempfile.TemporaryDirectory[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.root = tempfile.TemporaryDirectory()
+        (Path(cls.root.name) / "variables.tf").write_text(_variable_block("workspace_templates"))
+        init = _terraform(cls.root.name, "init", "-backend=false")
+        assert init.returncode == 0, init.stderr
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.root.cleanup()
+
+    def _plan(self, templates: str) -> subprocess.CompletedProcess[str]:
+        return _terraform(self.root.name, "plan", "-refresh=false", f"-var=workspace_templates={templates}")
+
+    def test_vscode_config_without_idle_minutes_is_accepted(self) -> None:
+        result = self._plan('[{name = "vscode-p", app = "vscode", gpus = "1", cpu = "8", memory = "32Gi"}]')
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_vscode_config_refuses_idle_minutes(self) -> None:
+        result = self._plan('[{name = "vscode-p", app = "vscode", idle_minutes = "30"}]')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            'workspace_templates configs with app = "vscode" cannot set idle_minutes: '
+            "VS Code workspaces have no idle shutdown yet.",
+            _diagnostic_text(result),
+        )
+
+    def test_unknown_app_is_refused(self) -> None:
+        result = self._plan('[{name = "rstudio", app = "rstudio"}]')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            'Each workspace_templates app, when set, must be "jupyterlab" or "vscode".', _diagnostic_text(result)
+        )
+
+    def test_built_in_card_names_are_reserved(self) -> None:
+        for name in ("jupyterlab", "vscode"):
+            with self.subTest(name=name):
+                result = self._plan(f'[{{name = "{name}"}}]')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    '"jupyterlab" and "vscode" are reserved for the built-in cards.', _diagnostic_text(result)
                 )
