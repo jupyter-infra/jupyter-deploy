@@ -23,7 +23,10 @@ def snapshot_overrides(e2e_deployment: EndToEndDeployment, keys: list[str]) -> d
 
 
 def restore_overrides(e2e_deployment: EndToEndDeployment, snapshot: dict[str, Any]) -> None:
-    """Write the snapshotted overrides back, resetting the keys that were unset, then jd config + jd up."""
+    """Write the snapshotted overrides back, then jd config + jd up.
+
+    A key that was unset is reset instead, which writes its preset default into the override.
+    """
     reset_args: list[str] = []
     for key, value in snapshot.items():
         if value is None:

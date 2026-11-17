@@ -127,13 +127,21 @@ def _delete_vscode_workspaces() -> None:
         )
 
 
+def _window_open(e2e_deployment: EndToEndDeployment) -> bool:
+    """Whether the flag is still on or the pool-bound config is still configured."""
+    configs = e2e_deployment.get_list_of_maps_variable_value("workspace_templates")
+    return e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG) or any(
+        config["name"] == VSCODE_SMALL_TEMPLATE for config in configs
+    )
+
+
 @pytest.fixture(scope="module")
 def remote_access_window(e2e_deployment: EndToEndDeployment) -> Generator[dict[str, Any], None, None]:
-    """The overrides as they were before the module; restored if a case left them changed."""
+    """The overrides as they were before the module; restored if a case left the window open."""
     e2e_deployment.ensure_deployed()
     snapshot = snapshot_overrides(e2e_deployment, WINDOW_VARIABLES)
     yield snapshot
-    if snapshot_overrides(e2e_deployment, WINDOW_VARIABLES) != snapshot:
+    if _window_open(e2e_deployment):
         _delete_vscode_workspaces()
         restore_overrides(e2e_deployment, snapshot)
 
