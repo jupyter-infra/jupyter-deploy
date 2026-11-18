@@ -229,7 +229,7 @@ The template provides two variable presets:
 | workspace_volume_snapshot_interval_hours | `number` | `24` | Hours between two snapshots of a workspace volume (1, 2, 3, 4, 6, 8, 12 or 24) |
 | workspace_volume_snapshot_retain_count | `number` | `7` | Scheduled snapshots kept per workspace volume |
 | workspace_templates | `list(map(string))` | `[]` | Named workspace template configs that pool entries offer as cards via their `templates` key; `app = "vscode"` makes a config a VS Code card |
-| enable_default_gpu_pool | `bool` | `false` | Append the built-in `workspace-gpu` entry and its `jupyterlab-gpu` template config; combining it with your own accelerator entries raises a plan-time error |
+| enable_default_gpu_pool | `bool` | `false` | Append the built-in `workspace-gpu` entry and its `jupyterlab-gpu` template config, and `vscode-gpu` when `enable_remote_access` is on; combining it with your own accelerator entries raises a plan-time error |
 | nvidia_device_plugin_version | `string` | `0.20.1` | Version of the NVIDIA device plugin chart (the template installs it when any pool entry sets `accelerator = "nvidia"`) |
 
 ## Outputs
