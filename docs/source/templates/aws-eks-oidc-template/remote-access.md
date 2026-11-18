@@ -68,6 +68,10 @@ A VS Code workspace pod holds two containers, `workspace` and the `ws-proxy` sid
 logs`, `jd server exec` and `jd server connect` act on `workspace` and print the container they
 picked; pass `--service ws-proxy` for the sidecar's logs.
 
+The VS Code image is the second entry of `jd image list`: `jd image status --name vscode` and
+`jd image vulnerabilities --name vscode` report on it, and with the flag off they say the image is
+not built. With two images built, the `jd image` commands need `--name`.
+
 ## Limits
 
 - **No idle shutdown**: nothing in a VS Code workspace reports editor activity to the operator
