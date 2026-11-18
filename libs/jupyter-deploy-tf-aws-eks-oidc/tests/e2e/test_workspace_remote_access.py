@@ -10,7 +10,6 @@ import base64
 import contextlib
 import http.client
 import json
-import os
 import secrets
 from collections.abc import Generator
 from typing import Any
@@ -19,11 +18,11 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.kubernetes.kubectl import resource_absent, run_kubectl
-from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
 from pytest_jupyter_deploy.polling import poll
 from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_apply_workspace,
     kubectl_delete_workspace,
+    kubectl_delete_workspaces_of_templates,
     kubectl_get_workspace_pod,
     kubectl_poll_workspace_status,
     kubectl_request_workspace_connection,
@@ -114,20 +113,6 @@ def _websocket_upgrade_status(url: str, token: str | None) -> int:
         connection.close()
 
 
-def _delete_workspaces_of(templates: tuple[str, ...]) -> None:
-    """Delete the workspaces of the given cards, which pin the templates the restoring apply removes."""
-    with contextlib.suppress(Exception):
-        run_kubectl(
-            "delete",
-            "workspaces",
-            "-n",
-            WORKSPACE_NAMESPACE,
-            "-l",
-            f"workspace.jupyter.org/template-name in ({','.join(templates)})",
-            check=True,
-        )
-
-
 def _window_open(e2e_deployment: EndToEndDeployment, window: dict[str, Any]) -> bool:
     """Whether the flag differs from its state before the module or the pool-bound config is still configured."""
     configs = e2e_deployment.get_list_of_maps_variable_value("workspace_templates")
@@ -150,7 +135,11 @@ def remote_access_window(e2e_deployment: EndToEndDeployment) -> Generator[dict[s
     }
     yield window
     if _window_open(e2e_deployment, window):
-        _delete_workspaces_of((VSCODE_SMALL_TEMPLATE,) if window["flag_was_on"] else VSCODE_TEMPLATES)
+        # The workspaces of the cards the restoring apply removes pin their templates.
+        with contextlib.suppress(Exception):
+            kubectl_delete_workspaces_of_templates(
+                (VSCODE_SMALL_TEMPLATE,) if window["flag_was_on"] else VSCODE_TEMPLATES, WORKSPACE_NAMESPACE
+            )
         restore_overrides(e2e_deployment, window["overrides"])
 
 
@@ -241,9 +230,8 @@ def test_enable_remote_access_offers_the_vscode_cards(
 
 
 @pytest.mark.order(ORDER_REMOTE_ACCESS + 2)
-@skip_if_testvars_not_set(["JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
 def test_vscode_workspace_runs_with_the_sidecar_and_hands_out_an_ssh_connection(
-    e2e_deployment: EndToEndDeployment, eks_domain: str
+    e2e_deployment: EndToEndDeployment, eks_domain: str, impersonation_group: str
 ) -> None:
     """A workspace from the VS Code card runs with the sidecar, and a team member gets a wss URL to it.
 
@@ -272,9 +260,8 @@ def test_vscode_workspace_runs_with_the_sidecar_and_hands_out_an_ssh_connection(
             ["jupyter-deploy", "server", "logs", "--name", VSCODE_WORKSPACE, "--scope", WORKSPACE_NAMESPACE]
         )
 
-        group = f"github:{os.environ['JD_E2E_ORG']}:{os.environ['JD_E2E_RBAC_TEAM']}"
         connection = kubectl_request_workspace_connection(
-            VSCODE_WORKSPACE, WORKSPACE_NAMESPACE, as_user=IMPERSONATED_USER, as_groups=[group]
+            VSCODE_WORKSPACE, WORKSPACE_NAMESPACE, as_user=IMPERSONATED_USER, as_groups=[impersonation_group]
         )
         url = urlparse(connection["status"]["workspaceConnectionUrl"])
         assert url.scheme == "wss", f"connection URL is not wss: {url.geturl()}"

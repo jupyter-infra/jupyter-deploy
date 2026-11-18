@@ -66,6 +66,15 @@ def _get_impersonation_group() -> str | None:
     return None
 
 
+@pytest.fixture
+def impersonation_group() -> str:
+    """The RBAC team's group for --as-group, github:<org>:<team>; skips when the env vars are unset."""
+    group = _get_impersonation_group()
+    if not group:
+        pytest.skip("JD_E2E_ORG and JD_E2E_RBAC_TEAM required to impersonate a team member")
+    return group
+
+
 def pytest_collection_modifyitems(items: list) -> None:
     """Automatically mark all tests in this directory as e2e tests."""
     for item in items:
