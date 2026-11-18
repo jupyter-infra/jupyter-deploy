@@ -211,6 +211,7 @@ class TestRemoteAccessChartFloors(unittest.TestCase):
         )
         self.assertEqual(plan.returncode, 0, plan.stderr)
         shown = _terraform(self.root.name, "show", "-json", "plan.out")
+        self.assertEqual(shown.returncode, 0, shown.stderr)
         at_floor: dict[str, bool] = json.loads(shown.stdout)["planned_values"]["outputs"]["at_floor"]["value"]
         return at_floor
 
