@@ -300,18 +300,22 @@ def kubectl_poll_workspace_status(
 
 
 def kubectl_get_workspace_pod(name: str, namespace: str = "default") -> dict[str, Any]:
-    """The pod of a workspace as JSON, found by the workspace-name label the operator sets on it.
+    """The live pod of a workspace as JSON, found by the workspace-name label the operator sets on it.
+
+    After a restart the pod being replaced still carries the label until it is gone, so a pod
+    with a deletion timestamp is not the workspace's pod.
 
     Raises:
-        LookupError: If no pod carries the label
+        LookupError: If no live pod carries the label
     """
     result = run_kubectl(
         "get", "pods", "-n", namespace, "-l", f"workspace.jupyter.org/workspace-name={name}", "-o", "json", check=True
     )
     pods: list[dict[str, Any]] = json.loads(result.stdout)["items"]
-    if not pods:
-        raise LookupError(f"no pod of workspace {name} in namespace {namespace}")
-    return pods[0]
+    live = [pod for pod in pods if "deletionTimestamp" not in pod["metadata"]]
+    if not live:
+        raise LookupError(f"no live pod of workspace {name} in namespace {namespace}")
+    return live[0]
 
 
 def kubectl_request_workspace_connection(

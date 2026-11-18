@@ -30,8 +30,17 @@ class TestKubectlGetWorkspacePod(unittest.TestCase):
         self.assertTrue(mock_run_kubectl.call_args.kwargs["check"])
 
     @patch("pytest_jupyter_deploy.workspaces.kubectl.run_kubectl")
-    def test_raises_when_no_pod_carries_the_label(self, mock_run_kubectl: Mock) -> None:
-        mock_run_kubectl.return_value = _kubectl_json({"items": []})
+    def test_skips_the_pod_being_replaced(self, mock_run_kubectl: Mock) -> None:
+        terminating = {"metadata": {"name": "workspace-ws1-old", "deletionTimestamp": "2026-11-17T00:00:00Z"}}
+        live = {"metadata": {"name": "workspace-ws1-new"}}
+        mock_run_kubectl.return_value = _kubectl_json({"items": [terminating, live]})
+
+        self.assertEqual(kubectl_get_workspace_pod("ws1"), live)
+
+    @patch("pytest_jupyter_deploy.workspaces.kubectl.run_kubectl")
+    def test_raises_when_no_live_pod_carries_the_label(self, mock_run_kubectl: Mock) -> None:
+        terminating = {"metadata": {"name": "workspace-ws1-old", "deletionTimestamp": "2026-11-17T00:00:00Z"}}
+        mock_run_kubectl.return_value = _kubectl_json({"items": [terminating]})
 
         with self.assertRaises(LookupError):
             kubectl_get_workspace_pod("ws1")
