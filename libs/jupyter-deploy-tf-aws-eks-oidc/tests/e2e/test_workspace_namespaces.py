@@ -271,6 +271,25 @@ def test_plan_time_validation(
         e2e_deployment.update_override_value("workspace_namespaces", mapped["workspace_namespaces"])
 
 
+@pytest.mark.order(ORDER_NAMESPACES + 8)
+@skip_if_testvars_not_set(NS_REQUIRED_VARS)
+def test_vscode_card_listed_without_remote_access_is_refused(
+    e2e_deployment: EndToEndDeployment, mapped: dict[str, Any]
+) -> None:
+    """`jd config` refuses a namespace entry listing the built-in vscode card while enable_remote_access is off."""
+    if e2e_deployment.get_bool_variable_value("enable_remote_access"):
+        pytest.skip("the deployment has enable_remote_access on")
+    try:
+        e2e_deployment.update_override_value(
+            "workspace_namespaces",
+            [*mapped["workspace_namespaces"][:2], {**mapped["workspace_namespaces"][2], "templates": "vscode"}],
+        )
+        error = e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "config"])
+        assert f'built-in "vscode" card, which needs enable_remote_access = true: {NS_B}' in error, error
+    finally:
+        e2e_deployment.update_override_value("workspace_namespaces", mapped["workspace_namespaces"])
+
+
 @pytest.mark.order(ORDER_NAMESPACES + 9)
 @skip_if_testvars_not_set(NS_REQUIRED_VARS)
 def test_coding_agents_answer_only_in_bedrock_enabled_namespaces(

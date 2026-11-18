@@ -31,15 +31,21 @@ locals {
     ])
   } : { default = var.oauth_allowed_teams }
 
-  # namespace => workspace_templates config names offered on top of jupyterlab,
-  # which every namespace offers (listing it is a no-op). With workspace_namespaces
-  # empty, "default" offers every config a pool references.
+  # namespace => workspace_templates config names offered on top of the built-in
+  # cards, which every namespace offers (listing one is a no-op). With
+  # workspace_namespaces empty, "default" offers every config a pool references.
   workspace_ns_template_requests = local.workspace_multi_ns ? {
     for ns, es in local.workspace_ns_entries : ns => distinct([
       for raw in split(",", lookup(es[0], "templates", "")) : trimspace(raw)
-      if trimspace(raw) != "" && trimspace(raw) != "jupyterlab"
+      if trimspace(raw) != "" && !contains(keys(local.workspace_apps), trimspace(raw))
     ])
   } : { default = keys(local.workspace_pool_templates) }
+
+  # Namespaces listing the built-in vscode card, which exists only with the flag.
+  workspace_ns_vscode_requests = [
+    for ns, es in local.workspace_ns_entries : ns
+    if contains([for raw in split(",", lookup(es[0], "templates", "")) : trimspace(raw)], "vscode")
+  ]
 
   workspace_ns_teams_unlisted = distinct([
     for team in flatten(values(local.workspace_ns_teams)) : team
@@ -596,7 +602,11 @@ resource "helm_release" "workspace_defaults" {
     }
     precondition {
       condition     = length(local.workspace_ns_template_dangling) == 0
-      error_message = "workspace_namespaces templates must name the built-in \"jupyterlab\" or a workspace_templates config offered by a workspace_nodepools entry: ${join(", ", local.workspace_ns_template_dangling)}."
+      error_message = "workspace_namespaces templates must name a built-in card (\"jupyterlab\", or \"vscode\" with enable_remote_access) or a workspace_templates config offered by a workspace_nodepools entry: ${join(", ", local.workspace_ns_template_dangling)}."
+    }
+    precondition {
+      condition     = var.enable_remote_access || length(local.workspace_ns_vscode_requests) == 0
+      error_message = "workspace_namespaces entries list the built-in \"vscode\" card, which needs enable_remote_access = true: ${join(", ", local.workspace_ns_vscode_requests)}."
     }
     precondition {
       condition     = length(local.workspace_template_dangling) == 0

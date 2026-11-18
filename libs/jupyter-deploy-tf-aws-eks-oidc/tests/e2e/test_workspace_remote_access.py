@@ -175,7 +175,8 @@ def test_enable_remote_access_offers_the_vscode_cards(
     """Enabling the flag builds the image and offers the VS Code card and a pool-bound VS Code config on the strategy.
 
     With a workspace_namespaces mapping, a namespace offers only the configs its entry lists, so
-    the default namespace's entry gets the pool-bound config, and the GPU card when the pool is on.
+    the default namespace's entry gets the pool-bound config, and the GPU card when the pool is on;
+    listing the built-in vscode card there is a no-op.
     """
     e2e_deployment.ensure_deployed()
     gpu_pool = e2e_deployment.get_bool_variable_value(GPU_POOL_FLAG)
@@ -188,7 +189,7 @@ def test_enable_remote_access_offers_the_vscode_cards(
         "workspace_nodepools": pools_offering(pools, VSCODE_SMALL_TEMPLATE),
     }
     if namespaces:
-        offered = [VSCODE_SMALL_TEMPLATE, *([VSCODE_GPU_TEMPLATE_NAME] if gpu_pool else [])]
+        offered = [VSCODE_TEMPLATE_NAME, VSCODE_SMALL_TEMPLATE, *([VSCODE_GPU_TEMPLATE_NAME] if gpu_pool else [])]
         overrides["workspace_namespaces"] = [
             {
                 **entry,
