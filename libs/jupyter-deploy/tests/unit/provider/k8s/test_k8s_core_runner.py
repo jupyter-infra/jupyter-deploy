@@ -357,15 +357,8 @@ class TestK8sCoreRunner(unittest.TestCase):
 
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
     def test_exec_pod_with_deployment_name_resolves_pod(self, mock_k8s_core: Mock) -> None:
-        runner = self._make_runner()
-        mock_deployment: Mock = Mock()
-        mock_deployment.spec.selector.match_labels = {"app": "ws"}
+        runner = self._runner_with_deployment_pod(mock_k8s_core)
         mock_apps_api: Mock = runner.apps_api  # type: ignore[assignment]
-        mock_apps_api.read_namespaced_deployment.return_value = mock_deployment
-        mock_k8s_core.list_pods.return_value = (
-            [PodInfo(name="ws-pod-abc", phase=PodPhase.RUNNING)],
-            None,
-        )
         mock_k8s_core.exec_pod.return_value = ExecResult(stdout="ok", stderr="", returncode=0)
 
         result = runner.execute_instruction(
@@ -390,9 +383,11 @@ class TestK8sCoreRunner(unittest.TestCase):
             container=None,
         )
 
-    def _runner_with_deployment_pod(self, mock_k8s_core: Mock, containers: tuple[str, ...]) -> K8sCoreRunner:
-        """A runner whose deployment resolves to one pod with the given containers."""
-        runner = self._make_runner()
+    def _runner_with_deployment_pod(
+        self, mock_k8s_core: Mock, containers: tuple[str, ...] = (), kubeconfig_path: str | None = None
+    ) -> K8sCoreRunner:
+        """A runner whose deployment my-deploy resolves to one running pod with the given containers."""
+        runner = self._make_runner(kubeconfig_path=kubeconfig_path)
         mock_deployment: Mock = Mock()
         mock_deployment.spec.selector.match_labels = {"app": "ws"}
         mock_apps_api: Mock = runner.apps_api  # type: ignore[assignment]
@@ -603,15 +598,7 @@ class TestK8sCoreRunner(unittest.TestCase):
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.cmd_utils")
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
     def test_exec_pod_interactive_with_deployment_name(self, mock_k8s_core: Mock, mock_cmd_utils: Mock) -> None:
-        runner = self._make_runner(kubeconfig_path="/tmp/kubeconfig")
-        mock_deployment: Mock = Mock()
-        mock_deployment.spec.selector.match_labels = {"app": "ws"}
-        mock_apps_api: Mock = runner.apps_api  # type: ignore[assignment]
-        mock_apps_api.read_namespaced_deployment.return_value = mock_deployment
-        mock_k8s_core.list_pods.return_value = (
-            [PodInfo(name="ws-pod-abc", phase=PodPhase.RUNNING)],
-            None,
-        )
+        runner = self._runner_with_deployment_pod(mock_k8s_core, kubeconfig_path="/tmp/kubeconfig")
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (0, False)
 
         result = runner.execute_instruction(
