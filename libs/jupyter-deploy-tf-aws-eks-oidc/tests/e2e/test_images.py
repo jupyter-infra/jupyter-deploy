@@ -48,7 +48,7 @@ def test_image_status(e2e_deployment: EndToEndDeployment) -> None:
     """Verify status reports the image as available."""
     e2e_deployment.ensure_deployed()
 
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "status"])
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "status", "--name", "jupyterlab"])
     assert "jupyterlab status:" in result.stdout
     assert "Available" in result.stdout
 
@@ -69,7 +69,7 @@ def test_image_show(e2e_deployment: EndToEndDeployment) -> None:
     """Verify show displays image details."""
     e2e_deployment.ensure_deployed()
 
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "show"])
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "show", "--name", "jupyterlab"])
     assert "jupyterlab" in result.stdout
     assert "ecr" in result.stdout.lower()
 
@@ -78,7 +78,7 @@ def test_image_show_json(e2e_deployment: EndToEndDeployment) -> None:
     """Verify show --json returns valid JSON with expected fields."""
     e2e_deployment.ensure_deployed()
 
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "show", "--json"])
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "show", "--name", "jupyterlab", "--json"])
     data = json.loads(result.stdout)
 
     assert data["name"] == "jupyterlab"
@@ -104,7 +104,7 @@ def test_image_tags(e2e_deployment: EndToEndDeployment) -> None:
     """Verify tags shows available tags for the image."""
     e2e_deployment.ensure_deployed()
 
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "tags"])
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "tags", "--name", "jupyterlab"])
     assert "v1" in result.stdout or "latest" in result.stdout
 
 
@@ -112,7 +112,7 @@ def test_image_tags_json(e2e_deployment: EndToEndDeployment) -> None:
     """Verify tags --json returns valid JSON with tag details."""
     e2e_deployment.ensure_deployed()
 
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "tags", "--json"])
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "tags", "--name", "jupyterlab", "--json"])
     tags = json.loads(result.stdout)
 
     assert isinstance(tags, list)
@@ -126,7 +126,7 @@ def test_image_tags_text(e2e_deployment: EndToEndDeployment) -> None:
     """Verify tags --text returns comma-separated tag names."""
     e2e_deployment.ensure_deployed()
 
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "tags", "--text"])
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "tags", "--name", "jupyterlab", "--text"])
     tag_names = result.stdout.strip().split(",")
     assert len(tag_names) >= 1
     assert any(t in tag_names for t in ["v1", "latest"])
@@ -139,7 +139,7 @@ def test_image_vulnerabilities(e2e_deployment: EndToEndDeployment) -> None:
     """Verify vulnerabilities returns scan results."""
     e2e_deployment.ensure_deployed()
 
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "vulnerabilities"])
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "vulnerabilities", "--name", "jupyterlab"])
     assert "Summary" in result.stdout
     assert "CRITICAL" in result.stdout or "No HIGH or CRITICAL" in result.stdout
 
@@ -148,7 +148,9 @@ def test_image_vulnerabilities_json(e2e_deployment: EndToEndDeployment) -> None:
     """Verify vulnerabilities --json returns valid JSON with expected structure."""
     e2e_deployment.ensure_deployed()
 
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "vulnerabilities", "--json"])
+    result = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "image", "vulnerabilities", "--name", "jupyterlab", "--json"]
+    )
     data = json.loads(result.stdout)
 
     assert data["image"] == "jupyterlab"
@@ -168,7 +170,9 @@ def test_image_vulnerabilities_with_tag(e2e_deployment: EndToEndDeployment) -> N
     """Verify vulnerabilities with explicit --tag works."""
     e2e_deployment.ensure_deployed()
 
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "vulnerabilities", "--tag", "v1", "--json"])
+    result = e2e_deployment.cli.run_command(
+        ["jupyter-deploy", "image", "vulnerabilities", "--name", "jupyterlab", "--tag", "v1", "--json"]
+    )
     data = json.loads(result.stdout)
     assert data["tag"] == "v1"
 
@@ -178,7 +182,9 @@ def test_image_vulnerabilities_tag_not_found(e2e_deployment: EndToEndDeployment)
     e2e_deployment.ensure_deployed()
 
     with pytest.raises(JDCliError) as exc_info:
-        e2e_deployment.cli.run_command(["jupyter-deploy", "image", "vulnerabilities", "--tag", "v999"])
+        e2e_deployment.cli.run_command(
+            ["jupyter-deploy", "image", "vulnerabilities", "--name", "jupyterlab", "--tag", "v999"]
+        )
     assert "v999" in str(exc_info.value)
 
 

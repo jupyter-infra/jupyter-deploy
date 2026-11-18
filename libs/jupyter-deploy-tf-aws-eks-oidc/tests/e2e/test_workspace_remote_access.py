@@ -40,6 +40,7 @@ from .constants import (
     SIDECAR_CONTAINER,
     SIDECAR_PORT,
     VSCODE_GPU_TEMPLATE_NAME,
+    VSCODE_IMAGE_NAME,
     VSCODE_SMALL_TEMPLATE,
     VSCODE_SMALL_TEMPLATE_CONFIG,
     VSCODE_TEMPLATE_NAME,
@@ -251,6 +252,8 @@ def test_vscode_workspace_runs_with_the_sidecar_and_hands_out_an_ssh_connection(
         pod = kubectl_get_workspace_pod(VSCODE_WORKSPACE, WORKSPACE_NAMESPACE)
         ready = {status["name"]: status["ready"] for status in pod["status"].get("containerStatuses", [])}
         assert ready.get(SIDECAR_CONTAINER) is True, f"{SIDECAR_CONTAINER} missing or not ready: {ready}"
+        image = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "status", "--name", VSCODE_IMAGE_NAME])
+        assert "Available" in image.stdout, f"jd image status does not see the VS Code image:\n{image.stdout}"
 
         e2e_deployment.cli.wait_for_workspace_pod_exec_ready(VSCODE_WORKSPACE, scope=WORKSPACE_NAMESPACE, timeout_s=60)
         for tool in IMAGE_TOOLS:
@@ -329,7 +332,7 @@ def test_deleted_websocket_strategy_is_repaired_on_apply(
 def test_disable_remote_access_removes_the_vscode_cards(
     e2e_deployment: EndToEndDeployment, shared_namespace: str, remote_access_window: dict[str, Any]
 ) -> None:
-    """Disabling the flag removes the VS Code cards, the strategy and the image output, and closes the sidecar port."""
+    """Disabling the flag removes the VS Code cards, the strategy and the image, and closes the sidecar port."""
     e2e_deployment.ensure_deployed()
     if remote_access_window["flag_was_on"]:
         pytest.skip(f"the deployment had {REMOTE_ACCESS_FLAG} on before the module; the window keeps it")
@@ -347,6 +350,10 @@ def test_disable_remote_access_removes_the_vscode_cards(
         msg=f"{WEBSOCKET_STRATEGY} still present after disabling {REMOTE_ACCESS_FLAG}",
     )
     assert _vscode_image_uri(e2e_deployment) == ""
+    unbuilt = e2e_deployment.cli.run_command_expecting_failure(
+        ["jupyter-deploy", "image", "status", "--name", VSCODE_IMAGE_NAME]
+    )
+    assert "not built" in unbuilt and REMOTE_ACCESS_FLAG in unbuilt, unbuilt
     assert _ingress_policy_ports(WORKSPACE_NAMESPACE) == {
         ROUTER_NAMESPACE: {WORKSPACE_APP_PORT},
         OPERATOR_NAMESPACE: {WORKSPACE_APP_PORT},
