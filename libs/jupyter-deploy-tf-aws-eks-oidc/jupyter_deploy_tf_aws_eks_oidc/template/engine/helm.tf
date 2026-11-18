@@ -107,6 +107,13 @@ resource "helm_release" "jupyter_k8s" {
     ] : [],
   )
 
+  lifecycle {
+    precondition {
+      condition     = !var.enable_remote_access || local.remote_access_chart_at_floor.operator
+      error_message = "enable_remote_access needs the jupyter-k8s chart at 0.3.0 or later, which serves workspace connections and signs their tokens; workspace_operator_chart_version is \"${var.workspace_operator_chart_version}\"."
+    }
+  }
+
   depends_on = [null_resource.platform, helm_release.traefik_crds, kubernetes_namespace_v1.shared, aws_eks_node_group.platform]
 }
 
@@ -322,6 +329,13 @@ resource "helm_release" "workspace_router" {
       value = random_password.dex_client_secret.result
     },
   ]
+
+  lifecycle {
+    precondition {
+      condition     = !var.enable_remote_access || local.remote_access_chart_at_floor.router
+      error_message = "enable_remote_access needs the aws-oidc chart at 0.2.1 or later, which carries the WebSocket access strategy; workspace_router_chart_version is \"${var.workspace_router_chart_version}\"."
+    }
+  }
 
   depends_on = [null_resource.platform, helm_release.jupyter_k8s, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup, kubernetes_namespace_v1.shared, null_resource.sync_ebs_storage_class]
 }
