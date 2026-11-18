@@ -148,10 +148,10 @@ class K8sCoreRunner(InstructionRunner):
 
         self.display_manager.info(f"Getting logs for deployment {name_arg.value} in namespace: {scope_arg.value}")
 
+        verify_kubeconfig_context(expected_cluster_config or None, self._kubeconfig_path)
         pod = self._resolve_pod(name_arg.value, scope_arg.value)
         container = self._container_for(pod, self._requested_container(resolved_arguments))
 
-        verify_kubeconfig_context(expected_cluster_config or None, self._kubeconfig_path)
         kubectl_cmd = ["kubectl", "logs", pod.name, "--namespace", scope_arg.value]
         if self._kubeconfig_path:
             kubectl_cmd.extend(["--kubeconfig", self._kubeconfig_path])
@@ -255,6 +255,7 @@ class K8sCoreRunner(InstructionRunner):
             resolved_arguments, "expected_cluster_config", StrResolvedInstructionArgument, ""
         ).value
 
+        verify_kubeconfig_context(expected_cluster_config or None, self._kubeconfig_path)
         if deployment_name_arg.value:
             pod = self._resolve_pod(deployment_name_arg.value, scope_arg.value)
         elif name_arg.value:
@@ -263,7 +264,6 @@ class K8sCoreRunner(InstructionRunner):
             raise ValueError("Either 'name' (pod name) or 'deployment_name' must be provided")
         pod_name, container = pod.name, self._container_for(pod, self._requested_container(resolved_arguments))
 
-        verify_kubeconfig_context(expected_cluster_config or None, self._kubeconfig_path)
         kubectl_cmd = ["kubectl", "exec", "-it", pod_name, "-n", scope_arg.value]
         if self._kubeconfig_path:
             kubectl_cmd.extend(["--kubeconfig", self._kubeconfig_path])
