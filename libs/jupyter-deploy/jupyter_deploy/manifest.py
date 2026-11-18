@@ -391,6 +391,8 @@ class JupyterDeployImageDefinitionV1(BaseModel):
     description: str = ""
     repository_output: str = Field(alias="repository-output")
     tag_output: str = Field(alias="tag-output")
+    # The template variable that makes the deployment build this image; unset for an image it always builds.
+    enabled_by: str | None = Field(default=None, alias="enabled-by")
 
 
 class JupyterDeployStaticVolumeV1(BaseModel):

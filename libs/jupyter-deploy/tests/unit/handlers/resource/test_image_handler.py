@@ -7,10 +7,16 @@ import yaml
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition
 from jupyter_deploy.engine.supervised_execution import NullDisplay
-from jupyter_deploy.exceptions import CommandNotImplementedError, ImageNotFoundError, ImageTagNotFoundError
+from jupyter_deploy.exceptions import (
+    CommandNotImplementedError,
+    ImageNotFoundError,
+    ImageNotProvisionedError,
+    ImageTagNotFoundError,
+    ResourceNameRequiredError,
+)
 from jupyter_deploy.handlers.payloads import ImageDetail, ImageInfo, ImageVulnerabilitiesResult
 from jupyter_deploy.handlers.resource.image_handler import ImageHandler
-from jupyter_deploy.manifest import JupyterDeployManifest, JupyterDeployManifestV1
+from jupyter_deploy.manifest import JupyterDeployImageDefinitionV1, JupyterDeployManifest, JupyterDeployManifestV1
 
 
 class TestImageHandler(unittest.TestCase):
@@ -159,6 +165,77 @@ class TestImageHandler(unittest.TestCase):
 
         self.assertEqual(handler.resolve_name(None), "jupyterlab")
         self.assertEqual(handler.resolve_name("jupyterlab"), "jupyterlab")
+
+    def _handler_with_two_images(
+        self, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock, vscode_repository: str
+    ) -> ImageHandler:
+        """A handler whose manifest declares jupyterlab, always built, and vscode behind a flag."""
+        images = {
+            "jupyterlab": JupyterDeployImageDefinitionV1(
+                **{"repository-output": "ecr_repository_name", "tag-output": "jupyterlab_image_tag"}
+            ),
+            "vscode": JupyterDeployImageDefinitionV1(
+                **{
+                    "repository-output": "vscode_ecr_repository_name",
+                    "tag-output": "vscode_image_tag",
+                    "enabled-by": "enable_remote_access",
+                }
+            ),
+        }
+        mock_manifest, manifest_fns = self.get_mock_manifest_and_fns()
+        manifest_fns["get_images"].return_value = images
+        manifest_fns["get_image"].side_effect = images.__getitem__
+        mock_retrieve_manifest.return_value = mock_manifest
+        mock_output_handler, output_fns = self.get_mock_outputs_handler_and_fns()
+        output_fns["get_full_project_outputs"].return_value |= {
+            "vscode_ecr_repository_name": StrTemplateOutputDefinition(
+                output_name="vscode_ecr_repository_name", value=vscode_repository
+            ),
+            "vscode_image_tag": StrTemplateOutputDefinition(output_name="vscode_image_tag", value="v1"),
+        }
+        mock_tf_outputs_handler.return_value = mock_output_handler
+        return ImageHandler(display_manager=NullDisplay())
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    def test_resolve_name_defaults_to_the_only_built_image(
+        self, mock_tf_variables_handler: Mock, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock
+    ) -> None:
+        mock_tf_variables_handler.return_value = Mock()
+        handler = self._handler_with_two_images(mock_tf_outputs_handler, mock_retrieve_manifest, vscode_repository="")
+
+        self.assertEqual(handler.resolve_name(None), "jupyterlab")
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    def test_resolve_name_needs_a_name_when_several_images_are_built(
+        self, mock_tf_variables_handler: Mock, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock
+    ) -> None:
+        mock_tf_variables_handler.return_value = Mock()
+        handler = self._handler_with_two_images(
+            mock_tf_outputs_handler, mock_retrieve_manifest, vscode_repository="my-app/vscode"
+        )
+
+        with self.assertRaises(ResourceNameRequiredError):
+            handler.resolve_name(None)
+        self.assertEqual(handler.resolve_name("vscode"), "vscode")
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    def test_image_commands_name_the_flag_that_builds_an_unbuilt_image(
+        self, mock_tf_variables_handler: Mock, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock
+    ) -> None:
+        mock_tf_variables_handler.return_value = Mock()
+        handler = self._handler_with_two_images(mock_tf_outputs_handler, mock_retrieve_manifest, vscode_repository="")
+
+        with self.assertRaises(ImageNotProvisionedError) as raised:
+            handler.get_status("vscode")
+
+        self.assertEqual(raised.exception.image_name, "vscode")
+        self.assertEqual(raised.exception.enabled_by, "enable_remote_access")
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")

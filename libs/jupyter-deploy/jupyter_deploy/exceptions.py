@@ -575,6 +575,20 @@ class ImageTagNotFoundError(JupyterDeployError, ValueError):
         super().__init__(f"Tag '{tag}' not found for image '{image_name}'.")
 
 
+class ImageNotProvisionedError(JupyterDeployError, ValueError):
+    """Raised when the manifest declares an image that this deployment does not build.
+
+    Attributes:
+        image_name: The image name
+        enabled_by: The template variable that makes the deployment build it, when the manifest names one
+    """
+
+    def __init__(self, image_name: str, enabled_by: str | None) -> None:
+        self.image_name = image_name
+        self.enabled_by = enabled_by
+        super().__init__(f"Image '{image_name}' is not built in this deployment.")
+
+
 class InvalidComponentVerbError(JupyterDeployError, ValueError):
     """Raised when a verb is not valid for the component's type.
 
