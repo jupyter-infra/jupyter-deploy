@@ -8,7 +8,7 @@ workspace namespace, plus a VS Code GPU card when `enable_default_gpu_pool` is o
 A workspace created from a VS Code card runs an SSH server on its pod's loopback interface and
 a `ws-proxy` sidecar that relays the SSH stream between the HTTPS entry point and that server.
 The VS Code image ships the same **Claude Code** and **Codex** agents as the JupyterLab image,
-so a terminal in the editor has them with no setup; see
+so a terminal in the editor has them with no setup, with Bedrock access as described in
 [Bedrock Integration](bedrock-integration.md).
 
 Set the flag in the `overrides:` block of `variables.yaml`, then run `jd config` and `jd up`:
@@ -38,9 +38,9 @@ Bump `workspace_app_vscode_image_build` to rebuild the image, as
 
 No SSH key is created or distributed. The SSH server binds the pod's loopback interface, so
 nothing outside the pod reaches it, and the workspace-ingress NetworkPolicy admits the sidecar
-port from the router namespace only; the operator namespace keeps the application port it
-probes for idle detection. The host key persists in the workspace's home volume, so a restart
-keeps its fingerprint.
+port from the router namespace only. The operator namespace keeps its access to the application
+port, which it probes for the idle detection of JupyterLab workspaces. The host key persists in
+the workspace's home volume, so a restart keeps its fingerprint.
 
 ## Connect from your machine
 
@@ -68,8 +68,8 @@ A VS Code workspace pod holds two containers, `workspace` and the `ws-proxy` sid
 logs`, `jd server exec` and `jd server connect` act on `workspace` and print the container they
 picked; pass `--service ws-proxy` for the sidecar's logs.
 
-The VS Code image is the second entry of `jd image list`: `jd image status --name vscode` and
-`jd image vulnerabilities --name vscode` report on it, and with the flag off they say the image is
+`jd image list` shows the VS Code image beside the JupyterLab one. `jd image status --name vscode`
+and `jd image vulnerabilities --name vscode` report on it; with the flag off they say the image is
 not built. With two images built, the `jd image` commands need `--name`.
 
 ## Limits
