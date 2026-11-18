@@ -7,6 +7,7 @@ from kubernetes import client
 
 from jupyter_deploy import cmd_utils
 from jupyter_deploy.api.k8s import core as k8s_core
+from jupyter_deploy.api.k8s.core import PodPhase
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.exceptions import (
     InstructionError,
@@ -179,6 +180,11 @@ class K8sCoreRunner(InstructionRunner):
         }
 
     def _resolve_pod(self, deployment_name: str, namespace: str) -> k8s_core.PodInfo:
+        """The deployment's running pod, else its first live one.
+
+        A pod being replaced keeps the deployment's labels until it is gone, and a failed one keeps
+        them until the deployment is cleaned up, so neither is the target while a running pod exists.
+        """
         deployment = self.apps_api.read_namespaced_deployment(name=deployment_name, namespace=namespace)
         match_labels = deployment.spec.selector.match_labels or {}
         label_selector = ",".join(f"{k}={v}" for k, v in match_labels.items())
@@ -188,7 +194,8 @@ class K8sCoreRunner(InstructionRunner):
         live = [pod for pod in pods if not pod.deleting]
         if not live:
             raise ValueError(f"No pods found for deployment {deployment_name} in namespace {namespace}")
-        return live[0]
+        running = [pod for pod in live if pod.phase == PodPhase.RUNNING]
+        return (running or live)[0]
 
     @staticmethod
     def _requested_container(resolved_arguments: dict[str, ResolvedInstructionArgument]) -> str | None:
@@ -209,23 +216,29 @@ class K8sCoreRunner(InstructionRunner):
             return pod.containers[0]
         return None
 
+    def _exec_target(
+        self, resolved_arguments: dict[str, ResolvedInstructionArgument], namespace: str
+    ) -> tuple[str, str | None]:
+        """The pod an exec command targets, from `deployment_name` or `name`, and the container in it."""
+        deployment_name = retrieve_optional_arg(
+            resolved_arguments, "deployment_name", StrResolvedInstructionArgument, ""
+        ).value
+        name = retrieve_optional_arg(resolved_arguments, "name", StrResolvedInstructionArgument, "").value
+        if deployment_name:
+            pod = self._resolve_pod(deployment_name, namespace)
+        elif name:
+            pod = k8s_core.get_pod(self.core_api, name=name, namespace=namespace)
+        else:
+            raise ValueError("Either 'name' (pod name) or 'deployment_name' must be provided")
+        return pod.name, self._container_for(pod, self._requested_container(resolved_arguments))
+
     def _exec_pod(
         self, resolved_arguments: dict[str, ResolvedInstructionArgument]
     ) -> dict[str, ResolvedInstructionResult]:
         scope_arg = require_arg(resolved_arguments, "scope", StrResolvedInstructionArgument)
         command_arg = require_arg(resolved_arguments, "command", StrResolvedInstructionArgument)
-        deployment_name_arg = retrieve_optional_arg(
-            resolved_arguments, "deployment_name", StrResolvedInstructionArgument, ""
-        )
-        name_arg = retrieve_optional_arg(resolved_arguments, "name", StrResolvedInstructionArgument, "")
 
-        if deployment_name_arg.value:
-            pod = self._resolve_pod(deployment_name_arg.value, scope_arg.value)
-        elif name_arg.value:
-            pod = k8s_core.get_pod(self.core_api, name=name_arg.value, namespace=scope_arg.value)
-        else:
-            raise ValueError("Either 'name' (pod name) or 'deployment_name' must be provided")
-        pod_name, container = pod.name, self._container_for(pod, self._requested_container(resolved_arguments))
+        pod_name, container = self._exec_target(resolved_arguments, scope_arg.value)
         command_parts = shlex.split(command_arg.value)
         self.display_manager.info(f"Executing command on pod: {pod_name}")
         result = k8s_core.exec_pod(
@@ -247,22 +260,12 @@ class K8sCoreRunner(InstructionRunner):
     ) -> dict[str, ResolvedInstructionResult]:
         scope_arg = require_arg(resolved_arguments, "scope", StrResolvedInstructionArgument)
         command_arg = retrieve_optional_arg(resolved_arguments, "command", StrResolvedInstructionArgument, "/bin/bash")
-        deployment_name_arg = retrieve_optional_arg(
-            resolved_arguments, "deployment_name", StrResolvedInstructionArgument, ""
-        )
-        name_arg = retrieve_optional_arg(resolved_arguments, "name", StrResolvedInstructionArgument, "")
         expected_cluster_config = retrieve_optional_arg(
             resolved_arguments, "expected_cluster_config", StrResolvedInstructionArgument, ""
         ).value
 
         verify_kubeconfig_context(expected_cluster_config or None, self._kubeconfig_path)
-        if deployment_name_arg.value:
-            pod = self._resolve_pod(deployment_name_arg.value, scope_arg.value)
-        elif name_arg.value:
-            pod = k8s_core.get_pod(self.core_api, name=name_arg.value, namespace=scope_arg.value)
-        else:
-            raise ValueError("Either 'name' (pod name) or 'deployment_name' must be provided")
-        pod_name, container = pod.name, self._container_for(pod, self._requested_container(resolved_arguments))
+        pod_name, container = self._exec_target(resolved_arguments, scope_arg.value)
 
         kubectl_cmd = ["kubectl", "exec", "-it", pod_name, "-n", scope_arg.value]
         if self._kubeconfig_path:
