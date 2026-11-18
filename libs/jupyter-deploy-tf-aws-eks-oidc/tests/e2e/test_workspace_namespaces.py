@@ -284,7 +284,7 @@ def test_vscode_card_listed_without_remote_access_is_refused(
     e2e_deployment: EndToEndDeployment, mapped: dict[str, Any]
 ) -> None:
     """`jd config` refuses a namespace entry listing the built-in vscode card while enable_remote_access is off."""
-    if e2e_deployment.get_bool_variable_value("enable_remote_access"):
+    if e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG):
         pytest.skip("the deployment has enable_remote_access on")
     try:
         e2e_deployment.update_override_value(
