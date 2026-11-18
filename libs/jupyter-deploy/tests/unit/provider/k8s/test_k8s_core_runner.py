@@ -448,6 +448,17 @@ class TestK8sCoreRunner(unittest.TestCase):
         self.assertEqual(mock_k8s_core.exec_pod.call_args.kwargs["name"], "ws-pod-new")
 
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
+    def test_exec_pod_fails_when_every_pod_is_being_replaced(self, mock_k8s_core: Mock) -> None:
+        runner = self._runner_with_deployment_pod(mock_k8s_core, ("workspace",))
+        mock_k8s_core.list_pods.return_value = (
+            [PodInfo(name="ws-pod-old", phase=PodPhase.RUNNING, containers=("workspace",), deleting=True)],
+            None,
+        )
+
+        with self.assertRaisesRegex(ValueError, "No pods found for deployment my-deploy"):
+            self._exec_via_deployment(runner)
+
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
     def test_exec_pod_single_container_passes_no_container(self, mock_k8s_core: Mock) -> None:
         runner = self._runner_with_deployment_pod(mock_k8s_core, ("workspace",))
         mock_k8s_core.exec_pod.return_value = ExecResult(stdout="", stderr="", returncode=0)
