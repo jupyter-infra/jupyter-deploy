@@ -218,14 +218,13 @@ class K8sCoreRunner(InstructionRunner):
         )
         name_arg = retrieve_optional_arg(resolved_arguments, "name", StrResolvedInstructionArgument, "")
 
-        container = self._requested_container(resolved_arguments)
         if deployment_name_arg.value:
             pod = self._resolve_pod(deployment_name_arg.value, scope_arg.value)
-            pod_name, container = pod.name, self._container_for(pod, container)
         elif name_arg.value:
-            pod_name = name_arg.value
+            pod = k8s_core.get_pod(self.core_api, name=name_arg.value, namespace=scope_arg.value)
         else:
             raise ValueError("Either 'name' (pod name) or 'deployment_name' must be provided")
+        pod_name, container = pod.name, self._container_for(pod, self._requested_container(resolved_arguments))
         command_parts = shlex.split(command_arg.value)
         self.display_manager.info(f"Executing command on pod: {pod_name}")
         result = k8s_core.exec_pod(
@@ -255,14 +254,13 @@ class K8sCoreRunner(InstructionRunner):
             resolved_arguments, "expected_cluster_config", StrResolvedInstructionArgument, ""
         ).value
 
-        container = self._requested_container(resolved_arguments)
         if deployment_name_arg.value:
             pod = self._resolve_pod(deployment_name_arg.value, scope_arg.value)
-            pod_name, container = pod.name, self._container_for(pod, container)
         elif name_arg.value:
-            pod_name = name_arg.value
+            pod = k8s_core.get_pod(self.core_api, name=name_arg.value, namespace=scope_arg.value)
         else:
             raise ValueError("Either 'name' (pod name) or 'deployment_name' must be provided")
+        pod_name, container = pod.name, self._container_for(pod, self._requested_container(resolved_arguments))
 
         verify_kubeconfig_context(expected_cluster_config or None, self._kubeconfig_path)
         kubectl_cmd = ["kubectl", "exec", "-it", pod_name, "-n", scope_arg.value]

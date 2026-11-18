@@ -502,6 +502,7 @@ class TestK8sCoreRunner(unittest.TestCase):
     def test_exec_pod_with_name_uses_pod_directly(self, mock_k8s_core: Mock) -> None:
         runner = self._make_runner()
         mock_apps_api: Mock = runner.apps_api  # type: ignore[assignment]
+        mock_k8s_core.get_pod.return_value = PodInfo(name="pod-1", phase=PodPhase.RUNNING, containers=("app",))
         mock_k8s_core.exec_pod.return_value = ExecResult(stdout="ok", stderr="", returncode=0)
 
         result = runner.execute_instruction(
@@ -515,9 +516,29 @@ class TestK8sCoreRunner(unittest.TestCase):
 
         self.assertEqual(result["Stdout"].value, "ok")
         mock_apps_api.read_namespaced_deployment.assert_not_called()
+        mock_k8s_core.get_pod.assert_called_once_with(runner.core_api, name="pod-1", namespace="default")
         mock_k8s_core.exec_pod.assert_called_once_with(
             runner.core_api, name="pod-1", namespace="default", command=["ls"], container=None
         )
+
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
+    def test_exec_pod_with_name_defaults_to_the_first_of_several_containers(self, mock_k8s_core: Mock) -> None:
+        runner = self._make_runner()
+        mock_k8s_core.get_pod.return_value = PodInfo(
+            name="pod-1", phase=PodPhase.RUNNING, containers=("workspace", "ws-proxy")
+        )
+        mock_k8s_core.exec_pod.return_value = ExecResult(stdout="", stderr="", returncode=0)
+
+        runner.execute_instruction(
+            instruction_name="exec-pod",
+            resolved_arguments={
+                "name": StrResolvedInstructionArgument(argument_name="name", value="pod-1"),
+                "scope": StrResolvedInstructionArgument(argument_name="scope", value="default"),
+                "command": StrResolvedInstructionArgument(argument_name="command", value="ls"),
+            },
+        )
+
+        self.assertEqual(mock_k8s_core.exec_pod.call_args.kwargs["container"], "workspace")
 
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
     def test_exec_pod_raises_when_neither_name_nor_deployment(self, mock_k8s_core: Mock) -> None:
@@ -535,6 +556,7 @@ class TestK8sCoreRunner(unittest.TestCase):
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
     def test_exec_pod_passes_container(self, mock_k8s_core: Mock) -> None:
         runner = self._make_runner()
+        mock_k8s_core.get_pod.return_value = PodInfo(name="pod-1", phase=PodPhase.RUNNING, containers=("app",))
         mock_k8s_core.exec_pod.return_value = ExecResult(stdout="", stderr="", returncode=0)
 
         runner.execute_instruction(
@@ -589,9 +611,11 @@ class TestK8sCoreRunner(unittest.TestCase):
             ]
         )
 
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.cmd_utils")
-    def test_exec_pod_interactive_with_pod_name_and_container(self, mock_cmd_utils: Mock) -> None:
+    def test_exec_pod_interactive_with_pod_name_and_container(self, mock_cmd_utils: Mock, mock_k8s_core: Mock) -> None:
         runner = self._make_runner()
+        mock_k8s_core.get_pod.return_value = PodInfo(name="pod-1", phase=PodPhase.RUNNING, containers=("app",))
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (0, False)
 
         result = runner.execute_instruction(
@@ -609,9 +633,11 @@ class TestK8sCoreRunner(unittest.TestCase):
             ["kubectl", "exec", "-it", "pod-1", "-n", "ns", "-c", "app", "--", "sh"]
         )
 
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.cmd_utils")
-    def test_exec_pod_interactive_timeout_raises(self, mock_cmd_utils: Mock) -> None:
+    def test_exec_pod_interactive_timeout_raises(self, mock_cmd_utils: Mock, mock_k8s_core: Mock) -> None:
         runner = self._make_runner()
+        mock_k8s_core.get_pod.return_value = PodInfo(name="pod-1", phase=PodPhase.RUNNING, containers=("app",))
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (0, True)
 
         with self.assertRaises(InteractiveSessionTimeoutError):
@@ -623,9 +649,11 @@ class TestK8sCoreRunner(unittest.TestCase):
                 },
             )
 
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.cmd_utils")
-    def test_exec_pod_interactive_nonzero_retcode_raises(self, mock_cmd_utils: Mock) -> None:
+    def test_exec_pod_interactive_nonzero_retcode_raises(self, mock_cmd_utils: Mock, mock_k8s_core: Mock) -> None:
         runner = self._make_runner()
+        mock_k8s_core.get_pod.return_value = PodInfo(name="pod-1", phase=PodPhase.RUNNING, containers=("app",))
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (1, False)
 
         with self.assertRaises(InteractiveSessionError):
@@ -637,9 +665,11 @@ class TestK8sCoreRunner(unittest.TestCase):
                 },
             )
 
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.cmd_utils")
-    def test_exec_pod_interactive_filters_default_container(self, mock_cmd_utils: Mock) -> None:
+    def test_exec_pod_interactive_filters_default_container(self, mock_cmd_utils: Mock, mock_k8s_core: Mock) -> None:
         runner = self._make_runner()
+        mock_k8s_core.get_pod.return_value = PodInfo(name="pod-1", phase=PodPhase.RUNNING, containers=("app",))
         mock_cmd_utils.run_cmd_and_pipe_to_terminal.return_value = (0, False)
 
         runner.execute_instruction(
