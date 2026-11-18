@@ -1,4 +1,4 @@
-"""Unit tests for the workspaces.kubectl pod lookup and connection request."""
+"""Unit tests for the workspaces.kubectl pod lookup, connection request and template-wide deletion."""
 
 import json
 import subprocess
@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import Mock, patch
 
-from pytest_jupyter_deploy.workspaces.kubectl import kubectl_get_workspace_pod, kubectl_request_workspace_connection
+from pytest_jupyter_deploy.workspaces.kubectl import (
+    kubectl_delete_workspaces_of_templates,
+    kubectl_get_workspace_pod,
+    kubectl_request_workspace_connection,
+)
 
 _RESPONSE = {"status": {"workspaceConnectionUrl": "wss://example.test/workspaces/team-a/ws1/ssh-ws?token=t"}}
 
@@ -83,4 +87,23 @@ class TestKubectlRequestWorkspaceConnection(unittest.TestCase):
         )
         self.assertEqual(mock_run_kubectl.call_args.kwargs["as_user"], "github:alice")
         self.assertEqual(mock_run_kubectl.call_args.kwargs["as_groups"], ["github:org:team-a"])
+        self.assertTrue(mock_run_kubectl.call_args.kwargs["check"])
+
+
+class TestKubectlDeleteWorkspacesOfTemplates(unittest.TestCase):
+    @patch("pytest_jupyter_deploy.workspaces.kubectl.run_kubectl")
+    def test_selects_the_workspaces_by_their_template_label(self, mock_run_kubectl: Mock) -> None:
+        kubectl_delete_workspaces_of_templates(["vscode", "e2e-vscode-small"], "team-a")
+
+        self.assertEqual(
+            mock_run_kubectl.call_args.args,
+            (
+                "delete",
+                "workspaces",
+                "-n",
+                "team-a",
+                "-l",
+                "workspace.jupyter.org/template-name in (vscode,e2e-vscode-small)",
+            ),
+        )
         self.assertTrue(mock_run_kubectl.call_args.kwargs["check"])

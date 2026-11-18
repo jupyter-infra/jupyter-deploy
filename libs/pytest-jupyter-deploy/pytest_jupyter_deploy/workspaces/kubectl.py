@@ -4,6 +4,7 @@ import json
 import subprocess
 import tempfile
 import time
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -55,6 +56,23 @@ def kubectl_delete_workspace(name: str, namespace: str = "default") -> None:
         check=True,
         capture_output=True,
         text=True,
+    )
+
+
+def kubectl_delete_workspaces_of_templates(templates: Iterable[str], namespace: str = "default") -> None:
+    """Delete the workspaces created from the given templates and wait until they are gone.
+
+    Selects by the template-name label the operator's defaulting webhook stamps on every
+    workspace, so a workspace whose name was generated at create time is found too.
+    """
+    run_kubectl(
+        "delete",
+        "workspaces",
+        "-n",
+        namespace,
+        "-l",
+        f"workspace.jupyter.org/template-name in ({','.join(templates)})",
+        check=True,
     )
 
 
