@@ -20,6 +20,8 @@ from .constants import (
     ADMIN_WORKSPACES,
     DEFAULT_WORKSPACE_TEMPLATE,
     GPU_NODEPOOL,
+    GPU_POOL_FLAG,
+    GPU_TEMPLATE_NAME,
     IMPERSONATED_USER,
     NS_A,
     NS_B,
@@ -28,7 +30,9 @@ from .constants import (
     NS_ONLY_DEFAULT_TEAM,
     NS_SMALL_TEMPLATE,
     NS_SMALL_TEMPLATE_CONFIG,
+    REMOTE_ACCESS_FLAG,
     SEEDED_WORKSPACES,
+    VSCODE_GPU_TEMPLATE_NAME,
     WORKSPACE_NAMESPACE,
     WORKSPACES_DIR,
 )
@@ -262,13 +266,12 @@ def namespace_base_values(e2e_deployment: EndToEndDeployment, restored_namespace
     ]
     pools = e2e_deployment.get_list_of_maps_variable_value("workspace_nodepools")
 
-    # default keeps every card the pools offer, including the built-in GPU card the flag injects.
+    # default keeps every card the pools offer, including the GPU cards the flags inject.
     offered = [t for p in pools for t in p.get("templates", "").split(",") if t]
-    gpu_flag = e2e_deployment.cli.run_command(
-        ["jupyter-deploy", "show", "--variable", "enable_default_gpu_pool", "--text"]
-    ).stdout.strip()
-    if gpu_flag.lower() == "true":
-        offered.append("jupyterlab-gpu")
+    if e2e_deployment.get_bool_variable_value(GPU_POOL_FLAG):
+        offered.append(GPU_TEMPLATE_NAME)
+        if e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG):
+            offered.append(VSCODE_GPU_TEMPLATE_NAME)
 
     pools_with_small = pools_offering(pools, NS_SMALL_TEMPLATE)
 
