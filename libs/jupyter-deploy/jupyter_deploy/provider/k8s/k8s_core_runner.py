@@ -184,10 +184,11 @@ class K8sCoreRunner(InstructionRunner):
         label_selector = ",".join(f"{k}={v}" for k, v in match_labels.items())
         if not label_selector:
             raise ValueError(f"Deployment {deployment_name} has no selector labels")
-        pods, _ = k8s_core.list_pods(self.core_api, namespace=namespace, label_selector=label_selector, limit=1)
-        if not pods:
+        pods, _ = k8s_core.list_pods(self.core_api, namespace=namespace, label_selector=label_selector)
+        live = [pod for pod in pods if not pod.deleting]
+        if not live:
             raise ValueError(f"No pods found for deployment {deployment_name} in namespace {namespace}")
-        return pods[0]
+        return live[0]
 
     @staticmethod
     def _requested_container(resolved_arguments: dict[str, ResolvedInstructionArgument]) -> str | None:

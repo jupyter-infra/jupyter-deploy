@@ -40,9 +40,12 @@ def _mock_container(name: str) -> Mock:
     return container
 
 
-def _mock_pod(name: str, phase: str = "Running", containers: tuple[str, ...] = ("app",)) -> Mock:
+def _mock_pod(
+    name: str, phase: str = "Running", containers: tuple[str, ...] = ("app",), deleting: bool = False
+) -> Mock:
     pod: Mock = Mock()
     pod.metadata.name = name
+    pod.metadata.deletion_timestamp = "2026-11-17T00:00:00Z" if deleting else None
     pod.status.phase = phase
     pod.spec.containers = [_mock_container(container) for container in containers]
     return pod
@@ -157,6 +160,14 @@ class TestListPods(unittest.TestCase):
         pods, _ = list_pods(mock_api, namespace="default")
 
         self.assertEqual(pods[0].containers, ("workspace", "ws-proxy"))
+
+    def test_marks_the_pod_being_deleted(self) -> None:
+        mock_api: Mock = Mock(spec=CoreV1Api)
+        mock_api.list_namespaced_pod.return_value = _mock_pod_list([_mock_pod("old", deleting=True), _mock_pod("new")])
+
+        pods, _ = list_pods(mock_api, namespace="default")
+
+        self.assertEqual([(pod.name, pod.deleting) for pod in pods], [("old", True), ("new", False)])
 
     def test_passes_label_selector(self) -> None:
         mock_api: Mock = Mock(spec=CoreV1Api)
