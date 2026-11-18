@@ -193,6 +193,8 @@ def test_enable_remote_access_offers_the_vscode_cards(
     configs = e2e_deployment.get_list_of_maps_variable_value("workspace_templates")
     pools = e2e_deployment.get_list_of_maps_variable_value("workspace_nodepools")
     namespaces = e2e_deployment.get_list_of_maps_variable_value("workspace_namespaces")
+    if namespaces and not any(entry["name"] == WORKSPACE_NAMESPACE for entry in namespaces):
+        pytest.skip(f"the workspace_namespaces mapping has no {WORKSPACE_NAMESPACE} entry to offer the cards in")
     overrides: dict[str, Any] = {
         REMOTE_ACCESS_FLAG: True,
         "workspace_templates": [*configs, VSCODE_SMALL_TEMPLATE_CONFIG],
