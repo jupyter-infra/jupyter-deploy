@@ -2,7 +2,8 @@
 
 The cases run in order as one enable_remote_access off->on->off window, each flip a jd config
 plus jd up. The window also offers a pool-bound VS Code config; remote_access_window restores
-the flag and the configs if a case leaves them changed.
+the flag and the configs if a case leaves them changed. On a deployment that already has the
+flag on, the refusal and the disable cases skip and the window leaves the flag on.
 """
 
 import base64
@@ -113,8 +114,8 @@ def _websocket_upgrade_status(url: str, token: str | None) -> int:
         connection.close()
 
 
-def _delete_vscode_workspaces() -> None:
-    """Delete the workspaces of the VS Code cards, which pin the templates the restoring apply removes."""
+def _delete_workspaces_of(templates: tuple[str, ...]) -> None:
+    """Delete the workspaces of the given cards, which pin the templates the restoring apply removes."""
     with contextlib.suppress(Exception):
         run_kubectl(
             "delete",
@@ -122,35 +123,44 @@ def _delete_vscode_workspaces() -> None:
             "-n",
             WORKSPACE_NAMESPACE,
             "-l",
-            f"workspace.jupyter.org/template-name in ({','.join(VSCODE_TEMPLATES)})",
+            f"workspace.jupyter.org/template-name in ({','.join(templates)})",
             check=True,
         )
 
 
-def _window_open(e2e_deployment: EndToEndDeployment) -> bool:
-    """Whether the flag is still on or the pool-bound config is still configured."""
+def _window_open(e2e_deployment: EndToEndDeployment, window: dict[str, Any]) -> bool:
+    """Whether the flag differs from its state before the module or the pool-bound config is still configured."""
     configs = e2e_deployment.get_list_of_maps_variable_value("workspace_templates")
-    return e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG) or any(
+    return e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG) != window["flag_was_on"] or any(
         config["name"] == VSCODE_SMALL_TEMPLATE for config in configs
     )
 
 
 @pytest.fixture(scope="module")
 def remote_access_window(e2e_deployment: EndToEndDeployment) -> Generator[dict[str, Any], None, None]:
-    """The overrides as they were before the module; restored if a case left the window open."""
+    """The flag's state and the overrides before the module, restored if a case left the window open.
+
+    On a deployment that had the flag on, only the pool-bound config's workspaces are the window's
+    to delete before the restoring apply.
+    """
     e2e_deployment.ensure_deployed()
-    snapshot = snapshot_overrides(e2e_deployment, WINDOW_VARIABLES)
-    yield snapshot
-    if _window_open(e2e_deployment):
-        _delete_vscode_workspaces()
-        restore_overrides(e2e_deployment, snapshot)
+    window: dict[str, Any] = {
+        "flag_was_on": e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG),
+        "overrides": snapshot_overrides(e2e_deployment, WINDOW_VARIABLES),
+    }
+    yield window
+    if _window_open(e2e_deployment, window):
+        _delete_workspaces_of((VSCODE_SMALL_TEMPLATE,) if window["flag_was_on"] else VSCODE_TEMPLATES)
+        restore_overrides(e2e_deployment, window["overrides"])
 
 
 @pytest.mark.order(ORDER_REMOTE_ACCESS)
-def test_vscode_config_is_refused_without_the_flag(e2e_deployment: EndToEndDeployment) -> None:
+def test_vscode_config_is_refused_without_the_flag(
+    e2e_deployment: EndToEndDeployment, remote_access_window: dict[str, Any]
+) -> None:
     """`jd config` refuses a workspace_templates config with app vscode while the flag is off, naming it."""
     e2e_deployment.ensure_deployed()
-    if e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG):
+    if remote_access_window["flag_was_on"]:
         pytest.skip(f"the deployment already has {REMOTE_ACCESS_FLAG} on")
 
     previous = e2e_deployment.read_override_value("workspace_templates")
@@ -330,10 +340,9 @@ def test_disable_remote_access_removes_the_vscode_cards(
 ) -> None:
     """Disabling the flag removes the VS Code cards, the strategy and the image output, and closes the sidecar port."""
     e2e_deployment.ensure_deployed()
-    restore = dict(remote_access_window)
-    if restore[REMOTE_ACCESS_FLAG]:
-        restore[REMOTE_ACCESS_FLAG] = False
-    restore_overrides(e2e_deployment, restore)
+    if remote_access_window["flag_was_on"]:
+        pytest.skip(f"the deployment had {REMOTE_ACCESS_FLAG} on before the module; the window keeps it")
+    restore_overrides(e2e_deployment, remote_access_window["overrides"])
 
     for name in VSCODE_TEMPLATES:
         poll(
