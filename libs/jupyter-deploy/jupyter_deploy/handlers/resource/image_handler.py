@@ -61,7 +61,10 @@ class ImageHandler(BaseProjectHandler):
         return built
 
     def _resolve_image_outputs(self, name: str, image_def: JupyterDeployImageDefinitionV1) -> tuple[str, str]:
-        if name not in self._built_images({name: image_def}):
+        # An empty repository output is the template's way of saying the image is behind a flag that is
+        # off; a missing one is a template or deployment problem, which _resolve_output names.
+        output_def = self._output_handler.get_full_project_outputs().get(image_def.repository_output)
+        if isinstance(output_def, StrTemplateOutputDefinition) and output_def.value == "":
             raise ImageNotProvisionedError(name, image_def.enabled_by)
         repository_name = self._resolve_output(image_def.repository_output)
         tag = self._resolve_output(image_def.tag_output)

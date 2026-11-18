@@ -240,6 +240,20 @@ class TestImageHandler(unittest.TestCase):
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    def test_a_missing_repository_output_is_not_reported_as_an_unbuilt_image(
+        self, mock_tf_variables_handler: Mock, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock
+    ) -> None:
+        mock_tf_variables_handler.return_value = Mock()
+        handler = self._handler_with_two_images(mock_tf_outputs_handler, mock_retrieve_manifest, vscode_repository="")
+        outputs = handler._output_handler.get_full_project_outputs.return_value  # type: ignore[attr-defined]
+        del outputs["vscode_ecr_repository_name"]
+
+        with self.assertRaisesRegex(KeyError, "vscode_ecr_repository_name"):
+            handler.get_status("vscode")
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     def test_resolve_name_passes_through_provided_name(
         self, mock_tf_variables_handler: Mock, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock
     ) -> None:
