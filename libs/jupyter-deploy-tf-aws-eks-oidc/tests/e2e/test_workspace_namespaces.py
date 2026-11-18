@@ -271,7 +271,7 @@ def test_plan_time_validation(
         e2e_deployment.update_override_value("workspace_namespaces", mapped["workspace_namespaces"])
 
 
-@pytest.mark.order(ORDER_NAMESPACES + 8)
+@pytest.mark.order(ORDER_NAMESPACES + 9)
 @skip_if_testvars_not_set(NS_REQUIRED_VARS)
 def test_vscode_card_listed_without_remote_access_is_refused(
     e2e_deployment: EndToEndDeployment, mapped: dict[str, Any]
@@ -290,7 +290,7 @@ def test_vscode_card_listed_without_remote_access_is_refused(
         e2e_deployment.update_override_value("workspace_namespaces", mapped["workspace_namespaces"])
 
 
-@pytest.mark.order(ORDER_NAMESPACES + 9)
+@pytest.mark.order(ORDER_NAMESPACES + 10)
 @skip_if_testvars_not_set(NS_REQUIRED_VARS)
 def test_coding_agents_answer_only_in_bedrock_enabled_namespaces(
     e2e_deployment: EndToEndDeployment, mapped: dict[str, Any]
@@ -325,7 +325,7 @@ def test_coding_agents_answer_only_in_bedrock_enabled_namespaces(
             kubectl_delete_workspace(name, namespace=ns)
 
 
-@pytest.mark.order(ORDER_NAMESPACES + 10)
+@pytest.mark.order(ORDER_NAMESPACES + 11)
 @skip_if_testvars_not_set(NS_REQUIRED_VARS)
 def test_web_app_follows_mapping_change(
     e2e_deployment: EndToEndDeployment,

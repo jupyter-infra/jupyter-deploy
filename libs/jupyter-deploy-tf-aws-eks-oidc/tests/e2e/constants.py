@@ -23,7 +23,7 @@ SEEDED_WORKSPACES = ["e2e-jupyterlab-other-public", "e2e-jupyterlab-other-privat
 ORDER_GPU = 10
 # Ordered mutating workspace-namespace cases: the single -> multi migration module
 # first, then test_workspace_namespaces, which applies one mapping for all its cases;
-# together they take the ordinals 20 to 30.
+# together they take the ordinals 20 to 31.
 ORDER_NAMESPACES = 20
 
 GPU_POOL_FLAG = "enable_default_gpu_pool"
