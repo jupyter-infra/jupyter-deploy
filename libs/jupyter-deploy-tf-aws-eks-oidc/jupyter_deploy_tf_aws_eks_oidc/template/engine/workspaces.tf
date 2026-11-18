@@ -673,9 +673,10 @@ resource "helm_release" "workspace_defaults" {
 # diffs chart+values, not in-cluster objects, so the orphaned CR never triggers
 # a planned change and `jd config`/`jd up` report "No changes" forever.
 #
-# Detect: read the live CR each plan. When it's gone, `.object` is null, the
-# trigger value flips, and the null_resource is scheduled for replacement — so
-# `jd config` surfaces the drift.
+# Detect: list the live CR by name each plan. When it's gone the list is empty,
+# the trigger value flips, and the null_resource is scheduled for replacement — so
+# `jd config` surfaces the drift. A single-object kubernetes_resource read cannot do
+# this: on a missing object the provider returns null and the plan fails.
 # Repair: re-apply the CR from the owning release's rendered manifest.
 
 locals {
@@ -686,15 +687,13 @@ locals {
   )
 }
 
-data "kubernetes_resource" "access_strategy" {
+data "kubernetes_resources" "access_strategy" {
   for_each = local.repaired_access_strategies
 
-  api_version = "workspace.jupyter.org/v1alpha1"
-  kind        = "WorkspaceAccessStrategy"
-  metadata {
-    name      = each.value
-    namespace = var.workspace_shared_namespace
-  }
+  api_version    = "workspace.jupyter.org/v1alpha1"
+  kind           = "WorkspaceAccessStrategy"
+  namespace      = var.workspace_shared_namespace
+  field_selector = "metadata.name=${each.value}"
 
   depends_on = [helm_release.workspace_router, kubernetes_namespace_v1.shared]
 }
@@ -704,7 +703,7 @@ resource "null_resource" "repair_access_strategy" {
 
   triggers = {
     # Flips to "missing" when the CR is orphaned → forces replacement → repair runs.
-    present = data.kubernetes_resource.access_strategy[each.key].object == null ? "missing" : "present"
+    present = length(data.kubernetes_resources.access_strategy[each.key].objects) == 0 ? "missing" : "present"
     script = templatefile("${path.module}/local-repair-cr.sh.tftpl", {
       cluster_name      = local.cluster_name
       region            = var.region
@@ -731,15 +730,13 @@ moved {
   to   = null_resource.repair_access_strategy["oauth"]
 }
 
-data "kubernetes_resource" "workspace_template" {
+data "kubernetes_resources" "workspace_template" {
   for_each = toset(local.workspace_templates_placed_keys)
 
-  api_version = "workspace.jupyter.org/v1alpha1"
-  kind        = "WorkspaceTemplate"
-  metadata {
-    name      = split("/", each.key)[1]
-    namespace = split("/", each.key)[0]
-  }
+  api_version    = "workspace.jupyter.org/v1alpha1"
+  kind           = "WorkspaceTemplate"
+  namespace      = split("/", each.key)[0]
+  field_selector = "metadata.name=${split("/", each.key)[1]}"
 
   depends_on = [helm_release.workspace_defaults, kubernetes_namespace_v1.shared, kubernetes_namespace_v1.workspaces]
 }
@@ -748,7 +745,7 @@ resource "null_resource" "repair_workspace_template" {
   for_each = toset(local.workspace_templates_placed_keys)
 
   triggers = {
-    present = data.kubernetes_resource.workspace_template[each.key].object == null ? "missing" : "present"
+    present = length(data.kubernetes_resources.workspace_template[each.key].objects) == 0 ? "missing" : "present"
     script = templatefile("${path.module}/local-repair-cr.sh.tftpl", {
       cluster_name      = local.cluster_name
       region            = var.region
