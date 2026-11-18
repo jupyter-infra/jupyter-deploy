@@ -450,6 +450,14 @@ class TestK8sCoreRunner(unittest.TestCase):
             None,
         )
 
+        with self.assertRaisesRegex(ValueError, "pods of deployment my-deploy .* are being replaced"):
+            self._exec_via_deployment(runner)
+
+    @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
+    def test_exec_pod_fails_when_the_deployment_has_no_pods(self, mock_k8s_core: Mock) -> None:
+        runner = self._runner_with_deployment_pod(mock_k8s_core, ("workspace",))
+        mock_k8s_core.list_pods.return_value = ([], None)
+
         with self.assertRaisesRegex(ValueError, "No pods found for deployment my-deploy"):
             self._exec_via_deployment(runner)
 

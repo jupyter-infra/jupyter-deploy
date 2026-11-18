@@ -191,9 +191,13 @@ class K8sCoreRunner(InstructionRunner):
         if not label_selector:
             raise ValueError(f"Deployment {deployment_name} has no selector labels")
         pods, _ = k8s_core.list_pods(self.core_api, namespace=namespace, label_selector=label_selector)
+        if not pods:
+            raise ValueError(f"No pods found for deployment {deployment_name} in namespace {namespace}")
         live = [pod for pod in pods if not pod.deleting]
         if not live:
-            raise ValueError(f"No pods found for deployment {deployment_name} in namespace {namespace}")
+            raise ValueError(
+                f"The pods of deployment {deployment_name} in namespace {namespace} are being replaced; retry shortly"
+            )
         running = [pod for pod in live if pod.phase == PodPhase.RUNNING]
         return (running or live)[0]
 
