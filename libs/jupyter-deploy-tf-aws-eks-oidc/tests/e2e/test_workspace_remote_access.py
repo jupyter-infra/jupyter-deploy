@@ -125,10 +125,14 @@ def _window_open(e2e_deployment: EndToEndDeployment, window: dict[str, Any]) -> 
 def remote_access_window(e2e_deployment: EndToEndDeployment) -> Generator[dict[str, Any], None, None]:
     """The flag's state and the overrides before the module, restored if a case left the window open.
 
-    On a deployment that had the flag on, only the pool-bound config's workspaces are the window's
-    to delete before the restoring apply.
+    Skips the module when a workspace_namespaces mapping has no default entry, since only that
+    entry offers cards in the namespace the cases use. On a deployment that had the flag on, only
+    the pool-bound config's workspaces are the window's to delete before the restoring apply.
     """
     e2e_deployment.ensure_deployed()
+    namespaces = e2e_deployment.get_list_of_maps_variable_value("workspace_namespaces")
+    if namespaces and not any(entry["name"] == WORKSPACE_NAMESPACE for entry in namespaces):
+        pytest.skip(f"the workspace_namespaces mapping has no {WORKSPACE_NAMESPACE} entry to offer the cards in")
     window: dict[str, Any] = {
         "flag_was_on": e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG),
         "overrides": snapshot_overrides(e2e_deployment, WINDOW_VARIABLES),
@@ -182,8 +186,6 @@ def test_enable_remote_access_offers_the_vscode_cards(
     configs = e2e_deployment.get_list_of_maps_variable_value("workspace_templates")
     pools = e2e_deployment.get_list_of_maps_variable_value("workspace_nodepools")
     namespaces = e2e_deployment.get_list_of_maps_variable_value("workspace_namespaces")
-    if namespaces and not any(entry["name"] == WORKSPACE_NAMESPACE for entry in namespaces):
-        pytest.skip(f"the workspace_namespaces mapping has no {WORKSPACE_NAMESPACE} entry to offer the cards in")
     overrides: dict[str, Any] = {
         REMOTE_ACCESS_FLAG: True,
         "workspace_templates": [*configs, VSCODE_SMALL_TEMPLATE_CONFIG],
