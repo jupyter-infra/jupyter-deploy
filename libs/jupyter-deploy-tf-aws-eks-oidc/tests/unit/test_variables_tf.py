@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import shutil
@@ -10,8 +11,10 @@ from typing import ClassVar
 from jupyter_deploy_tf_aws_eks_oidc.template import TEMPLATE_PATH
 
 VARIABLES_TF = TEMPLATE_PATH / "engine" / "variables.tf"
+REMOTE_ACCESS_TF = TEMPLATE_PATH / "engine" / "workspace_remote_access.tf"
 
 _VARIABLE_BLOCK = re.compile(r'^variable "(?P<name>[^"]+)" \{\n(?P<body>.*?)^\}', re.MULTILINE | re.DOTALL)
+_LOCALS_BLOCK = re.compile(r"^locals \{\n(?P<body>.*?)^\}", re.MULTILINE | re.DOTALL)
 _HEREDOC_FIRST_LINE = re.compile(r"description\s*=\s*<<-EOT\n\s*(?P<line>[^\n]*)\n")
 _TYPE = re.compile(r"^\s*type\s*=\s*(?P<type>\S+)", re.MULTILINE)
 _KEY_LINE = re.compile(r"^\s{6}(?P<key>[a-z_]+)\s+- ", re.MULTILINE)
@@ -88,9 +91,15 @@ def _variable_block(name: str) -> str:
     return match.group(0) + "\n"
 
 
+def _locals_block_defining(path: Path, name: str) -> str:
+    """The `locals` block of a file that defines the given local."""
+    match = next(m for m in _LOCALS_BLOCK.finditer(path.read_text()) if re.search(rf"^  {name}\s*=", m["body"], re.M))
+    return match.group(0) + "\n"
+
+
 def _terraform(cwd: str, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["terraform", *args, "-no-color", "-input=false"],
+        ["terraform", *args, "-no-color"],
         cwd=cwd,
         capture_output=True,
         text=True,
@@ -118,7 +127,7 @@ class TestWorkspaceTemplatesValidation(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.root = tempfile.TemporaryDirectory()
         (Path(cls.root.name) / "variables.tf").write_text(_variable_block("workspace_templates"))
-        init = _terraform(cls.root.name, "init", "-backend=false")
+        init = _terraform(cls.root.name, "init", "-backend=false", "-input=false")
         assert init.returncode == 0, init.stderr
 
     @classmethod
@@ -126,7 +135,9 @@ class TestWorkspaceTemplatesValidation(unittest.TestCase):
         cls.root.cleanup()
 
     def _plan(self, templates: str) -> subprocess.CompletedProcess[str]:
-        return _terraform(self.root.name, "plan", "-refresh=false", f"-var=workspace_templates={templates}")
+        return _terraform(
+            self.root.name, "plan", "-refresh=false", "-input=false", f"-var=workspace_templates={templates}"
+        )
 
     def test_vscode_config_without_idle_minutes_is_accepted(self) -> None:
         result = self._plan('[{name = "vscode-p", app = "vscode", gpus = "1", cpu = "8", memory = "32Gi"}]')
@@ -160,3 +171,62 @@ class TestWorkspaceTemplatesValidation(unittest.TestCase):
                 self.assertIn(
                     '"jupyterlab" and "vscode" are reserved for the built-in cards.', _diagnostic_text(result)
                 )
+
+
+@_SKIP_WITHOUT_TERRAFORM
+class TestRemoteAccessChartFloors(unittest.TestCase):
+    """The chart-version floors remote access needs, compared by terraform on the release core.
+
+    The root module is the two chart-version variable blocks, the locals block that compares
+    them and an output of the result, so a plan needs no provider.
+    """
+
+    root: ClassVar[tempfile.TemporaryDirectory[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.root = tempfile.TemporaryDirectory()
+        (Path(cls.root.name) / "main.tf").write_text(
+            _variable_block("workspace_router_chart_version")
+            + _variable_block("workspace_operator_chart_version")
+            + _locals_block_defining(REMOTE_ACCESS_TF, "remote_access_chart_at_floor")
+            + 'output "at_floor" {\n  value = local.remote_access_chart_at_floor\n}\n'
+        )
+        init = _terraform(cls.root.name, "init", "-backend=false", "-input=false")
+        assert init.returncode == 0, init.stderr
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.root.cleanup()
+
+    def _at_floor(self, router: str, operator: str) -> dict[str, bool]:
+        plan = _terraform(
+            self.root.name,
+            "plan",
+            "-refresh=false",
+            "-input=false",
+            "-out=plan.out",
+            f"-var=workspace_router_chart_version={router}",
+            f"-var=workspace_operator_chart_version={operator}",
+        )
+        self.assertEqual(plan.returncode, 0, plan.stderr)
+        shown = _terraform(self.root.name, "show", "-json", "plan.out")
+        at_floor: dict[str, bool] = json.loads(shown.stdout)["planned_values"]["outputs"]["at_floor"]["value"]
+        return at_floor
+
+    def test_router_floor_is_the_first_chart_with_the_websocket_strategy(self) -> None:
+        for pin, expected in (("0.2.0", False), ("0.2.1", True), ("0.3.2", True)):
+            with self.subTest(pin=pin):
+                self.assertIs(self._at_floor(pin, "0.4.1")["router"], expected)
+
+    def test_operator_floor_is_the_first_chart_with_the_connection_api(self) -> None:
+        for pin, expected in (("0.2.9", False), ("0.3.0", True), ("0.4.1", True)):
+            with self.subTest(pin=pin):
+                self.assertIs(self._at_floor("0.3.2", pin)["operator"], expected)
+
+    def test_release_core_compares_numerically_and_keeps_a_prerelease_suffix_out(self) -> None:
+        # Compared as strings, "0.10.0" sorts below "0.2.1".
+        self.assertEqual(self._at_floor("0.10.0", "1.0.0-rc1"), {"router": True, "operator": True})
+
+    def test_a_pin_that_is_not_a_version_counts_as_below_the_floor(self) -> None:
+        self.assertEqual(self._at_floor("latest", "main"), {"router": False, "operator": False})
