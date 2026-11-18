@@ -678,11 +678,21 @@ resource "helm_release" "workspace_defaults" {
 # `jd config` surfaces the drift.
 # Repair: re-apply the CR from the owning release's rendered manifest.
 
-data "kubernetes_resource" "oauth_access_strategy" {
+locals {
+  # The access strategies the router release owns, by the key the repair resources use.
+  repaired_access_strategies = merge(
+    { oauth = local.access_strategy_name },
+    var.enable_remote_access ? { websocket = local.remote_access_strategy_name } : {},
+  )
+}
+
+data "kubernetes_resource" "access_strategy" {
+  for_each = local.repaired_access_strategies
+
   api_version = "workspace.jupyter.org/v1alpha1"
   kind        = "WorkspaceAccessStrategy"
   metadata {
-    name      = local.access_strategy_name
+    name      = each.value
     namespace = var.workspace_shared_namespace
   }
 
@@ -690,16 +700,18 @@ data "kubernetes_resource" "oauth_access_strategy" {
 }
 
 resource "null_resource" "repair_access_strategy" {
+  for_each = local.repaired_access_strategies
+
   triggers = {
     # Flips to "missing" when the CR is orphaned → forces replacement → repair runs.
-    present = data.kubernetes_resource.oauth_access_strategy.object == null ? "missing" : "present"
+    present = data.kubernetes_resource.access_strategy[each.key].object == null ? "missing" : "present"
     script = templatefile("${path.module}/local-repair-cr.sh.tftpl", {
       cluster_name      = local.cluster_name
       region            = var.region
       release_name      = "jupyter-k8s-aws-oidc"
       release_namespace = var.workspace_router_namespace
       cr_kind           = "WorkspaceAccessStrategy"
-      cr_name           = local.access_strategy_name
+      cr_name           = each.value
       cr_namespace      = var.workspace_shared_namespace
     })
   }
@@ -711,6 +723,12 @@ resource "null_resource" "repair_access_strategy" {
   }
 
   depends_on = [helm_release.workspace_router, kubernetes_namespace_v1.shared]
+}
+
+# Deployments from before the map hold the OAuth repair at the unkeyed address.
+moved {
+  from = null_resource.repair_access_strategy
+  to   = null_resource.repair_access_strategy["oauth"]
 }
 
 data "kubernetes_resource" "workspace_template" {

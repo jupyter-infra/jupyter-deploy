@@ -1,7 +1,7 @@
-# Remote access (jupyter-k8s#509): the workspace side of SSH over the HTTPS ingress, the
-# VS Code card values that workspaces.tf places and the repair of the WebSocket access
-# strategy an operator upgrade can orphan. helm.tf turns on the strategy, the token
-# signing and its verification.
+# Remote access (jupyter-k8s#509): the workspace side of SSH over the HTTPS ingress and
+# the VS Code card values that workspaces.tf places. helm.tf turns on the WebSocket access
+# strategy, the token signing and its verification; workspaces.tf repairs the strategy
+# when an operator upgrade orphans it.
 locals {
   # One build of jupyter-infra/workspace-websocket-proxy publishes the sidecar image and
   # the SSH server image under the same tag. The sidecar is pinned by that tag, the only
@@ -72,44 +72,4 @@ locals {
     cpu          = local.gpu_template_builtin.cpu
     memory       = local.gpu_template_builtin.memory
   }
-}
-
-# Orphan detect + repair for the WebSocket strategy, as workspaces.tf does for the
-# OAuth one: an operator release replacement cascade-deletes it with the CRDs (#270).
-data "kubernetes_resource" "websocket_access_strategy" {
-  count = var.enable_remote_access ? 1 : 0
-
-  api_version = "workspace.jupyter.org/v1alpha1"
-  kind        = "WorkspaceAccessStrategy"
-  metadata {
-    name      = local.remote_access_strategy_name
-    namespace = var.workspace_shared_namespace
-  }
-
-  depends_on = [helm_release.workspace_router, kubernetes_namespace_v1.shared]
-}
-
-resource "null_resource" "repair_websocket_access_strategy" {
-  count = var.enable_remote_access ? 1 : 0
-
-  triggers = {
-    present = data.kubernetes_resource.websocket_access_strategy[0].object == null ? "missing" : "present"
-    script = templatefile("${path.module}/local-repair-cr.sh.tftpl", {
-      cluster_name      = local.cluster_name
-      region            = var.region
-      release_name      = "jupyter-k8s-aws-oidc"
-      release_namespace = var.workspace_router_namespace
-      cr_kind           = "WorkspaceAccessStrategy"
-      cr_name           = local.remote_access_strategy_name
-      cr_namespace      = var.workspace_shared_namespace
-    })
-  }
-
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    quiet       = true
-    command     = self.triggers.script
-  }
-
-  depends_on = [helm_release.workspace_router, kubernetes_namespace_v1.shared]
 }
