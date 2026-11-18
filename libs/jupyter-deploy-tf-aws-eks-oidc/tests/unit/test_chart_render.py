@@ -468,3 +468,31 @@ class TestWorkspaceDefaultsRemoteAccessRender(unittest.TestCase):
                 "jupyter-k8s-system": [{"port": 8888, "protocol": "TCP"}],
             },
         )
+
+
+@_SKIP_WITHOUT_HELM
+class TestWorkspaceDefaultsNetworkPolicyGuards(unittest.TestCase):
+    """An ingress rule without ports admits every port, so the chart refuses an empty or legacy ports value."""
+
+    def _render_refused_with(self, set_value: str, message: str) -> None:
+        with self.assertRaises(AssertionError) as refused:
+            _helm_template(
+                "charts/workspace-defaults",
+                "workspace-defaults",
+                "values_workspace_defaults_default.yaml",
+                set_values=[set_value],
+            )
+        self.assertIn(message, str(refused.exception))
+
+    def test_empty_router_ports_refused(self) -> None:
+        self._render_refused_with(
+            "networkPolicy.routerPorts=null", "networkPolicy.routerPorts must list at least one port"
+        )
+
+    def test_empty_operator_ports_refused(self) -> None:
+        self._render_refused_with(
+            "networkPolicy.operatorPorts=null", "networkPolicy.operatorPorts must list at least one port"
+        )
+
+    def test_legacy_single_port_key_refused(self) -> None:
+        self._render_refused_with("networkPolicy.port=8888", "networkPolicy.port was replaced")

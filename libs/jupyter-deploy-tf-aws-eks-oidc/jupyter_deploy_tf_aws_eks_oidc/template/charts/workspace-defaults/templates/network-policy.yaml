@@ -1,4 +1,14 @@
 {{- if .Values.networkPolicy.create }}
+{{- /* A rule without ports admits every port, so an empty list or the old single-port key is refused. */}}
+{{- if hasKey .Values.networkPolicy "port" }}
+{{- fail "networkPolicy.port was replaced by networkPolicy.routerPorts and networkPolicy.operatorPorts" }}
+{{- end }}
+{{- if not .Values.networkPolicy.routerPorts }}
+{{- fail "networkPolicy.routerPorts must list at least one port" }}
+{{- end }}
+{{- if not .Values.networkPolicy.operatorPorts }}
+{{- fail "networkPolicy.operatorPorts must list at least one port" }}
+{{- end }}
 {{- range $ns := .Values.networkPolicy.workspaceNamespaces }}
 ---
 apiVersion: networking.k8s.io/v1
