@@ -454,25 +454,34 @@ class TestWorkspaceDefaultsRemoteAccessRender(unittest.TestCase):
         self.assertNotIn("defaultIdleShutdown", self.vscode["spec"])
         self.assertNotIn("idleShutdownOverrides", self.vscode["spec"])
 
-    def test_network_policy_admits_the_sidecar_port_from_the_router_only(self) -> None:
+    def test_network_policy_admits_the_sidecar_port_from_the_traefik_pods_only(self) -> None:
         policies = _docs_of_kind(self.rendered, "NetworkPolicy")
         self.assertEqual([p["metadata"]["namespace"] for p in policies], ["default"])
-        ports_by_source = {
-            rule["from"][0]["namespaceSelector"]["matchLabels"]["kubernetes.io/metadata.name"]: rule["ports"]
-            for rule in policies[0]["spec"]["ingress"]
-        }
         self.assertEqual(
-            ports_by_source,
-            {
-                "jupyter-k8s-router": [{"port": 8888, "protocol": "TCP"}, {"port": 8080, "protocol": "TCP"}],
-                "jupyter-k8s-system": [{"port": 8888, "protocol": "TCP"}],
-            },
+            policies[0]["spec"]["ingress"],
+            [
+                {
+                    "from": [
+                        {
+                            "namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "jupyter-k8s-router"}},
+                            "podSelector": {"matchLabels": {"app": "traefik", "component": "router"}},
+                        }
+                    ],
+                    "ports": [{"port": 8888, "protocol": "TCP"}, {"port": 8080, "protocol": "TCP"}],
+                },
+                {
+                    "from": [
+                        {"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "jupyter-k8s-system"}}}
+                    ],
+                    "ports": [{"port": 8888, "protocol": "TCP"}],
+                },
+            ],
         )
 
 
 @_SKIP_WITHOUT_HELM
 class TestWorkspaceDefaultsNetworkPolicyGuards(unittest.TestCase):
-    """An ingress rule without ports admits every port, so the chart refuses an empty or legacy ports value."""
+    """A rule without ports admits every port and an empty podSelector every pod, so the chart refuses both."""
 
     def _render_refused_with(self, set_value: str, message: str) -> None:
         with self.assertRaises(AssertionError) as refused:
@@ -496,3 +505,8 @@ class TestWorkspaceDefaultsNetworkPolicyGuards(unittest.TestCase):
 
     def test_legacy_single_port_key_refused(self) -> None:
         self._render_refused_with("networkPolicy.port=8888", "networkPolicy.port was replaced")
+
+    def test_empty_router_pod_labels_refused(self) -> None:
+        self._render_refused_with(
+            "networkPolicy.routerPodLabels=null", "networkPolicy.routerPodLabels must name the router pods"
+        )

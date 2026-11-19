@@ -26,18 +26,15 @@ from pytest_jupyter_deploy.kubernetes.namespace import temporary_namespace
 from pytest_jupyter_deploy.kubernetes.services import get_service_port
 from pytest_jupyter_deploy.workspaces.network_probe import probe_service, probe_service_allowed
 
-pytestmark = pytest.mark.usefixtures("kubernetes_cluster_login")
+from .constants import ROUTER_NAMESPACE, ROUTER_POD_LABELS
 
-# Router namespace the aws-oidc chart deploys into (must match defaults-all.tfvars).
-ROUTER_NAMESPACE = "jupyter-k8s-router"
+pytestmark = pytest.mark.usefixtures("kubernetes_cluster_login")
 
 # Per-component throwaway namespace prefix for the cross-namespace deny cases. Each
 # parametrized case gets its own namespace name so a still-terminating namespace
 # from a prior case (deleted with --wait=false) does not collide with the next.
 CROSS_NAMESPACE_PREFIX = "e2e-routing-netpol"
 
-# Pod labels the policies key on. Traefik is the only allowed ingress source.
-TRAEFIK_LABELS = {"app": "traefik", "component": "router"}
 
 # Routing components, by their Service name in the aws-oidc chart.
 DEX = "dex"
@@ -70,7 +67,7 @@ def test_traefik_ingress_allowed(component: str) -> None:
         port,
         from_namespace=ROUTER_NAMESPACE,
         scheme=scheme,
-        pod_labels=TRAEFIK_LABELS,
+        pod_labels=ROUTER_POD_LABELS,
     )
     assert allowed, f"traefik in '{ROUTER_NAMESPACE}' should be allowed to reach {component}:{port}"
 
@@ -104,7 +101,7 @@ def test_cross_namespace_ingress_denied(component: str) -> None:
             port,
             from_namespace=cross_namespace,
             scheme=scheme,
-            pod_labels=TRAEFIK_LABELS,
+            pod_labels=ROUTER_POD_LABELS,
         )
         assert not allowed, f"namespace '{cross_namespace}' should be denied ingress to {component}:{port}"
 

@@ -2,9 +2,12 @@ locals {
   access_strategy_name    = "oauth-access-strategy"
   workspace_storage_class = "ebs-sc"
   # Ports the workspace-ingress NetworkPolicy admits: the application port from the
-  # router and operator namespaces, plus the remote access sidecar's from the router.
+  # Traefik pods and the operator namespace, plus the remote access sidecar's from Traefik.
   workspace_ingress_router_ports   = concat([8888], var.enable_remote_access ? [local.remote_access_sidecar_port] : [])
   workspace_ingress_operator_ports = [8888]
+  # Labels the aws-oidc chart sets on its Traefik Deployment; the router namespace's other
+  # components (web app, Authmiddleware, oauth2-proxy, Dex) never reach workspace pods.
+  workspace_ingress_router_pod_labels = { app = "traefik", component = "router" }
 }
 
 # ── Workspace namespaces ──────────────────────────────────────────────────────
@@ -554,8 +557,9 @@ resource "helm_release" "workspace_defaults" {
     yamlencode({
       workspaceTemplates = local.workspace_templates_placed
       networkPolicy = {
-        routerPorts   = local.workspace_ingress_router_ports
-        operatorPorts = local.workspace_ingress_operator_ports
+        routerPorts     = local.workspace_ingress_router_ports
+        operatorPorts   = local.workspace_ingress_operator_ports
+        routerPodLabels = local.workspace_ingress_router_pod_labels
       }
     })
   ]

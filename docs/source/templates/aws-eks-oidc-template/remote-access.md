@@ -38,7 +38,7 @@ Bump `workspace_app_vscode_image_build` to rebuild the image, as
 
 No SSH key is created or distributed. The SSH server binds the pod's loopback interface, so
 nothing outside the pod reaches it, and the workspace-ingress NetworkPolicy admits the sidecar
-port from the router namespace only. The operator namespace keeps its access to the application
+port from the Traefik router pods only. The operator namespace keeps its access to the application
 port, which it probes for the idle detection of JupyterLab workspaces. The host key persists in
 the workspace's home volume, so a restart keeps its fingerprint.
 

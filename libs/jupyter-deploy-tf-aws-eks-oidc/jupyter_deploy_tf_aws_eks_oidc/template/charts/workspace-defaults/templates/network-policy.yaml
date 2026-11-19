@@ -9,6 +9,10 @@
 {{- if not .Values.networkPolicy.operatorPorts }}
 {{- fail "networkPolicy.operatorPorts must list at least one port" }}
 {{- end }}
+{{- /* An empty podSelector admits every pod of the namespace, so an empty label map is refused. */}}
+{{- if not .Values.networkPolicy.routerPodLabels }}
+{{- fail "networkPolicy.routerPodLabels must name the router pods" }}
+{{- end }}
 {{- range $ns := .Values.networkPolicy.workspaceNamespaces }}
 ---
 apiVersion: networking.k8s.io/v1
@@ -26,11 +30,15 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    # Traefik router proxying authenticated workspace traffic.
+    # The Traefik pods proxying authenticated workspace traffic; the namespace alone would
+    # admit every router component.
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ $.Values.networkPolicy.routerNamespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $.Values.networkPolicy.routerPodLabels | nindent 14 }}
       ports:
         {{- range $.Values.networkPolicy.routerPorts }}
         - port: {{ . }}

@@ -87,6 +87,11 @@ networkPolicy:
     - default
   # -- Namespace of the Traefik router that proxies workspace traffic.
   routerNamespace: jupyter-k8s-router
+  # -- Labels of the Traefik pods, the only pods of the router namespace the policy admits.
+  # The aws-oidc chart sets them on its Traefik Deployment.
+  routerPodLabels:
+    app: traefik
+    component: router
   # -- Namespace of the operator that probes workspaces for idle detection.
   operatorNamespace: jupyter-k8s-system
   # -- Workspace pod ports the router may reach: the application port, plus the port

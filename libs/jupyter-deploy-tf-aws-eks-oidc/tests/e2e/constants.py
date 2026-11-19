@@ -53,9 +53,12 @@ NS_ONLY_DEFAULT_TEAM = "e2e-ns-only-default"
 NS_REQUIRED_VARS = ["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"]
 NS_RUNNING_TIMEOUT_S = 600
 # Namespaces of the router chart and of the operator (workspace_router_namespace and
-# workspace_operator_namespace presets): the two the workspace-ingress NetworkPolicy admits.
+# workspace_operator_namespace presets), the two sources of the workspace-ingress NetworkPolicy:
+# the Traefik pods of the first, any pod of the second.
 ROUTER_NAMESPACE = "jupyter-k8s-router"
 OPERATOR_NAMESPACE = "jupyter-k8s-system"
+# Labels of the aws-oidc chart's Traefik pods, the only router-namespace pods the policy admits.
+ROUTER_POD_LABELS = {"app": "traefik", "component": "router"}
 WORKSPACE_STOP_PATCH = '{"spec":{"desiredStatus":"Stopped"}}'
 WORKSPACE_START_PATCH = '{"spec":{"desiredStatus":"Running"}}'
 

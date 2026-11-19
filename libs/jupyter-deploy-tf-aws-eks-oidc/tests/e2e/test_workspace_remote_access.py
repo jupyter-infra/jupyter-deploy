@@ -37,6 +37,7 @@ from .constants import (
     ORDER_REMOTE_ACCESS,
     REMOTE_ACCESS_FLAG,
     ROUTER_NAMESPACE,
+    ROUTER_POD_LABELS,
     SIDECAR_CONTAINER,
     SIDECAR_PORT,
     VSCODE_GPU_TEMPLATE_NAME,
@@ -280,8 +281,11 @@ def test_vscode_workspace_runs_with_the_sidecar_and_hands_out_an_ssh_connection(
         assert 400 <= without_token < 500, f"the route answered {without_token} to an upgrade without a token"
 
         host = workspace_service_host(VSCODE_WORKSPACE, WORKSPACE_NAMESPACE)
-        assert probe_service_allowed(host, SIDECAR_PORT, from_namespace=ROUTER_NAMESPACE), (
-            f"the router namespace should reach the sidecar port {SIDECAR_PORT}"
+        assert probe_service_allowed(
+            host, SIDECAR_PORT, from_namespace=ROUTER_NAMESPACE, pod_labels=ROUTER_POD_LABELS
+        ), f"the Traefik pods should reach the sidecar port {SIDECAR_PORT}"
+        assert not probe_service(host, SIDECAR_PORT, from_namespace=ROUTER_NAMESPACE), (
+            f"a router-namespace pod without the Traefik labels should be denied the sidecar port {SIDECAR_PORT}"
         )
         for denied in (OPERATOR_NAMESPACE, WORKSPACE_NAMESPACE):
             assert not probe_service(host, SIDECAR_PORT, from_namespace=denied), (

@@ -15,11 +15,16 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    # Traefik router proxying authenticated workspace traffic.
+    # The Traefik pods proxying authenticated workspace traffic; the namespace alone would
+    # admit every router component.
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: jupyter-k8s-router
+          podSelector:
+            matchLabels:
+              app: traefik
+              component: router
       ports:
         - port: 8888
           protocol: TCP
