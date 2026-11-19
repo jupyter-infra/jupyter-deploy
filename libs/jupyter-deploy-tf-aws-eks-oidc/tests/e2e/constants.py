@@ -69,6 +69,8 @@ REMOTE_ACCESS_FLAG = "enable_remote_access"
 VSCODE_TEMPLATE_NAME = "vscode"
 # The manifest's entry for the VS Code image, the name `jd image` commands take.
 VSCODE_IMAGE_NAME = "vscode"
+# The manifest's entry for the ECR copy of the sidecar image.
+WS_PROXY_IMAGE_NAME = "ws-proxy"
 # The VS Code counterpart of the built-in GPU card, offered when both flags are on.
 VSCODE_GPU_TEMPLATE_NAME = "vscode-gpu"
 VSCODE_WORKSPACE = "e2e-vscode-workspace"

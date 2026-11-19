@@ -50,6 +50,7 @@ from .constants import (
     WORKSPACE_APP_PORT,
     WORKSPACE_NAMESPACE,
     WORKSPACES_DIR,
+    WS_PROXY_IMAGE_NAME,
 )
 from .overrides import pools_offering, restore_overrides, snapshot_overrides
 
@@ -87,8 +88,8 @@ def _ingress_policy_ports(namespace: str) -> dict[str, set[int]]:
     }
 
 
-def _vscode_image_uri(e2e_deployment: EndToEndDeployment) -> str:
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "show", "--output", "vscode_image_uri", "--text"])
+def _image_uri(e2e_deployment: EndToEndDeployment, output_name: str) -> str:
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "show", "--output", output_name, "--text"])
     return result.stdout.strip()
 
 
@@ -208,8 +209,10 @@ def test_enable_remote_access_offers_the_vscode_cards(
         ]
     e2e_deployment.ensure_deployed_with_overrides(overrides)
 
-    image_uri = _vscode_image_uri(e2e_deployment)
+    image_uri = _image_uri(e2e_deployment, "vscode_image_uri")
     assert ".dkr.ecr." in image_uri, f"vscode_image_uri is not an ECR image: {image_uri!r}"
+    sidecar_uri = _image_uri(e2e_deployment, "ws_proxy_image_uri")
+    assert ".dkr.ecr." in sidecar_uri, f"ws_proxy_image_uri is not an ECR image: {sidecar_uri!r}"
     templates = {name: _workspace_template(name, WORKSPACE_NAMESPACE) for name in VSCODE_TEMPLATES}
     for template in templates.values():
         assert template["metadata"]["labels"]["workspace.jupyter.org/default-template"] == "false"
@@ -253,8 +256,11 @@ def test_vscode_workspace_runs_with_the_sidecar_and_hands_out_an_ssh_connection(
         pod = kubectl_get_workspace_pod(VSCODE_WORKSPACE, WORKSPACE_NAMESPACE)
         ready = {status["name"]: status["ready"] for status in pod["status"].get("containerStatuses", [])}
         assert ready.get(SIDECAR_CONTAINER) is True, f"{SIDECAR_CONTAINER} missing or not ready: {ready}"
-        image = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "status", "--name", VSCODE_IMAGE_NAME])
-        assert "Available" in image.stdout, f"jd image status does not see the VS Code image:\n{image.stdout}"
+        images = {container["name"]: container["image"] for container in pod["spec"]["containers"]}
+        assert images[SIDECAR_CONTAINER] == _image_uri(e2e_deployment, "ws_proxy_image_uri"), images
+        for name in (VSCODE_IMAGE_NAME, WS_PROXY_IMAGE_NAME):
+            image = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "status", "--name", name])
+            assert "Available" in image.stdout, f"jd image status does not see the {name} image:\n{image.stdout}"
 
         e2e_deployment.cli.wait_for_workspace_pod_exec_ready(VSCODE_WORKSPACE, scope=WORKSPACE_NAMESPACE, timeout_s=60)
         for tool in IMAGE_TOOLS:
@@ -353,11 +359,12 @@ def test_disable_remote_access_removes_the_vscode_cards(
         timeout_s=REMOVAL_TIMEOUT_S,
         msg=f"{WEBSOCKET_STRATEGY} still present after disabling {REMOTE_ACCESS_FLAG}",
     )
-    assert _vscode_image_uri(e2e_deployment) == ""
-    unbuilt = e2e_deployment.cli.run_command_expecting_failure(
-        ["jupyter-deploy", "image", "status", "--name", VSCODE_IMAGE_NAME]
-    )
-    assert "not built" in unbuilt and REMOTE_ACCESS_FLAG in unbuilt, unbuilt
+    for output_name, name in (("vscode_image_uri", VSCODE_IMAGE_NAME), ("ws_proxy_image_uri", WS_PROXY_IMAGE_NAME)):
+        assert _image_uri(e2e_deployment, output_name) == ""
+        unbuilt = e2e_deployment.cli.run_command_expecting_failure(
+            ["jupyter-deploy", "image", "status", "--name", name]
+        )
+        assert "not built" in unbuilt and REMOTE_ACCESS_FLAG in unbuilt, unbuilt
     assert _ingress_policy_ports(WORKSPACE_NAMESPACE) == {
         ROUTER_NAMESPACE: {WORKSPACE_APP_PORT},
         OPERATOR_NAMESPACE: {WORKSPACE_APP_PORT},

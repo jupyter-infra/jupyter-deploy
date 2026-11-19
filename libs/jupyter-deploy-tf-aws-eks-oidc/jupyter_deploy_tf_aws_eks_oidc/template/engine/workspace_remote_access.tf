@@ -3,13 +3,17 @@
 # strategy, the token signing and its verification; workspaces.tf repairs the strategy
 # when an operator upgrade orphans it.
 locals {
-  # One build of jupyter-infra/workspace-websocket-proxy publishes the sidecar image and
-  # the SSH server image under the same tag. The sidecar is pinned by that tag, the only
-  # form the chart takes; the SSH server by the digest of the tag's image index, so a
-  # re-pushed tag cannot change what a rebuild of the VS Code image ships.
-  remote_access_release       = "v0.1.0-rc.2"
+  # One build of jupyter-infra/workspace-websocket-proxy (v0.1.0-rc.2) publishes the sidecar
+  # image and the SSH server image. Both are pinned by the digest of the tag's image index:
+  # the SSH server is copied into the VS Code image, the sidecar into its own ECR repository
+  # (applications.tf), so a re-pushed tag changes nothing a workspace pod runs.
+  remote_access_proxy_image   = "ghcr.io/jupyter-infra/workspace-websocket-proxy@sha256:ba0ce13cb958cbc63cb25e2ea9fafb805c76cb0daecd24fece07bea08ee5feda"
   remote_access_server_image  = "ghcr.io/jupyter-infra/remote-access-server@sha256:2041e8de768bf925cd4d5962fb1cdccbbb1db1cb457b2e522b279389c14337c7"
   remote_access_strategy_name = "websocket-access-strategy"
+  # The sidecar copy's address, split the way the chart's three image values take it.
+  remote_access_proxy_registry   = try(split("/", module.app_ws_proxy[0].repository_url)[0], "")
+  remote_access_proxy_repository = try(module.app_ws_proxy[0].repository_name, "")
+  remote_access_proxy_tag        = try(module.app_ws_proxy[0].image_tag, "")
 
   # The sidecar's listen port, accessStrategy.webSocket.port in the aws-oidc chart.
   remote_access_sidecar_port = 8080

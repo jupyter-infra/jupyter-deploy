@@ -18,7 +18,8 @@ overrides:
   enable_remote_access: true
 ```
 
-The first apply builds the VS Code image, a few minutes in AWS CodeBuild, and restarts the
+The first apply builds the VS Code image and copies the `ws-proxy` sidecar image from its
+published digest into the deployment's ECR, a few minutes in AWS CodeBuild, and restarts the
 operator and Authmiddleware once; running workspaces keep running.
 Bump `workspace_app_vscode_image_build` to rebuild the image, as
 `workspace_app_jupyterlab_image_build` does for JupyterLab.
@@ -68,9 +69,10 @@ A VS Code workspace pod holds two containers, `workspace` and the `ws-proxy` sid
 logs`, `jd server exec` and `jd server connect` act on `workspace` and print the container they
 picked; pass `--service ws-proxy` for the sidecar's logs.
 
-`jd image list` shows the VS Code image beside the JupyterLab one. `jd image status --name vscode`
-and `jd image vulnerabilities --name vscode` report on it; with the flag off they say the image is
-not built. With two images built, the `jd image` commands need `--name`.
+`jd image list` shows the VS Code image and the `ws-proxy` sidecar copy beside the JupyterLab
+one. `jd image status --name vscode` and `jd image vulnerabilities --name vscode` report on the
+VS Code image, `--name ws-proxy` on the sidecar copy; with the flag off they say the image is not
+built. With more than one image built, the `jd image` commands need `--name`.
 
 ## Limits
 

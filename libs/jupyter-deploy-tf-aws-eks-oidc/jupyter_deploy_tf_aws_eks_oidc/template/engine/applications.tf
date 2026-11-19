@@ -65,3 +65,29 @@ module "app_vscode" {
 
   depends_on = [module.eks_cluster]
 }
+
+# The copy of the ws-proxy sidecar (workspace_remote_access.tf) that VS Code workspace pods
+# run beside the workspace container: a one-line Dockerfile on the pinned GHCR digest, so the
+# pods pull it from the deployment's ECR and a re-pushed upstream tag changes nothing.
+module "app_ws_proxy" {
+  count  = var.enable_remote_access ? 1 : 0
+  source = "./modules/application"
+
+  name                 = "ws-proxy"
+  resource_name_prefix = local.resource_name_prefix
+  source_dir           = "${path.module}/../applications/ws-proxy"
+  image_name           = var.workspace_app_ws_proxy_image_name
+  image_build          = var.workspace_app_ws_proxy_image_build
+  build_args = {
+    WS_PROXY_IMAGE = local.remote_access_proxy_image
+  }
+  build_bucket_name = module.build_artifacts_bucket.bucket_name
+  build_bucket_arn  = module.build_artifacts_bucket.bucket_arn
+  region            = var.region
+  combined_tags     = local.combined_tags
+
+  build_log_group_name     = "/jupyter-deploy/${random_id.postfix.hex}/image-builds/ws-proxy"
+  build_log_retention_days = var.component_log_retention_days
+
+  depends_on = [module.eks_cluster]
+}

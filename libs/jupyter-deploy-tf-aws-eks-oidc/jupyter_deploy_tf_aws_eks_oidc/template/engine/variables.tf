@@ -1171,6 +1171,32 @@ variable "workspace_app_vscode_image_build" {
   type        = string
 }
 
+variable "workspace_app_ws_proxy_image_name" {
+  description = <<-EOT
+    The ECR repository name for the copy of the ws-proxy sidecar image.
+
+    VS Code workspace pods run the sidecar beside the workspace container.
+    Changing this value creates a new ECR repository. The default,
+    'ws-proxy-v<template version>', follows each template release like the
+    workspace image names. Used when enable_remote_access is true.
+
+    Example: ws-proxy-v0.4.3
+  EOT
+  type        = string
+}
+
+variable "workspace_app_ws_proxy_image_build" {
+  description = <<-EOT
+    The build tag for the copy of the ws-proxy sidecar image.
+
+    Increment this to copy the image again under a new tag; the copy is also
+    refreshed when the template moves the sidecar digest it pins.
+
+    Example: v1
+  EOT
+  type        = string
+}
+
 variable "workspace_bedrock_enabled" {
   description = <<-EOT
     Whether workspaces get AWS credentials to call Amazon Bedrock.

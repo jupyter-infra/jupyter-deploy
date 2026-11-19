@@ -222,6 +222,8 @@ The template provides two variable presets:
 | enable_remote_access | `bool` | `false` | Build the VS Code image and offer VS Code cards whose workspaces users open in VS Code, Cursor or Kiro over SSH with the `kubectl workspace` plugin |
 | workspace_app_vscode_image_name | `string` | See preset | ECR repository name for the VS Code image |
 | workspace_app_vscode_image_build | `string` | `v1` | Build tag (increment to trigger rebuild) |
+| workspace_app_ws_proxy_image_name | `string` | See preset | ECR repository name for the copy of the ws-proxy sidecar image |
+| workspace_app_ws_proxy_image_build | `string` | `v1` | Build tag of the sidecar copy (increment to copy again) |
 | workspace_bedrock_enabled | `bool` | `true` | Give workspaces Bedrock credentials for Claude Code and Codex; a `workspace_namespaces` entry opts out with `bedrock = "false"` |
 | workspace_bedrock_inference_scope | `string` | `geo` | Inference profiles workspaces use: `geo` (requests stay in the region's geography) or `global` |
 | workspace_bedrock_model_patterns | `list(string)` | `["anthropic.claude-*", "openai.gpt-*"]` | Bedrock model IDs workspaces may invoke (IAM wildcards) |
@@ -252,6 +254,7 @@ The template provides two variable presets:
 | `secret_arn` | ARN of the Secrets Manager secret storing the OAuth app client secret |
 | `jupyterlab_image_uri` | ECR image URI for the JupyterLab workspace image |
 | `vscode_image_uri` | ECR image URI for the VS Code workspace image; empty unless `enable_remote_access` is true |
+| `ws_proxy_image_uri` | ECR image URI of the ws-proxy sidecar copy run by VS Code workspace pods; empty unless `enable_remote_access` is true |
 | `kubeconfig_path` | Path to the local kubeconfig file for this cluster |
 | `workspace_bedrock_roles` | JSON-encoded map of workspace namespace to the IAM role granting its workspaces Bedrock |
 | `acm_certificate_arn` | ARN of the ACM certificate for the deployment domain |

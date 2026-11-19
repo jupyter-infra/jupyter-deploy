@@ -277,11 +277,19 @@ resource "helm_release" "workspace_router" {
         name  = "authmiddleware.enableBearerAuth"
         value = "true"
       },
-      # Chart 0.3.2's default sidecar tag was never published to GHCR; drop this with the
-      # chart bump to a release that defaults to a published tag.
+      # The sidecar image is the deployment's ECR copy (applications.tf), not the chart's
+      # GHCR default; the chart joins the three values as repository/imageName:imageTag.
+      {
+        name  = "accessStrategy.webSocket.image.repository"
+        value = local.remote_access_proxy_registry
+      },
+      {
+        name  = "accessStrategy.webSocket.image.imageName"
+        value = local.remote_access_proxy_repository
+      },
       {
         name  = "accessStrategy.webSocket.image.imageTag"
-        value = local.remote_access_release
+        value = local.remote_access_proxy_tag
       },
     ] : [],
     # Workspace namespaces the web app offers: the default one, plus the rest of
