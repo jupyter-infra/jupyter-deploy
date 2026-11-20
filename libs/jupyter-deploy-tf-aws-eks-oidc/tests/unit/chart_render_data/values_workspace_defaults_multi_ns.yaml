@@ -143,6 +143,9 @@ workspaceTemplates:
         responseBodyPath: last_activity
         format: RFC3339
 networkPolicy:
+  routerPodLabels:
+    app: traefik
+    component: router
   workspaceNamespaces:
     - team-a
     - team-b

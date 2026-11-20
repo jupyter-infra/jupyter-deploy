@@ -90,6 +90,9 @@ workspaceTemplates:
       failureThreshold: 30
     idleShutdown: null
 networkPolicy:
+  routerPodLabels:
+    app: traefik
+    component: router
   routerPorts:
     - 8888
     - 8080

@@ -9,8 +9,8 @@
 {{- if not .Values.networkPolicy.operatorPorts }}
 {{- fail "networkPolicy.operatorPorts must list at least one port" }}
 {{- end }}
-{{- /* An empty podSelector admits every pod of the namespace, so an empty label map is refused. */}}
-{{- if not .Values.networkPolicy.routerPodLabels }}
+{{- /* An empty podSelector admits every pod of the namespace, so a missing, empty or non-map value is refused. */}}
+{{- if or (not .Values.networkPolicy.routerPodLabels) (not (kindIs "map" .Values.networkPolicy.routerPodLabels)) }}
 {{- fail "networkPolicy.routerPodLabels must name the router pods" }}
 {{- end }}
 {{- range $ns := .Values.networkPolicy.workspaceNamespaces }}

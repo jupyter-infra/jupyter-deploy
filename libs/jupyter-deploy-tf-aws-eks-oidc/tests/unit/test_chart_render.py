@@ -515,3 +515,8 @@ class TestWorkspaceDefaultsNetworkPolicyGuards(unittest.TestCase):
         self._render_refused_with(
             "networkPolicy.routerPodLabels=null", "networkPolicy.routerPodLabels must name the router pods"
         )
+
+    def test_non_map_router_pod_labels_refused(self) -> None:
+        self._render_refused_with(
+            "networkPolicy.routerPodLabels=traefik", "networkPolicy.routerPodLabels must name the router pods"
+        )
