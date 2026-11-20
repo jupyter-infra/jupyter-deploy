@@ -10,8 +10,6 @@ locals {
   remote_access_proxy_image   = "ghcr.io/jupyter-infra/workspace-websocket-proxy@sha256:ba0ce13cb958cbc63cb25e2ea9fafb805c76cb0daecd24fece07bea08ee5feda"
   remote_access_server_image  = "ghcr.io/jupyter-infra/remote-access-server@sha256:2041e8de768bf925cd4d5962fb1cdccbbb1db1cb457b2e522b279389c14337c7"
   remote_access_strategy_name = "websocket-access-strategy"
-  # The ECR registry host of the sidecar copy, the chart's accessStrategy.webSocket.image.repository.
-  remote_access_proxy_registry = try(split("/", module.app_ws_proxy[0].repository_url)[0], "")
 
   # The sidecar's listen port, accessStrategy.webSocket.port in the aws-oidc chart.
   remote_access_sidecar_port = 8080
@@ -61,22 +59,23 @@ locals {
 }
 
 # The chart versions remote access needs: the aws-oidc chart carries the WebSocket
-# strategy from 0.2.1, the jupyter-k8s chart the connection API and its token signing
-# from 0.3.0. A pinned version compares on its release core; one that does not parse
-# counts as below the floor. helm.tf checks the result in the releases' preconditions.
-# The chart-floor unit test plans this block beside the two chart-version variables
-# alone, so it must reference nothing else.
+# strategy from 0.2.1, the jupyter-k8s chart the WebSocket connection type from 0.3.0.
+# helm.tf checks the results in the releases' preconditions.
+module "router_chart_floor" {
+  source        = "./modules/chart_floor"
+  chart_version = var.workspace_router_chart_version
+  floor         = [0, 2, 1]
+}
+
+module "operator_chart_floor" {
+  source        = "./modules/chart_floor"
+  chart_version = var.workspace_operator_chart_version
+  floor         = [0, 3, 0]
+}
+
 locals {
-  remote_access_chart_floors = { router = [0, 2, 1], operator = [0, 3, 0] }
-  remote_access_chart_cores = {
-    router   = try([for p in regex("^(\\d+)\\.(\\d+)\\.(\\d+)", var.workspace_router_chart_version) : tonumber(p)], [0, 0, 0])
-    operator = try([for p in regex("^(\\d+)\\.(\\d+)\\.(\\d+)", var.workspace_operator_chart_version) : tonumber(p)], [0, 0, 0])
-  }
   remote_access_chart_at_floor = {
-    for chart, core in local.remote_access_chart_cores : chart => (
-      core[0] != local.remote_access_chart_floors[chart][0] ? core[0] > local.remote_access_chart_floors[chart][0] :
-      core[1] != local.remote_access_chart_floors[chart][1] ? core[1] > local.remote_access_chart_floors[chart][1] :
-      core[2] >= local.remote_access_chart_floors[chart][2]
-    )
+    router   = module.router_chart_floor.at_floor
+    operator = module.operator_chart_floor.at_floor
   }
 }

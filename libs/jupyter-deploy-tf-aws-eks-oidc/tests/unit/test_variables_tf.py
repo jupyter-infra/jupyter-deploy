@@ -11,10 +11,9 @@ from typing import ClassVar
 from jupyter_deploy_tf_aws_eks_oidc.template import TEMPLATE_PATH
 
 VARIABLES_TF = TEMPLATE_PATH / "engine" / "variables.tf"
-REMOTE_ACCESS_TF = TEMPLATE_PATH / "engine" / "workspace_remote_access.tf"
+CHART_FLOOR_MODULE = TEMPLATE_PATH / "engine" / "modules" / "chart_floor"
 
 _VARIABLE_BLOCK = re.compile(r'^variable "(?P<name>[^"]+)" \{\n(?P<body>.*?)^\}', re.MULTILINE | re.DOTALL)
-_LOCALS_BLOCK = re.compile(r"^locals \{\n(?P<body>.*?)^\}", re.MULTILINE | re.DOTALL)
 _HEREDOC_FIRST_LINE = re.compile(r"description\s*=\s*<<-EOT\n\s*(?P<line>[^\n]*)\n")
 _TYPE = re.compile(r"^\s*type\s*=\s*(?P<type>\S+)", re.MULTILINE)
 _KEY_LINE = re.compile(r"^\s{6}(?P<key>[a-z_]+)\s+- ", re.MULTILINE)
@@ -88,12 +87,6 @@ _SKIP_WITHOUT_TERRAFORM = unittest.skipIf(_TERRAFORM is None and not os.environ.
 
 def _variable_block(name: str) -> str:
     match = next(m for m in _VARIABLE_BLOCK.finditer(VARIABLES_TF.read_text()) if m["name"] == name)
-    return match.group(0) + "\n"
-
-
-def _locals_block_defining(path: Path, name: str) -> str:
-    """The `locals` block of a file that defines the given local."""
-    match = next(m for m in _LOCALS_BLOCK.finditer(path.read_text()) if re.search(rf"^  {name}\s*=", m["body"], re.M))
     return match.group(0) + "\n"
 
 
@@ -177,8 +170,8 @@ class TestWorkspaceTemplatesValidation(unittest.TestCase):
 class TestRemoteAccessChartFloors(unittest.TestCase):
     """The chart-version floors remote access needs, compared by terraform on the release core.
 
-    The root module is the two chart-version variable blocks, the locals block that compares
-    them and an output of the result, so a plan needs no provider.
+    The root module instantiates the chart_floor module with a version and a floor and outputs
+    the result, so a plan needs no provider.
     """
 
     root: ClassVar[tempfile.TemporaryDirectory[str]]
@@ -187,10 +180,11 @@ class TestRemoteAccessChartFloors(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.root = tempfile.TemporaryDirectory()
         (Path(cls.root.name) / "main.tf").write_text(
-            _variable_block("workspace_router_chart_version")
-            + _variable_block("workspace_operator_chart_version")
-            + _locals_block_defining(REMOTE_ACCESS_TF, "remote_access_chart_at_floor")
-            + 'output "at_floor" {\n  value = local.remote_access_chart_at_floor\n}\n'
+            'variable "chart_version" {\n  type = string\n}\n'
+            'variable "floor" {\n  type = list(number)\n}\n'
+            f'module "floor" {{\n  source        = "{CHART_FLOOR_MODULE}"\n'
+            "  chart_version = var.chart_version\n  floor         = var.floor\n}\n"
+            'output "at_floor" {\n  value = module.floor.at_floor\n}\n'
         )
         init = _terraform(cls.root.name, "init", "-backend=false", "-input=false")
         assert init.returncode == 0, init.stderr
@@ -199,35 +193,51 @@ class TestRemoteAccessChartFloors(unittest.TestCase):
     def tearDownClass(cls) -> None:
         cls.root.cleanup()
 
-    def _at_floor(self, router: str, operator: str) -> dict[str, bool]:
+    def _at_floor(self, chart_version: str, floor: list[int]) -> bool:
         plan = _terraform(
             self.root.name,
             "plan",
             "-refresh=false",
             "-input=false",
             "-out=plan.out",
-            f"-var=workspace_router_chart_version={router}",
-            f"-var=workspace_operator_chart_version={operator}",
+            f"-var=chart_version={chart_version}",
+            f"-var=floor={json.dumps(floor)}",
         )
         self.assertEqual(plan.returncode, 0, plan.stderr)
         shown = _terraform(self.root.name, "show", "-json", "plan.out")
         self.assertEqual(shown.returncode, 0, shown.stderr)
-        at_floor: dict[str, bool] = json.loads(shown.stdout)["planned_values"]["outputs"]["at_floor"]["value"]
+        at_floor: bool = json.loads(shown.stdout)["planned_values"]["outputs"]["at_floor"]["value"]
         return at_floor
 
     def test_router_floor_is_the_first_chart_with_the_websocket_strategy(self) -> None:
         for pin, expected in (("0.2.0", False), ("0.2.1", True), ("0.3.2", True)):
             with self.subTest(pin=pin):
-                self.assertIs(self._at_floor(pin, "0.4.1")["router"], expected)
+                self.assertIs(self._at_floor(pin, [0, 2, 1]), expected)
 
-    def test_operator_floor_is_the_first_chart_with_the_connection_api(self) -> None:
+    def test_operator_floor_is_the_first_chart_with_the_websocket_connection_type(self) -> None:
         for pin, expected in (("0.2.9", False), ("0.3.0", True), ("0.4.1", True)):
             with self.subTest(pin=pin):
-                self.assertIs(self._at_floor("0.3.2", pin)["operator"], expected)
+                self.assertIs(self._at_floor(pin, [0, 3, 0]), expected)
 
     def test_release_core_compares_numerically_and_keeps_a_prerelease_suffix_out(self) -> None:
         # Compared as strings, "0.10.0" sorts below "0.2.1".
-        self.assertEqual(self._at_floor("0.10.0", "1.0.0-rc1"), {"router": True, "operator": True})
+        self.assertIs(self._at_floor("0.10.0", [0, 2, 1]), True)
+        self.assertIs(self._at_floor("1.0.0-rc1", [0, 3, 0]), True)
 
     def test_a_pin_that_is_not_a_version_counts_as_below_the_floor(self) -> None:
-        self.assertEqual(self._at_floor("latest", "main"), {"router": False, "operator": False})
+        self.assertIs(self._at_floor("latest", [0, 2, 1]), False)
+
+    def test_the_preset_pins_both_charts_at_or_above_their_floors(self) -> None:
+        remote_access_tf = (TEMPLATE_PATH / "engine" / "workspace_remote_access.tf").read_text()
+        preset = (TEMPLATE_PATH / "engine" / "presets" / "defaults-all.tfvars").read_text()
+        for chart, variable in (
+            ("router", "workspace_router_chart_version"),
+            ("operator", "workspace_operator_chart_version"),
+        ):
+            with self.subTest(chart=chart):
+                floor = re.search(
+                    rf'module "{chart}_chart_floor" \{{.*?floor\s*=\s*\[([0-9, ]+)\]', remote_access_tf, re.S
+                )
+                pinned = re.search(rf'^{variable}\s*=\s*"([^"]+)"', preset, re.M)
+                assert floor is not None and pinned is not None
+                self.assertIs(self._at_floor(pinned.group(1), [int(n) for n in floor.group(1).split(",")]), True)
