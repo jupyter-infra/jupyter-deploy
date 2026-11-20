@@ -15,8 +15,8 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    # The Traefik pods proxying authenticated workspace traffic; the namespace alone would
-    # admit every router component.
+    # The Traefik pods proxying authenticated workspace traffic; the router namespace's other
+    # components never reach workspace pods.
     - from:
         - namespaceSelector:
             matchLabels:

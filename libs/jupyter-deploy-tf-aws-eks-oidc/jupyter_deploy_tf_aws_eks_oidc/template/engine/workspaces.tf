@@ -2,7 +2,7 @@ locals {
   access_strategy_name    = "oauth-access-strategy"
   workspace_storage_class = "ebs-sc"
   # Ports the workspace-ingress NetworkPolicy admits: the application port from the
-  # Traefik pods and the operator namespace, plus the remote access sidecar's from Traefik.
+  # Traefik pods and the operator namespace, plus the remote access sidecar's from the Traefik pods.
   workspace_ingress_router_ports   = concat([8888], var.enable_remote_access ? [local.remote_access_sidecar_port] : [])
   workspace_ingress_operator_ports = [8888]
   # Labels the aws-oidc chart sets on its Traefik Deployment; the router namespace's other

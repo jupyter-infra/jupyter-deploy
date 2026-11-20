@@ -277,8 +277,8 @@ resource "helm_release" "workspace_router" {
         name  = "authmiddleware.enableBearerAuth"
         value = "true"
       },
-      # The sidecar image is the deployment's ECR copy (applications.tf), not the chart's
-      # GHCR default; the chart joins the three values as repository/imageName:imageTag.
+      # The sidecar copy (applications.tf), split the way the chart joins its three image
+      # values, repository/imageName:imageTag.
       {
         name  = "accessStrategy.webSocket.image.repository"
         value = local.remote_access_proxy_registry

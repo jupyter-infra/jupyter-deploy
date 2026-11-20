@@ -1173,7 +1173,7 @@ variable "workspace_app_vscode_image_build" {
 
 variable "workspace_app_ws_proxy_image_name" {
   description = <<-EOT
-    The ECR repository name for the copy of the ws-proxy sidecar image.
+    The ECR repository name for the ws-proxy sidecar copy.
 
     VS Code workspace pods run the sidecar beside the workspace container.
     Changing this value creates a new ECR repository. The default,
@@ -1187,10 +1187,10 @@ variable "workspace_app_ws_proxy_image_name" {
 
 variable "workspace_app_ws_proxy_image_build" {
   description = <<-EOT
-    The build tag for the copy of the ws-proxy sidecar image.
+    The build tag for the ws-proxy sidecar copy.
 
     Increment this to copy the image again under a new tag; the copy is also
-    refreshed when the template moves the sidecar digest it pins.
+    refreshed when a template release changes the pinned sidecar digest.
 
     Example: v1
   EOT

@@ -52,9 +52,9 @@ NS_ONLY_B_TEAM = "e2e-ns-only-b"
 NS_ONLY_DEFAULT_TEAM = "e2e-ns-only-default"
 NS_REQUIRED_VARS = ["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"]
 NS_RUNNING_TIMEOUT_S = 600
-# Namespaces of the router chart and of the operator (workspace_router_namespace and
-# workspace_operator_namespace presets), the two sources of the workspace-ingress NetworkPolicy:
-# the Traefik pods of the first, any pod of the second.
+# Namespaces of the router chart and of the operator (the workspace_router_namespace and
+# workspace_operator_namespace presets). The workspace-ingress NetworkPolicy admits the Traefik
+# pods of the router namespace and every pod of the operator namespace.
 ROUTER_NAMESPACE = "jupyter-k8s-router"
 OPERATOR_NAMESPACE = "jupyter-k8s-system"
 # Labels of the aws-oidc chart's Traefik pods, the only router-namespace pods the policy admits.
@@ -69,7 +69,7 @@ REMOTE_ACCESS_FLAG = "enable_remote_access"
 VSCODE_TEMPLATE_NAME = "vscode"
 # The manifest's entry for the VS Code image, the name `jd image` commands take.
 VSCODE_IMAGE_NAME = "vscode"
-# The manifest's entry for the ECR copy of the sidecar image.
+# The manifest's entry for the sidecar copy.
 WS_PROXY_IMAGE_NAME = "ws-proxy"
 # The VS Code counterpart of the built-in GPU card, offered when both flags are on.
 VSCODE_GPU_TEMPLATE_NAME = "vscode-gpu"

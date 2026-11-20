@@ -392,8 +392,8 @@ class JupyterDeployImageDefinitionV1(BaseModel):
     repository_output: str = Field(alias="repository-output")
     tag_output: str = Field(alias="tag-output")
     # The template variable that makes the deployment build this image; unset for an image it always builds.
-    # While that variable is off, the template outputs "" for repository_output, which `jd image` reports as
-    # not built, naming the variable (ImageNotProvisionedError); a missing output stays an error.
+    # While that variable is off, the template outputs "" for repository_output, which the per-image `jd image`
+    # commands report as not built, naming the variable (ImageNotProvisionedError); a missing output stays an error.
     enabled_by: str | None = Field(default=None, alias="enabled-by")
 
 

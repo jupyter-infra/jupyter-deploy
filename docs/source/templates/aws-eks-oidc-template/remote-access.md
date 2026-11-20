@@ -18,11 +18,13 @@ overrides:
   enable_remote_access: true
 ```
 
-The first apply builds the VS Code image and copies the `ws-proxy` sidecar image from its
-published digest into the deployment's ECR, a few minutes in AWS CodeBuild, and restarts the
+The first apply builds the VS Code image and copies the `ws-proxy` sidecar image from the digest
+the template pins into the deployment's ECR, a few minutes in AWS CodeBuild. It also restarts the
 operator and Authmiddleware once; running workspaces keep running.
 Bump `workspace_app_vscode_image_build` to rebuild the image, as
-`workspace_app_jupyterlab_image_build` does for JupyterLab.
+`workspace_app_jupyterlab_image_build` does for JupyterLab; `workspace_app_ws_proxy_image_build`
+does the same for the sidecar copy, which is also copied again when a template release changes
+the pinned digest.
 
 ## How a connection is authorized
 
@@ -39,7 +41,7 @@ Bump `workspace_app_vscode_image_build` to rebuild the image, as
 
 No SSH key is created or distributed. The SSH server binds the pod's loopback interface, so
 nothing outside the pod reaches it, and the workspace-ingress NetworkPolicy admits the sidecar
-port from the Traefik router pods only. The operator namespace keeps its access to the application
+port from the Traefik pods only. The operator namespace keeps its access to the application
 port, which it probes for the idle detection of JupyterLab workspaces. The host key persists in
 the workspace's home volume, so a restart keeps its fingerprint.
 
@@ -72,7 +74,7 @@ picked; pass `--service ws-proxy` for the sidecar's logs.
 `jd image list` shows the VS Code image and the `ws-proxy` sidecar copy beside the JupyterLab
 one. `jd image status --name vscode` and `jd image vulnerabilities --name vscode` report on the
 VS Code image, `--name ws-proxy` on the sidecar copy; with the flag off they say the image is not
-built. With more than one image built, the `jd image` commands need `--name`.
+built. With more than one image built, the per-image `jd image` commands need `--name`.
 
 ## Limits
 

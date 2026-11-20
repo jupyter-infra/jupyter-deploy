@@ -2,7 +2,7 @@
 
 The workspace-defaults chart installs a NetworkPolicy that restricts ingress to
 workspace pods (port 8888) to the Traefik pods of the router namespace and to the
-operator namespace. These tests verify the policy is actually enforced — which
+operator namespace. These tests verify the policy is actually enforced. That
 requires the VPC CNI addon to run with enableNetworkPolicy=true (see
 engine/eks_addons.tf). A structural "the object exists" check would pass even
 against an inert (unenforced) policy, so every case here drives real traffic with
@@ -66,7 +66,7 @@ def test_router_traefik_pods_ingress_allowed(e2e_workspace: str) -> None:
 
 @skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
 def test_router_namespace_other_pods_ingress_denied(e2e_workspace: str) -> None:
-    """A router-namespace pod without the Traefik labels (web app, Authmiddleware, oauth2-proxy) is denied."""
+    """A router-namespace pod without the Traefik labels (web app, Authmiddleware, oauth2-proxy, Dex) is denied."""
     allowed = probe_workspace(
         e2e_workspace,
         from_namespace=ROUTER_NAMESPACE,

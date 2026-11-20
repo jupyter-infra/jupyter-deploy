@@ -232,7 +232,9 @@ With `enable_remote_access: true`, the template builds a second workspace image 
 main process, and offers a VS Code card in every workspace namespace, plus a VS Code GPU card
 when `enable_default_gpu_pool` is on. The aws-oidc chart's WebSocket access strategy adds a `ws-proxy`
 sidecar to each VS Code workspace pod; the operator signs a five-minute token per connection and
-Authmiddleware verifies it. Users connect with the kubectl-workspace plugin
+Authmiddleware verifies it. The sidecar image is copied from its published digest into the
+deployment's ECR beside the VS Code image, and `jd image` lists both as `vscode` and `ws-proxy`.
+Users connect with the kubectl-workspace plugin
 (https://github.com/jupyter-infra/kubectl-workspace): `kubectl workspace ssh-config --write` once
 per cluster, then `kubectl workspace open <workspace> --editor <vscode|cursor|kiro>`.
 
