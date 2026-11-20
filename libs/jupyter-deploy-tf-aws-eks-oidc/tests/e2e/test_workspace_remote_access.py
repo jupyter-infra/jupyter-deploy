@@ -27,7 +27,7 @@ from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_poll_workspace_status,
     kubectl_request_workspace_connection,
 )
-from pytest_jupyter_deploy.workspaces.network_probe import probe_service, probe_service_allowed, workspace_service_host
+from pytest_jupyter_deploy.workspaces.network_probe import probe_workspace, probe_workspace_allowed
 from pytest_jupyter_deploy.workspaces.template import list_template_names
 
 from .constants import (
@@ -39,6 +39,7 @@ from .constants import (
     ROUTER_NAMESPACE,
     ROUTER_POD_LABELS,
     SIDECAR_CONTAINER,
+    SIDECAR_IMAGE_NAME,
     SIDECAR_PORT,
     VSCODE_GPU_TEMPLATE_NAME,
     VSCODE_IMAGE_NAME,
@@ -50,9 +51,8 @@ from .constants import (
     WORKSPACE_APP_PORT,
     WORKSPACE_NAMESPACE,
     WORKSPACES_DIR,
-    WS_PROXY_IMAGE_NAME,
 )
-from .overrides import pools_offering, restore_overrides, snapshot_overrides
+from .overrides import pools_offering, with_names
 
 pytestmark = [
     pytest.mark.mutating,
@@ -86,11 +86,6 @@ def _ingress_policy_ports(namespace: str) -> dict[str, set[int]]:
         }
         for rule in policy["spec"]["ingress"]
     }
-
-
-def _image_uri(e2e_deployment: EndToEndDeployment, output_name: str) -> str:
-    result = e2e_deployment.cli.run_command(["jupyter-deploy", "show", "--output", output_name, "--text"])
-    return result.stdout.strip()
 
 
 def _websocket_upgrade_status(url: str, token: str | None) -> int:
@@ -138,7 +133,7 @@ def remote_access_window(e2e_deployment: EndToEndDeployment) -> Generator[dict[s
         pytest.skip(f"the workspace_namespaces mapping has no {WORKSPACE_NAMESPACE} entry to offer the cards in")
     window: dict[str, Any] = {
         "flag_was_on": e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG),
-        "overrides": snapshot_overrides(e2e_deployment, WINDOW_VARIABLES),
+        "overrides": e2e_deployment.snapshot_overrides(WINDOW_VARIABLES),
     }
     yield window
     if _window_open(e2e_deployment, window):
@@ -147,7 +142,7 @@ def remote_access_window(e2e_deployment: EndToEndDeployment) -> Generator[dict[s
             kubectl_delete_workspaces_of_templates(
                 (VSCODE_SMALL_TEMPLATE,) if window["flag_was_on"] else VSCODE_TEMPLATES, WORKSPACE_NAMESPACE
             )
-        restore_overrides(e2e_deployment, window["overrides"])
+        e2e_deployment.restore_overrides(window["overrides"])
 
 
 @pytest.mark.order(ORDER_REMOTE_ACCESS)
@@ -202,9 +197,7 @@ def test_enable_remote_access_offers_the_vscode_cards(
         overrides["workspace_namespaces"] = [
             {
                 **entry,
-                "templates": ",".join(
-                    dict.fromkeys([*[t for t in entry.get("templates", "").split(",") if t], *offered])
-                ),
+                "templates": with_names(entry.get("templates", ""), offered),
             }
             if entry["name"] == WORKSPACE_NAMESPACE
             else entry
@@ -212,9 +205,9 @@ def test_enable_remote_access_offers_the_vscode_cards(
         ]
     e2e_deployment.ensure_deployed_with_overrides(overrides)
 
-    image_uri = _image_uri(e2e_deployment, "vscode_image_uri")
+    image_uri = e2e_deployment.cli.get_str_output("vscode_image_uri")
     assert ".dkr.ecr." in image_uri, f"vscode_image_uri is not an ECR image: {image_uri!r}"
-    sidecar_uri = _image_uri(e2e_deployment, "ws_proxy_image_uri")
+    sidecar_uri = e2e_deployment.cli.get_str_output("ws_proxy_image_uri")
     assert ".dkr.ecr." in sidecar_uri, f"ws_proxy_image_uri is not an ECR image: {sidecar_uri!r}"
     templates = {name: _workspace_template(name, WORKSPACE_NAMESPACE) for name in VSCODE_TEMPLATES}
     for template in templates.values():
@@ -260,8 +253,8 @@ def test_vscode_workspace_runs_with_the_sidecar_and_hands_out_an_ssh_connection(
         ready = {status["name"]: status["ready"] for status in pod["status"].get("containerStatuses", [])}
         assert ready.get(SIDECAR_CONTAINER) is True, f"{SIDECAR_CONTAINER} missing or not ready: {ready}"
         images = {container["name"]: container["image"] for container in pod["spec"]["containers"]}
-        assert images[SIDECAR_CONTAINER] == _image_uri(e2e_deployment, "ws_proxy_image_uri"), images
-        for name in (VSCODE_IMAGE_NAME, WS_PROXY_IMAGE_NAME):
+        assert images[SIDECAR_CONTAINER] == e2e_deployment.cli.get_str_output("ws_proxy_image_uri"), images
+        for name in (VSCODE_IMAGE_NAME, SIDECAR_IMAGE_NAME):
             image = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "status", "--name", name])
             assert "Available" in image.stdout, f"jd image status does not see the {name} image:\n{image.stdout}"
 
@@ -289,17 +282,17 @@ def test_vscode_workspace_runs_with_the_sidecar_and_hands_out_an_ssh_connection(
         without_token = _websocket_upgrade_status(route, None)
         assert 400 <= without_token < 500, f"the route answered {without_token} to an upgrade without a token"
 
-        host = workspace_service_host(VSCODE_WORKSPACE, WORKSPACE_NAMESPACE)
-        assert probe_service_allowed(
-            host, SIDECAR_PORT, from_namespace=ROUTER_NAMESPACE, pod_labels=ROUTER_POD_LABELS
+        assert probe_workspace_allowed(
+            VSCODE_WORKSPACE,
+            from_namespace=ROUTER_NAMESPACE,
+            workspace_namespace=WORKSPACE_NAMESPACE,
+            port=SIDECAR_PORT,
+            pod_labels=ROUTER_POD_LABELS,
         ), f"the Traefik pods should reach the sidecar port {SIDECAR_PORT}"
-        assert not probe_service(host, SIDECAR_PORT, from_namespace=ROUTER_NAMESPACE), (
-            f"a router-namespace pod without the Traefik labels should be denied the sidecar port {SIDECAR_PORT}"
-        )
-        for denied in (OPERATOR_NAMESPACE, WORKSPACE_NAMESPACE):
-            assert not probe_service(host, SIDECAR_PORT, from_namespace=denied), (
-                f"namespace {denied} should be denied the sidecar port {SIDECAR_PORT}"
-            )
+        for denied in (ROUTER_NAMESPACE, OPERATOR_NAMESPACE, WORKSPACE_NAMESPACE):
+            assert not probe_workspace(
+                VSCODE_WORKSPACE, from_namespace=denied, workspace_namespace=WORKSPACE_NAMESPACE, port=SIDECAR_PORT
+            ), f"a pod without the Traefik labels in {denied} should be denied the sidecar port {SIDECAR_PORT}"
     finally:
         kubectl_delete_workspace(VSCODE_WORKSPACE, namespace=WORKSPACE_NAMESPACE)
 
@@ -349,7 +342,7 @@ def test_disable_remote_access_removes_the_vscode_cards(
     e2e_deployment.ensure_deployed()
     if remote_access_window["flag_was_on"]:
         pytest.skip(f"the deployment had {REMOTE_ACCESS_FLAG} on before the module; the window keeps it")
-    restore_overrides(e2e_deployment, remote_access_window["overrides"])
+    e2e_deployment.restore_overrides(remote_access_window["overrides"])
 
     for name in VSCODE_TEMPLATES:
         poll(
@@ -362,8 +355,8 @@ def test_disable_remote_access_removes_the_vscode_cards(
         timeout_s=REMOVAL_TIMEOUT_S,
         msg=f"{WEBSOCKET_STRATEGY} still present after disabling {REMOTE_ACCESS_FLAG}",
     )
-    for output_name, name in (("vscode_image_uri", VSCODE_IMAGE_NAME), ("ws_proxy_image_uri", WS_PROXY_IMAGE_NAME)):
-        assert _image_uri(e2e_deployment, output_name) == ""
+    for output_name, name in (("vscode_image_uri", VSCODE_IMAGE_NAME), ("ws_proxy_image_uri", SIDECAR_IMAGE_NAME)):
+        assert e2e_deployment.cli.get_str_output(output_name) == ""
         unbuilt = e2e_deployment.cli.run_command_expecting_failure(
             ["jupyter-deploy", "image", "status", "--name", name]
         )

@@ -27,9 +27,8 @@ from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_poll_workspace_status,
 )
 from pytest_jupyter_deploy.workspaces.network_probe import (
-    probe_service_allowed,
     probe_workspace,
-    workspace_service_host,
+    probe_workspace_allowed,
 )
 from pytest_jupyter_deploy.workspaces.template import list_template_names
 from pytest_jupyter_deploy.workspaces.web_app import WebAppNavigator
@@ -48,6 +47,7 @@ from .constants import (
     ORDER_NAMESPACES,
     REMOTE_ACCESS_FLAG,
     ROUTER_NAMESPACE,
+    ROUTER_POD_LABELS,
     VSCODE_TEMPLATE_NAME,
     WORKSPACE_STOP_PATCH,
     WORKSPACES_DIR,
@@ -190,9 +190,9 @@ def test_network_policy_in_every_namespace(mapped: dict[str, Any]) -> None:
             kubectl_apply_workspace(name, WORKSPACES_DIR, as_user=_user(), as_groups=_group(_rbac_team()))
         for ns, name in names.items():
             kubectl_poll_workspace_status(name, "Running", namespace=ns, timeout_s=NS_RUNNING_TIMEOUT_S)
-            assert probe_service_allowed(workspace_service_host(name, ns), 8888, from_namespace=ROUTER_NAMESPACE), (
-                f"router should reach the workspace in {ns}"
-            )
+            assert probe_workspace_allowed(
+                name, from_namespace=ROUTER_NAMESPACE, workspace_namespace=ns, pod_labels=ROUTER_POD_LABELS
+            ), f"the Traefik pods should reach the workspace in {ns}"
         with temporary_namespace(PROBE_NAMESPACE):
             for ns, name in names.items():
                 assert not probe_workspace(name, from_namespace=PROBE_NAMESPACE, workspace_namespace=ns), (

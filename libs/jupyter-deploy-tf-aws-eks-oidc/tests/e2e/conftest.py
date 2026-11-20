@@ -36,7 +36,7 @@ from .constants import (
     WORKSPACE_NAMESPACE,
     WORKSPACES_DIR,
 )
-from .overrides import pools_offering, restore_overrides, snapshot_overrides
+from .overrides import pools_offering
 
 
 @pytest.fixture
@@ -66,7 +66,7 @@ def _get_impersonation_group() -> str | None:
     return None
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def impersonation_group() -> str:
     """The RBAC team's group for --as-group, github:<org>:<team>; skips when the env vars are unset."""
     group = _get_impersonation_group()
@@ -90,7 +90,7 @@ def browser_context_args(browser_context_args: dict[str, Any], request: pytest.F
 
 @pytest.fixture(scope="session")
 def seeded_cluster(
-    kubernetes_cluster_login: None, e2e_deployment: EndToEndDeployment
+    kubernetes_cluster_login: None, e2e_deployment: EndToEndDeployment, impersonation_group: str
 ) -> Generator[dict[str, list[str]], None, None]:
     """Seed the cluster with admin and impersonated workspaces.
 
@@ -105,9 +105,7 @@ def seeded_cluster(
     deleted by tests. Tests in test_workspace.py use separate, self-contained
     workspace names (e2e-ws-*) with their own create/delete lifecycle.
     """
-    group = _get_impersonation_group()
-    if not group:
-        pytest.skip("JD_E2E_ORG and JD_E2E_RBAC_TEAM required for cluster seeding")
+    group = impersonation_group
 
     created: dict[str, list[str]] = {"admin": [], "seeded": []}
 
@@ -302,8 +300,8 @@ def namespace_base_values(e2e_deployment: EndToEndDeployment, restored_namespace
 def restored_namespace_mapping(e2e_deployment: EndToEndDeployment) -> Generator[None, None, None]:
     """Snapshot the mapping variables and the allowlist; after the module, restore them and redeploy."""
     e2e_deployment.ensure_deployed()
-    snapshot = snapshot_overrides(e2e_deployment, _NAMESPACE_MAPPING_VARIABLES)
+    snapshot = e2e_deployment.snapshot_overrides(_NAMESPACE_MAPPING_VARIABLES)
     allowed_teams = e2e_deployment.get_list_str_variable_value("oauth_allowed_teams")
     yield
     e2e_deployment.update_required_value("oauth_allowed_teams", allowed_teams)
-    restore_overrides(e2e_deployment, snapshot)
+    e2e_deployment.restore_overrides(snapshot)

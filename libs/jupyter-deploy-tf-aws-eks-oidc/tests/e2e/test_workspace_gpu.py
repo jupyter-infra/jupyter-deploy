@@ -42,7 +42,6 @@ from .constants import (
     WORKSPACE_NAMESPACE,
     WORKSPACES_DIR,
 )
-from .overrides import restore_overrides, snapshot_overrides
 
 NOTEBOOKS_DIR = Path(__file__).parent / "notebooks"
 
@@ -70,13 +69,13 @@ def gpu_pool_flag_guard(e2e_deployment: EndToEndDeployment) -> Generator[None, N
     """Restore enable_default_gpu_pool to its pre-module value if a case left it flipped."""
     e2e_deployment.ensure_deployed()
     flag_was_on = e2e_deployment.get_bool_variable_value(GPU_POOL_FLAG)
-    overrides = snapshot_overrides(e2e_deployment, [GPU_POOL_FLAG])
+    overrides = e2e_deployment.snapshot_overrides([GPU_POOL_FLAG])
     yield
     if e2e_deployment.get_bool_variable_value(GPU_POOL_FLAG) != flag_was_on:
         # A live GPU pod pins the pool; drop leftovers before the restoring apply.
         with contextlib.suppress(Exception):
             kubectl_delete_workspaces_of_templates([GPU_TEMPLATE_NAME], WORKSPACE_NAMESPACE)
-        restore_overrides(e2e_deployment, overrides)
+        e2e_deployment.restore_overrides(overrides)
 
 
 @pytest.mark.order(ORDER_GPU)

@@ -20,13 +20,9 @@ cross-namespace cases (cleaned up on exit).
 import pytest
 from pytest_jupyter_deploy.kubernetes.namespace import get_namespace_labels, temporary_namespace
 from pytest_jupyter_deploy.plugin import skip_if_testvars_not_set
-from pytest_jupyter_deploy.workspaces.network_probe import (
-    probe_service_allowed,
-    probe_workspace,
-    workspace_service_host,
-)
+from pytest_jupyter_deploy.workspaces.network_probe import probe_workspace, probe_workspace_allowed
 
-from .constants import OPERATOR_NAMESPACE, ROUTER_NAMESPACE, ROUTER_POD_LABELS, WORKSPACE_APP_PORT
+from .constants import OPERATOR_NAMESPACE, ROUTER_NAMESPACE, ROUTER_POD_LABELS
 
 pytestmark = pytest.mark.usefixtures("kubernetes_cluster_login")
 
@@ -44,22 +40,15 @@ def test_operator_namespace_ingress_allowed(e2e_workspace: str) -> None:
     Pins the deny cases below to the policy itself. If this allow-path were
     broken, the workspace would simply be unreachable and the denials trivial.
     """
-    allowed = probe_service_allowed(
-        workspace_service_host(e2e_workspace, NAMESPACE),
-        WORKSPACE_APP_PORT,
-        from_namespace=OPERATOR_NAMESPACE,
-    )
+    allowed = probe_workspace_allowed(e2e_workspace, from_namespace=OPERATOR_NAMESPACE, workspace_namespace=NAMESPACE)
     assert allowed, f"operator namespace '{OPERATOR_NAMESPACE}' should be allowed to reach the workspace on 8888"
 
 
 @skip_if_testvars_not_set(["JD_E2E_USER", "JD_E2E_ORG", "JD_E2E_RBAC_TEAM"])
 def test_router_traefik_pods_ingress_allowed(e2e_workspace: str) -> None:
     """Positive control for the router rule: a pod with the Traefik labels in the router namespace reaches 8888."""
-    allowed = probe_service_allowed(
-        workspace_service_host(e2e_workspace, NAMESPACE),
-        WORKSPACE_APP_PORT,
-        from_namespace=ROUTER_NAMESPACE,
-        pod_labels=ROUTER_POD_LABELS,
+    allowed = probe_workspace_allowed(
+        e2e_workspace, from_namespace=ROUTER_NAMESPACE, workspace_namespace=NAMESPACE, pod_labels=ROUTER_POD_LABELS
     )
     assert allowed, f"a Traefik-labeled pod in '{ROUTER_NAMESPACE}' should be allowed to reach the workspace on 8888"
 
