@@ -1,6 +1,9 @@
 """Tests for version consistency across the project."""
 
+import importlib.util
 import re
+import shutil
+import tempfile
 import tomllib
 from pathlib import Path
 
@@ -74,3 +77,31 @@ def test_version_consistency() -> None:
                 f"Version mismatch: pyproject.toml ({pyproject_version})"
                 f" != {defaults_file.name} image name ({app}-v{image_name_match.group(1)})"
             )
+
+
+def test_version_bump_moves_the_three_image_names() -> None:
+    """The bump script rewrites jupyterlab-v, vscode-v and ws-proxy-v names in the files that carry them."""
+    repo_root = Path(__file__).parents[4]
+    spec = importlib.util.spec_from_file_location("version_edit", repo_root / "scripts" / "version_edit.py")
+    assert spec is not None and spec.loader is not None
+    version_edit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(version_edit)
+    template_path = (
+        repo_root / "libs" / "jupyter-deploy-tf-aws-eks-oidc" / "jupyter_deploy_tf_aws_eks_oidc" / "template"
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        for source in (
+            template_path / "engine" / "presets" / "defaults-all.tfvars",
+            template_path / "variables.yaml",
+            template_path / "engine" / "variables.tf",
+        ):
+            copy = Path(tmp) / source.name
+            shutil.copy(source, copy)
+            for app in ("jupyterlab", "vscode", "ws-proxy"):
+                version_edit.set_app_image_name_version(copy, app, "0.9.9rc1")
+            bumped = copy.read_text()
+            for app in ("jupyterlab", "vscode", "ws-proxy"):
+                assert f"{app}-v0.9.9rc1" in bumped, f"{source.name} does not carry {app}-v0.9.9rc1 after the bump"
+            assert not re.search(r"-v\d+\.\d+\.\d+(?!rc1)[^\s\"']*", bumped.replace("0.9.9rc1", "")), source.name
+        assert "ws-proxy-v<template version>" in (Path(tmp) / "variables.tf").read_text()

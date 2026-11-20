@@ -61,6 +61,16 @@ def test_vscode_image_shares_the_coding_agent_files_of_the_jupyterlab_image() ->
         )
 
 
+def test_vscode_ssh_server_listens_on_the_port_the_template_probes() -> None:
+    dockerfile = (TEMPLATE_PATH / "applications" / "vscode" / "Dockerfile").read_text()
+    listens_on = re.search(r'ENTRYPOINT \[.*"--port", "(\d+)"', dockerfile)
+    assert listens_on is not None, "the vscode Dockerfile must start the SSH server with --port"
+    remote_access_tf = (TEMPLATE_PATH / "engine" / "workspace_remote_access.tf").read_text()
+    probed = re.search(r"remote_access_ssh_port\s*=\s*(\d+)", remote_access_tf)
+    assert probed is not None
+    assert listens_on.group(1) == probed.group(1)
+
+
 def test_chart_versions_match_template_version() -> None:
     manifest_path = TEMPLATE_PATH / "manifest.yaml"
     manifest = yaml.safe_load(manifest_path.read_text())

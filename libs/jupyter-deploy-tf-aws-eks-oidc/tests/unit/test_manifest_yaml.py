@@ -218,6 +218,20 @@ class TestManifest(unittest.TestCase):
             self.assertIn("repository-output", image_def, f"Image '{name}' missing 'repository-output'")
             self.assertIn("tag-output", image_def, f"Image '{name}' missing 'tag-output'")
 
+    def test_image_flags_are_bool_variables_of_the_template(self) -> None:
+        if self.MANIFEST is None:
+            self.fail("MANIFEST is None")
+
+        variables_tf = (TEMPLATE_PATH / "engine" / "variables.tf").read_text()
+        for name, image_def in self.MANIFEST.get("images", {}).items():
+            flag = image_def.get("enabled-by")
+            if flag is None:
+                continue
+            block = re.search(rf'variable "{re.escape(flag)}" \{{.*?\n\}}', variables_tf, re.S)
+            self.assertIsNotNone(block, f"image '{name}' is enabled by '{flag}', which variables.tf does not declare")
+            assert block is not None
+            self.assertRegex(block.group(0), r"type\s*=\s*bool", f"'{flag}' must be a bool variable")
+
     def test_image_outputs_have_matching_terraform_outputs(self) -> None:
         if self.MANIFEST is None:
             self.fail("MANIFEST is None")
