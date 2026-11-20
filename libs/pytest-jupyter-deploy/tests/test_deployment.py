@@ -26,6 +26,26 @@ class TestGetVariablesYamlPath(unittest.TestCase):
 
 
 class TestOverrideValues(unittest.TestCase):
+    def test_restore_writes_back_set_keys_and_resets_unset_ones(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            variables_yaml = Path(tmp) / jd_constants.VARIABLES_FILENAME
+            variables_yaml.write_text(
+                "schema_version: 2\nrequired:\n  domain: example.com\nrequired_sensitive: {}\noverrides:\n  a: 1\n"
+            )
+            suite_config = Mock(spec=SuiteConfig)
+            suite_config.project_dir = Path(tmp)
+            deployment = EndToEndDeployment(suite_config)
+            deployment.ensure_deployed_with = Mock()  # type: ignore[method-assign]
+
+            snapshot = deployment.snapshot_overrides(["a", "b"])
+            deployment.update_override_value("a", 2)
+            deployment.update_override_value("b", True)
+            deployment.restore_overrides(snapshot)
+
+            self.assertEqual(snapshot, {"a": 1, "b": None})
+            self.assertEqual(deployment.read_override_value("a"), 1)
+            deployment.ensure_deployed_with.assert_called_once_with(["--reset-variable", "b"], timeout_seconds=None)
+
     def test_update_then_delete_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             variables_yaml = Path(tmp) / jd_constants.VARIABLES_FILENAME

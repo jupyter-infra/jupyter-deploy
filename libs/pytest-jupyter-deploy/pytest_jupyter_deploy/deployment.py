@@ -621,6 +621,23 @@ class EndToEndDeployment:
         self.cli.run_command(["jupyter-deploy", "up", "-y"], timeout_seconds=timeout)
         self._has_up_history = True
 
+    def snapshot_overrides(self, keys: list[str]) -> dict[str, Any]:
+        """The current override of each key, None for one that is not set."""
+        return {key: self.read_override_value(key) for key in keys}
+
+    def restore_overrides(self, snapshot: dict[str, Any], timeout_seconds: int | None = None) -> None:
+        """Write the snapshotted overrides back and redeploy.
+
+        A key that was unset is reset instead, which writes its preset default into the override.
+        """
+        reset_args: list[str] = []
+        for key, value in snapshot.items():
+            if value is None:
+                reset_args += ["--reset-variable", key]
+            else:
+                self.update_override_value(key, value)
+        self.ensure_deployed_with(reset_args, timeout_seconds=timeout_seconds)
+
     def ensure_deployed_with_overrides(self, overrides: dict[str, Any], timeout_seconds: int | None = None) -> None:
         """Write each value to the overrides section of variables.yaml, then `jd config` + `jd up`.
 
