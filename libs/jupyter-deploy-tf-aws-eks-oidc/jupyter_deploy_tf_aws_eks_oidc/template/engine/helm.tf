@@ -285,11 +285,11 @@ resource "helm_release" "workspace_router" {
       },
       {
         name  = "accessStrategy.webSocket.image.imageName"
-        value = local.remote_access_proxy_repository
+        value = module.app_ws_proxy[0].repository_name
       },
       {
         name  = "accessStrategy.webSocket.image.imageTag"
-        value = local.remote_access_proxy_tag
+        value = module.app_ws_proxy[0].image_tag
       },
     ] : [],
     # Workspace namespaces the web app offers: the default one, plus the rest of
