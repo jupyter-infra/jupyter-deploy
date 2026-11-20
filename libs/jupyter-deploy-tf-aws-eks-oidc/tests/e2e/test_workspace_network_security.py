@@ -26,7 +26,7 @@ from pytest_jupyter_deploy.workspaces.network_probe import (
     workspace_service_host,
 )
 
-from .constants import OPERATOR_NAMESPACE, ROUTER_NAMESPACE, ROUTER_POD_LABELS
+from .constants import OPERATOR_NAMESPACE, ROUTER_NAMESPACE, ROUTER_POD_LABELS, WORKSPACE_APP_PORT
 
 pytestmark = pytest.mark.usefixtures("kubernetes_cluster_login")
 
@@ -41,13 +41,13 @@ SPOOF_NAMESPACE = "e2e-netpol-spoof"
 def test_operator_namespace_ingress_allowed(e2e_workspace: str) -> None:
     """Positive control: the operator namespace may reach workspaces on 8888.
 
-    Pins the deny cases below to the policy itself — if this allow-path were
+    Pins the deny cases below to the policy itself. If this allow-path were
     broken, the workspace would simply be unreachable and the denials trivial.
     """
-    allowed = probe_workspace(
-        e2e_workspace,
+    allowed = probe_service_allowed(
+        workspace_service_host(e2e_workspace, NAMESPACE),
+        WORKSPACE_APP_PORT,
         from_namespace=OPERATOR_NAMESPACE,
-        workspace_namespace=NAMESPACE,
     )
     assert allowed, f"operator namespace '{OPERATOR_NAMESPACE}' should be allowed to reach the workspace on 8888"
 
@@ -57,7 +57,7 @@ def test_router_traefik_pods_ingress_allowed(e2e_workspace: str) -> None:
     """Positive control for the router rule: a pod with the Traefik labels in the router namespace reaches 8888."""
     allowed = probe_service_allowed(
         workspace_service_host(e2e_workspace, NAMESPACE),
-        8888,
+        WORKSPACE_APP_PORT,
         from_namespace=ROUTER_NAMESPACE,
         pod_labels=ROUTER_POD_LABELS,
     )
@@ -103,7 +103,7 @@ def test_namespace_and_pod_label_spoofing_denied(e2e_workspace: str) -> None:
     """Forging the router namespace identity (plus the Traefik pod labels) does not help.
 
     The policy allows by namespace via kubernetes.io/metadata.name, which the API
-    server manages and resets to the namespace's real name — so it can't be
+    server manages and resets to the namespace's real name, so it can't be
     spoofed. Any pod can carry the Traefik pod labels, which satisfy only the
     podSelector half of the router rule. Both spoofing attempts must still be denied.
     """
@@ -115,7 +115,7 @@ def test_namespace_and_pod_label_spoofing_denied(e2e_workspace: str) -> None:
             f"kubernetes.io/metadata.name should be forced to '{SPOOF_NAMESPACE}', got '{actual}'"
         )
 
-        # The Traefik labels satisfy the podSelector; the namespace half of the rule still refuses.
+        # The Traefik labels satisfy the podSelector half of the rule.
         allowed = probe_workspace(
             e2e_workspace,
             from_namespace=SPOOF_NAMESPACE,
