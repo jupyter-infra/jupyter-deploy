@@ -69,15 +69,20 @@ def _doc_chunks(rendered: str) -> dict[tuple[str, str], str]:
     return chunks
 
 
+def _without_document_padding(rendered: str) -> str:
+    """Drop the blank line Helm 4 emits before each `---`, so the goldens read the same under Helm 3 and 4."""
+    return rendered.replace("\n\n---\n", "\n---\n")
+
+
 class GoldenComparisonTestCase(unittest.TestCase):
     def compare_to_golden(self, rendered: str, golden_name: str) -> None:
         golden_path = DATA_DIR / golden_name
         if os.environ.get("JD_UPDATE_GOLDENS"):
-            golden_path.write_text(rendered)
+            golden_path.write_text(_without_document_padding(rendered))
             return
         self.assertEqual(
-            golden_path.read_text(),
-            rendered,
+            _without_document_padding(golden_path.read_text()),
+            _without_document_padding(rendered),
             f"{golden_name} drifted from the chart render. If the change is deliberate and its "
             "node-replacement impact is understood, regenerate with JD_UPDATE_GOLDENS=1.",
         )
