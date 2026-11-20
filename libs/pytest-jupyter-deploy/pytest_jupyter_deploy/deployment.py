@@ -551,6 +551,17 @@ class EndToEndDeployment:
         """
         self._update_variables_yaml_section("required", key, value)
 
+    def delete_override_value(self, key: str) -> None:
+        """Remove a key from the overrides section of variables.yaml, the inverse of update_override_value."""
+        variables_yaml = self.get_variables_yaml_path()
+        with open(variables_yaml) as f:
+            config = yaml.safe_load(f)
+
+        overrides = config.get("overrides") or {}
+        overrides.pop(key, None)
+        config["overrides"] = overrides
+        self._write_variables_yaml(variables_yaml, config)
+
     def _update_variables_yaml_section(self, section: str, key: str, value: Any) -> None:
         """Set one key inside one top-level section of variables.yaml, preserving comments."""
         variables_yaml = self.get_variables_yaml_path()
@@ -565,8 +576,11 @@ class EndToEndDeployment:
 
         # Update the specific key
         config[section][key] = value
+        self._write_variables_yaml(variables_yaml, config)
 
-        # Write back with comments preserved, using the correct format for the schema version
+    @staticmethod
+    def _write_variables_yaml(variables_yaml: Path, config: dict[str, Any]) -> None:
+        """Write variables.yaml back with its comments, in the layout of its schema version."""
         schema_version = config.get("schema_version", 1)
         if schema_version >= 2:
             jd_fs_utils.write_yaml_file_with_comments(
@@ -606,6 +620,23 @@ class EndToEndDeployment:
         timeout = timeout_seconds if timeout_seconds is not None else self.deploy_timeout_seconds
         self.cli.run_command(["jupyter-deploy", "up", "-y"], timeout_seconds=timeout)
         self._has_up_history = True
+
+    def snapshot_overrides(self, keys: list[str]) -> dict[str, Any]:
+        """The current override of each key, None for one that is not set."""
+        return {key: self.read_override_value(key) for key in keys}
+
+    def restore_overrides(self, snapshot: dict[str, Any], timeout_seconds: int | None = None) -> None:
+        """Write the snapshotted overrides back and redeploy.
+
+        A key that was unset is reset instead, which writes its preset default into the override.
+        """
+        reset_args: list[str] = []
+        for key, value in snapshot.items():
+            if value is None:
+                reset_args += ["--reset-variable", key]
+            else:
+                self.update_override_value(key, value)
+        self.ensure_deployed_with(reset_args, timeout_seconds=timeout_seconds)
 
     def ensure_deployed_with_overrides(self, overrides: dict[str, Any], timeout_seconds: int | None = None) -> None:
         """Write each value to the overrides section of variables.yaml, then `jd config` + `jd up`.

@@ -27,14 +27,14 @@ from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_poll_workspace_status,
 )
 from pytest_jupyter_deploy.workspaces.network_probe import (
-    probe_service_allowed,
     probe_workspace,
-    workspace_service_host,
+    probe_workspace_allowed,
 )
 from pytest_jupyter_deploy.workspaces.template import list_template_names
 from pytest_jupyter_deploy.workspaces.web_app import WebAppNavigator
 
 from .constants import (
+    DEFAULT_WORKSPACE_TEMPLATE,
     NS_A,
     NS_B,
     NS_ONLY_A_TEAM,
@@ -45,7 +45,10 @@ from .constants import (
     NS_SMALL_TEMPLATE,
     NS_SMALL_TEMPLATE_CONFIG,
     ORDER_NAMESPACES,
+    REMOTE_ACCESS_FLAG,
     ROUTER_NAMESPACE,
+    ROUTER_POD_LABELS,
+    VSCODE_TEMPLATE_NAME,
     WORKSPACE_STOP_PATCH,
     WORKSPACES_DIR,
 )
@@ -151,13 +154,17 @@ def test_team_mapped_to_no_namespace(mapped: dict[str, Any]) -> None:
 
 @pytest.mark.order(ORDER_NAMESPACES + 4)
 @skip_if_testvars_not_set(NS_REQUIRED_VARS)
-def test_templates_offered_per_namespace(mapped: dict[str, Any]) -> None:
-    """e2e-cpu-small is offered and runs in e2e-ns-a only; e2e-ns-b offers just jupyterlab."""
+def test_templates_offered_per_namespace(e2e_deployment: EndToEndDeployment, mapped: dict[str, Any]) -> None:
+    """e2e-cpu-small is offered and runs in e2e-ns-a only; e2e-ns-b offers just the built-in cards."""
     accepted, rejected_name = "e2e-ns-small-a", "e2e-ns-small-b"
     rbac = _rbac_team()
+    # Every workspace namespace gets the built-in cards, the VS Code one with the flag.
+    built_in = {DEFAULT_WORKSPACE_TEMPLATE}
+    if e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG):
+        built_in.add(VSCODE_TEMPLATE_NAME)
     try:
-        assert list_template_names(NS_A, as_user=_user(), as_groups=_group(rbac)) == {"jupyterlab", NS_SMALL_TEMPLATE}
-        assert list_template_names(NS_B, as_user=_user(), as_groups=_group(rbac)) == {"jupyterlab"}
+        assert list_template_names(NS_A, as_user=_user(), as_groups=_group(rbac)) == built_in | {NS_SMALL_TEMPLATE}
+        assert list_template_names(NS_B, as_user=_user(), as_groups=_group(rbac)) == built_in
 
         kubectl_apply_workspace(accepted, WORKSPACES_DIR, as_user=_user(), as_groups=_group(rbac))
         kubectl_poll_workspace_status(accepted, "Running", namespace=NS_A, timeout_s=NS_RUNNING_TIMEOUT_S)
@@ -183,9 +190,9 @@ def test_network_policy_in_every_namespace(mapped: dict[str, Any]) -> None:
             kubectl_apply_workspace(name, WORKSPACES_DIR, as_user=_user(), as_groups=_group(_rbac_team()))
         for ns, name in names.items():
             kubectl_poll_workspace_status(name, "Running", namespace=ns, timeout_s=NS_RUNNING_TIMEOUT_S)
-            assert probe_service_allowed(workspace_service_host(name, ns), 8888, from_namespace=ROUTER_NAMESPACE), (
-                f"router should reach the workspace in {ns}"
-            )
+            assert probe_workspace_allowed(
+                name, from_namespace=ROUTER_NAMESPACE, workspace_namespace=ns, pod_labels=ROUTER_POD_LABELS
+            ), f"the Traefik pods should reach the workspace in {ns}"
         with temporary_namespace(PROBE_NAMESPACE):
             for ns, name in names.items():
                 assert not probe_workspace(name, from_namespace=PROBE_NAMESPACE, workspace_namespace=ns), (
@@ -273,6 +280,25 @@ def test_plan_time_validation(
 
 @pytest.mark.order(ORDER_NAMESPACES + 9)
 @skip_if_testvars_not_set(NS_REQUIRED_VARS)
+def test_vscode_card_listed_without_remote_access_is_refused(
+    e2e_deployment: EndToEndDeployment, mapped: dict[str, Any]
+) -> None:
+    """`jd config` refuses a namespace entry listing the built-in vscode card while enable_remote_access is off."""
+    if e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG):
+        pytest.skip("the deployment has enable_remote_access on")
+    try:
+        e2e_deployment.update_override_value(
+            "workspace_namespaces",
+            [*mapped["workspace_namespaces"][:2], {**mapped["workspace_namespaces"][2], "templates": "vscode"}],
+        )
+        error = e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "config"])
+        assert f'built-in "vscode" card, which needs enable_remote_access = true: {NS_B}' in error, error
+    finally:
+        e2e_deployment.update_override_value("workspace_namespaces", mapped["workspace_namespaces"])
+
+
+@pytest.mark.order(ORDER_NAMESPACES + 10)
+@skip_if_testvars_not_set(NS_REQUIRED_VARS)
 def test_coding_agents_answer_only_in_bedrock_enabled_namespaces(
     e2e_deployment: EndToEndDeployment, mapped: dict[str, Any]
 ) -> None:
@@ -306,7 +332,7 @@ def test_coding_agents_answer_only_in_bedrock_enabled_namespaces(
             kubectl_delete_workspace(name, namespace=ns)
 
 
-@pytest.mark.order(ORDER_NAMESPACES + 10)
+@pytest.mark.order(ORDER_NAMESPACES + 11)
 @skip_if_testvars_not_set(NS_REQUIRED_VARS)
 def test_web_app_follows_mapping_change(
     e2e_deployment: EndToEndDeployment,

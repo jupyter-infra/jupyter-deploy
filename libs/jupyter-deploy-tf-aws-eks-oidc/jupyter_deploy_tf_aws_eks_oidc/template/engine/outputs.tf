@@ -106,6 +106,36 @@ output "jupyterlab_image_tag" {
   value       = try(module.app_jupyterlab[0].image_tag, "")
 }
 
+output "vscode_image_uri" {
+  description = "ECR image URI for the VS Code workspace image; empty unless enable_remote_access is true."
+  value       = try(module.app_vscode[0].image_uri, "")
+}
+
+output "vscode_ecr_repository_name" {
+  description = "ECR repository name for the VS Code workspace image; empty unless enable_remote_access is true."
+  value       = try(module.app_vscode[0].repository_name, "")
+}
+
+output "vscode_image_tag" {
+  description = "Current image tag for the VS Code workspace image; empty unless enable_remote_access is true."
+  value       = try(module.app_vscode[0].image_tag, "")
+}
+
+output "ws_proxy_image_uri" {
+  description = "ECR image URI of the ws-proxy sidecar copy run by VS Code workspace pods; empty unless enable_remote_access is true."
+  value       = try(module.app_ws_proxy[0].image_uri, "")
+}
+
+output "ws_proxy_ecr_repository_name" {
+  description = "ECR repository name for the ws-proxy sidecar copy; empty unless enable_remote_access is true."
+  value       = try(module.app_ws_proxy[0].repository_name, "")
+}
+
+output "ws_proxy_image_tag" {
+  description = "Current image tag for the ws-proxy sidecar copy; empty unless enable_remote_access is true."
+  value       = try(module.app_ws_proxy[0].image_tag, "")
+}
+
 output "kubeconfig_path" {
   description = "Path to the local kubeconfig file for this cluster."
   value       = abspath("${path.root}/.kube/config")

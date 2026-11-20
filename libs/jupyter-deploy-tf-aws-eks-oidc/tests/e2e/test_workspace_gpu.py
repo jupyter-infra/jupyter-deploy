@@ -4,7 +4,8 @@ One enable_default_gpu_pool on->off window: the first case turns the flag on
 (jd config + jd up), the ordered cases run the kubectl and UI critical paths
 (each running the torch/CUDA notebook) plus the scale-to-zero check, and the
 last case turns the flag off and verifies the pool tears down fully (#349).
-gpu_pool_flag_guard restores the flag if any case leaves the window open.
+gpu_pool_flag_guard restores the flag if any case leaves the window open. Both flips
+write the variables.yaml override: jd config exposes the flag only as a set-true option.
 Gated on JD_E2E_GPU_ENABLED (needs G/VT on-demand quota in the account).
 """
 
@@ -23,6 +24,7 @@ from pytest_jupyter_deploy.polling import poll
 from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_apply_workspace,
     kubectl_delete_workspace,
+    kubectl_delete_workspaces_of_templates,
     kubectl_get_workspace_access_url,
 )
 from pytest_jupyter_deploy.workspaces.web_app import WebAppNavigator
@@ -62,39 +64,18 @@ def _gpu_node_count() -> int:
     return len(get_node_names(GPU_ROLE_SELECTOR))
 
 
-def _apply_gpu_pool_flag(e2e_deployment: EndToEndDeployment, enabled: bool) -> None:
-    """Record the flag in variables.yaml, then apply with jd config + jd up.
-
-    jd config exposes the variable only as a set-true flag (typer generates no
-    --no- form for explicitly named bool options), so both directions go
-    through the variables.yaml override.
-    """
-    e2e_deployment.update_override_value(GPU_POOL_FLAG, enabled)
-    e2e_deployment.ensure_deployed_with([])
-
-
 @pytest.fixture(scope="module")
 def gpu_pool_flag_guard(e2e_deployment: EndToEndDeployment) -> Generator[None, None, None]:
     """Restore enable_default_gpu_pool to its pre-module value if a case left it flipped."""
     e2e_deployment.ensure_deployed()
-    original = bool(e2e_deployment.read_override_value(GPU_POOL_FLAG))
+    flag_was_on = e2e_deployment.get_bool_variable_value(GPU_POOL_FLAG)
+    overrides = e2e_deployment.snapshot_overrides([GPU_POOL_FLAG])
     yield
-    if bool(e2e_deployment.read_override_value(GPU_POOL_FLAG)) != original:
+    if e2e_deployment.get_bool_variable_value(GPU_POOL_FLAG) != flag_was_on:
         # A live GPU pod pins the pool; drop leftovers before the restoring apply.
-        # The UI case's workspace name is generated at create time, so select by the
-        # template label instead: the operator's defaulting webhook stamps it on every
-        # workspace and admission is failurePolicy=Fail, so it cannot be absent.
         with contextlib.suppress(Exception):
-            run_kubectl(
-                "delete",
-                "workspaces",
-                "-n",
-                WORKSPACE_NAMESPACE,
-                "-l",
-                f"workspace.jupyter.org/template-name={GPU_TEMPLATE_NAME}",
-                check=True,
-            )
-        _apply_gpu_pool_flag(e2e_deployment, original)
+            kubectl_delete_workspaces_of_templates([GPU_TEMPLATE_NAME], WORKSPACE_NAMESPACE)
+        e2e_deployment.restore_overrides(overrides)
 
 
 @pytest.mark.order(ORDER_GPU)
@@ -102,7 +83,7 @@ def gpu_pool_flag_guard(e2e_deployment: EndToEndDeployment) -> Generator[None, N
 def test_enable_gpu_pool(e2e_deployment: EndToEndDeployment) -> None:
     """Enabling the flag creates the workspace-gpu pool and installs the device plugin."""
     e2e_deployment.ensure_deployed()
-    _apply_gpu_pool_flag(e2e_deployment, True)
+    e2e_deployment.ensure_deployed_with_overrides({GPU_POOL_FLAG: True})
 
     assert not resource_absent("nodepools.karpenter.sh", GPU_NODEPOOL), (
         "workspace-gpu NodePool missing after enabling enable_default_gpu_pool"
@@ -258,7 +239,7 @@ def test_disable_gpu_pool_deletes_nodepool_and_ec2nodeclass(e2e_deployment: EndT
     """
     e2e_deployment.ensure_deployed()
 
-    _apply_gpu_pool_flag(e2e_deployment, False)
+    e2e_deployment.ensure_deployed_with_overrides({GPU_POOL_FLAG: False})
     poll(
         lambda: _gpu_node_count() == 0,
         timeout_s=300,

@@ -63,6 +63,11 @@ The JupyterLab image ships the Claude Code and Codex CLIs, at the versions pinne
 `workspace_app_claude_code_version` and `workspace_app_codex_version`. Both call Amazon
 Bedrock with the workspace's own credentials; see [Bedrock access](#bedrock-access).
 
+With `enable_remote_access = true`, the template also builds the VS Code image from
+`applications/vscode/`: the same base and coding agents, with the SSH server from the
+[workspace-websocket-proxy](https://github.com/jupyter-infra/workspace-websocket-proxy) project as
+the main process instead of JupyterLab. See [Remote Access](remote-access.md).
+
 ## Access and Permissions
 
 Two layers govern access to the cluster: **IAM** controls who can reach the
@@ -214,14 +219,19 @@ The template provides two variable presets:
 | workspace_app_jupyterlab_image_build | `string` | `v1` | Build tag (increment to trigger rebuild) |
 | workspace_app_claude_code_version | `string` | See preset | Claude Code version installed in the JupyterLab image |
 | workspace_app_codex_version | `string` | See preset | Codex CLI version installed in the JupyterLab image |
+| enable_remote_access | `bool` | `false` | Build the VS Code image and offer VS Code cards whose workspaces users open in VS Code, Cursor or Kiro over SSH with the `kubectl workspace` plugin |
+| workspace_app_vscode_image_name | `string` | See preset | ECR repository name for the VS Code image |
+| workspace_app_vscode_image_build | `string` | `v1` | Build tag (increment to trigger rebuild) |
+| workspace_app_ws_proxy_image_name | `string` | See preset | ECR repository name for the ws-proxy sidecar copy |
+| workspace_app_ws_proxy_image_build | `string` | `v1` | Build tag of the sidecar copy (increment to copy again) |
 | workspace_bedrock_enabled | `bool` | `true` | Give workspaces Bedrock credentials for Claude Code and Codex; a `workspace_namespaces` entry opts out with `bedrock = "false"` |
 | workspace_bedrock_inference_scope | `string` | `geo` | Inference profiles workspaces use: `geo` (requests stay in the region's geography) or `global` |
 | workspace_bedrock_model_patterns | `list(string)` | `["anthropic.claude-*", "openai.gpt-*"]` | Bedrock model IDs workspaces may invoke (IAM wildcards) |
 | workspace_volume_snapshots_enabled | `bool` | `true` | Snapshot workspace volumes on a schedule (Data Lifecycle Manager); `jd down` deletes the snapshots |
 | workspace_volume_snapshot_interval_hours | `number` | `24` | Hours between two snapshots of a workspace volume (1, 2, 3, 4, 6, 8, 12 or 24) |
 | workspace_volume_snapshot_retain_count | `number` | `7` | Scheduled snapshots kept per workspace volume |
-| workspace_templates | `list(map(string))` | `[]` | Named workspace template configs that pool entries offer as cards via their `templates` key |
-| enable_default_gpu_pool | `bool` | `false` | Append the built-in `workspace-gpu` entry and its `jupyterlab-gpu` template config; combining it with your own accelerator entries raises a plan-time error |
+| workspace_templates | `list(map(string))` | `[]` | Named workspace template configs that pool entries offer as cards via their `templates` key; `app = "vscode"` makes a config a VS Code card |
+| enable_default_gpu_pool | `bool` | `false` | Append the built-in `workspace-gpu` entry and its `jupyterlab-gpu` template config, and `vscode-gpu` when `enable_remote_access` is on; combining it with your own accelerator entries raises a plan-time error |
 | nvidia_device_plugin_version | `string` | `0.20.1` | Version of the NVIDIA device plugin chart (the template installs it when any pool entry sets `accelerator = "nvidia"`) |
 
 ## Outputs
@@ -243,6 +253,8 @@ The template provides two variable presets:
 | `get_started_url` | URL to the web UI |
 | `secret_arn` | ARN of the Secrets Manager secret storing the OAuth app client secret |
 | `jupyterlab_image_uri` | ECR image URI for the JupyterLab workspace image |
+| `vscode_image_uri` | ECR image URI for the VS Code workspace image; empty unless `enable_remote_access` is true |
+| `ws_proxy_image_uri` | ECR image URI of the ws-proxy sidecar copy run by VS Code workspace pods; empty unless `enable_remote_access` is true |
 | `kubeconfig_path` | Path to the local kubeconfig file for this cluster |
 | `workspace_bedrock_roles` | JSON-encoded map of workspace namespace to the IAM role granting its workspaces Bedrock |
 | `acm_certificate_arn` | ARN of the ACM certificate for the deployment domain |

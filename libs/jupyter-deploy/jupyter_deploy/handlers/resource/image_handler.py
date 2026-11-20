@@ -5,7 +5,7 @@ from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.engine.terraform import tf_outputs, tf_variables
-from jupyter_deploy.exceptions import ImageTagNotFoundError, ResourceNameRequiredError
+from jupyter_deploy.exceptions import ImageNotProvisionedError, ImageTagNotFoundError, ResourceNameRequiredError
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
 from jupyter_deploy.handlers.payloads import (
     ImageDetail,
@@ -50,7 +50,22 @@ class ImageHandler(BaseProjectHandler):
             return output_def.value
         raise ValueError(f"Output '{output_key}' is not resolved")
 
-    def _resolve_image_outputs(self, image_def: JupyterDeployImageDefinitionV1) -> tuple[str, str]:
+    def _built_images(self, images: dict[str, JupyterDeployImageDefinitionV1]) -> list[str]:
+        """The declared images this deployment built: those whose repository output carries a value."""
+        output_defs = self._output_handler.get_full_project_outputs()
+        built = []
+        for name, image_def in images.items():
+            output_def = output_defs.get(image_def.repository_output)
+            if isinstance(output_def, StrTemplateOutputDefinition) and output_def.value:
+                built.append(name)
+        return built
+
+    def _resolve_image_outputs(self, name: str, image_def: JupyterDeployImageDefinitionV1) -> tuple[str, str]:
+        # An empty repository output is the template's way of saying the image is behind a flag that is
+        # off; a missing one is a template or deployment problem, which _resolve_output names.
+        output_def = self._output_handler.get_full_project_outputs().get(image_def.repository_output)
+        if isinstance(output_def, StrTemplateOutputDefinition) and output_def.value == "":
+            raise ImageNotProvisionedError(name, image_def.enabled_by)
         repository_name = self._resolve_output(image_def.repository_output)
         tag = self._resolve_output(image_def.tag_output)
         return repository_name, tag
@@ -66,12 +81,15 @@ class ImageHandler(BaseProjectHandler):
         }
 
     def resolve_name(self, name: str | None) -> str:
-        """Resolve the image name, defaulting to the only image if there's just one."""
-        images = self.project_manifest.get_images()
+        """Resolve the image name, defaulting to the only declared image, else to the only built one."""
         if name:
             return name
+        images = self.project_manifest.get_images()
         if len(images) == 1:
             return next(iter(images))
+        built = self._built_images(images)
+        if len(built) == 1:
+            return built[0]
         raise ResourceNameRequiredError("image", "jd image list")
 
     def list_images(self) -> list[ImageInfo]:
@@ -83,7 +101,7 @@ class ImageHandler(BaseProjectHandler):
         """Return detailed information about an image."""
         resolved_name = self.resolve_name(name)
         image_def = self.project_manifest.get_image(resolved_name)
-        repository_name, tag = self._resolve_image_outputs(image_def)
+        repository_name, tag = self._resolve_image_outputs(resolved_name, image_def)
         cli_paramdefs = self._build_cli_paramdefs(repository_name, tag)
 
         command = self.project_manifest.get_command("image.show")
@@ -108,7 +126,7 @@ class ImageHandler(BaseProjectHandler):
         """Return tags for an image."""
         resolved_name = self.resolve_name(name)
         image_def = self.project_manifest.get_image(resolved_name)
-        repository_name, tag = self._resolve_image_outputs(image_def)
+        repository_name, tag = self._resolve_image_outputs(resolved_name, image_def)
         cli_paramdefs = self._build_cli_paramdefs(repository_name, tag)
 
         command = self.project_manifest.get_command("image.tags")
@@ -136,7 +154,7 @@ class ImageHandler(BaseProjectHandler):
         """Return whether the image is present in ECR, plus its latest non-'latest' tag."""
         resolved_name = self.resolve_name(name)
         image_def = self.project_manifest.get_image(resolved_name)
-        repository_name, default_tag = self._resolve_image_outputs(image_def)
+        repository_name, default_tag = self._resolve_image_outputs(resolved_name, image_def)
 
         latest_tag = self._select_latest_tag(self.list_tags(resolved_name))
         probe_tag = latest_tag or default_tag
@@ -170,7 +188,7 @@ class ImageHandler(BaseProjectHandler):
         """Return vulnerabilities for an image."""
         resolved_name = self.resolve_name(name)
         image_def = self.project_manifest.get_image(resolved_name)
-        repository_name, default_tag = self._resolve_image_outputs(image_def)
+        repository_name, default_tag = self._resolve_image_outputs(resolved_name, image_def)
         resolved_tag = tag or default_tag
         cli_paramdefs = self._build_cli_paramdefs(repository_name, resolved_tag)
 

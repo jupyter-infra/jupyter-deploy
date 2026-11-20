@@ -1,4 +1,18 @@
 {{- if .Values.networkPolicy.create }}
+{{- /* A rule without ports admits every port, so an empty list or the old single-port key is refused. */}}
+{{- if hasKey .Values.networkPolicy "port" }}
+{{- fail "networkPolicy.port was replaced by networkPolicy.routerPorts and networkPolicy.operatorPorts" }}
+{{- end }}
+{{- if not .Values.networkPolicy.routerPorts }}
+{{- fail "networkPolicy.routerPorts must list at least one port" }}
+{{- end }}
+{{- if not .Values.networkPolicy.operatorPorts }}
+{{- fail "networkPolicy.operatorPorts must list at least one port" }}
+{{- end }}
+{{- /* An empty podSelector admits every pod of the namespace, so a missing, empty or non-map value is refused. */}}
+{{- if or (not .Values.networkPolicy.routerPodLabels) (not (kindIs "map" .Values.networkPolicy.routerPodLabels)) }}
+{{- fail "networkPolicy.routerPodLabels must name the router pods" }}
+{{- end }}
 {{- range $ns := .Values.networkPolicy.workspaceNamespaces }}
 ---
 apiVersion: networking.k8s.io/v1
@@ -16,21 +30,29 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    # Traefik router proxying authenticated workspace traffic.
+    # The Traefik pods proxying authenticated workspace traffic; the router namespace's other
+    # components never reach workspace pods.
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ $.Values.networkPolicy.routerNamespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $.Values.networkPolicy.routerPodLabels | nindent 14 }}
       ports:
-        - port: {{ $.Values.networkPolicy.port }}
+        {{- range $.Values.networkPolicy.routerPorts }}
+        - port: {{ . }}
           protocol: TCP
+        {{- end }}
     # Operator idle-detection probes (transport: network).
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ $.Values.networkPolicy.operatorNamespace }}
       ports:
-        - port: {{ $.Values.networkPolicy.port }}
+        {{- range $.Values.networkPolicy.operatorPorts }}
+        - port: {{ . }}
           protocol: TCP
+        {{- end }}
 {{- end }}
 {{- end }}

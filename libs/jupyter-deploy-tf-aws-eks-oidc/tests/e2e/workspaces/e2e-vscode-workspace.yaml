@@ -1,0 +1,13 @@
+apiVersion: workspace.jupyter.org/v1alpha1
+kind: Workspace
+metadata:
+  name: e2e-vscode-workspace
+  namespace: default
+spec:
+  displayName: "E2E VS Code Workspace"
+  desiredStatus: Running
+  ownershipType: Public
+  accessType: Public
+  # Resolves in the workspace's own namespace, which holds its own template copy.
+  templateRef:
+    name: vscode

@@ -1,9 +1,11 @@
-"""Unit tests for EndToEndDeployment: project-dir resolution must not depend on call order."""
+"""Unit tests for EndToEndDeployment: project-dir resolution and the variables.yaml override writers."""
 
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
 
+import yaml
 from jupyter_deploy import constants as jd_constants
 
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
@@ -21,3 +23,44 @@ class TestGetVariablesYamlPath(unittest.TestCase):
 
         suite_config.load.assert_called_once_with()
         self.assertEqual(path, Path("/proj") / jd_constants.VARIABLES_FILENAME)
+
+
+class TestOverrideValues(unittest.TestCase):
+    def test_restore_writes_back_set_keys_and_resets_unset_ones(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            variables_yaml = Path(tmp) / jd_constants.VARIABLES_FILENAME
+            variables_yaml.write_text(
+                "schema_version: 2\nrequired:\n  domain: example.com\nrequired_sensitive: {}\noverrides:\n  a: 1\n"
+            )
+            suite_config = Mock(spec=SuiteConfig)
+            suite_config.project_dir = Path(tmp)
+            deployment = EndToEndDeployment(suite_config)
+            deployment.ensure_deployed_with = Mock()  # type: ignore[method-assign]
+
+            snapshot = deployment.snapshot_overrides(["a", "b"])
+            deployment.update_override_value("a", 2)
+            deployment.update_override_value("b", True)
+            deployment.restore_overrides(snapshot)
+
+            self.assertEqual(snapshot, {"a": 1, "b": None})
+            self.assertEqual(deployment.read_override_value("a"), 1)
+            deployment.ensure_deployed_with.assert_called_once_with(["--reset-variable", "b"], timeout_seconds=None)
+
+    def test_update_then_delete_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            variables_yaml = Path(tmp) / jd_constants.VARIABLES_FILENAME
+            variables_yaml.write_text(
+                "schema_version: 2\nrequired:\n  domain: example.com\nrequired_sensitive: {}\n"
+                "overrides:\n  a: 1\n  b: 2\n"
+            )
+            suite_config = Mock(spec=SuiteConfig)
+            suite_config.project_dir = Path(tmp)
+            deployment = EndToEndDeployment(suite_config)
+
+            deployment.update_override_value("c", True)
+            deployment.delete_override_value("a")
+            deployment.delete_override_value("missing")
+
+            self.assertEqual(yaml.safe_load(variables_yaml.read_text())["overrides"], {"b": 2, "c": True})
+            self.assertIsNone(deployment.read_override_value("a"))
+            self.assertEqual(yaml.safe_load(variables_yaml.read_text())["required"], {"domain": "example.com"})

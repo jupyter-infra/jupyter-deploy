@@ -42,6 +42,10 @@ On subsequent requests, the router grants access directly using the user's cooki
 
 ![Access Workspaces](diagrams/overview-access-workspace.svg)
 
+With `enable_remote_access` set to `true`, users also open a workspace in **VS Code**, **Cursor** or
+**Kiro** on their own machine, over SSH carried through the same HTTPS entry point. See
+[Remote Access](remote-access.md).
+
 ## Next Steps
 
 ```{toctree}
@@ -51,6 +55,7 @@ prerequisites
 user-guide
 architecture
 web-ui
+remote-access
 team-isolation
 bedrock-integration
 autoscaling

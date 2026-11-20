@@ -2,8 +2,18 @@
 
 import json
 import subprocess
+import tempfile
 import time
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
+
+from pytest_jupyter_deploy.kubernetes.kubectl import run_kubectl
+
+# The operator's extension API group that serves WorkspaceConnection requests.
+WORKSPACE_CONNECTION_API = "connection.workspace.jupyter.org/v1alpha1"
+# The connection type whose URL is the WebSocket route of the SSH sidecar.
+SSH_CONNECTION_TYPE = "ssh-over-websocket"
 
 
 def kubectl_apply_workspace(
@@ -46,6 +56,26 @@ def kubectl_delete_workspace(name: str, namespace: str = "default") -> None:
         check=True,
         capture_output=True,
         text=True,
+    )
+
+
+def kubectl_delete_workspaces_of_templates(templates: Iterable[str], namespace: str = "default") -> None:
+    """Delete the workspaces created from the given templates and wait until they are gone.
+
+    Selects by the template-name label the operator's defaulting webhook stamps on every
+    workspace, so a workspace whose name was generated at create time is found too.
+    """
+    names = list(templates)
+    if not names:
+        return
+    run_kubectl(
+        "delete",
+        "workspaces",
+        "-n",
+        namespace,
+        "-l",
+        f"workspace.jupyter.org/template-name in ({','.join(names)})",
+        check=True,
     )
 
 
@@ -288,3 +318,67 @@ def kubectl_poll_workspace_status(
     raise TimeoutError(
         f"Workspace '{name}' did not reach status '{target_status}' within {timeout_s}s (last: {last_status})"
     )
+
+
+def kubectl_get_workspace_pod(name: str, namespace: str = "default") -> dict[str, Any]:
+    """The live pod of a workspace as JSON, found by the workspace-name label the operator sets on it.
+
+    After a restart the pod being replaced still carries the label until it is gone, so a pod
+    with a deletion timestamp is not the workspace's pod.
+
+    Raises:
+        LookupError: If no live pod carries the label
+    """
+    result = run_kubectl(
+        "get", "pods", "-n", namespace, "-l", f"workspace.jupyter.org/workspace-name={name}", "-o", "json", check=True
+    )
+    pods: list[dict[str, Any]] = json.loads(result.stdout)["items"]
+    live = [pod for pod in pods if "deletionTimestamp" not in pod["metadata"]]
+    if not live:
+        raise LookupError(f"no live pod of workspace {name} in namespace {namespace}")
+    return live[0]
+
+
+def kubectl_request_workspace_connection(
+    name: str,
+    namespace: str = "default",
+    connection_type: str = SSH_CONNECTION_TYPE,
+    as_user: str | None = None,
+    as_groups: list[str] | None = None,
+) -> dict[str, Any]:
+    """Ask the operator for a connection to a workspace, as the kubectl-workspace plugin does.
+
+    POSTs a WorkspaceConnection to the extension API and returns the object it answers with;
+    status.workspaceConnectionUrl carries the URL and the token that authorizes it.
+
+    Args:
+        name: Workspace resource name
+        namespace: Kubernetes namespace
+        connection_type: spec.workspaceConnectionType of the request
+        as_user: Impersonate this user (--as flag)
+        as_groups: Impersonate these groups (--as-group flags)
+
+    Raises:
+        subprocess.CalledProcessError: If the operator refuses the request
+    """
+    request = {
+        "apiVersion": WORKSPACE_CONNECTION_API,
+        "kind": "WorkspaceConnection",
+        "metadata": {"namespace": namespace},
+        "spec": {"workspaceName": name, "workspaceConnectionType": connection_type},
+    }
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as body:
+        json.dump(request, body)
+        body.flush()
+        result = run_kubectl(
+            "create",
+            "--raw",
+            f"/apis/{WORKSPACE_CONNECTION_API}/namespaces/{namespace}/workspaceconnections",
+            "-f",
+            body.name,
+            as_user=as_user,
+            as_groups=as_groups,
+            check=True,
+        )
+    connection: dict[str, Any] = json.loads(result.stdout)
+    return connection

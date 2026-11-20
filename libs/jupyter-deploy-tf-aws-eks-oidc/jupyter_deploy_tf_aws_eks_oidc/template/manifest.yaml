@@ -250,6 +250,16 @@ images:
     description: JupyterLab workspace image
     repository-output: jupyterlab_ecr_repository_name
     tag-output: jupyterlab_image_tag
+  vscode:
+    description: VS Code workspace image, built with enable_remote_access
+    repository-output: vscode_ecr_repository_name
+    tag-output: vscode_image_tag
+    enabled-by: enable_remote_access
+  ws-proxy:
+    description: WebSocket proxy sidecar of VS Code workspaces, copied into ECR with enable_remote_access
+    repository-output: ws_proxy_ecr_repository_name
+    tag-output: ws_proxy_image_tag
+    enabled-by: enable_remote_access
 secrets:
 - name: oauth_app_client_secret
   source: output

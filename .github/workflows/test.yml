@@ -19,6 +19,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # The eks-oidc template's variable validation tests plan a one-variable module.
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
       - name: Install UV and Python
         uses: ./.github/actions/install-uv
         with:
@@ -42,6 +49,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # The eks-oidc template's variable validation tests plan a one-variable module.
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
 
       - name: Install UV and Python
         uses: ./.github/actions/install-uv

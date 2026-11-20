@@ -15,7 +15,7 @@ spec:
   defaultAccessType: {{ .accessType }}
   defaultOwnershipType: {{ .ownershipType }}
   defaultAccessStrategy:
-    name: {{ $.Values.accessStrategy.name }}
+    name: {{ .accessStrategy | default $.Values.accessStrategy.name }}
     namespace: {{ $.Values.sharedNamespace }}
   defaultResources:
     {{- .defaultResources | toYaml | nindent 4 }}
@@ -32,8 +32,14 @@ spec:
   # operator does not flip status.condition[Available]=True before the server is
   # up. Complements the access-strategy startupProbe.
   defaultReadinessProbe:
+    {{- if .readinessProbe.command }}
+    exec:
+      command:
+        {{- .readinessProbe.command | toYaml | nindent 8 }}
+    {{- else }}
     tcpSocket:
       port: {{ .readinessProbe.port }}
+    {{- end }}
     initialDelaySeconds: {{ .readinessProbe.initialDelaySeconds }}
     periodSeconds: {{ .readinessProbe.periodSeconds }}
     failureThreshold: {{ .readinessProbe.failureThreshold }}
@@ -47,19 +53,21 @@ spec:
     {{- .nodeSelector | toYaml | nindent 4 }}
   defaultTolerations:
     {{- .tolerations | toYaml | nindent 4 }}
+  {{- with .idleShutdown }}
   defaultIdleShutdown:
-    enabled: {{ .idleShutdown.enabled }}
-    idleTimeoutInMinutes: {{ .idleShutdown.timeoutMinutes }}
+    enabled: {{ .enabled }}
+    idleTimeoutInMinutes: {{ .timeoutMinutes }}
     detection:
       httpGet:
-        path: /api/status
-        port: 8888
+        path: {{ .detection.path }}
+        port: {{ .detection.port }}
         transport: network
         lastActivityTimestamp:
-          responseBodyPath: last_activity
-          format: RFC3339
+          responseBodyPath: {{ .detection.responseBodyPath }}
+          format: {{ .detection.format }}
   idleShutdownOverrides:
     allow: true
-    minIdleTimeoutInMinutes: {{ .idleShutdown.minTimeoutMinutes }}
-    maxIdleTimeoutInMinutes: {{ .idleShutdown.maxTimeoutMinutes }}
+    minIdleTimeoutInMinutes: {{ .minTimeoutMinutes }}
+    maxIdleTimeoutInMinutes: {{ .maxTimeoutMinutes }}
+  {{- end }}
 {{- end }}
