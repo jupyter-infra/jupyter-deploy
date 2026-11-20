@@ -237,6 +237,29 @@ class TestWorkspaceDefaultsDefaultRender(GoldenComparisonTestCase):
 
 
 @_SKIP_WITHOUT_HELM
+class TestWorkspaceDefaultsFixtureEntries(unittest.TestCase):
+    """Each fixture renders the entries it lists, and its jupyterlab entry renders the default golden's document.
+
+    The chart renders entries independently, so a drift here is a hand-edited fixture, not a chart change.
+    """
+
+    FIXTURES: ClassVar[dict[str, list[str]]] = {
+        "values_workspace_defaults_two_templates.yaml": ["jupyterlab", "jupyterlab-gpu"],
+        "values_workspace_defaults_custom_pool.yaml": ["jupyterlab", "jupyterlab-gpu-p"],
+        "values_workspace_defaults_remote_access.yaml": ["jupyterlab", "vscode"],
+    }
+
+    def test_each_fixture_renders_its_entries_with_jupyterlab_unchanged(self) -> None:
+        golden = _workspace_template_docs((DATA_DIR / "golden_workspace_defaults_default.yaml").read_text())[0]
+        for values_file, names in self.FIXTURES.items():
+            with self.subTest(values_file=values_file):
+                rendered = _helm_template("charts/workspace-defaults", "workspace-defaults", values_file)
+                templates = _workspace_template_docs(rendered)
+                self.assertEqual([doc["metadata"]["name"] for doc in templates], names)
+                self.assertEqual(next(doc for doc in templates if doc["metadata"]["name"] == "jupyterlab"), golden)
+
+
+@_SKIP_WITHOUT_HELM
 class TestWorkspaceDefaultsTwoTemplateRender(unittest.TestCase):
     """The jupyterlab-gpu entry renders a fenced fixed-shape template beside jupyterlab."""
 
@@ -250,15 +273,6 @@ class TestWorkspaceDefaultsTwoTemplateRender(unittest.TestCase):
         )
         cls.templates = _workspace_template_docs(rendered)
         cls.gpu = next(doc for doc in cls.templates if doc["metadata"]["name"] == "jupyterlab-gpu")
-
-    def test_renders_both_templates(self) -> None:
-        names = [doc["metadata"]["name"] for doc in self.templates]
-        self.assertEqual(names, ["jupyterlab", "jupyterlab-gpu"])
-
-    def test_jupyterlab_unchanged_beside_gpu_template(self) -> None:
-        golden = _workspace_template_docs((DATA_DIR / "golden_workspace_defaults_default.yaml").read_text())
-        jupyterlab = next(doc for doc in self.templates if doc["metadata"]["name"] == "jupyterlab")
-        self.assertEqual(golden[0], jupyterlab)
 
     def test_gpu_template_bounds_pinned(self) -> None:
         bounds = self.gpu["spec"]["resourceBounds"]["resources"]
@@ -304,10 +318,6 @@ class TestWorkspaceDefaultsCustomPoolRender(unittest.TestCase):
         )
         cls.templates = _workspace_template_docs(rendered)
         cls.custom = next(doc for doc in cls.templates if doc["metadata"]["name"] == "jupyterlab-gpu-p")
-
-    def test_renders_both_templates(self) -> None:
-        names = [doc["metadata"]["name"] for doc in self.templates]
-        self.assertEqual(names, ["jupyterlab", "jupyterlab-gpu-p"])
 
     def test_placement_follows_entry_role(self) -> None:
         spec = self.custom["spec"]
@@ -427,15 +437,6 @@ class TestWorkspaceDefaultsRemoteAccessRender(unittest.TestCase):
         )
         cls.templates = _workspace_template_docs(cls.rendered)
         cls.vscode = next(doc for doc in cls.templates if doc["metadata"]["name"] == "vscode")
-
-    def test_renders_both_templates(self) -> None:
-        names = [doc["metadata"]["name"] for doc in self.templates]
-        self.assertEqual(names, ["jupyterlab", "vscode"])
-
-    def test_jupyterlab_unchanged_beside_vscode_template(self) -> None:
-        golden = _workspace_template_docs((DATA_DIR / "golden_workspace_defaults_default.yaml").read_text())
-        jupyterlab = next(doc for doc in self.templates if doc["metadata"]["name"] == "jupyterlab")
-        self.assertEqual(golden[0], jupyterlab)
 
     def test_vscode_template_references_the_websocket_strategy(self) -> None:
         self.assertEqual(
