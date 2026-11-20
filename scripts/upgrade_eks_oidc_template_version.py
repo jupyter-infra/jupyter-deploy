@@ -55,7 +55,7 @@ def main() -> None:
         template_path / "variables.yaml",
         template_path / "engine" / "variables.tf",
     ]:
-        for app_name in ("jupyterlab", "vscode"):
+        for app_name in ("jupyterlab", "vscode", "ws-proxy"):
             set_app_image_name_version(defaults_file, app_name, pep440_version)
 
     chart_dirs = ["workspace-defaults", "github-rbac"]

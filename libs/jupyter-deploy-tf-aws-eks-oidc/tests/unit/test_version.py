@@ -62,7 +62,7 @@ def test_version_consistency() -> None:
     assert pyproject_version == app_version, (
         f"Version mismatch: pyproject.toml ({pyproject_version}) != jupyterlab app ({app_version})"
     )
-    for app in ("jupyterlab", "vscode"):
+    for app in ("jupyterlab", "vscode", "ws-proxy"):
         for defaults_file in [
             template_path / "engine" / "presets" / "defaults-all.tfvars",
             template_path / "variables.yaml",
