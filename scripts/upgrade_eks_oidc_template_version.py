@@ -47,8 +47,9 @@ def main() -> None:
     set_manifest_version(template_path / "manifest.yaml", semver_version)
     set_tf_template_version(template_path / "engine" / "main.tf", semver_version)
 
-    # The jupyterlab app, and both app image names, track the template version, so each
-    # release builds into new ECR repositories. PEP 440, like the app's pyproject.toml.
+    # The jupyterlab app and the three image names (jupyterlab, vscode and the ws-proxy sidecar
+    # copy) track the template version, so each release builds into new ECR repositories.
+    # PEP 440, like the app's pyproject.toml.
     set_toml_version(template_path / "applications" / "jupyterlab" / "pyproject.toml", pep440_version)
     for defaults_file in [
         template_path / "engine" / "presets" / "defaults-all.tfvars",
