@@ -1,10 +1,13 @@
 locals {
   access_strategy_name    = "oauth-access-strategy"
   workspace_storage_class = "ebs-sc"
+  # The card every namespace offers by default, and the port every application serves on.
+  workspace_default_app = "jupyterlab"
+  workspace_app_port    = 8888
   # Ports the workspace-ingress NetworkPolicy admits: the application port from the
   # Traefik pods and the operator namespace, plus the remote access sidecar's from the Traefik pods.
-  workspace_ingress_router_ports   = concat([8888], var.enable_remote_access ? [local.remote_access_sidecar_port] : [])
-  workspace_ingress_operator_ports = [8888]
+  workspace_ingress_router_ports   = concat([local.workspace_app_port], var.enable_remote_access ? [local.remote_access_sidecar_port] : [])
+  workspace_ingress_operator_ports = [local.workspace_app_port]
   # Labels the aws-oidc chart sets on its Traefik Deployment; the router namespace's other
   # components (web app, Authmiddleware, oauth2-proxy, Dex) never reach workspace pods.
   workspace_ingress_router_pod_labels = { app = "traefik", component = "router" }
@@ -37,17 +40,20 @@ locals {
   # namespace => workspace_templates config names offered on top of the built-in
   # cards, which every namespace offers (listing one is a no-op). With
   # workspace_namespaces empty, "default" offers every config a pool references.
+  workspace_ns_templates_listed = {
+    for ns, es in local.workspace_ns_entries : ns => [
+      for raw in split(",", lookup(es[0], "templates", "")) : trimspace(raw) if trimspace(raw) != ""
+    ]
+  }
   workspace_ns_template_requests = local.workspace_multi_ns ? {
-    for ns, es in local.workspace_ns_entries : ns => distinct([
-      for raw in split(",", lookup(es[0], "templates", "")) : trimspace(raw)
-      if trimspace(raw) != "" && !contains(keys(local.workspace_apps), trimspace(raw))
+    for ns, listed in local.workspace_ns_templates_listed : ns => distinct([
+      for name in listed : name if !contains(keys(local.workspace_apps), name)
     ])
   } : { default = keys(local.workspace_pool_templates) }
 
   # Namespaces listing the built-in vscode card, which exists only with the flag.
   workspace_ns_vscode_requests = [
-    for ns, es in local.workspace_ns_entries : ns
-    if contains([for raw in split(",", lookup(es[0], "templates", "")) : trimspace(raw)], "vscode")
+    for ns, listed in local.workspace_ns_templates_listed : ns if contains(listed, "vscode")
   ]
 
   workspace_ns_teams_unlisted = distinct([
@@ -222,9 +228,9 @@ locals {
         cpu    = { min = "100m", max = "8" }
         memory = { min = "256Mi", max = "32Gi" }
       }
-      readinessProbe = { port = 8888, initialDelaySeconds = 2, periodSeconds = 3, failureThreshold = 30 }
+      readinessProbe = { port = local.workspace_app_port, initialDelaySeconds = 2, periodSeconds = 3, failureThreshold = 30 }
       # JupyterLab reports its last activity on /api/status.
-      idleDetection = { path = "/api/status", port = 8888, responseBodyPath = "last_activity", format = "RFC3339" }
+      idleDetection = { path = "/api/status", port = local.workspace_app_port, responseBodyPath = "last_activity", format = "RFC3339" }
     }
     vscode = local.vscode_app
   }
@@ -246,7 +252,7 @@ locals {
   workspace_base_cards = {
     for app, a in local.workspace_apps : app => {
       name             = app
-      isDefault        = app == "jupyterlab" ? "true" : "false"
+      isDefault        = app == local.workspace_default_app ? "true" : "false"
       displayName      = a.displayName
       description      = a.description
       imageUri         = a.imageUri
@@ -299,15 +305,12 @@ locals {
     for name, refs in { for r in local.workspace_template_refs : r.config_name => r... } :
     name => {
       config      = local.workspace_template_configs[name][0]
+      app         = lookup(local.workspace_template_configs[name][0], "app", local.workspace_default_app)
       role        = refs[0].pool_role
       roles       = distinct([for r in refs : r.pool_role])
       pools       = distinct([for r in refs : r.pool_name])
       accelerated = alltrue([for r in refs : r.pool_accelerated])
     } if contains(keys(local.workspace_template_configs), name)
-  }
-
-  workspace_template_apps = {
-    for name, b in local.workspace_template_bindings : name => lookup(b.config, "app", "jupyterlab")
   }
 
   # A config starts from its app's base card and overrides the identity, the
@@ -316,7 +319,7 @@ locals {
   # choice would only change which instance Karpenter buys).
   workspace_pool_templates = {
     for name, b in local.workspace_template_bindings : name => merge(
-      local.workspace_base_cards[local.workspace_template_apps[name]],
+      local.workspace_base_cards[b.app],
       contains(keys(b.config), "cpu") ? {
         defaultResources = {
           requests = merge(
@@ -340,13 +343,13 @@ locals {
         name         = name
         isDefault    = "false"
         displayName  = lookup(b.config, "display_name", name)
-        description  = lookup(b.config, "description", "${local.workspace_apps[local.workspace_template_apps[name]].displayName} workspace on the ${b.pools[0]} pool")
+        description  = lookup(b.config, "description", "${local.workspace_apps[b.app].displayName} workspace on the ${b.pools[0]} pool")
         nodeSelector = { "jupyter-deploy/role" = b.role }
         tolerations = [
           { key = "jupyter-deploy/role", operator = "Equal", value = b.role, effect = "NoSchedule" }
         ]
-        idleShutdown = local.workspace_app_idle[local.workspace_template_apps[name]] == null ? null : merge(
-          local.workspace_app_idle[local.workspace_template_apps[name]],
+        idleShutdown = local.workspace_app_idle[b.app] == null ? null : merge(
+          local.workspace_app_idle[b.app],
           { timeoutMinutes = tonumber(lookup(b.config, "idle_minutes", var.workspaces_idle_shutdown_timeout_default)) },
         )
       },
@@ -354,7 +357,7 @@ locals {
   }
 
   workspace_template_vscode_configs = [
-    for t in local.workspace_templates_effective : t["name"] if lookup(t, "app", "jupyterlab") == "vscode"
+    for t in local.workspace_templates_effective : t["name"] if lookup(t, "app", local.workspace_default_app) == "vscode"
   ]
 
   # One copy of each offered template per workspace namespace, so a template
@@ -568,10 +571,6 @@ resource "helm_release" "workspace_defaults" {
     {
       name  = "sharedNamespace"
       value = var.workspace_shared_namespace
-    },
-    {
-      name  = "accessStrategy.name"
-      value = local.access_strategy_name
     },
     {
       name  = "networkPolicy.routerNamespace"
