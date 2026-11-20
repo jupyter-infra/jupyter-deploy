@@ -191,7 +191,10 @@ def test_enable_remote_access_offers_the_vscode_cards(
     namespaces = e2e_deployment.get_list_of_maps_variable_value("workspace_namespaces")
     overrides: dict[str, Any] = {
         REMOTE_ACCESS_FLAG: True,
-        "workspace_templates": [*configs, VSCODE_SMALL_TEMPLATE_CONFIG],
+        "workspace_templates": [
+            *[c for c in configs if c["name"] != VSCODE_SMALL_TEMPLATE],
+            VSCODE_SMALL_TEMPLATE_CONFIG,
+        ],
         "workspace_nodepools": pools_offering(pools, VSCODE_SMALL_TEMPLATE),
     }
     if namespaces:
