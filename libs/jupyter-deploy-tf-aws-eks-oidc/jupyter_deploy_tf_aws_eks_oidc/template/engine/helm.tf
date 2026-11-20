@@ -281,7 +281,7 @@ resource "helm_release" "workspace_router" {
       # values, repository/imageName:imageTag.
       {
         name  = "accessStrategy.webSocket.image.repository"
-        value = local.remote_access_proxy_registry
+        value = module.app_ws_proxy[0].registry
       },
       {
         name  = "accessStrategy.webSocket.image.imageName"
@@ -290,6 +290,15 @@ resource "helm_release" "workspace_router" {
       {
         name  = "accessStrategy.webSocket.image.imageTag"
         value = module.app_ws_proxy[0].image_tag
+      },
+      # The ports the NetworkPolicy admits and the readiness probe connects to.
+      {
+        name  = "accessStrategy.webSocket.port"
+        value = tostring(local.remote_access_sidecar_port)
+      },
+      {
+        name  = "accessStrategy.webSocket.targetPort"
+        value = tostring(local.remote_access_ssh_port)
       },
     ] : [],
     # Workspace namespaces the web app offers: the default one, plus the rest of
