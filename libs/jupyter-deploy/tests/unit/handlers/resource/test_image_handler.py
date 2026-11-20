@@ -167,9 +167,17 @@ class TestImageHandler(unittest.TestCase):
         self.assertEqual(handler.resolve_name("jupyterlab"), "jupyterlab")
 
     def _handler_with_two_images(
-        self, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock, vscode_repository: str
+        self,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+        vscode_repository: str | None,
+        jupyterlab_built: bool = True,
     ) -> ImageHandler:
-        """A handler whose manifest declares jupyterlab, always built, and vscode behind a flag."""
+        """A handler whose manifest declares jupyterlab, always built, and vscode behind a flag.
+
+        vscode_repository is the vscode repository output: "" for an image the flag did not build,
+        None for an output the template does not declare at all.
+        """
         images = {
             "jupyterlab": JupyterDeployImageDefinitionV1(
                 **{"repository-output": "ecr_repository_name", "tag-output": "jupyterlab_image_tag"}
@@ -187,12 +195,14 @@ class TestImageHandler(unittest.TestCase):
         manifest_fns["get_image"].side_effect = images.__getitem__
         mock_retrieve_manifest.return_value = mock_manifest
         mock_output_handler, output_fns = self.get_mock_outputs_handler_and_fns()
-        output_fns["get_full_project_outputs"].return_value |= {
-            "vscode_ecr_repository_name": StrTemplateOutputDefinition(
+        outputs = output_fns["get_full_project_outputs"].return_value
+        outputs["vscode_image_tag"] = StrTemplateOutputDefinition(output_name="vscode_image_tag", value="v1")
+        if vscode_repository is not None:
+            outputs["vscode_ecr_repository_name"] = StrTemplateOutputDefinition(
                 output_name="vscode_ecr_repository_name", value=vscode_repository
-            ),
-            "vscode_image_tag": StrTemplateOutputDefinition(output_name="vscode_image_tag", value="v1"),
-        }
+            )
+        if not jupyterlab_built:
+            outputs["ecr_repository_name"] = StrTemplateOutputDefinition(output_name="ecr_repository_name", value="")
         mock_tf_outputs_handler.return_value = mock_output_handler
         return ImageHandler(display_manager=NullDisplay())
 
@@ -244,12 +254,24 @@ class TestImageHandler(unittest.TestCase):
         self, mock_tf_variables_handler: Mock, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock
     ) -> None:
         mock_tf_variables_handler.return_value = Mock()
-        handler = self._handler_with_two_images(mock_tf_outputs_handler, mock_retrieve_manifest, vscode_repository="")
-        outputs = handler._output_handler.get_full_project_outputs.return_value  # type: ignore[attr-defined]
-        del outputs["vscode_ecr_repository_name"]
+        handler = self._handler_with_two_images(mock_tf_outputs_handler, mock_retrieve_manifest, vscode_repository=None)
 
         with self.assertRaisesRegex(KeyError, "vscode_ecr_repository_name"):
             handler.get_status("vscode")
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    def test_resolve_name_needs_a_name_when_no_image_is_built_yet(
+        self, mock_tf_variables_handler: Mock, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock
+    ) -> None:
+        mock_tf_variables_handler.return_value = Mock()
+        handler = self._handler_with_two_images(
+            mock_tf_outputs_handler, mock_retrieve_manifest, vscode_repository="", jupyterlab_built=False
+        )
+
+        with self.assertRaises(ResourceNameRequiredError):
+            handler.resolve_name(None)
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")

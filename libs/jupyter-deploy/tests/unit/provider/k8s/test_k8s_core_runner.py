@@ -384,7 +384,7 @@ class TestK8sCoreRunner(unittest.TestCase):
         )
 
     def _runner_with_deployment_pod(
-        self, mock_k8s_core: Mock, containers: tuple[str, ...] = (), kubeconfig_path: str | None = None
+        self, mock_k8s_core: Mock, containers: tuple[str, ...] = ("workspace",), kubeconfig_path: str | None = None
     ) -> K8sCoreRunner:
         """A runner whose deployment my-deploy resolves to one running pod with the given containers."""
         runner = self._make_runner(kubeconfig_path=kubeconfig_path)
@@ -462,13 +462,16 @@ class TestK8sCoreRunner(unittest.TestCase):
             self._exec_via_deployment(runner)
 
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
-    def test_exec_pod_single_container_passes_no_container(self, mock_k8s_core: Mock) -> None:
-        runner = self._runner_with_deployment_pod(mock_k8s_core, ("workspace",))
+    def test_exec_pod_says_which_container_it_defaulted_to(self, mock_k8s_core: Mock) -> None:
+        runner = self._runner_with_deployment_pod(mock_k8s_core, ("workspace", "ws-proxy"))
+        runner.display_manager = Mock()
         mock_k8s_core.exec_pod.return_value = ExecResult(stdout="", stderr="", returncode=0)
 
         self._exec_via_deployment(runner)
 
-        self.assertIsNone(mock_k8s_core.exec_pod.call_args.kwargs["container"])
+        runner.display_manager.hint.assert_called_once_with(
+            "Defaulted container 'workspace' out of: workspace, ws-proxy"
+        )
 
     @patch("jupyter_deploy.provider.k8s.k8s_core_runner.k8s_core")
     def test_exec_pod_defaults_to_the_first_of_several_containers(self, mock_k8s_core: Mock) -> None:
