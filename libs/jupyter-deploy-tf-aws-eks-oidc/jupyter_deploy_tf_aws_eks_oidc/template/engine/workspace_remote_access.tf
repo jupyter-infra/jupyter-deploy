@@ -66,6 +66,8 @@ locals {
 # strategy from 0.2.1, the jupyter-k8s chart the connection API and its token signing
 # from 0.3.0. A pinned version compares on its release core; one that does not parse
 # counts as below the floor. helm.tf checks the result in the releases' preconditions.
+# The chart-floor unit test plans this block beside the two chart-version variables
+# alone, so it must reference nothing else.
 locals {
   remote_access_chart_floors = { router = [0, 2, 1], operator = [0, 3, 0] }
   remote_access_chart_cores = {
