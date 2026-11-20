@@ -217,6 +217,29 @@ def probe_workspace(
     )
 
 
+def probe_workspace_allowed(
+    workspace_name: str,
+    *,
+    from_namespace: str,
+    workspace_namespace: str = "default",
+    port: int = 8888,
+    pod_labels: dict[str, str] | None = None,
+    attempts: int = 5,
+    connect_timeout_s: int = 8,
+    pod_name_prefix: str = _DEFAULT_POD_PREFIX,
+) -> bool:
+    """probe_workspace with the retries of probe_service_allowed, for allow assertions."""
+    return probe_service_allowed(
+        workspace_service_host(workspace_name, workspace_namespace),
+        port,
+        from_namespace=from_namespace,
+        pod_labels=pod_labels,
+        attempts=attempts,
+        connect_timeout_s=connect_timeout_s,
+        pod_name_prefix=pod_name_prefix,
+    )
+
+
 def delete_probe_pod(pod_name: str, namespace: str) -> None:
     """Best-effort cleanup of a probe pod."""
     _run(["kubectl", "delete", "pod", pod_name, "-n", namespace, "--ignore-not-found", "--wait=false"])
