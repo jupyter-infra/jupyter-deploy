@@ -33,7 +33,7 @@ class PodInfo:
     phase: PodPhase
     # Container names in spec order.
     containers: tuple[str, ...] = ()
-    # Set while the pod is being replaced; it keeps its labels until it is gone.
+    # metadata.deletionTimestamp is set: the pod is being replaced and still carries its labels.
     deleting: bool = False
 
 
