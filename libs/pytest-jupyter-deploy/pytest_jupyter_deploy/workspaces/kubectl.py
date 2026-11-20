@@ -65,13 +65,16 @@ def kubectl_delete_workspaces_of_templates(templates: Iterable[str], namespace: 
     Selects by the template-name label the operator's defaulting webhook stamps on every
     workspace, so a workspace whose name was generated at create time is found too.
     """
+    names = list(templates)
+    if not names:
+        return
     run_kubectl(
         "delete",
         "workspaces",
         "-n",
         namespace,
         "-l",
-        f"workspace.jupyter.org/template-name in ({','.join(templates)})",
+        f"workspace.jupyter.org/template-name in ({','.join(names)})",
         check=True,
     )
 

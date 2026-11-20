@@ -107,3 +107,9 @@ class TestKubectlDeleteWorkspacesOfTemplates(unittest.TestCase):
             ),
         )
         self.assertTrue(mock_run_kubectl.call_args.kwargs["check"])
+
+    @patch("pytest_jupyter_deploy.workspaces.kubectl.run_kubectl")
+    def test_deletes_nothing_for_no_templates(self, mock_run_kubectl: Mock) -> None:
+        kubectl_delete_workspaces_of_templates([], "team-a")
+
+        mock_run_kubectl.assert_not_called()
