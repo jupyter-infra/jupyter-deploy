@@ -72,9 +72,10 @@ logs`, `jd server exec` and `jd server connect` act on `workspace` and print the
 picked; pass `--service ws-proxy` for the sidecar's logs.
 
 `jd image list` shows the VS Code image and the `ws-proxy` sidecar copy beside the JupyterLab
-one. `jd image status --name vscode` and `jd image vulnerabilities --name vscode` report on the
-VS Code image, `--name ws-proxy` on the sidecar copy; with the flag off they say the image is not
-built. With more than one image built, the per-image `jd image` commands need `--name`.
+one, marked as not built while the flag is off. `jd image status --name vscode` and
+`jd image vulnerabilities --name vscode` report on the VS Code image, `--name ws-proxy` on the
+sidecar copy; with the flag off they say the image is not built. With more than one image built,
+the per-image `jd image` commands need `--name`.
 
 ## Limits
 

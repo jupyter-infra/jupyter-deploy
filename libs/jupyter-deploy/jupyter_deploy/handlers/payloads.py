@@ -42,6 +42,9 @@ class ImageInfo:
 
     name: str
     description: str
+    # Whether this deployment built the image; an unbuilt one names the variable that builds it.
+    built: bool = True
+    enabled_by: str | None = None
 
 
 @dataclass

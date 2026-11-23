@@ -44,6 +44,9 @@ class TestImageListCommand(unittest.TestCase):
         mock_handler.list_images = mock_list_images
         mock_list_images.return_value = [
             ImageInfo(name="jupyterlab", description="JupyterLab workspace image"),
+            ImageInfo(
+                name="vscode", description="VS Code workspace image", built=False, enabled_by="enable_remote_access"
+            ),
         ]
 
         return mock_handler, {
@@ -65,6 +68,9 @@ class TestImageListCommand(unittest.TestCase):
         mock_fns["list_images"].assert_called_once()
         self.assertIn("jupyterlab", result.stdout)
         self.assertIn("JupyterLab workspace image", result.stdout)
+        # The table wraps the cell at spaces, so the two words are checked apart.
+        self.assertIn("needs", result.stdout)
+        self.assertIn("enable_remote_access", result.stdout)
 
     @patch("jupyter_deploy.handlers.resource.image_handler.ImageHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")

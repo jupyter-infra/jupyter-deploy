@@ -93,9 +93,13 @@ class ImageHandler(BaseProjectHandler):
         raise ResourceNameRequiredError("image", "jd image list")
 
     def list_images(self) -> list[ImageInfo]:
-        """Return the list of images with name and description."""
+        """Return the declared images, each with whether this deployment built it."""
         images = self.project_manifest.get_images()
-        return [ImageInfo(name=name, description=img.description) for name, img in images.items()]
+        built = set(self._built_images(images))
+        return [
+            ImageInfo(name=name, description=img.description, built=name in built, enabled_by=img.enabled_by)
+            for name, img in images.items()
+        ]
 
     def show_image(self, name: str | None = None) -> ImageDetail:
         """Return detailed information about an image."""
