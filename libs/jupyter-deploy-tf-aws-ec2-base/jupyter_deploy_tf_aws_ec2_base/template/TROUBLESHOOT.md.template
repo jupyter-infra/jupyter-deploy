@@ -32,6 +32,33 @@ To resolve:
 
 {{ request-quota-increase-instructions }}
 
+## `jd up` hangs waiting for the SSM agent
+
+`jd up` waits for the instance's SSM agent to connect before it finishes. If the
+log repeats `SSM agent not yet connected (status: None), waiting...` and the
+instance is `running` with passing status checks, the instance most likely
+cannot reach the SSM endpoint. The instance's console output then shows a
+timeout such as `dial tcp ...:443: i/o timeout` for `ssm.<region>.amazonaws.com`.
+
+A common cause is VPC Block Public Access, an account- and region-wide setting
+that blocks internet gateway traffic even when the route table, security group
+and network ACL all allow it. Check it with:
+
+```bash
+aws ec2 describe-vpc-block-public-access-options --region <region>
+```
+
+If `InternetGatewayBlockMode` is `block-ingress` or `block-bidirectional`, the
+instance cannot complete connections through its internet gateway, so neither
+the SSM agent nor `jd open` can reach it.
+
+To resolve:
+
+- Deploy in a region or account where the setting is `off`, or
+- Ask the account owner for a VPC Block Public Access exclusion for the VPC or
+  subnet the template deploys into. The setting is often applied on purpose by
+  an organization's security baseline, so do not turn it off yourself.
+
 ## Claude Code or Codex cannot reach Bedrock
 
 ```bash
