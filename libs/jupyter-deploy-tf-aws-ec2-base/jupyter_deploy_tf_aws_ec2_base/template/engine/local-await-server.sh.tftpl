@@ -14,6 +14,7 @@ wait_for_instance(){
     # pass include-all-instances is necessary to ensure
     # EC2:DescribeInstanceStatus returns stopped instance
     INSTANCE_STATE=$(aws ec2 describe-instance-status \
+        --region "$REGION" \
         --instance-ids "$INSTANCE_ID" \
         --include-all-instances \
         --query "InstanceStatuses[0].InstanceState.Name" \
@@ -30,7 +31,7 @@ wait_for_instance(){
     # If the instance is stopped, start it
     if [ "$INSTANCE_STATE" = "stopped" ]; then
         echo "Instance is stopped, starting it..."
-        aws ec2 start-instances --instance-ids "$INSTANCE_ID" > /dev/null
+        aws ec2 start-instances --region "$REGION" --instance-ids "$INSTANCE_ID" > /dev/null
         # Update state to pending so the loop below will wait for it
         INSTANCE_STATE="pending"
 
@@ -48,6 +49,7 @@ wait_for_instance(){
         total_wait_seconds=$((total_wait_seconds + SLEEP_INTERVAL_SECONDS))
 
         INSTANCE_STATE=$(aws ec2 describe-instance-status \
+            --region "$REGION" \
             --instance-ids "$INSTANCE_ID" \
             --include-all-instances \
             --query "InstanceStatuses[0].InstanceState.Name" \
