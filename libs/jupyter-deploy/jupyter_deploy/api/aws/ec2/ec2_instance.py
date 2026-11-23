@@ -12,6 +12,7 @@ from mypy_boto3_ec2.type_defs import (
     InstanceStateChangeTypeDef,
     InstanceStateTypeDef,
     InstanceStatusTypeDef,
+    InstanceTypeDef,
     RebootInstancesRequestTypeDef,
     StartInstancesRequestTypeDef,
     StopInstancesRequestTypeDef,
@@ -367,6 +368,26 @@ def restart_instance(ec2_client: EC2Client, instance_id: str) -> None:
     ec2_client.reboot_instances(**request)
 
 
+def describe_instance(ec2_client: EC2Client, instance_id: str) -> InstanceTypeDef:
+    """Call EC2:DescribeInstances for one instance and return its description.
+
+    Raises:
+        ResourceNotFoundError: if the instance does not exist.
+    """
+    request: DescribeInstancesRequestTypeDef = {"InstanceIds": [instance_id]}
+    response = ec2_client.describe_instances(**request)
+
+    reservations = response.get("Reservations", [])
+    if not reservations:
+        raise ResourceNotFoundError("EC2 instance", instance_id, "describe_instances returned no reservations")
+
+    instances = reservations[0].get("Instances", [])
+    if not instances:
+        raise ResourceNotFoundError("EC2 instance", instance_id, "describe_instances returned an empty reservation")
+
+    return instances[0]
+
+
 def describe_instance_public_ip(ec2_client: EC2Client, instance_id: str) -> str:
     """Return the instance's current public IPv4 (from ``PublicIpAddress``).
 
@@ -382,18 +403,7 @@ def describe_instance_public_ip(ec2_client: EC2Client, instance_id: str) -> str:
         ResourceNotFoundError: if the instance does not exist.
         IncompatibleHostStateError: if it exists but has no public IP (typically stopped).
     """
-    request: DescribeInstancesRequestTypeDef = {"InstanceIds": [instance_id]}
-    response = ec2_client.describe_instances(**request)
-
-    reservations = response.get("Reservations", [])
-    if not reservations:
-        raise ResourceNotFoundError("EC2 instance", instance_id, "describe_instances returned no reservations")
-
-    instances = reservations[0].get("Instances", [])
-    if not instances:
-        raise ResourceNotFoundError("EC2 instance", instance_id, "describe_instances returned an empty reservation")
-
-    public_ip = instances[0].get("PublicIpAddress")
+    public_ip = describe_instance(ec2_client, instance_id=instance_id).get("PublicIpAddress")
     if not public_ip:
         raise IncompatibleHostStateError(
             f"Instance '{instance_id}' has no public IP — it may be stopped or is in a private subnet.",

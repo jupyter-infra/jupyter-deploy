@@ -17,6 +17,7 @@ from jupyter_deploy.provider.resolved_argdefs import (
     require_arg,
 )
 from jupyter_deploy.provider.resolved_resultdefs import (
+    ListStrResolvedInstructionResult,
     ResolvedInstructionResult,
     StrResolvedInstructionResult,
 )
@@ -79,6 +80,7 @@ def _tag_value(tags: list[TagTypeDef], key: str) -> str:
 class AwsEc2Instruction(str, Enum):
     """AWS EC2 instructions accessible from manifest.commands[].sequence[].api-name."""
 
+    DESCRIBE_INSTANCE = "describe-instance"
     DESCRIBE_INSTANCE_STATUS = "describe-instance-status"
     START_INSTANCE = "start-instance"
     STOP_INSTANCE = "stop-instance"
@@ -127,6 +129,40 @@ class AwsEc2Runner(InstructionRunner):
                 result_name="InstanceStateName",
                 value=instance_status.get("InstanceState", {}).get("Name", "unknown"),
             )
+        }
+
+    def _describe_instance(
+        self,
+        resolved_arguments: dict[str, ResolvedInstructionArgument],
+    ) -> dict[str, ResolvedInstructionResult]:
+        """Describe the instance as a host: its name, its state, and a summary of what it is.
+
+        The instance id IS the host name: it is what the user sees in the console and what every other
+        host command acts on, so `jd host list` and `jd host show` need no naming convention of their own.
+        """
+        instance_id = require_arg(resolved_arguments, "instance_id", StrResolvedInstructionArgument).value
+
+        self.display_manager.info(f"Describing instance: {instance_id}")
+        instance = ec2_instance.describe_instance(self.client, instance_id=instance_id)
+        state = instance.get("State", {}).get("Name", "unknown")
+
+        # A summary rather than the raw DescribeInstances payload: the raw one carries network interfaces,
+        # block device mappings and IAM profile ARNs that bury what a user runs `show` for.
+        summary = {
+            "instance_id": instance.get("InstanceId", instance_id),
+            "instance_type": instance.get("InstanceType", ""),
+            "zone": instance.get("Placement", {}).get("AvailabilityZone", ""),
+            "state": state,
+            "private_ip": instance.get("PrivateIpAddress", ""),
+            "launched_at": _isoformat_or_empty(instance.get("LaunchTime")),
+            "image_id": instance.get("ImageId", ""),
+        }
+
+        return {
+            "Name": StrResolvedInstructionResult(result_name="Name", value=instance_id),
+            "Names": ListStrResolvedInstructionResult(result_name="Names", value=[instance_id]),
+            "Status": StrResolvedInstructionResult(result_name="Status", value=state),
+            "Resource": StrResolvedInstructionResult(result_name="Resource", value=json.dumps(summary)),
         }
 
     def _verify_instance_stopped(
@@ -476,7 +512,9 @@ class AwsEc2Runner(InstructionRunner):
         instruction_name: str,
         resolved_arguments: dict[str, ResolvedInstructionArgument],
     ) -> dict[str, ResolvedInstructionResult]:
-        if instruction_name == AwsEc2Instruction.DESCRIBE_INSTANCE_STATUS:
+        if instruction_name == AwsEc2Instruction.DESCRIBE_INSTANCE:
+            return self._describe_instance(resolved_arguments=resolved_arguments)
+        elif instruction_name == AwsEc2Instruction.DESCRIBE_INSTANCE_STATUS:
             return self._describe_instance_status(
                 resolved_arguments=resolved_arguments,
             )

@@ -119,6 +119,13 @@ resolves the IP live at connection time and pins the instance's certificate, not
 ## Manage your EC2 instance
 
 ```bash
+# show your host's details; the host is named by its EC2 instance ID
+jd host list
+jd host show --name INSTANCE_ID
+
+# show your server's details; the server is always named `jupyter`
+jd server show --name jupyter
+
 # connect to your host
 jd host connect
 

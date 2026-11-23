@@ -34,8 +34,19 @@ class TestManifest(unittest.TestCase):
         "volume_backup_ids",
     ]
     EXPECTED_SERVICES = ["jupyter", "traefik", "auth-sidecar"]
-    EXPECTED_HOST_COMMANDS = ["host.status", "host.start", "host.stop", "host.restart", "host.connect", "host.exec"]
+    EXPECTED_HOST_COMMANDS = [
+        "host.list",
+        "host.show",
+        "host.status",
+        "host.start",
+        "host.stop",
+        "host.restart",
+        "host.connect",
+        "host.exec",
+    ]
     EXPECTED_SERVER_COMMANDS = [
+        "server.list",
+        "server.show",
         "server.status",
         "server.start",
         "server.stop",
