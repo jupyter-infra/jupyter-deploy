@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from pytest_jupyter_deploy.deployment import EndToEndDeployment
 from pytest_jupyter_deploy.kubernetes.kubectl import resource_absent, run_kubectl
+from pytest_jupyter_deploy.kubernetes.namespace import temporary_namespace
 from pytest_jupyter_deploy.polling import poll
 from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_apply_workspace,
@@ -27,7 +28,7 @@ from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_poll_workspace_status,
     kubectl_request_workspace_connection,
 )
-from pytest_jupyter_deploy.workspaces.network_probe import probe_workspace, probe_workspace_allowed
+from pytest_jupyter_deploy.workspaces.network_probe import probe_service, probe_workspace, probe_workspace_allowed
 from pytest_jupyter_deploy.workspaces.template import list_template_names
 
 from .constants import (
@@ -74,6 +75,21 @@ def _workspace_template(name: str, namespace: str) -> dict[str, Any]:
     assert result.returncode == 0, f"{name} WorkspaceTemplate missing in {namespace}: {result.stderr}"
     template: dict[str, Any] = json.loads(result.stdout)
     return template
+
+
+# Throwaway namespaces for the cross-namespace probes of the sidecar port.
+PROBE_NAMESPACE = "e2e-ra-probe"
+SPOOF_NAMESPACE = "e2e-ra-spoof"
+
+
+def _sidecar_port_closed_to_traefik(workspace: str) -> bool:
+    """Whether the policy drops a Traefik-labeled router pod's probe of the sidecar port, at the pod address.
+
+    The workspace Service publishes the sidecar port only on the WebSocket strategy, so a probe through
+    the Service of another workspace is refused by kube-proxy; the pod address shows the policy alone.
+    """
+    pod_ip = kubectl_get_workspace_pod(workspace, WORKSPACE_NAMESPACE)["status"]["podIP"]
+    return not probe_service(pod_ip, SIDECAR_PORT, from_namespace=ROUTER_NAMESPACE, pod_labels=ROUTER_POD_LABELS)
 
 
 def _ingress_policy_ports(namespace: str) -> dict[str, set[int]]:
@@ -147,12 +163,18 @@ def remote_access_window(e2e_deployment: EndToEndDeployment) -> Generator[dict[s
 
 @pytest.mark.order(ORDER_REMOTE_ACCESS)
 def test_vscode_config_is_refused_without_the_flag(
-    e2e_deployment: EndToEndDeployment, remote_access_window: dict[str, Any]
+    e2e_deployment: EndToEndDeployment, remote_access_window: dict[str, Any], e2e_workspace: str
 ) -> None:
-    """`jd config` refuses a workspace_templates config with app vscode while the flag is off, naming it."""
+    """With the flag off, a vscode config is refused, the sidecar port is closed and `jd image` needs no name."""
     e2e_deployment.ensure_deployed()
     if remote_access_window["flag_was_on"]:
         pytest.skip(f"the deployment already has {REMOTE_ACCESS_FLAG} on")
+
+    assert _sidecar_port_closed_to_traefik(e2e_workspace), f"port {SIDECAR_PORT} must stay closed while the flag is off"
+    status = e2e_deployment.cli.run_command(["jupyter-deploy", "image", "status"])
+    assert "jupyterlab status:" in status.stdout, (
+        f"with one image built, jd image status should pick it:\n{status.stdout}"
+    )
 
     previous = e2e_deployment.read_override_value("workspace_templates")
     configs = e2e_deployment.get_list_of_maps_variable_value("workspace_templates")
@@ -230,6 +252,8 @@ def test_enable_remote_access_offers_the_vscode_cards(
         ROUTER_NAMESPACE: {WORKSPACE_APP_PORT, SIDECAR_PORT},
         OPERATOR_NAMESPACE: {WORKSPACE_APP_PORT},
     }
+    unnamed = e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "image", "status"])
+    assert "jd image list" in unnamed, f"with several images built, jd image status should ask for --name:\n{unnamed}"
 
 
 @pytest.mark.order(ORDER_REMOTE_ACCESS + 2)
@@ -293,6 +317,22 @@ def test_vscode_workspace_runs_with_the_sidecar_and_hands_out_an_ssh_connection(
             assert not probe_workspace(
                 VSCODE_WORKSPACE, from_namespace=denied, workspace_namespace=WORKSPACE_NAMESPACE, port=SIDECAR_PORT
             ), f"a pod without the Traefik labels in {denied} should be denied the sidecar port {SIDECAR_PORT}"
+        with temporary_namespace(PROBE_NAMESPACE):
+            assert not probe_workspace(
+                VSCODE_WORKSPACE,
+                from_namespace=PROBE_NAMESPACE,
+                workspace_namespace=WORKSPACE_NAMESPACE,
+                port=SIDECAR_PORT,
+            ), f"an unrelated namespace should be denied the sidecar port {SIDECAR_PORT}"
+        # The API server resets kubernetes.io/metadata.name to the namespace's real name.
+        with temporary_namespace(SPOOF_NAMESPACE, labels={"kubernetes.io/metadata.name": ROUTER_NAMESPACE}):
+            assert not probe_workspace(
+                VSCODE_WORKSPACE,
+                from_namespace=SPOOF_NAMESPACE,
+                workspace_namespace=WORKSPACE_NAMESPACE,
+                port=SIDECAR_PORT,
+                pod_labels=ROUTER_POD_LABELS,
+            ), f"a namespace forging the router name should be denied the sidecar port {SIDECAR_PORT}"
     finally:
         kubectl_delete_workspace(VSCODE_WORKSPACE, namespace=WORKSPACE_NAMESPACE)
 
@@ -336,7 +376,7 @@ def test_deleted_websocket_strategy_is_repaired_on_apply(
 
 @pytest.mark.order(ORDER_REMOTE_ACCESS + 4)
 def test_disable_remote_access_removes_the_vscode_cards(
-    e2e_deployment: EndToEndDeployment, shared_namespace: str, remote_access_window: dict[str, Any]
+    e2e_deployment: EndToEndDeployment, shared_namespace: str, remote_access_window: dict[str, Any], e2e_workspace: str
 ) -> None:
     """Disabling the flag removes the VS Code cards, the strategy and the image, and closes the sidecar port."""
     e2e_deployment.ensure_deployed()
@@ -365,3 +405,4 @@ def test_disable_remote_access_removes_the_vscode_cards(
         ROUTER_NAMESPACE: {WORKSPACE_APP_PORT},
         OPERATOR_NAMESPACE: {WORKSPACE_APP_PORT},
     }
+    assert _sidecar_port_closed_to_traefik(e2e_workspace), f"port {SIDECAR_PORT} must close again with the flag off"
