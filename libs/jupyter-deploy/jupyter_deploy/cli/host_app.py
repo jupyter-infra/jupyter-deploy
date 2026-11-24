@@ -261,7 +261,10 @@ def list_hosts(
 
 @host_app.command()
 def show(
-    name: Annotated[str, typer.Option("--name", help="Name of the host to show details for.")],
+    name: Annotated[
+        str | None,
+        typer.Option("--name", help="Name of the host to show details for; optional for single-host templates."),
+    ] = None,
     project_dir: Annotated[
         Path | None,
         typer.Option("--path", "-p", help="Directory of the project."),
@@ -278,7 +281,9 @@ def show(
         simple_display_manager = SimpleDisplayManager(console=console)
         handler = host_handler.HostHandler(display_manager=simple_display_manager)
 
-        with simple_display_manager.spinner(f"Getting host details for {name}..."):
+        with simple_display_manager.spinner(
+            f"Getting host details for {name}..." if name else "Getting host details..."
+        ):
             details = handler.show_host(name=name)
 
         if json_output:

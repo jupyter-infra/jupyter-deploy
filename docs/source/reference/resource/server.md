@@ -246,7 +246,7 @@ $ jd server show [OPTIONS]
 
 **Options**:
 
-* `--name <str>`: Name of the server to show details for.  [required]
+* `--name <str>`: Name of the server to show details for; optional for single-server templates.
 * `-p, --path <path>`: Directory of the project.
 * `--scope <str>`: Scope or group the server belongs to.
 * `--json`: Output as JSON.

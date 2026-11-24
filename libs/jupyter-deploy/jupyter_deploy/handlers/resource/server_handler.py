@@ -97,8 +97,12 @@ class ServerHandler(BaseProjectHandler):
         resource_json = runner.get_result_value(command, "server.status.resource", str)
         return evaluate_status_rules(resource_json, rules)
 
-    def show_server(self, name: str, scope: str | None = None) -> ServerDetail:
-        """Returns detailed information about a server."""
+    def show_server(self, name: str | None = None, scope: str | None = None) -> ServerDetail:
+        """Returns detailed information about a server.
+
+        `name` may be omitted for a single-server template; the manifest then receives an empty name.
+        """
+        self._require_name(name)
         resolved_scope = self._resolve_scope(scope)
         command = self.project_manifest.get_command("server.show")
         runner = cmd_runner.ManifestCommandRunner(
@@ -109,7 +113,7 @@ class ServerHandler(BaseProjectHandler):
         runner.run_command_sequence(
             command,
             cli_paramdefs={
-                "name": StrResolvedCliParameter(parameter_name="name", value=name),
+                "name": StrResolvedCliParameter(parameter_name="name", value=name or ""),
                 "scope": StrResolvedCliParameter(parameter_name="scope", value=resolved_scope),
             },
         )

@@ -94,23 +94,8 @@ commands:
   - result-name: host.status
     source: result
     source-key: '[0].InstanceStateName'
-# One host per deployment: the EC2 instance, named by its instance id. host.list and host.show answer from
-# core.match-name rather than a lookup, so a --name that is not this instance is rejected instead of
-# silently describing the one that exists.
-- cmd: host.list
-  sequence:
-  - api-name: core.match-name
-    arguments:
-    - api-attribute: expected
-      source: output
-      source-key: instance_id
-    - api-attribute: kind
-      source: literal
-      value: host
-  results:
-  - result-name: host.list
-    source: result
-    source-key: '[0].Names'
+# One host per deployment: the EC2 instance, named by its instance id. --name is optional; when given,
+# core.match-name rejects any name but this instance's instead of silently describing the one that exists.
 - cmd: host.show
   sequence:
   - api-name: core.match-name             # [0] reject any name but this instance's
@@ -228,20 +213,7 @@ commands:
     source: result
     source-key: '[0].StandardOutputContent'
 # One server per deployment, named `jupyter` after the compose service and container that run it.
-- cmd: server.list
-  sequence:
-  - api-name: core.match-name
-    arguments:
-    - api-attribute: expected
-      source: literal
-      value: jupyter
-    - api-attribute: kind
-      source: literal
-      value: server
-  results:
-  - result-name: server.list
-    source: result
-    source-key: '[0].Names'
+# --name is optional; when given, core.match-name rejects any name but `jupyter`.
 - cmd: server.show
   sequence:
   - api-name: core.match-name             # [0] reject any name but `jupyter`, before touching the host

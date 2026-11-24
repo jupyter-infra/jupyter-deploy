@@ -102,10 +102,9 @@ class CoreInstructionRunner(InstructionRunner):
         For a single-resource template (one EC2 host, one jupyter server) the name is fixed by the
         template rather than looked up, so a `name` the user typed can only be right or wrong. Wrong
         raises: answering for a resource that does not exist would report a confident status for it.
-        An absent or empty `name` is not a mismatch -- `list` asks for no name at all.
+        An absent or empty `name` is not a mismatch: single-resource templates let users omit `--name`.
 
-        Returns the expected name both as `Name` and as the one-element list `Names`, so a `list`
-        command can answer from the same step its `show` uses to validate.
+        Returns the expected name as `Name`.
         """
         expected = require_arg(resolved_arguments, "expected", StrResolvedInstructionArgument).value
         if not expected:
@@ -116,10 +115,7 @@ class CoreInstructionRunner(InstructionRunner):
         if name and name != expected:
             raise ResourceNotFoundError(kind or "resource", name, f"the only {kind or 'resource'} is '{expected}'")
 
-        return {
-            "Name": StrResolvedInstructionResult(result_name="Name", value=expected),
-            "Names": ListStrResolvedInstructionResult(result_name="Names", value=[expected]),
-        }
+        return {"Name": StrResolvedInstructionResult(result_name="Name", value=expected)}
 
     def _make_json_object(
         self, resolved_arguments: dict[str, ResolvedInstructionArgument]

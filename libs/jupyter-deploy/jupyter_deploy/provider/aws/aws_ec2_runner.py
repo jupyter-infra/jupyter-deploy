@@ -17,7 +17,6 @@ from jupyter_deploy.provider.resolved_argdefs import (
     require_arg,
 )
 from jupyter_deploy.provider.resolved_resultdefs import (
-    ListStrResolvedInstructionResult,
     ResolvedInstructionResult,
     StrResolvedInstructionResult,
 )
@@ -138,7 +137,7 @@ class AwsEc2Runner(InstructionRunner):
         """Describe the instance as a host: its name, its state, and a summary of what it is.
 
         The instance id IS the host name: it is what the user sees in the console and what every other
-        host command acts on, so `jd host list` and `jd host show` need no naming convention of their own.
+        host command acts on, so `jd host show` needs no naming convention of their own.
         """
         instance_id = require_arg(resolved_arguments, "instance_id", StrResolvedInstructionArgument).value
 
@@ -160,7 +159,6 @@ class AwsEc2Runner(InstructionRunner):
 
         return {
             "Name": StrResolvedInstructionResult(result_name="Name", value=instance_id),
-            "Names": ListStrResolvedInstructionResult(result_name="Names", value=[instance_id]),
             "Status": StrResolvedInstructionResult(result_name="Status", value=state),
             "Resource": StrResolvedInstructionResult(result_name="Resource", value=json.dumps(summary)),
         }

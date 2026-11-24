@@ -933,15 +933,16 @@ class TestHostShowCommand(unittest.TestCase):
 
     @patch("jupyter_deploy.handlers.resource.host_handler.HostHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_requires_name_option(self, mock_project_dir: Mock, mock_host_handler_class: Mock) -> None:
-        mock_host_handler, _ = self.get_mock_host_handler()
+    def test_name_is_optional(self, mock_project_dir: Mock, mock_host_handler_class: Mock) -> None:
+        mock_host_handler, mock_handler_fns = self.get_mock_host_handler()
         mock_host_handler_class.return_value = mock_host_handler
         mock_project_dir.return_value.__enter__.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(host_app, ["show"])
 
-        self.assertNotEqual(result.exit_code, 0)
+        self.assertEqual(result.exit_code, 0, result.output)
+        mock_handler_fns["show_host"].assert_called_once_with(name=None)
 
     @patch("jupyter_deploy.handlers.resource.host_handler.HostHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")

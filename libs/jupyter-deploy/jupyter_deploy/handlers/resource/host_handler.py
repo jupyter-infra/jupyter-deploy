@@ -79,8 +79,12 @@ class HostHandler(BaseProjectHandler):
         runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
         return runner.get_result_value(command, "host.status", str)
 
-    def show_host(self, name: str) -> HostDetail:
-        """Returns detailed information about a host."""
+    def show_host(self, name: str | None = None) -> HostDetail:
+        """Returns detailed information about a host.
+
+        `name` may be omitted for a single-host template; the manifest then receives an empty name.
+        """
+        self._require_name(name)
         command = self.project_manifest.get_command("host.show")
         runner = cmd_runner.ManifestCommandRunner(
             display_manager=self.display_manager,
@@ -90,7 +94,7 @@ class HostHandler(BaseProjectHandler):
         runner.run_command_sequence(
             command,
             cli_paramdefs={
-                "name": StrResolvedCliParameter(parameter_name="name", value=name),
+                "name": StrResolvedCliParameter(parameter_name="name", value=name or ""),
             },
         )
         results = collect_results(runner, command)

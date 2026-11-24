@@ -35,7 +35,6 @@ class TestManifest(unittest.TestCase):
     ]
     EXPECTED_SERVICES = ["jupyter", "traefik", "auth-sidecar"]
     EXPECTED_HOST_COMMANDS = [
-        "host.list",
         "host.show",
         "host.status",
         "host.start",
@@ -45,7 +44,6 @@ class TestManifest(unittest.TestCase):
         "host.exec",
     ]
     EXPECTED_SERVER_COMMANDS = [
-        "server.list",
         "server.show",
         "server.status",
         "server.start",

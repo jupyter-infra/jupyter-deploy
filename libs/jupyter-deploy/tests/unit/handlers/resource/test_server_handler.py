@@ -7,6 +7,7 @@ import yaml
 
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.supervised_execution import NullDisplay
+from jupyter_deploy.exceptions import ResourceNameRequiredError
 from jupyter_deploy.handlers.resource.server_handler import ServerHandler
 from jupyter_deploy.manifest import (
     JupyterDeployManifest,
@@ -427,6 +428,52 @@ class TestServerHandler(unittest.TestCase):
         self.assertEqual(cli_paramdefs["name"].value, "my-ws")
         self.assertIn("scope", cli_paramdefs)
         self.assertEqual(cli_paramdefs["scope"].value, "default")
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_show_server_without_name_passes_empty_name_on_single_server_template(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        mock_retrieve_manifest.return_value = self.mock_full_manifest.model_copy(update={"multi_server": False})
+        mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
+        mock_tf_outputs_handler.return_value = mock_output_handler
+        mock_tf_variables_handler.return_value = Mock()
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_fns["get_result_value_with_fallback"].side_effect = ["jupyter", "{}"]
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        ServerHandler(display_manager=NullDisplay()).show_server(scope="default")
+
+        cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
+        self.assertEqual(cli_paramdefs["name"].value, "")
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_show_server_without_name_raises_on_multi_server_template(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        mock_retrieve_manifest.return_value = self.mock_full_manifest.model_copy(update={"multi_server": True})
+        mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
+        mock_tf_outputs_handler.return_value = mock_output_handler
+        mock_tf_variables_handler.return_value = Mock()
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        with self.assertRaises(ResourceNameRequiredError):
+            ServerHandler(display_manager=NullDisplay()).show_server(scope="default")
+        mock_cmd_runner_fns["run_command_sequence"].assert_not_called()
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")

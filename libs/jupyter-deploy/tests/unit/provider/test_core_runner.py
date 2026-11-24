@@ -138,11 +138,10 @@ class TestMatchName(unittest.TestCase):
             {k: StrResolvedInstructionArgument(argument_name=k, value=v) for k, v in args.items()},
         )
 
-    def test_returns_expected_as_name_and_single_item_list(self) -> None:
+    def test_returns_expected_as_name(self) -> None:
         result = self._run(expected="jupyter")
+        self.assertEqual(result, {"Name": result["Name"]})
         self.assertEqual(result["Name"].value, "jupyter")
-        self.assertIsInstance(result["Names"], ListStrResolvedInstructionResult)
-        self.assertEqual(result["Names"].value, ["jupyter"])
 
     def test_matching_name_passes(self) -> None:
         self.assertEqual(self._run(expected="i-123", name="i-123")["Name"].value, "i-123")

@@ -1,4 +1,4 @@
-"""Run this template's host/server list and show commands through the real command runner.
+"""Run this template's host/server show commands through the real command runner.
 
 AWS runners are mocked; core.* runs for real, so these pin both the wiring (which step answers which
 result) and the name validation that stops `--name <anything>` from describing the one host or server.
@@ -17,7 +17,7 @@ from jupyter_deploy.manifest import JupyterDeployManifestV1
 from jupyter_deploy.provider.core.core_runner import CoreInstructionRunner
 from jupyter_deploy.provider.manifest_command_runner import ManifestCommandRunner
 from jupyter_deploy.provider.resolved_clidefs import ResolvedCliParameter, StrResolvedCliParameter
-from jupyter_deploy.provider.resolved_resultdefs import ListStrResolvedInstructionResult, StrResolvedInstructionResult
+from jupyter_deploy.provider.resolved_resultdefs import StrResolvedInstructionResult
 
 from jupyter_deploy_tf_aws_ec2_jupyterlab.template import TEMPLATE_PATH
 
@@ -34,11 +34,7 @@ class TestHostServerShow(unittest.TestCase):
             cls.manifest = JupyterDeployManifestV1(**yaml.safe_load(f))
 
     def _run(self, cmd_name: str, cli: dict[str, str] | None = None) -> tuple[Mock, dict[str, Any]]:
-        """Return the AWS runner mock and the command's results keyed without the command prefix.
-
-        A `.list` result is read as a list, the way the handlers read it; every other result goes
-        through collect_results, the way `show` reads it.
-        """
+        """Return the AWS runner mock and the command's results keyed without the command prefix."""
         output_handler = Mock()
         output_handler.get_full_project_outputs.return_value = {
             "instance_id": StrTemplateOutputDefinition(output_name="instance_id", value=_INSTANCE_ID),
@@ -50,7 +46,6 @@ class TestHostServerShow(unittest.TestCase):
         aws_runner.execute_instruction.side_effect = lambda instruction_name, resolved_arguments: {
             "aws.ec2.describe-instance": {
                 "Name": StrResolvedInstructionResult(result_name="Name", value=_INSTANCE_ID),
-                "Names": ListStrResolvedInstructionResult(result_name="Names", value=[_INSTANCE_ID]),
                 "Status": StrResolvedInstructionResult(result_name="Status", value="running"),
                 "Resource": StrResolvedInstructionResult(
                     result_name="Resource", value='{"instance_type": "t3.medium"}'
@@ -80,14 +75,13 @@ class TestHostServerShow(unittest.TestCase):
                 display_manager=Mock(), output_handler=output_handler, variable_handler=Mock()
             )
             runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
-        if cmd_name.endswith(".list"):
-            return aws_runner, {"list": runner.get_result_value(command, cmd_name, list)}
         return aws_runner, collect_results(runner, command)
 
-    def test_host_list_is_the_instance_id(self) -> None:
-        aws_runner, results = self._run("host.list")
-        self.assertEqual(results["list"], [_INSTANCE_ID])
-        aws_runner.execute_instruction.assert_not_called()
+    def test_host_show_without_a_name_describes_the_instance(self) -> None:
+        """The handler passes an empty name when --name is omitted; a single-host template accepts it."""
+        _, results = self._run("host.show", {"name": ""})
+        self.assertEqual(results["name"], _INSTANCE_ID)
+        self.assertEqual(results["status"], "running")
 
     def test_host_show_describes_the_instance(self) -> None:
         _, results = self._run("host.show", {"name": _INSTANCE_ID})
@@ -100,10 +94,11 @@ class TestHostServerShow(unittest.TestCase):
             self._run("host.show", {"name": "default"})
         self.assertEqual(str(ctx.exception), "host 'default' not found")
 
-    def test_server_list_is_jupyter(self) -> None:
-        aws_runner, results = self._run("server.list", {"scope": "default"})
-        self.assertEqual(results["list"], ["jupyter"])
-        aws_runner.execute_instruction.assert_not_called()
+    def test_server_show_without_a_name_reports_jupyter(self) -> None:
+        """The handler passes an empty name when --name is omitted; a single-server template accepts it."""
+        _, results = self._run("server.show", {"name": "", "scope": "default"})
+        self.assertEqual(results["name"], "jupyter")
+        self.assertEqual(results["resource"], {"host": _INSTANCE_ID, "status": "IN_SERVICE"})
 
     def test_server_show_reports_host_and_status(self) -> None:
         _, results = self._run("server.show", {"name": "jupyter", "scope": "default"})

@@ -376,7 +376,10 @@ def list_servers(
 
 @servers_app.command()
 def show(
-    name: Annotated[str, typer.Option("--name", help="Name of the server to show details for.")],
+    name: Annotated[
+        str | None,
+        typer.Option("--name", help="Name of the server to show details for; optional for single-server templates."),
+    ] = None,
     project_dir: Annotated[
         Path | None,
         typer.Option("--path", "-p", help="Directory of the project."),
@@ -394,7 +397,9 @@ def show(
         simple_display_manager = SimpleDisplayManager(console=console)
         handler = server_handler.ServerHandler(display_manager=simple_display_manager)
 
-        with simple_display_manager.spinner(f"Getting server details for {name}..."):
+        with simple_display_manager.spinner(
+            f"Getting server details for {name}..." if name else "Getting server details..."
+        ):
             details = handler.show_server(name=name, scope=scope or None)
 
         if json_output:

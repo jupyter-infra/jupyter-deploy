@@ -639,7 +639,6 @@ class TestDescribeInstance(unittest.TestCase):
             }
         )
         self.assertEqual(results["Name"].value, "i-123")
-        self.assertEqual(results["Names"].value, ["i-123"])
         self.assertEqual(results["Status"].value, "running")
         self.assertEqual(
             json.loads(results["Resource"].value),
