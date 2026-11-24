@@ -6,7 +6,7 @@ locals {
   workspace_app_port    = 8888
   # Ports the workspace-ingress NetworkPolicy admits: the application port from the
   # Traefik pods and the operator namespace, plus the remote access sidecar's from the Traefik pods.
-  workspace_ingress_router_ports   = concat([local.workspace_app_port], var.enable_remote_access ? [local.remote_access_sidecar_port] : [])
+  workspace_ingress_router_ports   = concat([local.workspace_app_port], var.enable_default_vscode_app ? [local.remote_access_sidecar_port] : [])
   workspace_ingress_operator_ports = [local.workspace_app_port]
   # Labels the aws-oidc chart sets on its Traefik Deployment; the router namespace's other
   # components (web app, Authmiddleware, oauth2-proxy, Dex) never reach workspace pods.
@@ -37,9 +37,10 @@ locals {
     ])
   } : { default = var.oauth_allowed_teams }
 
-  # namespace => workspace_templates config names offered on top of the built-in
-  # cards, which every namespace offers (listing one is a no-op). With
-  # workspace_namespaces empty, "default" offers every config a pool references.
+  # namespace => names its entry lists in templates: workspace_templates configs,
+  # plus the built-in vscode card, offered only where listed. jupyterlab is offered
+  # everywhere. With workspace_namespaces empty, "default" offers every config a
+  # pool references and the vscode card.
   workspace_ns_templates_listed = {
     for ns, es in local.workspace_ns_entries : ns => [
       for raw in split(",", lookup(es[0], "templates", "")) : trimspace(raw) if trimspace(raw) != ""
@@ -366,11 +367,12 @@ locals {
   # precondition on helm_release.workspace_defaults.
   workspace_templates_placed = flatten([
     for ns in local.workspace_ns_names : concat(
-      # Every namespace gets the base cards. jupyterlab is the default template the
-      # operator webhook needs, exactly one per namespace, for workspaces created
-      # without a templateRef.
+      # Every namespace gets jupyterlab, the default template the operator webhook
+      # needs, exactly one per namespace, for workspaces created without a
+      # templateRef. The vscode card is opt-in per namespace entry.
       [merge(local.workspace_base_cards.jupyterlab, { namespace = ns })],
-      var.enable_remote_access ? [merge(local.workspace_base_cards.vscode, { namespace = ns })] : [],
+      var.enable_default_vscode_app && (!local.workspace_multi_ns || contains(lookup(local.workspace_ns_templates_listed, ns, []), "vscode"))
+      ? [merge(local.workspace_base_cards.vscode, { namespace = ns })] : [],
       [
         for name in sort(local.workspace_ns_template_requests[ns]) :
         merge(local.workspace_pool_templates[name], { namespace = ns })
@@ -605,11 +607,11 @@ resource "helm_release" "workspace_defaults" {
     }
     precondition {
       condition     = length(local.workspace_ns_template_dangling) == 0
-      error_message = "workspace_namespaces templates must name a built-in card (\"jupyterlab\", or \"vscode\" with enable_remote_access) or a workspace_templates config offered by a workspace_nodepools entry: ${join(", ", local.workspace_ns_template_dangling)}."
+      error_message = "workspace_namespaces templates must name a built-in card (\"jupyterlab\", or \"vscode\" with enable_default_vscode_app) or a workspace_templates config offered by a workspace_nodepools entry: ${join(", ", local.workspace_ns_template_dangling)}."
     }
     precondition {
-      condition     = var.enable_remote_access || length(local.workspace_ns_vscode_requests) == 0
-      error_message = "workspace_namespaces entries list the built-in \"vscode\" card, which needs enable_remote_access = true: ${join(", ", local.workspace_ns_vscode_requests)}."
+      condition     = var.enable_default_vscode_app || length(local.workspace_ns_vscode_requests) == 0
+      error_message = "workspace_namespaces entries list the built-in \"vscode\" card, which needs enable_default_vscode_app = true: ${join(", ", local.workspace_ns_vscode_requests)}."
     }
     precondition {
       condition     = length(local.workspace_template_dangling) == 0
@@ -617,12 +619,12 @@ resource "helm_release" "workspace_defaults" {
     }
     precondition {
       condition     = length(distinct([for t in local.workspace_templates_effective : t["name"]])) == length(local.workspace_templates_effective)
-      error_message = "workspace_templates names must be unique, including the configs enable_default_gpu_pool injects (\"jupyterlab-gpu\", and \"vscode-gpu\" with enable_remote_access)."
+      error_message = "workspace_templates names must be unique, including the configs enable_default_gpu_pool injects (\"jupyterlab-gpu\", and \"vscode-gpu\" with enable_default_vscode_app)."
     }
     precondition {
       # The WebSocket access strategy a VS Code card references exists only with the flag.
-      condition     = var.enable_remote_access || length(local.workspace_template_vscode_configs) == 0
-      error_message = "workspace_templates configs with app = \"vscode\" need enable_remote_access = true: ${join(", ", local.workspace_template_vscode_configs)}."
+      condition     = var.enable_default_vscode_app || length(local.workspace_template_vscode_configs) == 0
+      error_message = "workspace_templates configs with app = \"vscode\" need enable_default_vscode_app = true: ${join(", ", local.workspace_template_vscode_configs)}."
     }
     precondition {
       condition     = alltrue([for name, b in local.workspace_template_bindings : length(b.roles) == 1])
@@ -686,7 +688,7 @@ locals {
   # The access strategies the router release owns, by the key the repair resources use.
   repaired_access_strategies = merge(
     { oauth = local.access_strategy_name },
-    var.enable_remote_access ? { websocket = local.remote_access_strategy_name } : {},
+    var.enable_default_vscode_app ? { websocket = local.remote_access_strategy_name } : {},
   )
 }
 

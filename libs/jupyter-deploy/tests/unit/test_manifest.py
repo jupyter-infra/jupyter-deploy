@@ -415,13 +415,13 @@ class TestJupyterDeployManifestV1Images(unittest.TestCase):
                 "vscode": {
                     "repository-output": "vscode_repo",
                     "tag-output": "vscode_tag",
-                    "enabled-by": "enable_remote_access",
+                    "enabled-by": "enable_default_vscode_app",
                 },
             }
         )
 
         self.assertIsNone(manifest.get_image("jupyterlab").enabled_by)
-        self.assertEqual(manifest.get_image("vscode").enabled_by, "enable_remote_access")
+        self.assertEqual(manifest.get_image("vscode").enabled_by, "enable_default_vscode_app")
 
     def test_get_image_returns_definition(self) -> None:
         manifest = self._make_manifest(

@@ -1,4 +1,4 @@
-# The enable_remote_access render: the two base cards of workspaces.tf in one
+# The enable_default_vscode_app render: the two base cards of workspaces.tf in one
 # namespace (jupyterlab as in values_workspace_defaults_default.yaml, vscode from
 # vscode_app in workspace_remote_access.tf, its readiness an exec probe) and the
 # sidecar port on the router's ingress rule. Keep in sync with workspace_base_cards,

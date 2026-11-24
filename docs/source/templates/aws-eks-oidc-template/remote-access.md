@@ -1,9 +1,11 @@
 # Remote Access
 
-With the `enable_remote_access` template variable set to `true`, users open workspaces in
+With the `enable_default_vscode_app` template variable set to `true`, users open workspaces in
 **VS Code**, **Cursor** or **Kiro** running on their own machine, over SSH. The template then
-builds a second workspace image, the VS Code image, and offers a VS Code card in every
-workspace namespace, plus a VS Code GPU card when `enable_default_gpu_pool` is on.
+builds a second workspace image, the VS Code image, and offers a VS Code card in the namespaces
+whose `workspace_namespaces` entry lists `vscode` in `templates`, or in the single `default`
+namespace when no namespaces are declared, plus a VS Code GPU card when `enable_default_gpu_pool`
+is on.
 
 A workspace created from a VS Code card runs an SSH server on its pod's loopback interface and
 a `ws-proxy` sidecar that relays the SSH stream between the HTTPS entry point and that server.
@@ -15,7 +17,7 @@ Set the flag in the `overrides:` block of `variables.yaml`, then run `jd config`
 
 ```yaml
 overrides:
-  enable_remote_access: true
+  enable_default_vscode_app: true
 ```
 
 The first apply builds the VS Code image and copies the `ws-proxy` sidecar image from the digest
@@ -94,7 +96,7 @@ it, with the same keys as a JupyterLab config except `idle_minutes`:
 
 ```yaml
 overrides:
-  enable_remote_access: true
+  enable_default_vscode_app: true
   workspace_templates:
     - name: vscode-gpu-p
       app: vscode
@@ -114,6 +116,6 @@ overrides:
 
 ## Turning it off
 
-Setting `enable_remote_access` back to `false` removes the VS Code cards and the WebSocket
+Setting `enable_default_vscode_app` back to `false` removes the VS Code cards and the WebSocket
 access strategy. Delete the VS Code workspaces first: `jd config` refuses to remove a template a
 live workspace still uses.

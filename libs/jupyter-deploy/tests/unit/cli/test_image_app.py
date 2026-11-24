@@ -45,7 +45,10 @@ class TestImageListCommand(unittest.TestCase):
         mock_list_images.return_value = [
             ImageInfo(name="jupyterlab", description="JupyterLab workspace image"),
             ImageInfo(
-                name="vscode", description="VS Code workspace image", built=False, enabled_by="enable_remote_access"
+                name="vscode",
+                description="VS Code workspace image",
+                built=False,
+                enabled_by="enable_default_vscode_app",
             ),
         ]
 
@@ -70,21 +73,21 @@ class TestImageListCommand(unittest.TestCase):
         self.assertIn("JupyterLab workspace image", result.stdout)
         # The table wraps the cell at spaces, so the two words are checked apart.
         self.assertIn("needs", result.stdout)
-        self.assertIn("enable_remote_access", result.stdout)
+        self.assertIn("enable_default_vscode_app", result.stdout)
 
     @patch("jupyter_deploy.handlers.resource.image_handler.ImageHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
     def test_list_tells_a_set_but_unapplied_flag_apart(self, mock_project_dir: Mock, mock_handler_class: Mock) -> None:
         mock_handler = Mock()
         mock_handler.list_images.return_value = [
-            ImageInfo(name="vscode", description="", built=False, enabled_by="enable_remote_access", enabled=True)
+            ImageInfo(name="vscode", description="", built=False, enabled_by="enable_default_vscode_app", enabled=True)
         ]
         mock_handler_class.return_value = mock_handler
         mock_project_dir.return_value.__enter__.return_value = None
         runner = CliRunner()
         result = runner.invoke(image_app, ["list"], env={"COLUMNS": "200"})
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("no, enable_remote_access is set, run jd up", result.stdout)
+        self.assertIn("no, enable_default_vscode_app is set, run jd up", result.stdout)
 
     @patch("jupyter_deploy.handlers.resource.image_handler.ImageHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")

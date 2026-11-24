@@ -46,7 +46,7 @@ overrides:
   # workspace_app_jupyterlab_image_build: v1
   # workspace_app_claude_code_version: 2.1.312
   # workspace_app_codex_version: 0.166.0
-  # enable_remote_access: false
+  # enable_default_vscode_app: false
   # workspace_app_vscode_image_name: vscode-v0.4.3
   # workspace_app_vscode_image_build: v1
   # workspace_app_ws_proxy_image_name: ws-proxy-v0.4.3

@@ -386,7 +386,7 @@ variable "workspace_templates" {
                      "jupyterlab" and "vscode" are reserved for the built-in cards
     Optional keys per entry (all strings):
       app          - application the card runs: "jupyterlab" (default) or "vscode",
-                     which needs enable_remote_access and has no idle shutdown yet,
+                     which needs enable_default_vscode_app and has no idle shutdown yet,
                      so idle_minutes is refused with it
       gpus         - nvidia.com/gpu count the template pins (e.g. "1");
                      requires cpu and memory, and only accelerator pools may
@@ -492,7 +492,7 @@ variable "enable_default_gpu_pool" {
 
     When true, the template appends the built-in workspace-gpu entry to
     workspace_nodepools and its jupyterlab-gpu config to workspace_templates,
-    and the vscode-gpu config as well when enable_remote_access is on: one GPU
+    and the vscode-gpu config as well when enable_default_vscode_app is on: one GPU
     pool, the NVIDIA device plugin, and one GPU workspace card per application.
     Combining the flag with your own accelerator entries is a plan-time
     error: configure GPU support either through this flag or through
@@ -599,7 +599,7 @@ variable "workspace_namespaces" {
     Optional keys per entry (all strings):
       templates - comma-separated workspace_templates config names offered in this
                   namespace, on top of the built-in cards ("jupyterlab", and "vscode"
-                  with enable_remote_access); each config must be offered by a
+                  with enable_default_vscode_app); each config must be offered by a
                   workspace_nodepools entry
       bedrock   - "false" to withhold Bedrock credentials from this namespace's
                   workspaces when workspace_bedrock_enabled is true (default "true")
@@ -1123,12 +1123,14 @@ variable "workspace_app_codex_version" {
   }
 }
 
-variable "enable_remote_access" {
+variable "enable_default_vscode_app" {
   description = <<-EOT
-    Whether users can open workspaces in VS Code and other desktop editors over SSH.
+    Whether to offer the built-in VS Code application, opened over SSH from desktop editors.
 
-    When true, the template builds the vscode workspace image and offers a VS Code
-    card in every workspace namespace (plus a VS Code GPU card when
+    When true, the template builds the vscode workspace image, copies the ws-proxy
+    sidecar image into ECR and offers a VS Code card in the namespaces whose
+    workspace_namespaces entry lists "vscode" in templates, or in the single default
+    namespace when no namespaces are declared (plus a VS Code GPU card when
     enable_default_gpu_pool is on). Each VS Code workspace runs an SSH server on
     its pod's loopback interface and a sidecar that relays the SSH stream from the
     HTTPS ingress to it; the operator signs a short-lived token per connection and
@@ -1152,7 +1154,7 @@ variable "workspace_app_vscode_image_name" {
     Changing this value creates a new ECR repository. The default,
     'vscode-v<template version>', follows each template release, so an
     upgrade builds into a new repo while previous images stay available for
-    running workspaces. Used when enable_remote_access is true.
+    running workspaces. Used when enable_default_vscode_app is true.
 
     Example: vscode-v0.4.3
   EOT
@@ -1178,7 +1180,7 @@ variable "workspace_app_ws_proxy_image_name" {
     VS Code workspace pods run the sidecar beside the workspace container.
     Changing this value creates a new ECR repository. The default,
     'ws-proxy-v<template version>', follows each template release like the
-    workspace image names. Used when enable_remote_access is true.
+    workspace image names. Used when enable_default_vscode_app is true.
 
     Example: ws-proxy-v0.4.3
   EOT

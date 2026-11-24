@@ -283,16 +283,16 @@ def test_plan_time_validation(
 def test_vscode_card_listed_without_remote_access_is_refused(
     e2e_deployment: EndToEndDeployment, mapped: dict[str, Any]
 ) -> None:
-    """`jd config` refuses a namespace entry listing the built-in vscode card while enable_remote_access is off."""
+    """`jd config` refuses a namespace entry listing the built-in vscode card while enable_default_vscode_app is off."""
     if e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG):
-        pytest.skip("the deployment has enable_remote_access on")
+        pytest.skip("the deployment has enable_default_vscode_app on")
     try:
         e2e_deployment.update_override_value(
             "workspace_namespaces",
             [*mapped["workspace_namespaces"][:2], {**mapped["workspace_namespaces"][2], "templates": "vscode"}],
         )
         error = e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "config"])
-        assert f'built-in "vscode" card, which needs enable_remote_access = true: {NS_B}' in error, error
+        assert f'built-in "vscode" card, which needs enable_default_vscode_app = true: {NS_B}' in error, error
     finally:
         e2e_deployment.update_override_value("workspace_namespaces", mapped["workspace_namespaces"])
 

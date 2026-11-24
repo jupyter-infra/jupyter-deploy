@@ -63,9 +63,9 @@ WORKSPACE_STOP_PATCH = '{"spec":{"desiredStatus":"Stopped"}}'
 WORKSPACE_START_PATCH = '{"spec":{"desiredStatus":"Running"}}'
 
 # Ordered mutating remote-access cases (test_workspace_remote_access) run as one
-# enable_remote_access off->on->off window after the namespace modules.
+# enable_default_vscode_app off->on->off window after the namespace modules.
 ORDER_REMOTE_ACCESS = 40
-REMOTE_ACCESS_FLAG = "enable_remote_access"
+REMOTE_ACCESS_FLAG = "enable_default_vscode_app"
 VSCODE_TEMPLATE_NAME = "vscode"
 # The manifest's entries for the images, the names `jd image` commands take.
 JUPYTERLAB_IMAGE_NAME = "jupyterlab"

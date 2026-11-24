@@ -234,7 +234,7 @@ class TestVariablesYaml(unittest.TestCase):
 
     def test_feature_flags_off_in_preset(self) -> None:
         """The feature flags default to false so existing deployments see zero deltas."""
-        for flag in ("enable_default_gpu_pool", "enable_remote_access"):
+        for flag in ("enable_default_gpu_pool", "enable_default_vscode_app"):
             with self.subTest(flag=flag):
                 self.assertIn(flag, self.DEFAULTS_ALL_TFVARS, f"{flag} must be set in defaults-all.tfvars")
                 self.assertIs(self.DEFAULTS_ALL_TFVARS[flag], False, f"{flag} must default to false")

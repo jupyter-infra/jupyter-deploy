@@ -57,7 +57,7 @@ jd cluster login
 The web UI at the root of your domain lets users manage workspaces from the browser
 and download a `kubectl` setup script — see [Web UI](web-ui.md).
 
-With `enable_remote_access` set to `true`, users also open workspaces in **VS Code**, **Cursor** or
+With `enable_default_vscode_app` set to `true`, users also open workspaces in **VS Code**, **Cursor** or
 **Kiro** over SSH with the `kubectl workspace` plugin; see [Remote Access](remote-access.md).
 
 ```bash

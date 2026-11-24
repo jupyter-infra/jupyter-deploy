@@ -257,7 +257,7 @@ locals {
   # (workspace_remote_access.tf).
   gpu_templates_builtin = concat(
     [local.gpu_template_builtin],
-    var.enable_remote_access ? [local.vscode_gpu_template_builtin] : [],
+    var.enable_default_vscode_app ? [local.vscode_gpu_template_builtin] : [],
   )
 
   workspace_nodepools_accelerated = [

@@ -1,6 +1,6 @@
 """E2E tests for remote access (VS Code, Cursor or Kiro over SSH) on the EKS OIDC template.
 
-The cases run in order as one enable_remote_access off->on->off window, each flip a jd config
+The cases run in order as one enable_default_vscode_app off->on->off window, each flip a jd config
 plus jd up. The window also offers a pool-bound VS Code config; remote_access_window restores
 the flag and the configs if a case leaves them changed. On a deployment that already has the
 flag on, the refusal and the disable cases skip and the window leaves the flag on.
@@ -201,14 +201,14 @@ def test_vscode_config_is_refused_without_the_flag(
 
 
 @pytest.mark.order(ORDER_REMOTE_ACCESS + 1)
-def test_enable_remote_access_offers_the_vscode_cards(
+def test_enable_default_vscode_app_offers_the_vscode_cards(
     e2e_deployment: EndToEndDeployment, shared_namespace: str
 ) -> None:
     """Enabling the flag builds the image and offers the VS Code card and a pool-bound VS Code config on the strategy.
 
-    With a workspace_namespaces mapping, a namespace offers only the configs its entry lists, so
-    the default namespace's entry gets the pool-bound config, and the GPU card when the pool is on;
-    listing the built-in vscode card there is a no-op.
+    With a workspace_namespaces mapping, a namespace offers only the cards its entry lists, so
+    the default namespace's entry gets the pool-bound config, the GPU card when the pool is on,
+    and the built-in vscode card.
     """
     e2e_deployment.ensure_deployed()
     gpu_pool = e2e_deployment.get_bool_variable_value(GPU_POOL_FLAG)

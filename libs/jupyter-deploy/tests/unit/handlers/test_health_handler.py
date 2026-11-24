@@ -227,7 +227,7 @@ class TestHealthHandlerCheckImages(unittest.TestCase):
         handler, manifest, _, _, _ = _make_handler()
         manifest.get_images.return_value = {"vscode": Mock()}
         img = _image_handler_of(handler)
-        img.get_status.side_effect = ImageNotProvisionedError("vscode", "enable_remote_access")
+        img.get_status.side_effect = ImageNotProvisionedError("vscode", "enable_default_vscode_app")
 
         results = handler._check_images()
 
@@ -235,19 +235,19 @@ class TestHealthHandlerCheckImages(unittest.TestCase):
         self.assertTrue(results[0].skipped)
         self.assertEqual(results[0].status_category, StatusCategory.HEALTHY)
         self.assertEqual(results[0].status_text, "not built")
-        self.assertEqual(results[0].detail, "needs enable_remote_access = true")
+        self.assertEqual(results[0].detail, "needs enable_default_vscode_app = true")
         img.get_vulnerabilities.assert_not_called()
 
     def test_image_behind_a_set_but_unapplied_flag_says_so(self) -> None:
         handler, manifest, _, _, _ = _make_handler()
         manifest.get_images.return_value = {"vscode": Mock()}
         img = _image_handler_of(handler)
-        img.get_status.side_effect = ImageNotProvisionedError("vscode", "enable_remote_access", enabled=True)
+        img.get_status.side_effect = ImageNotProvisionedError("vscode", "enable_default_vscode_app", enabled=True)
 
         results = handler._check_images()
 
         self.assertTrue(results[0].skipped)
-        self.assertEqual(results[0].detail, "enable_remote_access is set, run jd up")
+        self.assertEqual(results[0].detail, "enable_default_vscode_app is set, run jd up")
 
     def test_vulnerability_fetch_error_surfaces_in_sub_component(self) -> None:
         handler, manifest, _, _, _ = _make_handler()

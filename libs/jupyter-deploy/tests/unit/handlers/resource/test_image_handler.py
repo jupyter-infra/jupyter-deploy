@@ -186,7 +186,7 @@ class TestImageHandler(unittest.TestCase):
                 **{
                     "repository-output": "vscode_ecr_repository_name",
                     "tag-output": "vscode_image_tag",
-                    "enabled-by": "enable_remote_access",
+                    "enabled-by": "enable_default_vscode_app",
                 }
             ),
         }
@@ -245,7 +245,7 @@ class TestImageHandler(unittest.TestCase):
             handler.get_status("vscode")
 
         self.assertEqual(raised.exception.image_name, "vscode")
-        self.assertEqual(raised.exception.enabled_by, "enable_remote_access")
+        self.assertEqual(raised.exception.enabled_by, "enable_default_vscode_app")
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
@@ -272,7 +272,7 @@ class TestImageHandler(unittest.TestCase):
 
         self.assertTrue(images["jupyterlab"].built)
         self.assertFalse(images["vscode"].built)
-        self.assertEqual(images["vscode"].enabled_by, "enable_remote_access")
+        self.assertEqual(images["vscode"].enabled_by, "enable_default_vscode_app")
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
@@ -281,7 +281,7 @@ class TestImageHandler(unittest.TestCase):
         self, mock_tf_variables_handler: Mock, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock
     ) -> None:
         variables = Mock()
-        variables.get_template_variables.return_value = {"enable_remote_access": Mock(assigned_value=True)}
+        variables.get_template_variables.return_value = {"enable_default_vscode_app": Mock(assigned_value=True)}
         mock_tf_variables_handler.return_value = variables
         handler = self._handler_with_two_images(mock_tf_outputs_handler, mock_retrieve_manifest, vscode_repository="")
 

@@ -143,14 +143,14 @@ class TestImageErrors(unittest.TestCase):
     """An image the deployment did not build names the variable that builds it, when the manifest knows one."""
 
     def test_unbuilt_image_points_at_the_variable_that_builds_it(self) -> None:
-        output = _render(ImageNotProvisionedError("vscode", "enable_remote_access"), ["config"])
+        output = _render(ImageNotProvisionedError("vscode", "enable_default_vscode_app"), ["config"])
 
         self.assertIn("vscode", output)
-        self.assertIn("enable_remote_access", output)
+        self.assertIn("enable_default_vscode_app", output)
         self.assertIn("jd up", output)
 
     def test_unbuilt_image_behind_a_set_flag_points_at_jd_up_only(self) -> None:
-        output = _render(ImageNotProvisionedError("vscode", "enable_remote_access", enabled=True), ["config"])
+        output = _render(ImageNotProvisionedError("vscode", "enable_default_vscode_app", enabled=True), ["config"])
 
         self.assertIn("jd up", output)
         self.assertNotIn("jd config", output)

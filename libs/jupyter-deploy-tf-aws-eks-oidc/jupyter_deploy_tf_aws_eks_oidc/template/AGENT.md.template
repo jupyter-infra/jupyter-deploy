@@ -227,9 +227,10 @@ from the installed release's own catalog (`codex debug models`, see `pick-codex-
 
 ### Remote access: VS Code, Cursor or Kiro over SSH
 
-With `enable_remote_access: true`, the template builds a second workspace image from
+With `enable_default_vscode_app: true`, the template builds a second workspace image from
 `applications/vscode/`, the JupyterLab image's base and coding agents with the SSH server as the
-main process, and offers a VS Code card in every workspace namespace, plus a VS Code GPU card
+main process, and offers a VS Code card in the namespaces that list `vscode` in their `templates`
+(the single default namespace when none are declared), plus a VS Code GPU card
 when `enable_default_gpu_pool` is on. The aws-oidc chart's WebSocket access strategy adds a `ws-proxy`
 sidecar to each VS Code workspace pod; the operator signs a five-minute token per connection and
 Authmiddleware verifies it. The sidecar image is copied from its published digest into the

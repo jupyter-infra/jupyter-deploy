@@ -51,7 +51,7 @@ A user in several teams, such as Carol in the diagram above, may work in all the
 |---|---|---|
 | `name` | yes | Kubernetes namespace; must not start with `kube-` or `jupyter-k8s-`, nor name a namespace a platform component uses |
 | `teams` | yes | Comma-separated GitHub teams in `org:team` format |
-| `templates` | no | Comma-separated `workspace_templates` configs offered in the namespace, on top of the built-in `jupyterlab` template |
+| `templates` | no | Comma-separated `workspace_templates` configs offered in the namespace, on top of the built-in `jupyterlab` template; `vscode` offers the VS Code card when `enable_default_vscode_app` is on |
 | `bedrock` | no | `"false"` to withhold Bedrock credentials from the namespace; see [Bedrock Integration](bedrock-integration.md) |
 
 A few rules apply:

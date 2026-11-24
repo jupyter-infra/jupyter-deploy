@@ -44,7 +44,7 @@ module "app_jupyterlab" {
 # The VS Code workspace image (workspace_remote_access.tf): the jupyterlab image's
 # base and coding agents, with the SSH server as the main process instead of JupyterLab.
 module "app_vscode" {
-  count  = var.enable_remote_access ? 1 : 0
+  count  = var.enable_default_vscode_app ? 1 : 0
   source = "./modules/application"
 
   name                 = "vscode"
@@ -67,7 +67,7 @@ module "app_vscode" {
 # The ws-proxy sidecar copy that VS Code workspace pods run beside the workspace container,
 # built from the digest workspace_remote_access.tf pins.
 module "app_ws_proxy" {
-  count  = var.enable_remote_access ? 1 : 0
+  count  = var.enable_default_vscode_app ? 1 : 0
   source = "./modules/application"
 
   name                 = "ws-proxy"
