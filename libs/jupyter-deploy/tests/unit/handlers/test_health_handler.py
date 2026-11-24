@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from jupyter_deploy.enum import StatusCategory
+from jupyter_deploy.exceptions import ImageNotProvisionedError
 from jupyter_deploy.handlers.health_handler import HealthHandler
 from jupyter_deploy.handlers.payloads import (
     ComponentStatus,
@@ -221,6 +222,21 @@ class TestHealthHandlerCheckImages(unittest.TestCase):
 
         self.assertEqual(results[0].status_category, StatusCategory.DEGRADED)
         self.assertEqual(results[0].status_text, "error")
+
+    def test_image_not_built_behind_a_flag_is_skipped(self) -> None:
+        handler, manifest, _, _, _ = _make_handler()
+        manifest.get_images.return_value = {"vscode": Mock()}
+        img = _image_handler_of(handler)
+        img.get_status.side_effect = ImageNotProvisionedError("vscode", "enable_remote_access")
+
+        results = handler._check_images()
+
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0].skipped)
+        self.assertEqual(results[0].status_category, StatusCategory.HEALTHY)
+        self.assertEqual(results[0].status_text, "not built")
+        self.assertEqual(results[0].detail, "needs enable_remote_access = true")
+        img.get_vulnerabilities.assert_not_called()
 
     def test_vulnerability_fetch_error_surfaces_in_sub_component(self) -> None:
         handler, manifest, _, _, _ = _make_handler()

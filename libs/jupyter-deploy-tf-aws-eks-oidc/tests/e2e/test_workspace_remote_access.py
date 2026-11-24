@@ -82,6 +82,12 @@ PROBE_NAMESPACE = "e2e-ra-probe"
 SPOOF_NAMESPACE = "e2e-ra-spoof"
 
 
+def _image_health_rows(e2e_deployment: EndToEndDeployment) -> dict[str, dict[str, Any]]:
+    """The images layer of `jd health --json`, by image name."""
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "health", "--images", "--json"])
+    return {row["name"]: row for row in json.loads(result.stdout)["layers"]}
+
+
 def _sidecar_port_closed_to_traefik(workspace: str) -> bool:
     """Whether the policy drops a Traefik-labeled router pod's probe of the sidecar port, at the pod address.
 
@@ -175,6 +181,9 @@ def test_vscode_config_is_refused_without_the_flag(
     assert "jupyterlab status:" in status.stdout, (
         f"with one image built, jd image status should pick it:\n{status.stdout}"
     )
+    health = _image_health_rows(e2e_deployment)
+    for name in (VSCODE_IMAGE_NAME, SIDECAR_IMAGE_NAME):
+        assert health[name]["skipped"] and health[name]["detail"] == f"needs {REMOTE_ACCESS_FLAG} = true", health[name]
 
     previous = e2e_deployment.read_override_value("workspace_templates")
     configs = e2e_deployment.get_list_of_maps_variable_value("workspace_templates")
@@ -254,6 +263,9 @@ def test_enable_remote_access_offers_the_vscode_cards(
     }
     unnamed = e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "image", "status"])
     assert "jd image list" in unnamed, f"with several images built, jd image status should ask for --name:\n{unnamed}"
+    health = _image_health_rows(e2e_deployment)
+    for name in (VSCODE_IMAGE_NAME, SIDECAR_IMAGE_NAME):
+        assert health[name]["status"] == "Available" and not health[name]["skipped"], health[name]
 
 
 @pytest.mark.order(ORDER_REMOTE_ACCESS + 2)
@@ -401,6 +413,8 @@ def test_disable_remote_access_removes_the_vscode_cards(
             ["jupyter-deploy", "image", "status", "--name", name]
         )
         assert "not built" in unbuilt and REMOTE_ACCESS_FLAG in unbuilt, unbuilt
+    health = _image_health_rows(e2e_deployment)
+    assert all(health[name]["skipped"] for name in (VSCODE_IMAGE_NAME, SIDECAR_IMAGE_NAME)), health
     assert _ingress_policy_ports(WORKSPACE_NAMESPACE) == {
         ROUTER_NAMESPACE: {WORKSPACE_APP_PORT},
         OPERATOR_NAMESPACE: {WORKSPACE_APP_PORT},
