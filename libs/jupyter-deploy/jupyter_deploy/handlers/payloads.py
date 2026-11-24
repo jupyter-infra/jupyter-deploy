@@ -212,6 +212,32 @@ class ProxyStatus:
 
 
 @dataclass
+class ProxySession:
+    """One run of the proxy process, as found on disk (jd proxy sessions).
+
+    A session is one timestamped runtime directory: the proxy's rotating logs plus, while it runs
+    or after it dies uncleanly, its ``status.json``. `session_id` is that directory's name, which
+    is also the launch timestamp.
+
+    `state` is what the CLI can tell from disk:
+
+    - the published state (e.g. ``running``) when the process is alive and confirmed to be this proxy;
+    - ``unconfirmed`` when the recorded PID is alive but its identity cannot be confirmed;
+    - the published terminal state (``stopped``, ``failed``) when the proxy recorded one;
+    - ``dead`` when the record claims a live state but its process is gone (killed, crashed);
+    - ``stopped`` when there is no status file — a clean shutdown deletes it;
+    - ``unknown`` when the status file is present but unreadable.
+    """
+
+    session_id: str
+    state: str
+    pid: int | None = None
+    port: int | None = None
+    started_at: str = ""
+    log_dir: str = ""
+
+
+@dataclass
 class ResolvedVolume:
     """One volume, resolved from its manifest declaration plus the values that declaration points at."""
 

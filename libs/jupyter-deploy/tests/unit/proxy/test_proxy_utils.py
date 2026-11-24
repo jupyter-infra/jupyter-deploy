@@ -137,3 +137,71 @@ class TestReadInstanceStatus(unittest.TestCase):
             assert status is not None
             self.assertEqual(status.pid, 0)
             self.assertFalse(status.alive)
+
+
+class TestSessionStartedAt(unittest.TestCase):
+    def test_parses_session_id_as_iso_timestamp(self) -> None:
+        self.assertEqual(proxy_utils.session_started_at("20260610-180100.500"), "2026-06-10T18:01:00.500")
+
+    def test_non_timestamp_id_yields_empty(self) -> None:
+        self.assertEqual(proxy_utils.session_started_at("not-a-timestamp"), "")
+
+
+def _write_logs(instance_dir: Path, files: dict[str, str]) -> None:
+    instance_dir.mkdir(parents=True, exist_ok=True)
+    for name, text in files.items():
+        (instance_dir / name).write_text(text)
+
+
+class TestSessionLogFiles(unittest.TestCase):
+    def test_returns_rotated_logs_in_write_order_and_ignores_other_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            instance_dir = Path(tmp)
+            _write_logs(
+                instance_dir, {"0002.log": "", "0000.log": "", "0001.log": "", "status.json": "{}", "x.log": ""}
+            )
+            (instance_dir / "0003.log").mkdir()  # a directory is never a log file
+            names = [f.name for f in proxy_utils.session_log_files(instance_dir)]
+            self.assertEqual(names, ["0000.log", "0001.log", "0002.log"])
+
+    def test_orders_past_four_digits_numerically(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            instance_dir = Path(tmp)
+            _write_logs(instance_dir, {"10000.log": "", "9999.log": ""})
+            names = [f.name for f in proxy_utils.session_log_files(instance_dir)]
+            self.assertEqual(names, ["9999.log", "10000.log"])
+
+    def test_missing_dir_yields_no_files(self) -> None:
+        self.assertEqual(proxy_utils.session_log_files(Path("/nonexistent/session")), [])
+
+
+class TestLogLines(unittest.TestCase):
+    def _files(self, tmp: str) -> list[Path]:
+        instance_dir = Path(tmp)
+        _write_logs(instance_dir, {"0000.log": "a\nb\n", "0001.log": "c\nd\ne\n"})
+        return proxy_utils.session_log_files(instance_dir)
+
+    def test_iter_concatenates_files_in_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(list(proxy_utils.iter_log_lines(self._files(tmp))), ["a\n", "b\n", "c\n", "d\n", "e\n"])
+
+    def test_iter_skips_a_file_rotated_away_after_listing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            files = self._files(tmp)
+            files[0].unlink()
+            self.assertEqual(list(proxy_utils.iter_log_lines(files)), ["c\n", "d\n", "e\n"])
+
+    def test_tail_spans_rotated_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(proxy_utils.tail_log_lines(self._files(tmp), max_lines=3), ["c\n", "d\n", "e\n"])
+            self.assertEqual(proxy_utils.tail_log_lines(self._files(tmp), max_lines=2, skip=2), ["b\n", "c\n"])
+
+    def test_tail_skip_past_the_start_yields_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(proxy_utils.tail_log_lines(self._files(tmp), max_lines=2, skip=10), [])
+
+    def test_tail_window_larger_than_log_returns_everything_before_skip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                proxy_utils.tail_log_lines(self._files(tmp), max_lines=100, skip=1), ["a\n", "b\n", "c\n", "d\n"]
+            )

@@ -1,4 +1,4 @@
-"""CLI surface for the local proxy: `jd proxy connect-info | start | stop | status | show`.
+"""CLI surface for the local proxy: `jd proxy connect-info | start | stop | status | show | sessions | logs`.
 
 Thin by design — each command resolves the project, delegates to :class:`ProxyHandler`, and
 displays the result. All orchestration (manifest command, subprocess launch, status-file
@@ -14,6 +14,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from jupyter_deploy import cmd_utils
 from jupyter_deploy.cli.error_decorator import handle_cli_errors, handle_connect_info_errors
@@ -185,3 +186,101 @@ def show(
             return
 
         console.print_json(json.dumps(asdict(details)))
+
+
+@proxy_app.command("sessions")
+def sessions(
+    project_dir: Annotated[
+        Path | None,
+        typer.Option("--path", "-p", help="Directory of the project whose proxy sessions to list."),
+    ] = None,
+    limit: Annotated[
+        int | None, typer.Option("-n", help="Maximum number of sessions to list, newest first.", min=1)
+    ] = None,
+    json_output: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
+) -> None:
+    """List the runs of the local proxy for this project, newest first.
+
+    Each run of the proxy process is a session, with its own logs. Read one with
+    <jd proxy logs --session-id SESSION_ID>.
+
+    Run either from a project directory that you created with <jd init>;
+    or pass --path <project-dir>.
+    """
+    console = Console()
+    with handle_cli_errors(console), cmd_utils.project_dir(project_dir):
+        result = ProxyHandler().sessions(limit=limit)
+
+        if json_output:
+            payload = {"sessions": [asdict(session) for session in result]}
+            console.print(json.dumps(payload), highlight=False, markup=False, soft_wrap=True)
+            return
+
+        if not result:
+            console.print("No proxy session found for this project.")
+            console.line()
+            console.print(":bulb: Start one: [bold cyan]jd proxy start[/]")
+            return
+
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("Session ID", style="green", no_wrap=True)
+        table.add_column("State")
+        table.add_column("PID", justify="right")
+        table.add_column("Port", justify="right")
+        table.add_column("Started at", style="blue")
+        for session in result:
+            table.add_row(
+                session.session_id,
+                session.state,
+                str(session.pid) if session.pid else "-",
+                str(session.port) if session.port else "-",
+                session.started_at or "-",
+            )
+        console.print(table)
+
+
+@proxy_app.command("logs")
+def logs(
+    project_dir: Annotated[
+        Path | None,
+        typer.Option("--path", "-p", help="Directory of the project whose proxy logs to read."),
+    ] = None,
+    session_id: Annotated[
+        str | None,
+        typer.Option("--session-id", help="Session to read; default: the running one, else the most recent."),
+    ] = None,
+    lines: Annotated[
+        int | None,
+        typer.Option("-l", "--lines", help="Show only last L lines of the log content.", min=1),
+    ] = None,
+    skip: Annotated[
+        int,
+        typer.Option("-s", "--skip", help="Skip S lines from end (for pagination).", min=0),
+    ] = 0,
+) -> None:
+    """Print the logs of one run of the local proxy.
+
+    By default, reads the running session, or the most recent one if none is running — the run
+    that just died is usually the one worth reading. List sessions with <jd proxy sessions>.
+
+    Use --lines/-l to show only the last N lines.
+
+    Use --skip/-s to offset the first line returned (from the end of the content).
+
+    Run either from a project directory that you created with <jd init>;
+    or pass --path <project-dir>.
+    """
+    console = Console()
+    with handle_cli_errors(console), cmd_utils.project_dir(project_dir):
+        handler = ProxyHandler()
+        if lines or skip:
+            # Tail/pagination mode, bounded memory; same default window as `jd history show`.
+            _, log_lines = handler.session_log_tail(session_id=session_id, max_lines=lines or 1000, skip=skip)
+            for line in log_lines:
+                # raw print: log lines are not Rich markup; end="" as each line keeps its newline
+                print(line, end="")
+            return
+
+        _, all_lines = handler.session_log_lines(session_id=session_id)
+        for line in all_lines:
+            print(line, end="")

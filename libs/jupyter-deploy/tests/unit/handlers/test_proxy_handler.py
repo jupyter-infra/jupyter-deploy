@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from jupyter_deploy.exceptions import CommandNotImplementedError
-from jupyter_deploy.handlers.payloads import ProxyConnectBundle, ProxyStatus
+from jupyter_deploy.handlers.payloads import ProxyConnectBundle, ProxySession, ProxyStatus
 from jupyter_deploy.handlers.proxy_handler import ProxyHandler
 from jupyter_deploy.manifest import JupyterDeployManifestV1
 from jupyter_deploy.proxy.proxy_manager import ProxyManager
@@ -173,6 +173,25 @@ class TestLifecycleDelegation(unittest.TestCase):
 
         self.assertIs(handler.show(), listening)
         manager.show.assert_called_once_with()
+
+    def test_delegates_sessions_and_logs_to_manager(self) -> None:
+        handler = _make_handler()
+        manager = Mock()
+        handler._manager = manager
+        session = ProxySession(session_id="20260610-180000.000", state="stopped")
+        manager.sessions.return_value = [session]
+        manager.session_log_lines.return_value = ("20260610-180000.000", iter(["a\n"]))
+        manager.session_log_tail.return_value = ("20260610-180000.000", ["a\n"])
+
+        self.assertEqual(handler.sessions(limit=3), [session])
+        manager.sessions.assert_called_once_with(limit=3)
+
+        session_id, lines = handler.session_log_lines(session_id="20260610-180000.000")
+        self.assertEqual((session_id, list(lines)), ("20260610-180000.000", ["a\n"]))
+        manager.session_log_lines.assert_called_once_with(session_id="20260610-180000.000")
+
+        self.assertEqual(handler.session_log_tail(max_lines=5, skip=1), ("20260610-180000.000", ["a\n"]))
+        manager.session_log_tail.assert_called_once_with(session_id=None, max_lines=5, skip=1)
 
     def test_token_command_is_derived_for_the_project(self) -> None:
         # The manager's token command drives `jd proxy connect-info` for this project.

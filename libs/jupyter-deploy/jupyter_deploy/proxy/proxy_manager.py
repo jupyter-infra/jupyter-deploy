@@ -33,6 +33,7 @@ import time
 import urllib.error
 import urllib.request
 import webbrowser
+from collections.abc import Iterator
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -44,10 +45,11 @@ from jupyter_deploy.exceptions import (
     ProxyAlreadyRunningError,
     ProxyIdentityUnconfirmedError,
     ProxyNotInstalledError,
+    ProxySessionNotFoundError,
     ProxyStartError,
     UrlNotSecureError,
 )
-from jupyter_deploy.handlers.payloads import ProxyStatus
+from jupyter_deploy.handlers.payloads import ProxySession, ProxyStatus
 from jupyter_deploy.proxy import proxy_utils
 
 # The proxy only ever binds loopback, so the browser must only ever be opened at loopback.
@@ -596,3 +598,93 @@ class ProxyManager:
         if status is None:
             raise NoProxyFoundError()
         return status
+
+    # ------------------------------------------------------------------ sessions / logs
+
+    def _session_of(self, instance_dir: Path) -> ProxySession:
+        """Describe one instance directory as a session, deriving its state from what is on disk.
+
+        See :class:`~jupyter_deploy.handlers.payloads.ProxySession` for the state vocabulary.
+        """
+        session_id = instance_dir.name
+        started_at = proxy_utils.session_started_at(session_id)
+        status_path = instance_dir / proxy_utils.PROXY_STATUS_FILE_NAME
+        try:
+            status = proxy_utils.read_instance_status(instance_dir)
+        except OSError:
+            # Present but unreadable: no verdict. Listing must not fail on one bad directory.
+            return ProxySession(session_id, "unknown", started_at=started_at, log_dir=str(instance_dir))
+
+        if status is None:
+            # A clean shutdown deletes status.json; a file that is there but corrupt is no verdict.
+            state = "unknown" if status_path.is_file() else "stopped"
+            return ProxySession(session_id, state, started_at=started_at, log_dir=str(instance_dir))
+
+        if status.running:
+            state = status.state if self._is_confirmed_proxy(status) else "unconfirmed"
+        elif status.alive:
+            state = status.state  # alive PID, but the proxy published a terminal state
+        elif status.state in ("stopped", "failed"):
+            state = status.state
+        else:
+            state = "dead"  # claims to be live, but its process is gone (killed, crashed)
+
+        return ProxySession(
+            session_id=session_id,
+            state=state,
+            pid=status.pid or None,
+            port=status.port,
+            started_at=started_at,
+            log_dir=str(instance_dir),
+        )
+
+    def sessions(self, limit: int | None = None) -> list[ProxySession]:
+        """Return the target's proxy sessions, newest first, capped at ``limit`` if given."""
+        instance_dirs = list(reversed(self._instance_dirs()))
+        if limit is not None:
+            instance_dirs = instance_dirs[:limit]
+        return [self._session_of(d) for d in instance_dirs]
+
+    def _resolve_session_dir(self, session_id: str | None) -> Path:
+        """Return the directory of ``session_id``; by default the running session, else the newest.
+
+        ``session_id`` is matched against this target's existing session directory names, never
+        joined onto a path, so a value like ``../..`` cannot reach outside the runtime tree.
+
+        Raises:
+            ProxySessionNotFoundError: If ``session_id`` names no session, or the target has none.
+        """
+        instance_dirs = self._instance_dirs()
+        if session_id is not None:
+            for instance_dir in instance_dirs:
+                if instance_dir.name == session_id:
+                    return instance_dir
+            raise ProxySessionNotFoundError(session_id)
+
+        running = self._latest_running()
+        if running is not None:
+            return Path(running.log_dir)
+        if instance_dirs:
+            return instance_dirs[-1]
+        raise ProxySessionNotFoundError()
+
+    def session_log_lines(self, session_id: str | None = None) -> tuple[str, Iterator[str]]:
+        """Return a session's id and an iterator over its whole log, rotated files concatenated in order.
+
+        Raises:
+            ProxySessionNotFoundError: If the session does not exist, or the target has none.
+        """
+        instance_dir = self._resolve_session_dir(session_id)
+        return instance_dir.name, proxy_utils.iter_log_lines(proxy_utils.session_log_files(instance_dir))
+
+    def session_log_tail(
+        self, session_id: str | None = None, max_lines: int = 1000, skip: int = 0
+    ) -> tuple[str, list[str]]:
+        """Return a session's id and the last ``max_lines`` lines of its log, ``skip`` lines from the end.
+
+        Raises:
+            ProxySessionNotFoundError: If the session does not exist, or the target has none.
+        """
+        instance_dir = self._resolve_session_dir(session_id)
+        log_files = proxy_utils.session_log_files(instance_dir)
+        return instance_dir.name, proxy_utils.tail_log_lines(log_files, max_lines=max_lines, skip=skip)

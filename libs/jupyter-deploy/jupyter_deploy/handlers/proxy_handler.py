@@ -17,6 +17,8 @@ to the project's remote host. This handler stays engine/provider-agnostic and th
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from jupyter_deploy.engine.engine_outputs import EngineOutputsHandler
 from jupyter_deploy.engine.engine_variables import EngineVariablesHandler
 from jupyter_deploy.engine.enum import EngineType
@@ -24,7 +26,7 @@ from jupyter_deploy.engine.supervised_execution import DisplayManager, NullDispl
 from jupyter_deploy.engine.terraform import tf_outputs, tf_variables
 from jupyter_deploy.exceptions import CommandNotImplementedError
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
-from jupyter_deploy.handlers.payloads import ProxyConnectBundle, ProxyStatus
+from jupyter_deploy.handlers.payloads import ProxyConnectBundle, ProxySession, ProxyStatus
 from jupyter_deploy.handlers.resource.resource_utils import collect_results
 from jupyter_deploy.manifest import PROXY_CONNECT_INFO_COMMAND
 from jupyter_deploy.provider import manifest_command_runner as cmd_runner
@@ -144,3 +146,27 @@ class ProxyHandler(BaseProjectHandler):
             NoProxyFoundError: If no confirmed running proxy exists.
         """
         return self._manager.show()
+
+    # ------------------------------------------------------------------ sessions / logs (delegated)
+
+    def sessions(self, limit: int | None = None) -> list[ProxySession]:
+        """Return this project's proxy sessions, newest first. See ProxyManager.sessions."""
+        return self._manager.sessions(limit=limit)
+
+    def session_log_lines(self, session_id: str | None = None) -> tuple[str, Iterator[str]]:
+        """Return a session's id and an iterator over its whole log.
+
+        Raises:
+            ProxySessionNotFoundError: If the session does not exist, or the project has none.
+        """
+        return self._manager.session_log_lines(session_id=session_id)
+
+    def session_log_tail(
+        self, session_id: str | None = None, max_lines: int = 1000, skip: int = 0
+    ) -> tuple[str, list[str]]:
+        """Return a session's id and a tail window of its log (see ``jd history show -l/-s``).
+
+        Raises:
+            ProxySessionNotFoundError: If the session does not exist, or the project has none.
+        """
+        return self._manager.session_log_tail(session_id=session_id, max_lines=max_lines, skip=skip)

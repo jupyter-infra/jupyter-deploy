@@ -70,6 +70,11 @@ jd proxy open
 jd proxy status
 jd proxy show
 
+# list its runs, newest first, and read the logs of one
+jd proxy sessions
+jd proxy logs
+jd proxy logs --session-id SESSION_ID --lines 50
+
 # stop it
 jd proxy stop
 ```
@@ -91,10 +96,15 @@ A background proxy stops on its own so that it cannot outlive your session:
 
 A foreground proxy has no idle timeout: your terminal governs its lifetime.
 
-```{note}
-The proxy keeps its logs under `.jd-proxy/` in your project directory. Look there first if
-the proxy stops unexpectedly.
-```
+## Troubleshooting the proxy
+
+Each run of the proxy process is a *session* with its own logs, kept under `.jd-proxy/` in your
+project directory. `jd proxy sessions` lists them with their state: `running`, `stopped` after a
+clean shutdown, `failed`, or `dead` when the process went away without shutting down (for
+example, it was killed).
+
+If the proxy stops unexpectedly, run `jd proxy logs`: without `--session-id`, it reads the running
+session, or the most recent one when none is running, which is usually the run that just stopped.
 
 See the [`jd proxy`](../reference/project/proxy) and [`jd open`](../reference/project/open)
 reference pages for every option.

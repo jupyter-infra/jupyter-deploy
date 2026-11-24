@@ -5,14 +5,19 @@ under each proxy instance's log dir. Because instance directories persist across
 upgrades, a project's history can hold files written by older proxy versions — so reads go
 through a per-version converter keyed on the file's ``schema_version``.
 
-These are pure functions (no I/O beyond reading the given file); the manager owns discovery
+It also reads a session's rotated log files (``NNNN.log``) back as one stream.
+
+These are pure functions (no I/O beyond reading the given files); the manager owns discovery
 of instance directories and process orchestration.
 """
 
 from __future__ import annotations
 
+import datetime
 import json
-from collections.abc import Callable
+import re
+from collections import deque
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from jupyter_deploy import cmd_utils, fs_utils
@@ -74,3 +79,53 @@ def read_instance_status(instance_dir: Path) -> ProxyStatus | None:
     version = payload.get("schema_version", 1)
     convert = _STATUS_CONVERTERS.get(version, _LATEST_STATUS_CONVERTER)
     return convert(payload, instance_dir)
+
+
+# The proxy's rotating log files: ``0000.log``, ``0001.log``, … (owned by the client-proxy's
+# rotation handler). Zero-padded, so name order is write order.
+_LOG_FILE_RE = re.compile(r"^\d{4,}\.log$")
+
+# Directory-name format of a session (see ProxyManager._now_timestamp).
+_SESSION_ID_FORMAT = "%Y%m%d-%H%M%S.%f"
+
+
+def session_started_at(session_id: str) -> str:
+    """Return a session's launch time as ISO 8601 (local time, ms), or "" if the id is not a timestamp."""
+    try:
+        started = datetime.datetime.strptime(session_id, _SESSION_ID_FORMAT)
+    except ValueError:
+        return ""
+    return started.isoformat(timespec="milliseconds")
+
+
+def session_log_files(instance_dir: Path) -> list[Path]:
+    """Return a session's rotated log files in write order (oldest first)."""
+    if not instance_dir.is_dir():
+        return []
+    files = (f for f in instance_dir.iterdir() if f.is_file() and _LOG_FILE_RE.match(f.name))
+    return sorted(files, key=lambda f: (len(f.name), f.name))
+
+
+def iter_log_lines(log_files: list[Path]) -> Iterator[str]:
+    """Yield every line of ``log_files``, in order, as if they were one file.
+
+    A file the proxy rotated away (deleted) between listing and reading is skipped rather than
+    failing the read: the remaining files are still the session's log, in order.
+    """
+    for log_file in log_files:
+        try:
+            with open(log_file, encoding="utf-8", errors="replace") as f:
+                yield from f
+        except FileNotFoundError:
+            continue
+
+
+def tail_log_lines(log_files: list[Path], max_lines: int, skip: int = 0) -> list[str]:
+    """Return up to ``max_lines`` lines ending ``skip`` lines before the end of ``log_files``.
+
+    Same window as ``jd history show -l/-s``: ``max_lines=10, skip=0`` is the last 10 lines,
+    ``max_lines=10, skip=10`` the 10 before those. Memory is bounded by ``max_lines + skip``.
+    """
+    window = deque(iter_log_lines(log_files), maxlen=max_lines + skip)
+    lines = list(window)
+    return lines[: max(len(lines) - skip, 0)]

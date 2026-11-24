@@ -32,6 +32,7 @@ from jupyter_deploy.exceptions import (
     ProjectStoreAccessConfigurationError,
     ProjectStoreNotFoundError,
     ProxyNotInstalledError,
+    ProxySessionNotFoundError,
     ProxyStartError,
     ReadConfigurationError,
     ReadManifestError,
@@ -282,6 +283,15 @@ class TestToolErrors(unittest.TestCase):
         self.assertIsNone(ProxyStartError("x").log_dir)
         self.assertIsInstance(error, JupyterDeployError)
         self.assertIsInstance(error, RuntimeError)
+
+    def test_proxy_session_not_found_error(self) -> None:
+        """Test ProxySessionNotFoundError names the session, or says the project has none."""
+        error = ProxySessionNotFoundError("20260610-180000.000")
+        self.assertEqual(error.session_id, "20260610-180000.000")
+        self.assertIn("20260610-180000.000", str(error))
+        self.assertIsNone(ProxySessionNotFoundError().session_id)
+        self.assertIn("No proxy session", str(ProxySessionNotFoundError()))
+        self.assertIsInstance(error, JupyterDeployError)
 
 
 class TestResourceErrors(unittest.TestCase):
