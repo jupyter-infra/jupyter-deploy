@@ -33,6 +33,7 @@ from .constants import (
     REMOTE_ACCESS_FLAG,
     SEEDED_WORKSPACES,
     VSCODE_GPU_TEMPLATE_NAME,
+    VSCODE_TEMPLATE_NAME,
     WORKSPACE_NAMESPACE,
     WORKSPACES_DIR,
 )
@@ -258,7 +259,8 @@ def namespace_base_values(e2e_deployment: EndToEndDeployment, restored_namespace
 
     - default:  every team in oauth_allowed_teams, keeping the cards the empty mapping
                 gives it, so its live workspaces keep their templates
-    - e2e-ns-a: JD_E2E_RBAC_TEAM + a synthetic "only-a" team, also offering e2e-cpu-small
+    - e2e-ns-a: JD_E2E_RBAC_TEAM + a synthetic "only-a" team, also offering e2e-cpu-small and,
+                with the flag on, the VS Code card; e2e-ns-b never lists it
     - e2e-ns-b: JD_E2E_RBAC_TEAM + a synthetic "only-b" team, opted out of Bedrock
 
     Also allowlists the synthetic teams (incl. the #409 case's "only-default") in variables.yaml,
@@ -275,9 +277,12 @@ def namespace_base_values(e2e_deployment: EndToEndDeployment, restored_namespace
 
     # default keeps every card the pools offer, including the GPU cards the flags inject.
     offered = [t for p in pools for t in p.get("templates", "").split(",") if t]
+    vscode_on = e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG)
+    if vscode_on:
+        offered.append(VSCODE_TEMPLATE_NAME)
     if e2e_deployment.get_bool_variable_value(GPU_POOL_FLAG):
         offered.append(GPU_TEMPLATE_NAME)
-        if e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG):
+        if vscode_on:
             offered.append(VSCODE_GPU_TEMPLATE_NAME)
 
     pools_with_small = pools_offering(pools, NS_SMALL_TEMPLATE)
@@ -290,7 +295,11 @@ def namespace_base_values(e2e_deployment: EndToEndDeployment, restored_namespace
         "workspace_nodepools": pools_with_small,
         "workspace_namespaces": [
             _namespace_entry("default", allowed_teams, list(dict.fromkeys(offered))),
-            _namespace_entry(NS_A, [rbac_team, f"{org}:{NS_ONLY_A_TEAM}"], [NS_SMALL_TEMPLATE]),
+            _namespace_entry(
+                NS_A,
+                [rbac_team, f"{org}:{NS_ONLY_A_TEAM}"],
+                [NS_SMALL_TEMPLATE, *([VSCODE_TEMPLATE_NAME] if vscode_on else [])],
+            ),
             _namespace_entry(NS_B, [rbac_team, f"{org}:{NS_ONLY_B_TEAM}"], bedrock=False),
         ],
     }

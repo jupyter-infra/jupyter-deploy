@@ -6,8 +6,9 @@
 #
 # The Terraform Helm provider only diffs a release's chart+values, not its
 # in-cluster objects, so once the CR is gone `jd config`/`jd up` report
-# "No changes" and never self-heal. A companion data.kubernetes_resource read
-# makes `jd config` notice the drift (planned replacement of this resource); this
+# "No changes" and never self-heal. A companion data.kubernetes_resources list,
+# filtered by name, makes `jd config` notice the drift (planned replacement of
+# this resource); this
 # script performs the repair by re-applying the CR straight from the owning
 # release's rendered manifest — the source of truth, no duplicated YAML.
 #

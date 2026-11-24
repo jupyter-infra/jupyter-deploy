@@ -1140,7 +1140,8 @@ variable "enable_default_vscode_app" {
     Turning it on restarts the operator and the auth middleware once; running
     workspaces keep running. Turning it off removes the VS Code cards; delete the
     VS Code workspaces first, since a template a live workspace uses cannot be
-    removed.
+    removed, and drop "vscode" from every workspace_namespaces entry in the same
+    change, since a listing without the flag is refused at plan time.
 
     Recommended: false
   EOT

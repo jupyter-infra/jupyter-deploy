@@ -243,7 +243,8 @@ VS Code workspaces have no idle shutdown yet, since nothing in the pod reports e
 `workspace_templates` configs with `app: vscode` refuse `idle_minutes`. The Web UI's Open button
 leads to the browser URL, which nothing answers in a VS Code workspace. Turning the flag off removes
 the VS Code cards. Delete the VS Code workspaces first: `jd config` refuses to remove a template a
-live workspace still uses.
+live workspace still uses. With a `workspace_namespaces` mapping, remove `vscode` from each entry's
+`templates` in the same change: a listing without the flag is refused at plan time.
 
 ### Charts directory
 

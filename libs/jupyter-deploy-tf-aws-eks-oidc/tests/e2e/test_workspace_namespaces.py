@@ -155,16 +155,16 @@ def test_team_mapped_to_no_namespace(mapped: dict[str, Any]) -> None:
 @pytest.mark.order(ORDER_NAMESPACES + 4)
 @skip_if_testvars_not_set(NS_REQUIRED_VARS)
 def test_templates_offered_per_namespace(e2e_deployment: EndToEndDeployment, mapped: dict[str, Any]) -> None:
-    """e2e-cpu-small is offered and runs in e2e-ns-a only; e2e-ns-b offers just the built-in cards."""
+    """e2e-cpu-small runs in e2e-ns-a only; the VS Code card, when on, is offered where listed and not in e2e-ns-b."""
     accepted, rejected_name = "e2e-ns-small-a", "e2e-ns-small-b"
     rbac = _rbac_team()
-    # Every workspace namespace gets the built-in cards, the VS Code one with the flag.
-    built_in = {DEFAULT_WORKSPACE_TEMPLATE}
+    # Every workspace namespace gets the JupyterLab card; the VS Code card only where the entry lists it.
+    expected_a = {DEFAULT_WORKSPACE_TEMPLATE, NS_SMALL_TEMPLATE}
     if e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG):
-        built_in.add(VSCODE_TEMPLATE_NAME)
+        expected_a.add(VSCODE_TEMPLATE_NAME)
     try:
-        assert list_template_names(NS_A, as_user=_user(), as_groups=_group(rbac)) == built_in | {NS_SMALL_TEMPLATE}
-        assert list_template_names(NS_B, as_user=_user(), as_groups=_group(rbac)) == built_in
+        assert list_template_names(NS_A, as_user=_user(), as_groups=_group(rbac)) == expected_a
+        assert list_template_names(NS_B, as_user=_user(), as_groups=_group(rbac)) == {DEFAULT_WORKSPACE_TEMPLATE}
 
         kubectl_apply_workspace(accepted, WORKSPACES_DIR, as_user=_user(), as_groups=_group(rbac))
         kubectl_poll_workspace_status(accepted, "Running", namespace=NS_A, timeout_s=NS_RUNNING_TIMEOUT_S)

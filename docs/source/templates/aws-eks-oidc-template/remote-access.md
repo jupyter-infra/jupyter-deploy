@@ -118,4 +118,5 @@ overrides:
 
 Setting `enable_default_vscode_app` back to `false` removes the VS Code cards and the WebSocket
 access strategy. Delete the VS Code workspaces first: `jd config` refuses to remove a template a
-live workspace still uses.
+live workspace still uses. With a `workspace_namespaces` mapping, remove `vscode` from each entry's
+`templates` in the same change: a listing without the flag is refused at plan time.
