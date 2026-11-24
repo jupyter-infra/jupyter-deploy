@@ -3,7 +3,8 @@
 The cases run in order as one enable_default_vscode_app off->on->off window, each flip a jd config
 plus jd up. The window also offers a pool-bound VS Code config; remote_access_window restores
 the flag and the configs if a case leaves them changed. On a deployment that already has the
-flag on, the refusal and the disable cases skip and the window leaves the flag on.
+flag on, the refusal and the disable cases skip and the window leaves the flag on. One case maps
+two extra namespaces to show the card is offered only where listed; the restoring apply drops them.
 """
 
 import base64
@@ -29,10 +30,12 @@ from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_request_workspace_connection,
 )
 from pytest_jupyter_deploy.workspaces.network_probe import probe_service, probe_workspace, probe_workspace_allowed
-from pytest_jupyter_deploy.workspaces.template import list_template_names
+from pytest_jupyter_deploy.workspaces.template import get_template, list_template_names
 
 from .constants import (
+    DEFAULT_WORKSPACE_TEMPLATE,
     GPU_POOL_FLAG,
+    GPU_TEMPLATE_NAME,
     IMPERSONATED_USER,
     OPERATOR_NAMESPACE,
     ORDER_REMOTE_ACCESS,
@@ -70,22 +73,24 @@ REMOVAL_TIMEOUT_S = 120
 IMAGE_TOOLS = ("claude", "codex", "git", "curl")
 
 
-def _workspace_template(name: str, namespace: str) -> dict[str, Any]:
-    result = run_kubectl("get", "workspacetemplate", name, "-n", namespace, "-o", "json")
-    assert result.returncode == 0, f"{name} WorkspaceTemplate missing in {namespace}: {result.stderr}"
-    template: dict[str, Any] = json.loads(result.stdout)
-    return template
-
-
 # Throwaway namespaces for the cross-namespace probes of the sidecar port.
 PROBE_NAMESPACE = "e2e-ra-probe"
 SPOOF_NAMESPACE = "e2e-ra-spoof"
+# Two throwaway workspace namespaces of the opt-in case: one lists the vscode card, one does not.
+LISTED_NAMESPACE = "e2e-ra-listed"
+UNLISTED_NAMESPACE = "e2e-ra-unlisted"
 
 
-def _image_health_rows(e2e_deployment: EndToEndDeployment) -> dict[str, dict[str, Any]]:
-    """The images layer of `jd health --json`, by image name."""
+def _assert_remote_access_images(e2e_deployment: EndToEndDeployment, *, built: bool, detail: str = "") -> None:
+    """Both remote-access images read alike in `jd health --images`: Available if built, else skipped with `detail`."""
     result = e2e_deployment.cli.run_command(["jupyter-deploy", "health", "--images", "--json"])
-    return {row["name"]: row for row in json.loads(result.stdout)["layers"]}
+    rows = {row["name"]: row for row in json.loads(result.stdout)["layers"]}
+    for name in (VSCODE_IMAGE_NAME, SIDECAR_IMAGE_NAME):
+        row = rows[name]
+        if built:
+            assert row["status"] == "Available" and not row["skipped"], row
+        else:
+            assert row["skipped"] and row["detail"] == detail, row
 
 
 def _sidecar_port_closed_to_traefik(workspace: str) -> bool:
@@ -181,23 +186,13 @@ def test_vscode_config_is_refused_without_the_flag(
     assert "jupyterlab status:" in status.stdout, (
         f"with one image built, jd image status should pick it:\n{status.stdout}"
     )
-    health = _image_health_rows(e2e_deployment)
-    for name in (VSCODE_IMAGE_NAME, SIDECAR_IMAGE_NAME):
-        assert health[name]["skipped"] and health[name]["detail"] == f"needs {REMOTE_ACCESS_FLAG} = true", health[name]
+    _assert_remote_access_images(e2e_deployment, built=False, detail=f"needs {REMOTE_ACCESS_FLAG} = true")
 
-    previous = e2e_deployment.read_override_value("workspace_templates")
     configs = e2e_deployment.get_list_of_maps_variable_value("workspace_templates")
-    try:
-        e2e_deployment.update_override_value(
-            "workspace_templates", [*configs, {"name": VSCODE_SMALL_TEMPLATE, "app": "vscode"}]
-        )
-        error = e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "config"])
-        assert f'app = "vscode" need {REMOTE_ACCESS_FLAG} = true: {VSCODE_SMALL_TEMPLATE}' in error, error
-    finally:
-        if previous is None:
-            e2e_deployment.delete_override_value("workspace_templates")
-        else:
-            e2e_deployment.update_override_value("workspace_templates", previous)
+    error = e2e_deployment.config_refused_with_override(
+        "workspace_templates", [*configs, {"name": VSCODE_SMALL_TEMPLATE, "app": "vscode"}]
+    )
+    assert f'app = "vscode" need {REMOTE_ACCESS_FLAG} = true: {VSCODE_SMALL_TEMPLATE}' in error, error
 
 
 @pytest.mark.order(ORDER_REMOTE_ACCESS + 1)
@@ -236,17 +231,15 @@ def test_enable_default_vscode_app_offers_the_vscode_cards(
         ]
     for key, value in overrides.items():
         e2e_deployment.update_override_value(key, value)
-    # The flag is written but not applied yet, so the not-built hint must point at the apply.
-    health = _image_health_rows(e2e_deployment)
-    for name in (VSCODE_IMAGE_NAME, SIDECAR_IMAGE_NAME):
-        assert health[name]["detail"] == f"{REMOTE_ACCESS_FLAG} is set, run jd up", health[name]
+    # The flag is written but not applied yet.
+    _assert_remote_access_images(e2e_deployment, built=False, detail=f"{REMOTE_ACCESS_FLAG} is set, run jd up")
     e2e_deployment.ensure_deployed_with([])
 
     image_uri = e2e_deployment.cli.get_str_output("vscode_image_uri")
     assert ".dkr.ecr." in image_uri, f"vscode_image_uri is not an ECR image: {image_uri!r}"
     sidecar_uri = e2e_deployment.cli.get_str_output("ws_proxy_image_uri")
     assert ".dkr.ecr." in sidecar_uri, f"ws_proxy_image_uri is not an ECR image: {sidecar_uri!r}"
-    templates = {name: _workspace_template(name, WORKSPACE_NAMESPACE) for name in VSCODE_TEMPLATES}
+    templates = {name: get_template(name, WORKSPACE_NAMESPACE) for name in VSCODE_TEMPLATES}
     for template in templates.values():
         assert template["metadata"]["labels"]["workspace.jupyter.org/default-template"] == "false"
         assert template["spec"]["defaultImage"] == image_uri
@@ -269,12 +262,41 @@ def test_enable_default_vscode_app_offers_the_vscode_cards(
     }
     unnamed = e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "image", "status"])
     assert "jd image list" in unnamed, f"with several images built, jd image status should ask for --name:\n{unnamed}"
-    health = _image_health_rows(e2e_deployment)
-    for name in (VSCODE_IMAGE_NAME, SIDECAR_IMAGE_NAME):
-        assert health[name]["status"] == "Available" and not health[name]["skipped"], health[name]
+    _assert_remote_access_images(e2e_deployment, built=True)
 
 
 @pytest.mark.order(ORDER_REMOTE_ACCESS + 2)
+def test_vscode_card_is_offered_only_in_namespaces_that_list_it(
+    e2e_deployment: EndToEndDeployment, remote_access_window: dict[str, Any]
+) -> None:
+    """With the flag on, a workspace_namespaces entry offers the VS Code card only when its templates list vscode.
+
+    The mapping gives the default namespace every card it offers without a mapping, so the later cases keep
+    their cards there; the window's restoring apply drops the two extra namespaces.
+    """
+    e2e_deployment.ensure_deployed()
+    if e2e_deployment.get_list_of_maps_variable_value("workspace_namespaces"):
+        pytest.skip("the deployment has its own workspace_namespaces mapping")
+    teams = ",".join(e2e_deployment.get_list_str_variable_value("oauth_allowed_teams"))
+    pools = e2e_deployment.get_list_of_maps_variable_value("workspace_nodepools")
+    offered = [VSCODE_TEMPLATE_NAME, *[t for p in pools for t in p.get("templates", "").split(",") if t]]
+    if e2e_deployment.get_bool_variable_value(GPU_POOL_FLAG):
+        offered += [GPU_TEMPLATE_NAME, VSCODE_GPU_TEMPLATE_NAME]
+    e2e_deployment.ensure_deployed_with_overrides(
+        {
+            "workspace_namespaces": [
+                {"name": WORKSPACE_NAMESPACE, "teams": teams, "templates": ",".join(dict.fromkeys(offered))},
+                {"name": LISTED_NAMESPACE, "teams": teams, "templates": VSCODE_TEMPLATE_NAME},
+                {"name": UNLISTED_NAMESPACE, "teams": teams},
+            ]
+        }
+    )
+
+    assert list_template_names(LISTED_NAMESPACE) == {DEFAULT_WORKSPACE_TEMPLATE, VSCODE_TEMPLATE_NAME}
+    assert list_template_names(UNLISTED_NAMESPACE) == {DEFAULT_WORKSPACE_TEMPLATE}
+
+
+@pytest.mark.order(ORDER_REMOTE_ACCESS + 3)
 def test_vscode_workspace_runs_with_the_sidecar_and_hands_out_an_ssh_connection(
     e2e_deployment: EndToEndDeployment, eks_domain: str, impersonation_group: str
 ) -> None:
@@ -289,7 +311,6 @@ def test_vscode_workspace_runs_with_the_sidecar_and_hands_out_an_ssh_connection(
 
     kubectl_apply_workspace(VSCODE_WORKSPACE, WORKSPACES_DIR)
     try:
-        # First start pulls the new image; allow minutes.
         kubectl_poll_workspace_status(VSCODE_WORKSPACE, "Running", namespace=WORKSPACE_NAMESPACE, timeout_s=600)
         pod = kubectl_get_workspace_pod(VSCODE_WORKSPACE, WORKSPACE_NAMESPACE)
         ready = {status["name"]: status["ready"] for status in pod["status"].get("containerStatuses", [])}
@@ -355,7 +376,7 @@ def test_vscode_workspace_runs_with_the_sidecar_and_hands_out_an_ssh_connection(
         kubectl_delete_workspace(VSCODE_WORKSPACE, namespace=WORKSPACE_NAMESPACE)
 
 
-@pytest.mark.order(ORDER_REMOTE_ACCESS + 3)
+@pytest.mark.order(ORDER_REMOTE_ACCESS + 4)
 def test_deleted_websocket_strategy_is_repaired_on_apply(
     e2e_deployment: EndToEndDeployment, shared_namespace: str
 ) -> None:
@@ -392,7 +413,7 @@ def test_deleted_websocket_strategy_is_repaired_on_apply(
     )
 
 
-@pytest.mark.order(ORDER_REMOTE_ACCESS + 4)
+@pytest.mark.order(ORDER_REMOTE_ACCESS + 5)
 def test_disable_remote_access_removes_the_vscode_cards(
     e2e_deployment: EndToEndDeployment, shared_namespace: str, remote_access_window: dict[str, Any], e2e_workspace: str
 ) -> None:
@@ -419,8 +440,7 @@ def test_disable_remote_access_removes_the_vscode_cards(
             ["jupyter-deploy", "image", "status", "--name", name]
         )
         assert "not built" in unbuilt and REMOTE_ACCESS_FLAG in unbuilt, unbuilt
-    health = _image_health_rows(e2e_deployment)
-    assert all(health[name]["skipped"] for name in (VSCODE_IMAGE_NAME, SIDECAR_IMAGE_NAME)), health
+    _assert_remote_access_images(e2e_deployment, built=False, detail=f"needs {REMOTE_ACCESS_FLAG} = true")
     assert _ingress_policy_ports(WORKSPACE_NAMESPACE) == {
         ROUTER_NAMESPACE: {WORKSPACE_APP_PORT},
         OPERATOR_NAMESPACE: {WORKSPACE_APP_PORT},

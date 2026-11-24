@@ -638,6 +638,21 @@ class EndToEndDeployment:
                 self.update_override_value(key, value)
         self.ensure_deployed_with(reset_args, timeout_seconds=timeout_seconds)
 
+    def config_refused_with_override(self, key: str, value: Any) -> str:
+        """Write one override, run `jd config` expecting a refusal, and put the override back as it was.
+
+        Returns the refused command's flattened output, for substring assertions on the message.
+        """
+        previous = self.read_override_value(key)
+        self.update_override_value(key, value)
+        try:
+            return self.cli.run_command_expecting_failure(["jupyter-deploy", "config"])
+        finally:
+            if previous is None:
+                self.delete_override_value(key)
+            else:
+                self.update_override_value(key, previous)
+
     def ensure_deployed_with_overrides(self, overrides: dict[str, Any], timeout_seconds: int | None = None) -> None:
         """Write each value to the overrides section of variables.yaml, then `jd config` + `jd up`.
 

@@ -202,7 +202,7 @@ def test_health_images_layer(e2e_deployment: EndToEndDeployment) -> None:
     for entry in layers:
         assert entry["layer"] == "images"
         if entry["skipped"]:
-            # Only an image behind a template flag that is off may be unbuilt; it is reported, not failed.
+            # Only an image behind a template flag that is off may be unbuilt.
             flag = manifest_images[entry["name"]].enabled_by
             assert flag, f"unbuilt image without an enabling flag: {entry}"
             assert entry["status"] == "not built" and entry["status_category"] == "healthy", entry

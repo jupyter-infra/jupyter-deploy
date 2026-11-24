@@ -46,6 +46,25 @@ class TestOverrideValues(unittest.TestCase):
             self.assertEqual(deployment.read_override_value("a"), 1)
             deployment.ensure_deployed_with.assert_called_once_with(["--reset-variable", "b"], timeout_seconds=None)
 
+    def test_config_refused_with_override_restores_the_file_either_way(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            variables_yaml = Path(tmp) / jd_constants.VARIABLES_FILENAME
+            variables_yaml.write_text(
+                "schema_version: 2\nrequired:\n  domain: example.com\nrequired_sensitive: {}\noverrides:\n  a: 1\n"
+            )
+            suite_config = Mock(spec=SuiteConfig)
+            suite_config.project_dir = Path(tmp)
+            deployment = EndToEndDeployment(suite_config)
+            deployment._cli = Mock()
+            deployment._cli.run_command_expecting_failure.return_value = "refused"
+
+            self.assertEqual(deployment.config_refused_with_override("a", 2), "refused")
+            self.assertEqual(deployment.config_refused_with_override("b", True), "refused")
+
+            deployment._cli.run_command_expecting_failure.assert_called_with(["jupyter-deploy", "config"])
+            self.assertEqual(deployment.read_override_value("a"), 1)
+            self.assertIsNone(deployment.read_override_value("b"))
+
     def test_update_then_delete_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             variables_yaml = Path(tmp) / jd_constants.VARIABLES_FILENAME

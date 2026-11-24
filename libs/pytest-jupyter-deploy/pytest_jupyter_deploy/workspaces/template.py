@@ -13,6 +13,7 @@ revert after — so the test is self-contained and runs against any existing dep
 """
 
 import json
+from typing import Any
 
 from pytest_jupyter_deploy.kubernetes.kubectl import run_kubectl
 
@@ -67,3 +68,11 @@ def list_template_names(namespace: str, as_user: str | None = None, as_groups: l
         check=True,
     )
     return set(result.stdout.split())
+
+
+def get_template(name: str, namespace: str) -> dict[str, Any]:
+    """The WorkspaceTemplate object as `kubectl get -o json` returns it; fails when it is missing."""
+    result = run_kubectl("get", "workspacetemplate", name, "-n", namespace, "-o", "json")
+    assert result.returncode == 0, f"{name} WorkspaceTemplate missing in {namespace}: {result.stderr}"
+    template: dict[str, Any] = json.loads(result.stdout)
+    return template

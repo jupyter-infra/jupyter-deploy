@@ -70,7 +70,6 @@ VSCODE_TEMPLATE_NAME = "vscode"
 # The manifest's entries for the images, the names `jd image` commands take.
 JUPYTERLAB_IMAGE_NAME = "jupyterlab"
 VSCODE_IMAGE_NAME = "vscode"
-# The manifest's entry for the sidecar copy, the name `jd image` commands take.
 SIDECAR_IMAGE_NAME = "ws-proxy"
 # The VS Code counterpart of the built-in GPU card, offered when both flags are on.
 VSCODE_GPU_TEMPLATE_NAME = "vscode-gpu"

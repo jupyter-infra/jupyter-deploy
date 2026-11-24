@@ -215,12 +215,10 @@ def test_in_use_template_cannot_be_dropped(e2e_deployment: EndToEndDeployment, m
         dropped = [
             _entry(e["name"], e["teams"].split(",")) if e["name"] == NS_A else e for e in mapped["workspace_namespaces"]
         ]
-        e2e_deployment.update_override_value("workspace_namespaces", dropped)
-        error = e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "config"])
+        error = e2e_deployment.config_refused_with_override("workspace_namespaces", dropped)
         assert f"{NS_A}/{NS_SMALL_TEMPLATE} used by {NS_A}/{name}" in error, error
         assert NS_SMALL_TEMPLATE in list_template_names(NS_A, as_user=_user(), as_groups=_group(_rbac_team()))
     finally:
-        e2e_deployment.update_override_value("workspace_namespaces", mapped["workspace_namespaces"])
         kubectl_delete_workspace(name, namespace=NS_A)
 
 
@@ -233,11 +231,9 @@ def test_in_use_namespace_cannot_be_dropped(e2e_deployment: EndToEndDeployment, 
         kubectl_apply_workspace(name, WORKSPACES_DIR, as_user=_user(), as_groups=_group(_rbac_team()))
 
         dropped = [e for e in mapped["workspace_namespaces"] if e["name"] != NS_B]
-        e2e_deployment.update_override_value("workspace_namespaces", dropped)
-        error = e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "config"])
+        error = e2e_deployment.config_refused_with_override("workspace_namespaces", dropped)
         assert f"{NS_B} holds {NS_B}/{name}" in error, error
     finally:
-        e2e_deployment.update_override_value("workspace_namespaces", mapped["workspace_namespaces"])
         kubectl_delete_workspace(name, namespace=NS_B)
 
 
@@ -271,11 +267,8 @@ def test_plan_time_validation(
     e2e_deployment: EndToEndDeployment, mapped: dict[str, Any], mutate: Any, message: str
 ) -> None:
     """`jd config` refuses an invalid mapping at plan, naming the culprit."""
-    try:
-        e2e_deployment.update_override_value("workspace_namespaces", mutate(mapped["workspace_namespaces"]))
-        assert message in e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "config"])
-    finally:
-        e2e_deployment.update_override_value("workspace_namespaces", mapped["workspace_namespaces"])
+    error = e2e_deployment.config_refused_with_override("workspace_namespaces", mutate(mapped["workspace_namespaces"]))
+    assert message in error, error
 
 
 @pytest.mark.order(ORDER_NAMESPACES + 9)
@@ -286,15 +279,11 @@ def test_vscode_card_listed_without_remote_access_is_refused(
     """`jd config` refuses a namespace entry listing the built-in vscode card while enable_default_vscode_app is off."""
     if e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG):
         pytest.skip("the deployment has enable_default_vscode_app on")
-    try:
-        e2e_deployment.update_override_value(
-            "workspace_namespaces",
-            [*mapped["workspace_namespaces"][:2], {**mapped["workspace_namespaces"][2], "templates": "vscode"}],
-        )
-        error = e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "config"])
-        assert f'built-in "vscode" card, which needs enable_default_vscode_app = true: {NS_B}' in error, error
-    finally:
-        e2e_deployment.update_override_value("workspace_namespaces", mapped["workspace_namespaces"])
+    error = e2e_deployment.config_refused_with_override(
+        "workspace_namespaces",
+        [*mapped["workspace_namespaces"][:2], {**mapped["workspace_namespaces"][2], "templates": "vscode"}],
+    )
+    assert f'built-in "vscode" card, which needs enable_default_vscode_app = true: {NS_B}' in error, error
 
 
 @pytest.mark.order(ORDER_NAMESPACES + 10)
