@@ -193,14 +193,15 @@ class WebAppNavigator:
         self.page = new_page
 
     def stop_workspace(self, timeout: int = 180000) -> None:
-        """Click the Stop button on the detail page and confirm.
+        """Click the Stop button on the detail page once.
 
         Waits for the status chip to show 'Stopped'.
+
+        Stop has no confirm dialog. Stop and Start are the same <button> node with
+        the label swapped, so a second click after the stop settles can land on
+        Start and set desiredStatus back to Running.
         """
         self.page.get_by_role("button", name="Stop").click()
-        self.page.get_by_role("button", name="Confirm").or_(self.page.get_by_role("button", name="Stop")).last.click(
-            timeout=5000
-        )
         self.wait_for_status("Stopped", timeout=timeout)
 
     def start_workspace(self, timeout: int = 300000) -> None:
