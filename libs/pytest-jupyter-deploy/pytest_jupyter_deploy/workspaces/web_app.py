@@ -197,8 +197,9 @@ class WebAppNavigator:
 
         Waits for the status chip to show 'Stopped'.
 
-        Stop has no confirm dialog: a second click while the first write is in
-        flight sends a stale spec that reverts desiredStatus to Running.
+        Stop has no confirm dialog. Stop and Start are the same <button> node with
+        the label swapped, so a second click after the stop settles can land on
+        Start and set desiredStatus back to Running.
         """
         self.page.get_by_role("button", name="Stop").click()
         self.wait_for_status("Stopped", timeout=timeout)
