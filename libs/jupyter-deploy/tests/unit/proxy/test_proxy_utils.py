@@ -1,3 +1,4 @@
+import datetime
 import json
 import tempfile
 import unittest
@@ -140,8 +141,13 @@ class TestReadInstanceStatus(unittest.TestCase):
 
 
 class TestSessionStartedAt(unittest.TestCase):
-    def test_parses_session_id_as_iso_timestamp(self) -> None:
-        self.assertEqual(proxy_utils.session_started_at("20260610-180100.500"), "2026-06-10T18:01:00.500")
+    def test_parses_session_id_as_local_iso_timestamp_with_offset(self) -> None:
+        started_at = proxy_utils.session_started_at("20260610-180100.500")
+        # Same wall-clock time as the id, plus the machine's UTC offset: an unambiguous instant.
+        self.assertTrue(started_at.startswith("2026-06-10T18:01:00.500"))
+        parsed = datetime.datetime.fromisoformat(started_at)
+        self.assertIsNotNone(parsed.utcoffset())
+        self.assertEqual(parsed, datetime.datetime(2026, 6, 10, 18, 1, 0, 500000).astimezone())
 
     def test_non_timestamp_id_yields_empty(self) -> None:
         self.assertEqual(proxy_utils.session_started_at("not-a-timestamp"), "")

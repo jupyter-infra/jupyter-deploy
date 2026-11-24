@@ -28,7 +28,7 @@ PROXY_STATUS_FILE_NAME = "status.json"
 
 # Published states the proxy uses for a torn-down / crashed instance; these are "not running"
 # even if the recorded PID happens to still be alive.
-_TERMINAL_STATES = ("stopped", "failed")
+TERMINAL_STATES = ("stopped", "failed")
 
 
 def _status_from_v1(payload: dict, instance_dir: Path) -> ProxyStatus:
@@ -42,7 +42,7 @@ def _status_from_v1(payload: dict, instance_dir: Path) -> ProxyStatus:
         alive=alive,
         port=payload.get("port"),
         expires_at=payload.get("expires_at"),
-        running=alive and state not in _TERMINAL_STATES,
+        running=alive and state not in TERMINAL_STATES,
         started_at=instance_dir.name,
         log_dir=str(instance_dir),
         process_created_at=payload.get("process_created_at"),
@@ -90,12 +90,16 @@ _SESSION_ID_FORMAT = "%Y%m%d-%H%M%S.%f"
 
 
 def session_started_at(session_id: str) -> str:
-    """Return a session's launch time as ISO 8601 (local time, ms), or "" if the id is not a timestamp."""
+    """Return a session's launch time as ISO 8601 with its UTC offset, or "" if the id is not a timestamp.
+
+    The id is the launching machine's local wall-clock time (see ``ProxyManager._now_timestamp``);
+    attaching the local offset makes it an unambiguous instant, like ``expires_at`` elsewhere.
+    """
     try:
         started = datetime.datetime.strptime(session_id, _SESSION_ID_FORMAT)
     except ValueError:
         return ""
-    return started.isoformat(timespec="milliseconds")
+    return started.astimezone().isoformat(timespec="milliseconds")
 
 
 def session_log_files(instance_dir: Path) -> list[Path]:

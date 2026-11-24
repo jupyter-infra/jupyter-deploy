@@ -99,9 +99,18 @@ A foreground proxy has no idle timeout: your terminal governs its lifetime.
 ## Troubleshooting the proxy
 
 Each run of the proxy process is a *session* with its own logs, kept under `.jd-proxy/` in your
-project directory. `jd proxy sessions` lists them with their state: `running`, `stopped` after a
-clean shutdown, `failed`, or `dead` when the process went away without shutting down (for
-example, it was killed).
+project directory. `jd proxy sessions` lists them, newest first, with one of these states:
+
+| State | Meaning |
+|---|---|
+| `starting` | The proxy is up but not serving yet: it has not fetched its first token or bound its port. |
+| `running` | The proxy is serving with a current token. |
+| `degraded` | The proxy is serving on its last token, but refreshing it is failing, for example during a network interruption. It keeps retrying and returns to `running` once a refresh succeeds. |
+| `failed` | The proxy hit an error it cannot recover from, such as expired cloud credentials, and shut down. |
+| `stopped` | The proxy shut down cleanly. |
+| `dead` | The process went away without shutting down, for example it was killed or crashed. |
+| `unconfirmed` | A process with the recorded PID is alive, but it cannot be confirmed to be this proxy (the PID may have been reused). |
+| `unknown` | The session's status file is present but cannot be read. |
 
 If the proxy stops unexpectedly, run `jd proxy logs`: without `--session-id`, it reads the running
 session, or the most recent one when none is running, which is usually the run that just stopped.

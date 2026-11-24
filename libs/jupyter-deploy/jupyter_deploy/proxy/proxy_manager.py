@@ -529,8 +529,9 @@ class ProxyManager:
         status file predating the recorded creation time) is silently skipped — callers decide
         how to surface it (:meth:`_prepare_launch` warns and proceeds; :meth:`stop` raises). A
         proxy stopped by SIGTERM deletes its own status file, but a SIGKILL escalation can't —
-        so once the process is confirmed gone, remove the stale status file too, so future
-        scans skip its directory cheaply.
+        so once a process *we signaled* is confirmed gone, remove its status file too. A record
+        whose process was already gone is left alone: it is the evidence that the run crashed,
+        so ``jd proxy sessions`` keeps reporting it as ``dead``/``failed`` until it is pruned.
         """
         stopped: list[int] = []
         for instance_dir in self._instance_dirs():
@@ -538,10 +539,8 @@ class ProxyManager:
             if status is None:
                 continue
             if not status.alive:
-                # Already gone. If it left a status file behind (killed without running its
-                # shutdown path), remove it so later scans skip the directory cheaply and no
-                # stale record claims to be running. Not added to `stopped`: we did not stop it.
-                Path(status.log_dir, proxy_utils.PROXY_STATUS_FILE_NAME).unlink(missing_ok=True)
+                # Already gone, and not by our hand: keep its record so the session still reads
+                # as crashed. Not added to `stopped`: we did not stop it.
                 continue
             if not self._is_confirmed_proxy(status):
                 continue  # unconfirmed identity — never signal; surfaced via _unconfirmed_live()
@@ -624,7 +623,7 @@ class ProxyManager:
             state = status.state if self._is_confirmed_proxy(status) else "unconfirmed"
         elif status.alive:
             state = status.state  # alive PID, but the proxy published a terminal state
-        elif status.state in ("stopped", "failed"):
+        elif status.state in proxy_utils.TERMINAL_STATES:
             state = status.state
         else:
             state = "dead"  # claims to be live, but its process is gone (killed, crashed)

@@ -131,10 +131,10 @@ class TestLatestRunning(_ManagerTestCase):
 
 
 class TestTerminateRunning(_ManagerTestCase):
-    def test_removes_stale_status_file_of_a_dead_proxy(self) -> None:
-        # Housekeeping for the case above: once the process is gone, drop the status file so
-        # later scans skip the directory and no stale record claims to be running. The PID is
-        # NOT reported as stopped — we did not stop it.
+    def test_keeps_status_file_of_a_proxy_that_was_already_dead(self) -> None:
+        # A record whose process is gone, but which we did not signal, is the evidence that the
+        # run crashed: keep it so `jd proxy sessions` still reports it as dead until it is
+        # pruned. The PID is NOT reported as stopped — we did not stop it.
         with tempfile.TemporaryDirectory() as tmp:
             manager = self._manager_rooted_at(tmp)
             instance_dir = self._write_instance(
@@ -144,7 +144,21 @@ class TestTerminateRunning(_ManagerTestCase):
             )
             with patch("jupyter_deploy.proxy.proxy_utils.cmd_utils.is_pid_alive", return_value=False):
                 self.assertEqual(manager._terminate_running(), [])
-            self.assertFalse((instance_dir / "status.json").exists())
+            self.assertTrue((instance_dir / "status.json").exists())
+
+    def test_crashed_session_still_reads_dead_after_a_stop(self) -> None:
+        # `jd proxy stop` / the `jd open` restart must not turn a crashed run into a clean stop.
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self._write_instance(
+                manager,
+                "20260610-180100.123",
+                {"schema_version": 1, "state": "running", "pid": 4321, "port": 51000, "process_created_at": 1.0},
+            )
+            with patch("jupyter_deploy.proxy.proxy_utils.cmd_utils.is_pid_alive", return_value=False):
+                manager._terminate_running()
+                sessions = manager.sessions()
+            self.assertEqual([(s.session_id, s.state) for s in sessions], [("20260610-180100.123", "dead")])
 
 
 class TestLaunch(_ManagerTestCase):
@@ -897,7 +911,8 @@ class TestSessions(_ManagerTestCase):
             )
             self.assertEqual(result[0].pid, 333)
             self.assertEqual(result[0].port, 8003)
-            self.assertEqual(result[0].started_at, "2026-06-10T18:03:00.000")
+            self.assertEqual(result[0].started_at, proxy_utils.session_started_at("20260610-180300.000"))
+            self.assertTrue(result[0].started_at.startswith("2026-06-10T18:03:00.000"))
             self.assertEqual(result[0].log_dir, str(manager._target_dir / "20260610-180300.000"))
             self.assertIsNone(result[3].pid)
 
