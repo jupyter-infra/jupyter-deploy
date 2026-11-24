@@ -277,6 +277,25 @@ class TestImageHandler(unittest.TestCase):
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    def test_unbuilt_image_reports_whether_its_flag_is_already_set(
+        self, mock_tf_variables_handler: Mock, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock
+    ) -> None:
+        variables = Mock()
+        variables.get_template_variables.return_value = {"enable_remote_access": Mock(assigned_value=True)}
+        mock_tf_variables_handler.return_value = variables
+        handler = self._handler_with_two_images(mock_tf_outputs_handler, mock_retrieve_manifest, vscode_repository="")
+
+        images = {img.name: img for img in handler.list_images()}
+        self.assertFalse(images["vscode"].built)
+        self.assertTrue(images["vscode"].enabled)
+        self.assertIsNone(images["jupyterlab"].enabled)
+        with self.assertRaises(ImageNotProvisionedError) as raised:
+            handler.get_status("vscode")
+        self.assertTrue(raised.exception.enabled)
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     def test_resolve_name_needs_a_name_when_no_image_is_built_yet(
         self, mock_tf_variables_handler: Mock, mock_tf_outputs_handler: Mock, mock_retrieve_manifest: Mock
     ) -> None:

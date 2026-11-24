@@ -2,7 +2,13 @@ from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.enum import StatusCategory
 from jupyter_deploy.exceptions import CommandNotImplementedError, ImageNotProvisionedError
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
-from jupyter_deploy.handlers.payloads import ConnectionResult, HealthLayer, HealthLayerResult, ImageVulnerability
+from jupyter_deploy.handlers.payloads import (
+    ConnectionResult,
+    HealthLayer,
+    HealthLayerResult,
+    ImageVulnerability,
+    not_built_reason,
+)
 from jupyter_deploy.handlers.project.open_handler import OpenHandler
 from jupyter_deploy.handlers.resource.cluster_handler import ClusterHandler
 from jupyter_deploy.handlers.resource.component_handler import ComponentHandler
@@ -165,7 +171,7 @@ class HealthHandler(BaseProjectHandler):
                         name=name,
                         status_category=StatusCategory.HEALTHY,
                         status_text="not built",
-                        detail=f"needs {exc.enabled_by} = true" if exc.enabled_by else str(exc),
+                        detail=not_built_reason(exc.enabled_by, exc.enabled) or str(exc),
                         skipped=True,
                     )
                 )

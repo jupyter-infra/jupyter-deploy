@@ -36,15 +36,29 @@ class ConnectionResult:
     skipped: bool = False
 
 
+def not_built_reason(enabled_by: str | None, enabled: bool | None) -> str | None:
+    """Why an image is not built, when its manifest entry names the variable that builds it.
+
+    `enabled` is that variable's configured value: set but not applied yet means only `jd up` is missing.
+    """
+    if not enabled_by:
+        return None
+    if enabled:
+        return f"{enabled_by} is set, run jd up"
+    return f"needs {enabled_by} = true"
+
+
 @dataclass
 class ImageInfo:
     """Entry in the image list."""
 
     name: str
     description: str
-    # Whether this deployment built the image; an unbuilt one names the variable that builds it.
+    # Whether this deployment built the image; an unbuilt one names the variable that builds it
+    # and that variable's configured value, when the project configuration could be read.
     built: bool = True
     enabled_by: str | None = None
+    enabled: bool | None = None
 
 
 @dataclass

@@ -581,11 +581,13 @@ class ImageNotProvisionedError(JupyterDeployError, ValueError):
     Attributes:
         image_name: The image name
         enabled_by: The template variable that makes the deployment build it, when the manifest names one
+        enabled: That variable's configured value, when known; True means it is set but not applied yet
     """
 
-    def __init__(self, image_name: str, enabled_by: str | None) -> None:
+    def __init__(self, image_name: str, enabled_by: str | None, enabled: bool | None = None) -> None:
         self.image_name = image_name
         self.enabled_by = enabled_by
+        self.enabled = enabled
         super().__init__(f"Image '{image_name}' is not built in this deployment.")
 
 

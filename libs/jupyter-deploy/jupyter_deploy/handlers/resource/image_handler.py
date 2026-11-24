@@ -60,12 +60,26 @@ class ImageHandler(BaseProjectHandler):
                 built.append(name)
         return built
 
+    def _flag_states(self, images: dict[str, JupyterDeployImageDefinitionV1]) -> dict[str, bool | None]:
+        """The configured value of each variable the given images are built behind, by variable name."""
+        flags = {img.enabled_by for img in images.values() if img.enabled_by}
+        if not flags:
+            return {}
+        self._variable_handler.sync_engine_varfiles_with_project_variables_config()
+        variables = self._variable_handler.get_template_variables()
+        states: dict[str, bool | None] = {}
+        for flag in flags:
+            value = getattr(variables.get(flag), "assigned_value", None)
+            states[flag] = value if isinstance(value, bool) else None
+        return states
+
     def _resolve_image_outputs(self, name: str, image_def: JupyterDeployImageDefinitionV1) -> tuple[str, str]:
         # An empty repository output is the template's way of saying the image is behind a flag that is
         # off; a missing one is a template or deployment problem, which _resolve_output names.
         output_def = self._output_handler.get_full_project_outputs().get(image_def.repository_output)
         if isinstance(output_def, StrTemplateOutputDefinition) and output_def.value == "":
-            raise ImageNotProvisionedError(name, image_def.enabled_by)
+            enabled = self._flag_states({name: image_def}).get(image_def.enabled_by or "")
+            raise ImageNotProvisionedError(name, image_def.enabled_by, enabled)
         repository_name = self._resolve_output(image_def.repository_output)
         tag = self._resolve_output(image_def.tag_output)
         return repository_name, tag
@@ -96,8 +110,15 @@ class ImageHandler(BaseProjectHandler):
         """Return the declared images, each with whether this deployment built it."""
         images = self.project_manifest.get_images()
         built = set(self._built_images(images))
+        flags = self._flag_states({name: img for name, img in images.items() if name not in built})
         return [
-            ImageInfo(name=name, description=img.description, built=name in built, enabled_by=img.enabled_by)
+            ImageInfo(
+                name=name,
+                description=img.description,
+                built=name in built,
+                enabled_by=img.enabled_by,
+                enabled=flags.get(img.enabled_by or ""),
+            )
             for name, img in images.items()
         ]
 

@@ -149,6 +149,12 @@ class TestImageErrors(unittest.TestCase):
         self.assertIn("enable_remote_access", output)
         self.assertIn("jd up", output)
 
+    def test_unbuilt_image_behind_a_set_flag_points_at_jd_up_only(self) -> None:
+        output = _render(ImageNotProvisionedError("vscode", "enable_remote_access", enabled=True), ["config"])
+
+        self.assertIn("jd up", output)
+        self.assertNotIn("jd config", output)
+
     def test_unbuilt_image_without_a_known_variable_offers_no_remedy(self) -> None:
         output = _render(ImageNotProvisionedError("vscode", None), ["config"])
 

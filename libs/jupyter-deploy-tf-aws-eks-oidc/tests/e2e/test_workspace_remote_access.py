@@ -234,7 +234,13 @@ def test_enable_remote_access_offers_the_vscode_cards(
             else entry
             for entry in namespaces
         ]
-    e2e_deployment.ensure_deployed_with_overrides(overrides)
+    for key, value in overrides.items():
+        e2e_deployment.update_override_value(key, value)
+    # The flag is written but not applied yet, so the not-built hint must point at the apply.
+    health = _image_health_rows(e2e_deployment)
+    for name in (VSCODE_IMAGE_NAME, SIDECAR_IMAGE_NAME):
+        assert health[name]["detail"] == f"{REMOTE_ACCESS_FLAG} is set, run jd up", health[name]
+    e2e_deployment.ensure_deployed_with([])
 
     image_uri = e2e_deployment.cli.get_str_output("vscode_image_uri")
     assert ".dkr.ecr." in image_uri, f"vscode_image_uri is not an ECR image: {image_uri!r}"

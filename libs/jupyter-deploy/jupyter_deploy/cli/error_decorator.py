@@ -370,7 +370,10 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
 
     except ImageNotProvisionedError as e:
         console.print(f":x: {e}", style="bold red", highlight=False)
-        if e.enabled_by:
+        if e.enabled:
+            console.line()
+            console.print(f":bulb: [bold cyan]{e.enabled_by}[/] is set; run [bold cyan]jd up[/] to build the image.")
+        elif e.enabled_by:
             console.line()
             console.print(
                 f":bulb: Set [bold cyan]{e.enabled_by}[/] to true, "
