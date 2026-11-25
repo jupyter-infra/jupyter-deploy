@@ -50,8 +50,8 @@ variable "build_args" {
   # Rendered into a shell command in the buildspec: keep both sides to a safe charset.
   validation {
     condition = alltrue([
-      for k, v in var.build_args : can(regex("^[A-Za-z_][A-Za-z0-9_]*$", k)) && can(regex("^[A-Za-z0-9._,:*/+-]*$", v))
+      for k, v in var.build_args : can(regex("^[A-Za-z_][A-Za-z0-9_]*$", k)) && can(regex("^[A-Za-z0-9._,:*/+@-]*$", v))
     ])
-    error_message = "build_args keys must be identifiers and values may only hold letters, digits and . _ , : * / + -"
+    error_message = "build_args keys must be identifiers and values may only hold letters, digits and . _ , : * / + @ -"
   }
 }

@@ -1,0 +1,6 @@
+{
+  "env": {
+    "CLAUDE_CODE_USE_BEDROCK": "1",
+    "DISABLE_AUTOUPDATER": "1"
+  }
+}

@@ -31,6 +31,10 @@ class NodeInfo:
 class PodInfo:
     name: str
     phase: PodPhase
+    # Container names in spec order.
+    containers: tuple[str, ...] = ()
+    # metadata.deletionTimestamp is set: the pod is being replaced and still carries its labels.
+    deleting: bool = False
 
 
 def _parse_node_status(node: object) -> NodeConditionStatus:
@@ -41,6 +45,15 @@ def _parse_node_status(node: object) -> NodeConditionStatus:
             if condition.type == "Ready":
                 return NodeConditionStatus.READY if condition.status == "True" else NodeConditionStatus.NOT_READY
     return NodeConditionStatus.UNKNOWN
+
+
+def _deleting(pod: object) -> bool:
+    return getattr(getattr(pod, "metadata", None), "deletion_timestamp", None) is not None
+
+
+def _container_names(pod: object) -> tuple[str, ...]:
+    spec = getattr(pod, "spec", None)
+    return tuple(container.name for container in (getattr(spec, "containers", None) or []))
 
 
 def _parse_pod_phase(pod: object) -> PodPhase:
@@ -97,7 +110,9 @@ def list_pods(
     pods = []
     for pod in pod_list.items:
         name = (pod.metadata.name or "") if pod.metadata else ""
-        pods.append(PodInfo(name=name, phase=_parse_pod_phase(pod)))
+        pods.append(
+            PodInfo(name=name, phase=_parse_pod_phase(pod), containers=_container_names(pod), deleting=_deleting(pod))
+        )
 
     next_token = pod_list.metadata._continue if pod_list.metadata else None
     return pods, next_token or None
@@ -106,7 +121,9 @@ def list_pods(
 def get_pod(api: CoreV1Api, name: str, namespace: str) -> PodInfo:
     pod = api.read_namespaced_pod(name=name, namespace=namespace)
     pod_name = (pod.metadata.name or "") if pod.metadata else ""
-    return PodInfo(name=pod_name, phase=_parse_pod_phase(pod))
+    return PodInfo(
+        name=pod_name, phase=_parse_pod_phase(pod), containers=_container_names(pod), deleting=_deleting(pod)
+    )
 
 
 @dataclass(frozen=True)

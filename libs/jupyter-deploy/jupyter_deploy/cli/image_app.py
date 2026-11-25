@@ -10,6 +10,7 @@ from rich.table import Table
 from jupyter_deploy import cmd_utils, str_utils
 from jupyter_deploy.cli.error_decorator import handle_cli_errors
 from jupyter_deploy.cli.simple_display import SimpleDisplayManager
+from jupyter_deploy.handlers.payloads import ImageInfo, not_built_reason
 from jupyter_deploy.handlers.resource import image_handler
 
 image_app = typer.Typer(
@@ -51,9 +52,17 @@ def list_images(
         table = Table(show_header=True, header_style="bold magenta")
         table.add_column("Name", style="bold cyan", no_wrap=True)
         table.add_column("Description", style="white")
+        table.add_column("Built", style="white")
         for img in images:
-            table.add_row(img.name, img.description)
+            table.add_row(img.name, img.description, _built_cell(img))
         console.print(table)
+
+
+def _built_cell(img: ImageInfo) -> str:
+    if img.built:
+        return "yes"
+    reason = not_built_reason(img.enabled_by, img.enabled)
+    return f"no, {reason}" if reason else "no"
 
 
 @image_app.command()

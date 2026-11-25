@@ -408,6 +408,21 @@ class TestJupyterDeployManifestV1Images(unittest.TestCase):
         self.assertIn("jupyterlab", images)
         self.assertIn("worker", images)
 
+    def test_image_names_the_variable_that_builds_it_when_declared(self) -> None:
+        manifest = self._make_manifest(
+            images={
+                "jupyterlab": {"repository-output": "ecr_repo_name", "tag-output": "image_tag"},
+                "vscode": {
+                    "repository-output": "vscode_repo",
+                    "tag-output": "vscode_tag",
+                    "enabled-by": "enable_default_vscode_app",
+                },
+            }
+        )
+
+        self.assertIsNone(manifest.get_image("jupyterlab").enabled_by)
+        self.assertEqual(manifest.get_image("vscode").enabled_by, "enable_default_vscode_app")
+
     def test_get_image_returns_definition(self) -> None:
         manifest = self._make_manifest(
             images={

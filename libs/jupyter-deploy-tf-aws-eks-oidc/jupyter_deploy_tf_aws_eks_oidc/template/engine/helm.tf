@@ -78,24 +78,41 @@ resource "helm_release" "jupyter_k8s" {
   namespace        = local.release_namespaces.operator
   create_namespace = true
 
-  set = [
-    {
-      name  = "certManager.enable"
-      value = "true"
-    },
-    {
-      name  = "crd.enable"
-      value = "true"
-    },
-    {
-      name  = "workspaceTemplates.defaultNamespace"
-      value = var.workspace_shared_namespace
-    },
-    {
-      name  = "manager.nodeSelector.jupyter-deploy/role"
-      value = "platform"
-    },
-  ]
+  set = concat(
+    [
+      {
+        name  = "certManager.enable"
+        value = "true"
+      },
+      {
+        name  = "crd.enable"
+        value = "true"
+      },
+      {
+        name  = "workspaceTemplates.defaultNamespace"
+        value = var.workspace_shared_namespace
+      },
+      {
+        name  = "manager.nodeSelector.jupyter-deploy/role"
+        value = "platform"
+      },
+    ],
+    # Remote access (workspace_remote_access.tf): the operator signs the connection
+    # tokens of the WebSocket access strategy with a rotated in-cluster secret.
+    var.enable_default_vscode_app ? [
+      {
+        name  = "extensionApi.jwtSecret.enable"
+        value = "true"
+      },
+    ] : [],
+  )
+
+  lifecycle {
+    precondition {
+      condition     = !var.enable_default_vscode_app || local.remote_access_chart_at_floor.operator
+      error_message = "enable_default_vscode_app needs the jupyter-k8s chart at 0.3.0 or later, which serves workspace connections and signs their tokens; workspace_operator_chart_version is \"${var.workspace_operator_chart_version}\"."
+    }
+  }
 
   depends_on = [null_resource.platform, helm_release.traefik_crds, kubernetes_namespace_v1.shared, aws_eks_node_group.platform]
 }
@@ -249,6 +266,41 @@ resource "helm_release" "workspace_router" {
         value = "false"
       },
     ],
+    # Remote access (workspace_remote_access.tf): the WebSocket access strategy with
+    # its sidecar, and the bearer-auth handler that verifies the connection tokens.
+    var.enable_default_vscode_app ? [
+      {
+        name  = "accessStrategy.createWebSocket"
+        value = "true"
+      },
+      {
+        name  = "authmiddleware.enableBearerAuth"
+        value = "true"
+      },
+      # The sidecar copy (applications.tf), split the way the chart joins its three image
+      # values, repository/imageName:imageTag.
+      {
+        name  = "accessStrategy.webSocket.image.repository"
+        value = module.app_ws_proxy[0].registry
+      },
+      {
+        name  = "accessStrategy.webSocket.image.imageName"
+        value = module.app_ws_proxy[0].repository_name
+      },
+      {
+        name  = "accessStrategy.webSocket.image.imageTag"
+        value = module.app_ws_proxy[0].image_tag
+      },
+      # The ports the NetworkPolicy admits and the readiness probe connects to.
+      {
+        name  = "accessStrategy.webSocket.port"
+        value = tostring(local.remote_access_sidecar_port)
+      },
+      {
+        name  = "accessStrategy.webSocket.targetPort"
+        value = tostring(local.remote_access_ssh_port)
+      },
+    ] : [],
     # Workspace namespaces the web app offers: the default one, plus the rest of
     # workspace_namespaces (also discovered by their workspaces-enabled label).
     [
@@ -294,6 +346,13 @@ resource "helm_release" "workspace_router" {
       value = random_password.dex_client_secret.result
     },
   ]
+
+  lifecycle {
+    precondition {
+      condition     = !var.enable_default_vscode_app || local.remote_access_chart_at_floor.router
+      error_message = "enable_default_vscode_app needs the aws-oidc chart at 0.2.1 or later, which carries the WebSocket access strategy; workspace_router_chart_version is \"${var.workspace_router_chart_version}\"."
+    }
+  }
 
   depends_on = [null_resource.platform, helm_release.jupyter_k8s, helm_release.traefik_crds, null_resource.wait_for_lb_cleanup, kubernetes_namespace_v1.shared, null_resource.sync_ebs_storage_class]
 }

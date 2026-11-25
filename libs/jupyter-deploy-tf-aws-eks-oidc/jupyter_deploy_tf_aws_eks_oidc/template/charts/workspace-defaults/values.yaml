@@ -1,8 +1,8 @@
 # -- Shared namespace holding the WorkspaceAccessStrategy every template references.
 sharedNamespace: jupyter-k8s-shared
 
-# -- Name of the WorkspaceAccessStrategy to reference in the WorkspaceTemplate.
-# Must match the strategy created by the aws-oidc chart (accessStrategy.createOAuth).
+# -- Name of the WorkspaceAccessStrategy a template references when its entry sets
+# none. Must match the strategy created by the aws-oidc chart (accessStrategy.createOAuth).
 accessStrategy:
   name: oauth-access-strategy
 
@@ -13,12 +13,19 @@ accessStrategy:
 #   namespace                                                - workspace namespace the
 #     template lands in; workspaces use the templates of their own namespace
 #   name/isDefault/displayName/description/imageUri/appType - identity + card copy
+#   accessStrategy                                           - optional strategy name
+#     replacing accessStrategy.name (e.g. the WebSocket strategy of VS Code workspaces)
 #   accessType/ownershipType/storageClassName               - workspace defaults
 #   defaultResources/resourceBounds                          - per-resource-key
 #     requests/limits and min/max (extended keys like nvidia.com/gpu included)
 #   nodeSelector/tolerations                                 - placement; must match
 #     the role of the Karpenter pool the template targets
-#   readinessProbe/idleShutdown                              - probe + idle policy
+#   readinessProbe                                           - timings plus either
+#     port, a TCP connect from the node, or command, run inside the container (the
+#     only way to probe a server bound to the pod's loopback interface)
+#   idleShutdown                                             - optional idle policy;
+#     detection names the app's HTTP endpoint and the JSON field holding its last
+#     activity; an entry without idleShutdown renders no idle policy
 #   baseEnv                                                  - optional env vars
 #     (name/value list) added to every workspace from the template
 workspaceTemplates:
@@ -63,6 +70,11 @@ workspaceTemplates:
       timeoutMinutes: 60
       minTimeoutMinutes: 15
       maxTimeoutMinutes: 480
+      detection:
+        path: /api/status
+        port: 8888
+        responseBodyPath: last_activity
+        format: RFC3339
 
 # -- Namespace-scoped NetworkPolicy governing ingress to workspace pods. One
 # policy is created per workspace namespace, replacing the per-workspace policy
@@ -75,7 +87,17 @@ networkPolicy:
     - default
   # -- Namespace of the Traefik router that proxies workspace traffic.
   routerNamespace: jupyter-k8s-router
+  # -- Labels of the Traefik pods, the only pods of the router namespace the policy admits,
+  # set by the caller from the aws-oidc chart it pins. No default: Helm merges map values,
+  # so a default here could only be extended, never replaced.
+  routerPodLabels: {}
   # -- Namespace of the operator that probes workspaces for idle detection.
   operatorNamespace: jupyter-k8s-system
-  # -- Workspace application port allowed for ingress.
-  port: 8888
+  # -- Workspace pod ports the router may reach: the application port, plus the port
+  # of the remote access sidecar when a template carries one.
+  routerPorts:
+    - 8888
+  # -- Workspace pod ports the operator may reach: the application port its idle
+  # detection probes.
+  operatorPorts:
+    - 8888

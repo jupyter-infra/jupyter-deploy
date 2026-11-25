@@ -27,14 +27,14 @@ from pytest_jupyter_deploy.workspaces.kubectl import (
     kubectl_poll_workspace_status,
 )
 from pytest_jupyter_deploy.workspaces.network_probe import (
-    probe_service_allowed,
     probe_workspace,
-    workspace_service_host,
+    probe_workspace_allowed,
 )
 from pytest_jupyter_deploy.workspaces.template import list_template_names
 from pytest_jupyter_deploy.workspaces.web_app import WebAppNavigator
 
 from .constants import (
+    DEFAULT_WORKSPACE_TEMPLATE,
     NS_A,
     NS_B,
     NS_ONLY_A_TEAM,
@@ -45,7 +45,10 @@ from .constants import (
     NS_SMALL_TEMPLATE,
     NS_SMALL_TEMPLATE_CONFIG,
     ORDER_NAMESPACES,
+    REMOTE_ACCESS_FLAG,
     ROUTER_NAMESPACE,
+    ROUTER_POD_LABELS,
+    VSCODE_TEMPLATE_NAME,
     WORKSPACE_STOP_PATCH,
     WORKSPACES_DIR,
 )
@@ -151,13 +154,17 @@ def test_team_mapped_to_no_namespace(mapped: dict[str, Any]) -> None:
 
 @pytest.mark.order(ORDER_NAMESPACES + 4)
 @skip_if_testvars_not_set(NS_REQUIRED_VARS)
-def test_templates_offered_per_namespace(mapped: dict[str, Any]) -> None:
-    """e2e-cpu-small is offered and runs in e2e-ns-a only; e2e-ns-b offers just jupyterlab."""
+def test_templates_offered_per_namespace(e2e_deployment: EndToEndDeployment, mapped: dict[str, Any]) -> None:
+    """e2e-cpu-small runs in e2e-ns-a only; the VS Code card, when on, is offered where listed and not in e2e-ns-b."""
     accepted, rejected_name = "e2e-ns-small-a", "e2e-ns-small-b"
     rbac = _rbac_team()
+    # Every workspace namespace gets the JupyterLab card; the VS Code card only where the entry lists it.
+    expected_a = {DEFAULT_WORKSPACE_TEMPLATE, NS_SMALL_TEMPLATE}
+    if e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG):
+        expected_a.add(VSCODE_TEMPLATE_NAME)
     try:
-        assert list_template_names(NS_A, as_user=_user(), as_groups=_group(rbac)) == {"jupyterlab", NS_SMALL_TEMPLATE}
-        assert list_template_names(NS_B, as_user=_user(), as_groups=_group(rbac)) == {"jupyterlab"}
+        assert list_template_names(NS_A, as_user=_user(), as_groups=_group(rbac)) == expected_a
+        assert list_template_names(NS_B, as_user=_user(), as_groups=_group(rbac)) == {DEFAULT_WORKSPACE_TEMPLATE}
 
         kubectl_apply_workspace(accepted, WORKSPACES_DIR, as_user=_user(), as_groups=_group(rbac))
         kubectl_poll_workspace_status(accepted, "Running", namespace=NS_A, timeout_s=NS_RUNNING_TIMEOUT_S)
@@ -183,9 +190,9 @@ def test_network_policy_in_every_namespace(mapped: dict[str, Any]) -> None:
             kubectl_apply_workspace(name, WORKSPACES_DIR, as_user=_user(), as_groups=_group(_rbac_team()))
         for ns, name in names.items():
             kubectl_poll_workspace_status(name, "Running", namespace=ns, timeout_s=NS_RUNNING_TIMEOUT_S)
-            assert probe_service_allowed(workspace_service_host(name, ns), 8888, from_namespace=ROUTER_NAMESPACE), (
-                f"router should reach the workspace in {ns}"
-            )
+            assert probe_workspace_allowed(
+                name, from_namespace=ROUTER_NAMESPACE, workspace_namespace=ns, pod_labels=ROUTER_POD_LABELS
+            ), f"the Traefik pods should reach the workspace in {ns}"
         with temporary_namespace(PROBE_NAMESPACE):
             for ns, name in names.items():
                 assert not probe_workspace(name, from_namespace=PROBE_NAMESPACE, workspace_namespace=ns), (
@@ -208,12 +215,10 @@ def test_in_use_template_cannot_be_dropped(e2e_deployment: EndToEndDeployment, m
         dropped = [
             _entry(e["name"], e["teams"].split(",")) if e["name"] == NS_A else e for e in mapped["workspace_namespaces"]
         ]
-        e2e_deployment.update_override_value("workspace_namespaces", dropped)
-        error = e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "config"])
+        error = e2e_deployment.config_refused_with_override("workspace_namespaces", dropped)
         assert f"{NS_A}/{NS_SMALL_TEMPLATE} used by {NS_A}/{name}" in error, error
         assert NS_SMALL_TEMPLATE in list_template_names(NS_A, as_user=_user(), as_groups=_group(_rbac_team()))
     finally:
-        e2e_deployment.update_override_value("workspace_namespaces", mapped["workspace_namespaces"])
         kubectl_delete_workspace(name, namespace=NS_A)
 
 
@@ -226,11 +231,9 @@ def test_in_use_namespace_cannot_be_dropped(e2e_deployment: EndToEndDeployment, 
         kubectl_apply_workspace(name, WORKSPACES_DIR, as_user=_user(), as_groups=_group(_rbac_team()))
 
         dropped = [e for e in mapped["workspace_namespaces"] if e["name"] != NS_B]
-        e2e_deployment.update_override_value("workspace_namespaces", dropped)
-        error = e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "config"])
+        error = e2e_deployment.config_refused_with_override("workspace_namespaces", dropped)
         assert f"{NS_B} holds {NS_B}/{name}" in error, error
     finally:
-        e2e_deployment.update_override_value("workspace_namespaces", mapped["workspace_namespaces"])
         kubectl_delete_workspace(name, namespace=NS_B)
 
 
@@ -264,14 +267,26 @@ def test_plan_time_validation(
     e2e_deployment: EndToEndDeployment, mapped: dict[str, Any], mutate: Any, message: str
 ) -> None:
     """`jd config` refuses an invalid mapping at plan, naming the culprit."""
-    try:
-        e2e_deployment.update_override_value("workspace_namespaces", mutate(mapped["workspace_namespaces"]))
-        assert message in e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "config"])
-    finally:
-        e2e_deployment.update_override_value("workspace_namespaces", mapped["workspace_namespaces"])
+    error = e2e_deployment.config_refused_with_override("workspace_namespaces", mutate(mapped["workspace_namespaces"]))
+    assert message in error, error
 
 
 @pytest.mark.order(ORDER_NAMESPACES + 9)
+@skip_if_testvars_not_set(NS_REQUIRED_VARS)
+def test_vscode_card_listed_without_remote_access_is_refused(
+    e2e_deployment: EndToEndDeployment, mapped: dict[str, Any]
+) -> None:
+    """`jd config` refuses a namespace entry listing the built-in vscode card while enable_default_vscode_app is off."""
+    if e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG):
+        pytest.skip("the deployment has enable_default_vscode_app on")
+    error = e2e_deployment.config_refused_with_override(
+        "workspace_namespaces",
+        [*mapped["workspace_namespaces"][:2], {**mapped["workspace_namespaces"][2], "templates": "vscode"}],
+    )
+    assert f'built-in "vscode" card, which needs enable_default_vscode_app = true: {NS_B}' in error, error
+
+
+@pytest.mark.order(ORDER_NAMESPACES + 10)
 @skip_if_testvars_not_set(NS_REQUIRED_VARS)
 def test_coding_agents_answer_only_in_bedrock_enabled_namespaces(
     e2e_deployment: EndToEndDeployment, mapped: dict[str, Any]
@@ -306,7 +321,7 @@ def test_coding_agents_answer_only_in_bedrock_enabled_namespaces(
             kubectl_delete_workspace(name, namespace=ns)
 
 
-@pytest.mark.order(ORDER_NAMESPACES + 10)
+@pytest.mark.order(ORDER_NAMESPACES + 11)
 @skip_if_testvars_not_set(NS_REQUIRED_VARS)
 def test_web_app_follows_mapping_change(
     e2e_deployment: EndToEndDeployment,

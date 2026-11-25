@@ -34,6 +34,7 @@ The workspace runs a container image built by AWS CodeBuild and stored in ECR.
 When an administrator runs `jd up`, Terraform creates the CodeBuild project (Job Template) and triggers a build.
 The build job uses the Dockerfile defined in the JupyterDeploy project to produce the JupyterLab image.
 At runtime, the workspace pod pulls this image from ECR.
+With `enable_default_vscode_app` on, a second CodeBuild project builds the VS Code image the same way; see [Remote Access](remote-access.md).
 
 ![Application image](diagrams/application-image.svg)
 

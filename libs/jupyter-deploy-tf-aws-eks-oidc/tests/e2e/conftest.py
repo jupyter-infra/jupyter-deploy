@@ -20,6 +20,8 @@ from .constants import (
     ADMIN_WORKSPACES,
     DEFAULT_WORKSPACE_TEMPLATE,
     GPU_NODEPOOL,
+    GPU_POOL_FLAG,
+    GPU_TEMPLATE_NAME,
     IMPERSONATED_USER,
     NS_A,
     NS_B,
@@ -28,10 +30,14 @@ from .constants import (
     NS_ONLY_DEFAULT_TEAM,
     NS_SMALL_TEMPLATE,
     NS_SMALL_TEMPLATE_CONFIG,
+    REMOTE_ACCESS_FLAG,
     SEEDED_WORKSPACES,
+    VSCODE_GPU_TEMPLATE_NAME,
+    VSCODE_TEMPLATE_NAME,
     WORKSPACE_NAMESPACE,
     WORKSPACES_DIR,
 )
+from .overrides import pools_offering
 
 
 @pytest.fixture
@@ -61,6 +67,15 @@ def _get_impersonation_group() -> str | None:
     return None
 
 
+@pytest.fixture(scope="session")
+def impersonation_group() -> str:
+    """The RBAC team's group for --as-group, github:<org>:<team>; skips when the env vars are unset."""
+    group = _get_impersonation_group()
+    if not group:
+        pytest.skip("JD_E2E_ORG and JD_E2E_RBAC_TEAM required to impersonate a team member")
+    return group
+
+
 def pytest_collection_modifyitems(items: list) -> None:
     """Automatically mark all tests in this directory as e2e tests."""
     for item in items:
@@ -76,7 +91,7 @@ def browser_context_args(browser_context_args: dict[str, Any], request: pytest.F
 
 @pytest.fixture(scope="session")
 def seeded_cluster(
-    kubernetes_cluster_login: None, e2e_deployment: EndToEndDeployment
+    kubernetes_cluster_login: None, e2e_deployment: EndToEndDeployment, impersonation_group: str
 ) -> Generator[dict[str, list[str]], None, None]:
     """Seed the cluster with admin and impersonated workspaces.
 
@@ -91,9 +106,7 @@ def seeded_cluster(
     deleted by tests. Tests in test_workspace.py use separate, self-contained
     workspace names (e2e-ws-*) with their own create/delete lifecycle.
     """
-    group = _get_impersonation_group()
-    if not group:
-        pytest.skip("JD_E2E_ORG and JD_E2E_RBAC_TEAM required for cluster seeding")
+    group = impersonation_group
 
     created: dict[str, list[str]] = {"admin": [], "seeded": []}
 
@@ -246,7 +259,8 @@ def namespace_base_values(e2e_deployment: EndToEndDeployment, restored_namespace
 
     - default:  every team in oauth_allowed_teams, keeping the cards the empty mapping
                 gives it, so its live workspaces keep their templates
-    - e2e-ns-a: JD_E2E_RBAC_TEAM + a synthetic "only-a" team, also offering e2e-cpu-small
+    - e2e-ns-a: JD_E2E_RBAC_TEAM + a synthetic "only-a" team, also offering e2e-cpu-small and,
+                with the flag on, the VS Code card; e2e-ns-b never lists it
     - e2e-ns-b: JD_E2E_RBAC_TEAM + a synthetic "only-b" team, opted out of Bedrock
 
     Also allowlists the synthetic teams (incl. the #409 case's "only-default") in variables.yaml,
@@ -261,19 +275,17 @@ def namespace_base_values(e2e_deployment: EndToEndDeployment, restored_namespace
     ]
     pools = e2e_deployment.get_list_of_maps_variable_value("workspace_nodepools")
 
-    # default keeps every card the pools offer, including the built-in GPU card the flag injects.
+    # default keeps every card the pools offer, including the GPU cards the flags inject.
     offered = [t for p in pools for t in p.get("templates", "").split(",") if t]
-    gpu_flag = e2e_deployment.cli.run_command(
-        ["jupyter-deploy", "show", "--variable", "enable_default_gpu_pool", "--text"]
-    ).stdout.strip()
-    if gpu_flag.lower() == "true":
-        offered.append("jupyterlab-gpu")
+    vscode_on = e2e_deployment.get_bool_variable_value(REMOTE_ACCESS_FLAG)
+    if vscode_on:
+        offered.append(VSCODE_TEMPLATE_NAME)
+    if e2e_deployment.get_bool_variable_value(GPU_POOL_FLAG):
+        offered.append(GPU_TEMPLATE_NAME)
+        if vscode_on:
+            offered.append(VSCODE_GPU_TEMPLATE_NAME)
 
-    # A config renders only where a pool offers it, so the first CPU pool offers the small one.
-    pools_with_small = [dict(p) for p in pools]
-    cpu_pool = next(p for p in pools_with_small if not p.get("accelerator"))
-    cpu_offered = [t for t in cpu_pool.get("templates", "").split(",") if t]
-    cpu_pool["templates"] = ",".join(dict.fromkeys([*cpu_offered, NS_SMALL_TEMPLATE]))
+    pools_with_small = pools_offering(pools, NS_SMALL_TEMPLATE)
 
     allowed_teams = e2e_deployment.get_list_str_variable_value("oauth_allowed_teams")
     synthetic = [f"{org}:{t}" for t in (NS_ONLY_A_TEAM, NS_ONLY_B_TEAM, NS_ONLY_DEFAULT_TEAM)]
@@ -283,7 +295,11 @@ def namespace_base_values(e2e_deployment: EndToEndDeployment, restored_namespace
         "workspace_nodepools": pools_with_small,
         "workspace_namespaces": [
             _namespace_entry("default", allowed_teams, list(dict.fromkeys(offered))),
-            _namespace_entry(NS_A, [rbac_team, f"{org}:{NS_ONLY_A_TEAM}"], [NS_SMALL_TEMPLATE]),
+            _namespace_entry(
+                NS_A,
+                [rbac_team, f"{org}:{NS_ONLY_A_TEAM}"],
+                [NS_SMALL_TEMPLATE, *([VSCODE_TEMPLATE_NAME] if vscode_on else [])],
+            ),
             _namespace_entry(NS_B, [rbac_team, f"{org}:{NS_ONLY_B_TEAM}"], bedrock=False),
         ],
     }
@@ -293,14 +309,8 @@ def namespace_base_values(e2e_deployment: EndToEndDeployment, restored_namespace
 def restored_namespace_mapping(e2e_deployment: EndToEndDeployment) -> Generator[None, None, None]:
     """Snapshot the mapping variables and the allowlist; after the module, restore them and redeploy."""
     e2e_deployment.ensure_deployed()
-    snapshot = {key: e2e_deployment.read_override_value(key) for key in _NAMESPACE_MAPPING_VARIABLES}
+    snapshot = e2e_deployment.snapshot_overrides(_NAMESPACE_MAPPING_VARIABLES)
     allowed_teams = e2e_deployment.get_list_str_variable_value("oauth_allowed_teams")
     yield
     e2e_deployment.update_required_value("oauth_allowed_teams", allowed_teams)
-    reset_args: list[str] = []
-    for key, value in snapshot.items():
-        if value is None:
-            reset_args += ["--reset-variable", key]
-        else:
-            e2e_deployment.update_override_value(key, value)
-    e2e_deployment.ensure_deployed_with(reset_args)
+    e2e_deployment.restore_overrides(snapshot)

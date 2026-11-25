@@ -21,6 +21,7 @@ from jupyter_deploy.constants import RETRYABLE_EXIT_CODE
 from jupyter_deploy.enum import ProviderType
 from jupyter_deploy.exceptions import (
     CommandNotImplementedError,
+    ImageNotProvisionedError,
     InvalidProviderCredentialsError,
     InvalidVariableTypeError,
     JupyterDeployError,
@@ -135,6 +136,29 @@ class TestRequiredOutputErrors(unittest.TestCase):
         self.assertIn("open_url", output)
         # Nothing the user can do to this project fixes it, and creating a fresh one is not a fix.
         self.assertNotIn("jd init", output)
+        self.assertNotIn("jd up", output)
+
+
+class TestImageErrors(unittest.TestCase):
+    """An image the deployment did not build names the variable that builds it, when the manifest knows one."""
+
+    def test_unbuilt_image_points_at_the_variable_that_builds_it(self) -> None:
+        output = _render(ImageNotProvisionedError("vscode", "enable_default_vscode_app"), ["config"])
+
+        self.assertIn("vscode", output)
+        self.assertIn("enable_default_vscode_app", output)
+        self.assertIn("jd up", output)
+
+    def test_unbuilt_image_behind_a_set_flag_points_at_jd_up_only(self) -> None:
+        output = _render(ImageNotProvisionedError("vscode", "enable_default_vscode_app", enabled=True), ["config"])
+
+        self.assertIn("jd up", output)
+        self.assertNotIn("jd config", output)
+
+    def test_unbuilt_image_without_a_known_variable_offers_no_remedy(self) -> None:
+        output = _render(ImageNotProvisionedError("vscode", None), ["config"])
+
+        self.assertIn("vscode", output)
         self.assertNotIn("jd up", output)
 
 

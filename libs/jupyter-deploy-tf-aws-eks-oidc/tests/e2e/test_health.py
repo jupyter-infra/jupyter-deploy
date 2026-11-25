@@ -183,7 +183,7 @@ def test_health_load_balancer_layer(e2e_deployment: EndToEndDeployment) -> None:
 
 
 def test_health_images_layer(e2e_deployment: EndToEndDeployment) -> None:
-    """Verify --images reports one row per image, available with its latest tag."""
+    """Verify --images reports one row per image: available with its latest tag, or skipped behind its flag."""
     e2e_deployment.ensure_deployed()
 
     manifest = e2e_deployment.get_manifest()
@@ -201,6 +201,13 @@ def test_health_images_layer(e2e_deployment: EndToEndDeployment) -> None:
 
     for entry in layers:
         assert entry["layer"] == "images"
+        if entry["skipped"]:
+            # Only an image behind a template flag that is off may be unbuilt.
+            flag = manifest_images[entry["name"]].enabled_by
+            assert flag, f"unbuilt image without an enabling flag: {entry}"
+            assert entry["status"] == "not built" and entry["status_category"] == "healthy", entry
+            assert entry["detail"] == f"needs {flag} = true", entry
+            continue
         # Status reflects ECR presence; a deployed image must be available.
         assert entry["status"] == "Available"
         assert entry["status_category"] == "healthy"

@@ -8,6 +8,7 @@ workspaceTemplates:
     description: "JupyterLab workspace with persistent EBS storage"
     imageUri: docker.io/test/jupyterlab:latest
     appType: jupyterlab
+    accessStrategy: oauth-access-strategy
     accessType: OwnerOnly
     ownershipType: OwnerOnly
     storageClassName: ebs-sc
@@ -42,6 +43,11 @@ workspaceTemplates:
       timeoutMinutes: 60
       minTimeoutMinutes: 15
       maxTimeoutMinutes: 480
+      detection:
+        path: /api/status
+        port: 8888
+        responseBodyPath: last_activity
+        format: RFC3339
   - name: jupyterlab-small
     namespace: team-a
     isDefault: "false"
@@ -49,6 +55,7 @@ workspaceTemplates:
     description: "JupyterLab workspace with persistent EBS storage"
     imageUri: docker.io/test/jupyterlab:latest
     appType: jupyterlab
+    accessStrategy: oauth-access-strategy
     accessType: OwnerOnly
     ownershipType: OwnerOnly
     storageClassName: ebs-sc
@@ -83,6 +90,11 @@ workspaceTemplates:
       timeoutMinutes: 60
       minTimeoutMinutes: 15
       maxTimeoutMinutes: 480
+      detection:
+        path: /api/status
+        port: 8888
+        responseBodyPath: last_activity
+        format: RFC3339
   - name: jupyterlab
     namespace: team-b
     isDefault: "true"
@@ -90,6 +102,7 @@ workspaceTemplates:
     description: "JupyterLab workspace with persistent EBS storage"
     imageUri: docker.io/test/jupyterlab:latest
     appType: jupyterlab
+    accessStrategy: oauth-access-strategy
     accessType: OwnerOnly
     ownershipType: OwnerOnly
     storageClassName: ebs-sc
@@ -124,7 +137,15 @@ workspaceTemplates:
       timeoutMinutes: 60
       minTimeoutMinutes: 15
       maxTimeoutMinutes: 480
+      detection:
+        path: /api/status
+        port: 8888
+        responseBodyPath: last_activity
+        format: RFC3339
 networkPolicy:
+  routerPodLabels:
+    app: traefik
+    component: router
   workspaceNamespaces:
     - team-a
     - team-b

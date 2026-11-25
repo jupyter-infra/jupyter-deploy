@@ -237,7 +237,7 @@ locals {
     # pool name), and tests, fixtures, and docs pin "workspaces-gpu".
     role        = "workspaces-gpu"
     accelerator = "nvidia"
-    templates   = "jupyterlab-gpu"
+    templates   = join(",", [for t in local.gpu_templates_builtin : t.name])
   }
   # cpu/memory sit under the g4dn.xlarge allocatable with headroom, so kubelet
   # reservation or DaemonSet growth cannot leave the pod permanently
@@ -253,6 +253,12 @@ locals {
     memory       = "12Gi"
     idle_minutes = tostring(var.workspaces_idle_shutdown_timeout_default)
   }
+  # The configs the flag injects: JupyterLab, and VS Code with remote access on
+  # (workspace_remote_access.tf).
+  gpu_templates_builtin = concat(
+    [local.gpu_template_builtin],
+    var.enable_default_vscode_app ? [local.vscode_gpu_template_builtin] : [],
+  )
 
   workspace_nodepools_accelerated = [
     for p in var.workspace_nodepools : p if lookup(p, "accelerator", "") != ""
@@ -267,7 +273,7 @@ locals {
   )
   workspace_templates_effective = concat(
     var.workspace_templates,
-    var.enable_default_gpu_pool ? [local.gpu_template_builtin] : [],
+    var.enable_default_gpu_pool ? local.gpu_templates_builtin : [],
   )
   # Accelerator entries default role to the pool name, fencing each accelerator
   # pool by construction. Non-accelerator entries keep the key absent so the

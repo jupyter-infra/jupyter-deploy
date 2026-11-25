@@ -18,6 +18,7 @@ from jupyter_deploy.exceptions import (
     DownAutoApproveRequiredError,
     HostCommandInstructionError,
     ImageNotFoundError,
+    ImageNotProvisionedError,
     ImageTagNotFoundError,
     IncompatibleHostStateError,
     InstructionNotFoundError,
@@ -365,6 +366,19 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         console.print(f":x: {e}", style="bold red", highlight=False)
         console.line()
         console.print(f":bulb: Run [bold cyan]jd image tags --name {e.image_name}[/] to see available tags.")
+        raise typer.Exit(code=1) from None
+
+    except ImageNotProvisionedError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        if e.enabled:
+            console.line()
+            console.print(f":bulb: [bold cyan]{e.enabled_by}[/] is set; run [bold cyan]jd up[/] to build the image.")
+        elif e.enabled_by:
+            console.line()
+            console.print(
+                f":bulb: Set [bold cyan]{e.enabled_by}[/] to true, "
+                "then run [bold cyan]jd config[/] and [bold cyan]jd up[/]."
+            )
         raise typer.Exit(code=1) from None
 
     except InvalidComponentVerbError as e:

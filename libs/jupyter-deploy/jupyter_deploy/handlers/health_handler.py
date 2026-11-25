@@ -1,8 +1,14 @@
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.enum import StatusCategory
-from jupyter_deploy.exceptions import CommandNotImplementedError
+from jupyter_deploy.exceptions import CommandNotImplementedError, ImageNotProvisionedError
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
-from jupyter_deploy.handlers.payloads import ConnectionResult, HealthLayer, HealthLayerResult, ImageVulnerability
+from jupyter_deploy.handlers.payloads import (
+    ConnectionResult,
+    HealthLayer,
+    HealthLayerResult,
+    ImageVulnerability,
+    not_built_reason,
+)
 from jupyter_deploy.handlers.project.open_handler import OpenHandler
 from jupyter_deploy.handlers.resource.cluster_handler import ClusterHandler
 from jupyter_deploy.handlers.resource.component_handler import ComponentHandler
@@ -157,6 +163,19 @@ class HealthHandler(BaseProjectHandler):
         for name in self.project_manifest.get_images():
             try:
                 status = self._image_handler.get_status(name)
+            except ImageNotProvisionedError as exc:
+                # An image behind a template flag that is off is not a failure of the deployment.
+                results.append(
+                    HealthLayerResult(
+                        layer=HealthLayer.IMAGES,
+                        name=name,
+                        status_category=StatusCategory.HEALTHY,
+                        status_text="not built",
+                        detail=not_built_reason(exc.enabled_by, exc.enabled) or str(exc),
+                        skipped=True,
+                    )
+                )
+                continue
             except Exception as exc:  # noqa: BLE001 - one bad image must not fail the whole check
                 results.append(
                     HealthLayerResult(

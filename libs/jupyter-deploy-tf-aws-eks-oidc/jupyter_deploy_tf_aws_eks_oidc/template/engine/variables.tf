@@ -369,7 +369,7 @@ variable "workspace_nodepools" {
 
 variable "workspace_templates" {
   description = <<-EOT
-    Named workspace template configurations. Keys: name, gpus, cpu, memory, idle_minutes, display_name, description.
+    Named workspace template configurations. Keys: name, app, gpus, cpu, memory, idle_minutes, display_name, description.
 
     A workspace_nodepools entry adopts a config by listing its name in the
     entry's templates key; each (entry, config) pairing renders one
@@ -383,8 +383,11 @@ variable "workspace_templates" {
 
     Required keys per entry (all strings):
       name         - WorkspaceTemplate name (e.g. "jupyterlab-gpu-p"); unique,
-                     "jupyterlab" is reserved for the built-in default template
+                     "jupyterlab" and "vscode" are reserved for the built-in cards
     Optional keys per entry (all strings):
+      app          - application the card runs: "jupyterlab" (default) or "vscode",
+                     which needs enable_default_vscode_app and has no idle shutdown yet,
+                     so idle_minutes is refused with it
       gpus         - nvidia.com/gpu count the template pins (e.g. "1");
                      requires cpu and memory, and only accelerator pools may
                      offer the config
@@ -395,9 +398,9 @@ variable "workspace_templates" {
       display_name - UI card title (defaults to the config name)
       description  - UI card description (defaults to a generic line)
 
-    A config without cpu/memory (legal only without gpus) inherits the base
-    jupyterlab shape: the card is the standard adjustable workspace, pinned to
-    the pool that lists it, with its own idle policy.
+    A config without cpu/memory (legal only without gpus) inherits its app's
+    base shape: the card is the standard adjustable workspace, pinned to the
+    pool that lists it, with its own idle policy.
 
     Example (a P-family pool with its own template; enable_default_gpu_pool
     provides the equivalent G-family stack built in):
@@ -427,8 +430,24 @@ variable "workspace_templates" {
   }
 
   validation {
-    condition     = !contains([for t in var.workspace_templates : lookup(t, "name", "")], "jupyterlab")
-    error_message = "\"jupyterlab\" is reserved for the built-in default template."
+    condition     = length(setintersection(toset([for t in var.workspace_templates : lookup(t, "name", "")]), toset(["jupyterlab", "vscode"]))) == 0
+    error_message = "\"jupyterlab\" and \"vscode\" are reserved for the built-in cards."
+  }
+
+  validation {
+    condition = alltrue([
+      for t in var.workspace_templates : contains(["jupyterlab", "vscode"], lookup(t, "app", "jupyterlab"))
+    ])
+    error_message = "Each workspace_templates app, when set, must be \"jupyterlab\" or \"vscode\"."
+  }
+
+  validation {
+    # VS Code workspaces report no activity the operator can read yet, so a timeout
+    # would never fire.
+    condition = alltrue([
+      for t in var.workspace_templates : lookup(t, "app", "jupyterlab") != "vscode" || !contains(keys(t), "idle_minutes")
+    ])
+    error_message = "workspace_templates configs with app = \"vscode\" cannot set idle_minutes: VS Code workspaces have no idle shutdown yet."
   }
 
   validation {
@@ -472,8 +491,9 @@ variable "enable_default_gpu_pool" {
     Whether to provision the built-in default GPU workspace stack.
 
     When true, the template appends the built-in workspace-gpu entry to
-    workspace_nodepools and its jupyterlab-gpu config to workspace_templates:
-    one GPU pool, the NVIDIA device plugin, and one GPU workspace card.
+    workspace_nodepools and its jupyterlab-gpu config to workspace_templates,
+    and the vscode-gpu config as well when enable_default_vscode_app is on: one GPU
+    pool, the NVIDIA device plugin, and one GPU workspace card per application.
     Combining the flag with your own accelerator entries is a plan-time
     error: configure GPU support either through this flag or through
     workspace_nodepools + workspace_templates, not both. Delete GPU
@@ -578,8 +598,9 @@ variable "workspace_namespaces" {
                   oauth_allowed_teams
     Optional keys per entry (all strings):
       templates - comma-separated workspace_templates config names offered in this
-                  namespace, on top of the built-in "jupyterlab" template; each
-                  config must be offered by a workspace_nodepools entry
+                  namespace, on top of the built-in cards ("jupyterlab", and "vscode"
+                  with enable_default_vscode_app); each config must be offered by a
+                  workspace_nodepools entry
       bedrock   - "false" to withhold Bedrock credentials from this namespace's
                   workspaces when workspace_bedrock_enabled is true (default "true")
 
@@ -1100,6 +1121,83 @@ variable "workspace_app_codex_version" {
     condition     = can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+$", var.workspace_app_codex_version))
     error_message = "workspace_app_codex_version must be an exact version (e.g. 0.163.0)."
   }
+}
+
+variable "enable_default_vscode_app" {
+  description = <<-EOT
+    Whether to offer the built-in VS Code application, opened over SSH from desktop editors.
+
+    When true, the template builds the vscode workspace image, copies the ws-proxy
+    sidecar image into ECR and offers a VS Code card in the namespaces whose
+    workspace_namespaces entry lists "vscode" in templates, or in the single default
+    namespace when no namespaces are declared (plus a VS Code GPU card when
+    enable_default_gpu_pool is on). Each VS Code workspace runs an SSH server on
+    its pod's loopback interface and a sidecar that relays the SSH stream from the
+    HTTPS ingress to it; the operator signs a short-lived token per connection and
+    the auth middleware verifies it. Users connect from their machine with the
+    kubectl-workspace plugin: https://github.com/jupyter-infra/kubectl-workspace
+
+    Turning it on restarts the operator and the auth middleware once; running
+    workspaces keep running. Turning it off removes the VS Code cards; delete the
+    VS Code workspaces first, since a template a live workspace uses cannot be
+    removed, and drop "vscode" from every workspace_namespaces entry in the same
+    change, since a listing without the flag is refused at plan time.
+
+    Recommended: false
+  EOT
+  type        = bool
+}
+
+variable "workspace_app_vscode_image_name" {
+  description = <<-EOT
+    The ECR repository name for the VS Code workspace image.
+
+    Changing this value creates a new ECR repository. The default,
+    'vscode-v<template version>', follows each template release, so an
+    upgrade builds into a new repo while previous images stay available for
+    running workspaces. Used when enable_default_vscode_app is true.
+
+    Example: vscode-v0.4.3
+  EOT
+  type        = string
+}
+
+variable "workspace_app_vscode_image_build" {
+  description = <<-EOT
+    The build tag for the VS Code workspace image.
+
+    Increment this to trigger a rebuild of the same application version
+    (e.g. to pick up dependency updates or Dockerfile changes).
+
+    Example: v1
+  EOT
+  type        = string
+}
+
+variable "workspace_app_ws_proxy_image_name" {
+  description = <<-EOT
+    The ECR repository name for the ws-proxy sidecar copy.
+
+    VS Code workspace pods run the sidecar beside the workspace container.
+    Changing this value creates a new ECR repository. The default,
+    'ws-proxy-v<template version>', follows each template release like the
+    workspace image names. Used when enable_default_vscode_app is true.
+
+    Example: ws-proxy-v0.4.3
+  EOT
+  type        = string
+}
+
+variable "workspace_app_ws_proxy_image_build" {
+  description = <<-EOT
+    The build tag for the ws-proxy sidecar copy.
+
+    Increment this to copy the image again under a new tag; the copy is also
+    refreshed when a template release changes the pinned sidecar digest.
+
+    Example: v1
+  EOT
+  type        = string
 }
 
 variable "workspace_bedrock_enabled" {

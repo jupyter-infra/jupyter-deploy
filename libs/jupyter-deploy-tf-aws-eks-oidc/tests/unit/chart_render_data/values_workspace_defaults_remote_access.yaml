@@ -1,0 +1,100 @@
+# The enable_default_vscode_app render: the two base cards of workspaces.tf in one
+# namespace (jupyterlab as in values_workspace_defaults_default.yaml, vscode from
+# vscode_app in workspace_remote_access.tf, its readiness an exec probe) and the
+# sidecar port on the router's ingress rule. Keep in sync with workspace_base_cards,
+# vscode_app and workspace_ingress_router_ports.
+workspaceTemplates:
+  - name: jupyterlab
+    namespace: default
+    isDefault: "true"
+    displayName: JupyterLab
+    description: "JupyterLab workspace with persistent EBS storage"
+    imageUri: docker.io/test/jupyterlab:latest
+    appType: jupyterlab
+    accessStrategy: oauth-access-strategy
+    accessType: OwnerOnly
+    ownershipType: OwnerOnly
+    storageClassName: ebs-sc
+    defaultResources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+    resourceBounds:
+      cpu:
+        min: "100m"
+        max: "8"
+      memory:
+        min: "256Mi"
+        max: "32Gi"
+    nodeSelector:
+      jupyter-deploy/role: workspaces
+    tolerations:
+      - key: jupyter-deploy/role
+        operator: Equal
+        value: workspaces
+        effect: NoSchedule
+    readinessProbe:
+      port: 8888
+      initialDelaySeconds: 2
+      periodSeconds: 3
+      failureThreshold: 30
+    idleShutdown:
+      enabled: true
+      timeoutMinutes: 60
+      minTimeoutMinutes: 15
+      maxTimeoutMinutes: 480
+      detection:
+        path: /api/status
+        port: 8888
+        responseBodyPath: last_activity
+        format: RFC3339
+  - name: vscode
+    namespace: default
+    isDefault: "false"
+    displayName: VS Code
+    description: "Workspace for VS Code, Cursor or Kiro over SSH, with persistent EBS storage"
+    imageUri: docker.io/test/vscode:latest
+    appType: vscode
+    accessStrategy: websocket-access-strategy
+    accessType: OwnerOnly
+    ownershipType: OwnerOnly
+    storageClassName: ebs-sc
+    defaultResources:
+      requests:
+        cpu: "500m"
+        memory: "2Gi"
+      limits:
+        cpu: "2"
+        memory: "4Gi"
+    resourceBounds:
+      cpu:
+        min: "100m"
+        max: "8"
+      memory:
+        min: "2Gi"
+        max: "32Gi"
+    nodeSelector:
+      jupyter-deploy/role: workspaces
+    tolerations:
+      - key: jupyter-deploy/role
+        operator: Equal
+        value: workspaces
+        effect: NoSchedule
+    readinessProbe:
+      command: ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/2222"]
+      initialDelaySeconds: 2
+      periodSeconds: 3
+      failureThreshold: 30
+    idleShutdown: null
+networkPolicy:
+  routerPodLabels:
+    app: traefik
+    component: router
+  routerPorts:
+    - 8888
+    - 8080
+  operatorPorts:
+    - 8888

@@ -28,10 +28,18 @@ _HELM = shutil.which("helm")
 _SKIP_WITHOUT_HELM = unittest.skipIf(_HELM is None and not os.environ.get("CI"), "helm not installed")
 
 
-def _helm_template(chart_dir: str, release_name: str, values_file: str | None, namespace: str = "default") -> str:
+def _helm_template(
+    chart_dir: str,
+    release_name: str,
+    values_file: str | None,
+    namespace: str = "default",
+    set_values: list[str] | None = None,
+) -> str:
     cmd = ["helm", "template", release_name, str(TEMPLATE_PATH / chart_dir), "--namespace", namespace]
     if values_file is not None:
         cmd.extend(["-f", str(DATA_DIR / values_file)])
+    for value in set_values or []:
+        cmd.extend(["--set", value])
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise AssertionError(f"helm template failed for {chart_dir}: {result.stderr}")
@@ -218,6 +226,38 @@ class TestWorkspaceDefaultsDefaultRender(GoldenComparisonTestCase):
         self.assertEqual(len(golden), 1)
         self.assertEqual(golden[0], self.templates[0])
 
+    def test_entry_without_access_strategy_falls_back_to_the_chart_default(self) -> None:
+        rendered = _helm_template(
+            "charts/workspace-defaults",
+            "workspace-defaults",
+            "values_workspace_defaults_default.yaml",
+            set_values=["workspaceTemplates[0].accessStrategy=null"],
+        )
+        self.assertEqual(_workspace_template_docs(rendered)[0], self.templates[0])
+
+
+@_SKIP_WITHOUT_HELM
+class TestWorkspaceDefaultsFixtureEntries(unittest.TestCase):
+    """Each fixture renders the entries it lists, and its jupyterlab entry renders the default golden's document.
+
+    The chart renders entries independently, so a drift here is a hand-edited fixture, not a chart change.
+    """
+
+    FIXTURES: ClassVar[dict[str, list[str]]] = {
+        "values_workspace_defaults_two_templates.yaml": ["jupyterlab", "jupyterlab-gpu"],
+        "values_workspace_defaults_custom_pool.yaml": ["jupyterlab", "jupyterlab-gpu-p"],
+        "values_workspace_defaults_remote_access.yaml": ["jupyterlab", "vscode"],
+    }
+
+    def test_each_fixture_renders_its_entries_with_jupyterlab_unchanged(self) -> None:
+        golden = _workspace_template_docs((DATA_DIR / "golden_workspace_defaults_default.yaml").read_text())[0]
+        for values_file, names in self.FIXTURES.items():
+            with self.subTest(values_file=values_file):
+                rendered = _helm_template("charts/workspace-defaults", "workspace-defaults", values_file)
+                templates = _workspace_template_docs(rendered)
+                self.assertEqual([doc["metadata"]["name"] for doc in templates], names)
+                self.assertEqual(next(doc for doc in templates if doc["metadata"]["name"] == "jupyterlab"), golden)
+
 
 @_SKIP_WITHOUT_HELM
 class TestWorkspaceDefaultsTwoTemplateRender(unittest.TestCase):
@@ -233,15 +273,6 @@ class TestWorkspaceDefaultsTwoTemplateRender(unittest.TestCase):
         )
         cls.templates = _workspace_template_docs(rendered)
         cls.gpu = next(doc for doc in cls.templates if doc["metadata"]["name"] == "jupyterlab-gpu")
-
-    def test_renders_both_templates(self) -> None:
-        names = [doc["metadata"]["name"] for doc in self.templates]
-        self.assertEqual(names, ["jupyterlab", "jupyterlab-gpu"])
-
-    def test_jupyterlab_unchanged_beside_gpu_template(self) -> None:
-        golden = _workspace_template_docs((DATA_DIR / "golden_workspace_defaults_default.yaml").read_text())
-        jupyterlab = next(doc for doc in self.templates if doc["metadata"]["name"] == "jupyterlab")
-        self.assertEqual(golden[0], jupyterlab)
 
     def test_gpu_template_bounds_pinned(self) -> None:
         bounds = self.gpu["spec"]["resourceBounds"]["resources"]
@@ -287,10 +318,6 @@ class TestWorkspaceDefaultsCustomPoolRender(unittest.TestCase):
         )
         cls.templates = _workspace_template_docs(rendered)
         cls.custom = next(doc for doc in cls.templates if doc["metadata"]["name"] == "jupyterlab-gpu-p")
-
-    def test_renders_both_templates(self) -> None:
-        names = [doc["metadata"]["name"] for doc in self.templates]
-        self.assertEqual(names, ["jupyterlab", "jupyterlab-gpu-p"])
 
     def test_placement_follows_entry_role(self) -> None:
         spec = self.custom["spec"]
@@ -393,3 +420,104 @@ class TestWorkspaceDefaultsMultiNamespaceRender(unittest.TestCase):
     def test_network_policy_per_namespace(self) -> None:
         namespaces = [d["metadata"]["namespace"] for d in _docs_of_kind(self.rendered, "NetworkPolicy")]
         self.assertEqual(namespaces, ["team-a", "team-b"])
+
+
+@_SKIP_WITHOUT_HELM
+class TestWorkspaceDefaultsRemoteAccessRender(unittest.TestCase):
+    """With remote access on, the vscode card renders beside jupyterlab and the router may reach the sidecar port."""
+
+    rendered: ClassVar[str]
+    templates: ClassVar[list[dict[str, Any]]]
+    vscode: ClassVar[dict[str, Any]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.rendered = _helm_template(
+            "charts/workspace-defaults", "workspace-defaults", "values_workspace_defaults_remote_access.yaml"
+        )
+        cls.templates = _workspace_template_docs(cls.rendered)
+        cls.vscode = next(doc for doc in cls.templates if doc["metadata"]["name"] == "vscode")
+
+    def test_vscode_template_references_the_websocket_strategy(self) -> None:
+        self.assertEqual(
+            self.vscode["spec"]["defaultAccessStrategy"],
+            {"name": "websocket-access-strategy", "namespace": "jupyter-k8s-shared"},
+        )
+
+    def test_vscode_readiness_probe_connects_to_the_loopback_ssh_port_from_inside(self) -> None:
+        """The SSH server binds loopback, which a TCP probe from the node cannot reach."""
+        self.assertEqual(
+            self.vscode["spec"]["defaultReadinessProbe"],
+            {
+                "exec": {"command": ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/2222"]},
+                "initialDelaySeconds": 2,
+                "periodSeconds": 3,
+                "failureThreshold": 30,
+            },
+        )
+
+    def test_vscode_template_carries_no_idle_policy(self) -> None:
+        self.assertNotIn("defaultIdleShutdown", self.vscode["spec"])
+        self.assertNotIn("idleShutdownOverrides", self.vscode["spec"])
+
+    def test_network_policy_admits_the_sidecar_port_from_the_traefik_pods_only(self) -> None:
+        policies = _docs_of_kind(self.rendered, "NetworkPolicy")
+        self.assertEqual([p["metadata"]["namespace"] for p in policies], ["default"])
+        self.assertEqual(
+            policies[0]["spec"]["ingress"],
+            [
+                {
+                    "from": [
+                        {
+                            "namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "jupyter-k8s-router"}},
+                            "podSelector": {"matchLabels": {"app": "traefik", "component": "router"}},
+                        }
+                    ],
+                    "ports": [{"port": 8888, "protocol": "TCP"}, {"port": 8080, "protocol": "TCP"}],
+                },
+                {
+                    "from": [
+                        {"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "jupyter-k8s-system"}}}
+                    ],
+                    "ports": [{"port": 8888, "protocol": "TCP"}],
+                },
+            ],
+        )
+
+
+@_SKIP_WITHOUT_HELM
+class TestWorkspaceDefaultsNetworkPolicyGuards(unittest.TestCase):
+    """A rule without ports admits every port and an empty podSelector every pod, so the chart refuses both."""
+
+    def _render_refused_with(self, set_value: str, message: str) -> None:
+        with self.assertRaises(AssertionError) as refused:
+            _helm_template(
+                "charts/workspace-defaults",
+                "workspace-defaults",
+                "values_workspace_defaults_default.yaml",
+                set_values=[set_value],
+            )
+        self.assertIn(message, str(refused.exception))
+
+    def test_empty_router_ports_refused(self) -> None:
+        self._render_refused_with(
+            "networkPolicy.routerPorts=null", "networkPolicy.routerPorts must list at least one port"
+        )
+
+    def test_empty_operator_ports_refused(self) -> None:
+        self._render_refused_with(
+            "networkPolicy.operatorPorts=null", "networkPolicy.operatorPorts must list at least one port"
+        )
+
+    def test_legacy_single_port_key_refused(self) -> None:
+        self._render_refused_with("networkPolicy.port=8888", "networkPolicy.port was replaced")
+
+    def test_empty_router_pod_labels_refused(self) -> None:
+        self._render_refused_with(
+            "networkPolicy.routerPodLabels=null", "networkPolicy.routerPodLabels must name the router pods"
+        )
+
+    def test_non_map_router_pod_labels_refused(self) -> None:
+        self._render_refused_with(
+            "networkPolicy.routerPodLabels=traefik", "networkPolicy.routerPodLabels must name the router pods"
+        )
