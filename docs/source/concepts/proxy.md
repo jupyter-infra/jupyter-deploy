@@ -108,7 +108,7 @@ project directory. `jd proxy sessions` lists them, newest first, with one of the
 | `degraded` | The proxy is serving on its last token, but refreshing it is failing, for example during a network interruption. It keeps retrying and returns to `running` once a refresh succeeds. |
 | `failed` | The proxy hit an error it cannot recover from, such as expired cloud credentials, and shut down. |
 | `stopped` | The proxy shut down cleanly. |
-| `dead` | The process went away without shutting down, for example it was killed or crashed. |
+| `dead` | The process went away without shutting down, for example it was killed or crashed. `jd proxy stop` and `jd open` record this in the session so it keeps reading `dead` even if the OS later reuses the process ID. |
 | `unconfirmed` | A process with the recorded PID is alive, but it cannot be confirmed to be this proxy (the PID may have been reused). |
 | `unknown` | The session's status file is present but cannot be read. |
 

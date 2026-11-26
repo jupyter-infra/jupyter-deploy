@@ -193,7 +193,8 @@ class ProxyConnectBundle:
 class ProxyStatus:
     """Detail of a single proxy instance, as observed on disk (jd proxy show).
 
-    `alive` is the live PID probe; `running` is `alive` AND a non-terminal published state.
+    `alive` is the live PID probe (always False once the CLI recorded the run as ``dead``, since
+    the PID may since belong to another process); `running` is `alive` AND a non-terminal state.
     `started_at` is the launch timestamp (its runtime directory name); `log_dir` is where
     its console + rotating logs live.
     """
@@ -224,7 +225,8 @@ class ProxySession:
     - the published state (e.g. ``running``) when the process is alive and confirmed to be this proxy;
     - ``unconfirmed`` when the recorded PID is alive but its identity cannot be confirmed;
     - the published terminal state (``stopped``, ``failed``) when the proxy recorded one;
-    - ``dead`` when the record claims a live state but its process is gone (killed, crashed);
+    - ``dead`` when the record claims a live state but its process is gone (killed, crashed), or
+      when ``jd proxy stop``/``restart`` already recorded that verdict in the status file;
     - ``stopped`` when there is no status file — a clean shutdown deletes it;
     - ``unknown`` when the status file is present but unreadable.
     """

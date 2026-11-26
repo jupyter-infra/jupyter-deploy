@@ -160,6 +160,73 @@ class TestTerminateRunning(_ManagerTestCase):
                 sessions = manager.sessions()
             self.assertEqual([(s.session_id, s.state) for s in sessions], [("20260610-180100.123", "dead")])
 
+    def test_records_dead_on_disk_and_keeps_the_other_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            payload = {"schema_version": 1, "state": "running", "pid": 4321, "port": 51000, "process_created_at": 1.0}
+            instance_dir = self._write_instance(manager, "20260610-180100.123", payload)
+            with patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=False):
+                manager._terminate_running()
+            on_disk = json.loads((instance_dir / "status.json").read_text())
+            self.assertEqual(on_disk, {**payload, "state": "dead"})
+
+    def test_does_not_overwrite_a_published_terminal_state(self) -> None:
+        # The proxy said why it ended (`failed`, e.g. expired credentials); keep that, not `dead`.
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            payload = {"schema_version": 1, "state": "failed", "pid": 4321, "port": 51000, "process_created_at": 1.0}
+            instance_dir = self._write_instance(manager, "20260610-180100.123", payload)
+            with patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=False):
+                manager._terminate_running()
+            self.assertEqual(json.loads((instance_dir / "status.json").read_text()), payload)
+
+    def test_crashed_run_stays_dead_after_its_pid_is_reused(self) -> None:
+        # A stop finds the crashed run's process gone and records `dead`. Later the OS hands that
+        # PID to an unrelated program: the run must still read `dead`, not `unconfirmed`, and
+        # `jd proxy stop` must say nothing is running rather than refuse over an unverifiable PID.
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self._write_instance(
+                manager,
+                "20260610-180100.123",
+                {"schema_version": 1, "state": "running", "pid": 4321, "port": 51000, "process_created_at": 1.0},
+            )
+            with (
+                patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=False),
+                self.assertRaises(NoProxyFoundError),
+            ):
+                manager.stop()
+
+            with (
+                patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=True),
+                patch("jupyter_deploy.cmd_utils.get_pid_create_time", return_value=9999.0),  # someone else's PID
+                patch("jupyter_deploy.cmd_utils.terminate_process") as terminate,
+            ):
+                self.assertEqual(
+                    [(s.session_id, s.state) for s in manager.sessions()], [("20260610-180100.123", "dead")]
+                )
+                self.assertEqual(manager._unconfirmed_live(), [])
+                with self.assertRaises(NoProxyFoundError):
+                    manager.stop()
+                terminate.assert_not_called()
+
+    def test_unwritable_record_warns_and_does_not_fail_the_stop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            display = Mock()
+            manager = ProxyManager(project_path=Path(tmp), token_command=_TOKEN_COMMAND, display_manager=display)
+            self._write_instance(
+                manager,
+                "20260610-180100.123",
+                {"schema_version": 1, "state": "running", "pid": 4321, "port": 51000, "process_created_at": 1.0},
+            )
+            with (
+                patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=False),
+                patch("jupyter_deploy.proxy.proxy_utils.os.replace", side_effect=PermissionError("read-only")),
+            ):
+                self.assertEqual(manager._terminate_running(), [])
+            display.warning.assert_called_once()
+            self.assertEqual(list((manager._target_dir / "20260610-180100.123").glob(".status-*")), [])
+
 
 class TestLaunch(_ManagerTestCase):
     def test_creates_timestamped_instance_dir_under_target(self) -> None:

@@ -140,6 +140,32 @@ class TestReadInstanceStatus(unittest.TestCase):
             self.assertFalse(status.alive)
 
 
+class TestDeadRecords(unittest.TestCase):
+    def test_dead_record_is_not_alive_even_if_its_pid_is(self) -> None:
+        # Once recorded dead, the PID may belong to an unrelated process: never read it as alive.
+        with tempfile.TemporaryDirectory() as tmp:
+            instance_dir = Path(tmp) / "20260610-180000.000"
+            _write_status(instance_dir, {"schema_version": 1, "state": "dead", "pid": 4321})
+            with patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=True):
+                status = proxy_utils.read_instance_status(instance_dir)
+            assert status is not None
+            self.assertFalse(status.alive)
+            self.assertFalse(status.running)
+
+    def test_mark_instance_dead_rewrites_only_the_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            instance_dir = Path(tmp) / "20260610-180000.000"
+            payload = {"schema_version": 1, "state": "running", "pid": 4321, "port": 51000, "future_field": "x"}
+            _write_status(instance_dir, payload)
+            proxy_utils.mark_instance_dead(instance_dir)
+            on_disk = json.loads((instance_dir / proxy_utils.PROXY_STATUS_FILE_NAME).read_text())
+            self.assertEqual(on_disk, {**payload, "state": "dead"})
+            self.assertEqual(sorted(p.name for p in instance_dir.iterdir()), [proxy_utils.PROXY_STATUS_FILE_NAME])
+
+    def test_dead_is_a_terminal_state(self) -> None:
+        self.assertIn(proxy_utils.DEAD_STATE, proxy_utils.TERMINAL_STATES)
+
+
 class TestSessionStartedAt(unittest.TestCase):
     def test_parses_session_id_as_local_iso_timestamp_with_offset(self) -> None:
         started_at = proxy_utils.session_started_at("20260610-180100.500")

@@ -527,11 +527,14 @@ class ProxyManager:
         Each candidate's process identity is verified (creation-time match) before signaling,
         so a recycled PID is never killed. An alive PID we *cannot* confirm (reused, or a
         status file predating the recorded creation time) is silently skipped — callers decide
-        how to surface it (:meth:`_prepare_launch` warns and proceeds; :meth:`stop` raises). A
+        how to surface it (:meth:`_warn_unconfirmed` warns and proceeds; :meth:`stop` raises). A
         proxy stopped by SIGTERM deletes its own status file, but a SIGKILL escalation can't —
-        so once a process *we signaled* is confirmed gone, remove its status file too. A record
-        whose process was already gone is left alone: it is the evidence that the run crashed,
-        so ``jd proxy sessions`` keeps reporting it as ``dead``/``failed`` until it is pruned.
+        so once a process *we signaled* is confirmed gone, remove its status file too.
+
+        A record that still claims a live state but whose process is already gone (killed,
+        crashed) is kept as the evidence of the crash and marked ``dead`` on disk. Persisting
+        that verdict means a later reuse of the PID by an unrelated program can't make the run
+        read as alive (``unconfirmed``) again.
         """
         stopped: list[int] = []
         for instance_dir in self._instance_dirs():
@@ -539,8 +542,9 @@ class ProxyManager:
             if status is None:
                 continue
             if not status.alive:
-                # Already gone, and not by our hand: keep its record so the session still reads
-                # as crashed. Not added to `stopped`: we did not stop it.
+                # Already gone, and not by our hand. Not added to `stopped`: we did not stop it.
+                if status.state not in proxy_utils.TERMINAL_STATES:
+                    self._mark_dead(instance_dir)
                 continue
             if not self._is_confirmed_proxy(status):
                 continue  # unconfirmed identity — never signal; surfaced via _unconfirmed_live()
@@ -548,6 +552,13 @@ class ProxyManager:
                 Path(status.log_dir, proxy_utils.PROXY_STATUS_FILE_NAME).unlink(missing_ok=True)
                 stopped.append(status.pid)
         return stopped
+
+    def _mark_dead(self, instance_dir: Path) -> None:
+        """Persist the ``dead`` verdict for a crashed run; best-effort, never fails the caller."""
+        try:
+            proxy_utils.mark_instance_dead(instance_dir)
+        except (OSError, RuntimeError, ValueError) as e:
+            self._display.warning(f"Could not record the crashed proxy run at {instance_dir}: {e}")
 
     def _unconfirmed_live(self) -> list[ProxyStatus]:
         """Return alive proxy records whose process identity could not be confirmed.

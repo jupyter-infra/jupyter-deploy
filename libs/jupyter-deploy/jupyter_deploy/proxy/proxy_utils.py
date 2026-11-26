@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import re
+import tempfile
 from collections import deque
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -26,16 +28,22 @@ from jupyter_deploy.handlers.payloads import ProxyStatus
 # Status file the running proxy publishes under its --log-dir (name owned by the proxy).
 PROXY_STATUS_FILE_NAME = "status.json"
 
-# Published states the proxy uses for a torn-down / crashed instance; these are "not running"
-# even if the recorded PID happens to still be alive.
-TERMINAL_STATES = ("stopped", "failed")
+# State the CLI writes into status.json once it finds the recorded process gone without having
+# published a terminal state (killed, crashed). The proxy never publishes it itself.
+DEAD_STATE = "dead"
+
+# States of a torn-down / crashed instance: the proxy publishes ``stopped`` and ``failed``, the CLI
+# records ``dead``. These are "not running" even if the recorded PID is alive — for ``dead`` that
+# PID was handed to an unrelated process after the proxy died.
+TERMINAL_STATES = ("stopped", "failed", DEAD_STATE)
 
 
 def _status_from_v1(payload: dict, instance_dir: Path) -> ProxyStatus:
     """Convert a v1 status.json payload ({state, pid, port, expires_at}) to a ProxyStatus."""
     state = str(payload.get("state", "unknown"))
     pid = int(payload["pid"]) if payload.get("pid") else 0
-    alive = cmd_utils.is_pid_alive(pid)
+    # A run recorded as dead stays dead: its PID may since belong to an unrelated process.
+    alive = state != DEAD_STATE and cmd_utils.is_pid_alive(pid)
     return ProxyStatus(
         state=state,
         pid=pid,
@@ -79,6 +87,31 @@ def read_instance_status(instance_dir: Path) -> ProxyStatus | None:
     version = payload.get("schema_version", 1)
     convert = _STATUS_CONVERTERS.get(version, _LATEST_STATUS_CONVERTER)
     return convert(payload, instance_dir)
+
+
+def mark_instance_dead(instance_dir: Path) -> None:
+    """Record in ``instance_dir``'s status.json that its process died without shutting down.
+
+    Rewrites only the ``state`` field, keeping every other field as the proxy published it, so
+    the record stays a valid status file for every reader. The write goes through a temp file and
+    an atomic rename, so a concurrent reader sees either the old record or the new one.
+
+    Persisting the verdict matters because liveness is otherwise re-derived from the PID on every
+    read: once the OS hands that PID to another program, the crashed run would read as alive.
+    """
+    status_path = instance_dir / PROXY_STATUS_FILE_NAME
+    payload = json.loads(fs_utils.read_short_file(status_path))
+    if not isinstance(payload, dict):
+        return
+    payload["state"] = DEAD_STATE
+    fd, tmp_name = tempfile.mkstemp(dir=instance_dir, prefix=".status-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as tmp:
+            json.dump(payload, tmp)
+        os.replace(tmp_name, status_path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
 
 
 # The proxy's rotating log files: ``0000.log``, ``0001.log``, … (owned by the client-proxy's
