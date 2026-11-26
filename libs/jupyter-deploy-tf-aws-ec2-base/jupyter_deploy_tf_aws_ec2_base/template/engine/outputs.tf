@@ -118,6 +118,12 @@ output "server_logs_document" {
   value       = aws_ssm_document.server_logs.name
 }
 
+# server.show CLI handling
+output "server_show_document" {
+  description = "Name of the SSM document to inspect a server container."
+  value       = aws_ssm_document.server_show.name
+}
+
 # server.exec CLI handling
 output "server_exec_document" {
   description = "Name of the SSM document to execute commands inside server containers."

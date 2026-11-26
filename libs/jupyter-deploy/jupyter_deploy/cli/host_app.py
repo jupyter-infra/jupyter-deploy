@@ -263,7 +263,7 @@ def list_hosts(
 def show(
     name: Annotated[
         str | None,
-        typer.Option("--name", help="Name of the host to show details for; optional for single-host templates."),
+        typer.Option("--name", help="Name of the host to show details for; ignored by single-host templates."),
     ] = None,
     project_dir: Annotated[
         Path | None,

@@ -86,22 +86,9 @@ commands:
   - result-name: host.status
     source: result
     source-key: '[0].InstanceStateName'
-# One host per deployment: the EC2 instance, named by its instance id. --name is optional; when given,
-# core.match-name rejects any name but this instance's instead of silently describing the one that exists.
 - cmd: host.show
   sequence:
-  - api-name: core.match-name             # [0] reject any name but this instance's
-    arguments:
-    - api-attribute: expected
-      source: output
-      source-key: instance_id
-    - api-attribute: name
-      source: cli
-      source-key: name
-    - api-attribute: kind
-      source: literal
-      value: host
-  - api-name: aws.ec2.describe-instance   # [1]
+  - api-name: aws.ec2.describe-instance
     arguments:
     - api-attribute: instance_id
       source: output
@@ -109,13 +96,13 @@ commands:
   results:
   - result-name: host.show.name
     source: result
-    source-key: '[1].Name'
+    source-key: '[0].Name'
   - result-name: host.show.status
     source: result
-    source-key: '[1].Status'
+    source-key: '[0].Status'
   - result-name: host.show.resource
     source: result
-    source-key: '[1].Resource'
+    source-key: '[0].Resource'
 - cmd: host.stop
   sequence:
   - api-name: aws.ec2.stop-instance
@@ -204,44 +191,23 @@ commands:
   - result-name: server.status
     source: result
     source-key: '[0].StandardOutputContent'
-# One server per deployment, named `jupyter` after the compose service and container that run it.
-# --name is optional; when given, core.match-name rejects any name but `jupyter`.
 - cmd: server.show
   sequence:
-  - api-name: core.match-name             # [0] reject any name but `jupyter`, before touching the host
-    arguments:
-    - api-attribute: expected
-      source: literal
-      value: jupyter
-    - api-attribute: name
-      source: cli
-      source-key: name
-    - api-attribute: kind
-      source: literal
-      value: server
-  - api-name: aws.ssm.wait-command-sync   # [1] same health check as server.status
+  - api-name: aws.ssm.wait-command-sync
     arguments:
     - api-attribute: document_name
       source: output
-      source-key: server_status_check_document
+      source-key: server_show_document
     - api-attribute: instance_id
       source: output
       source-key: instance_id
-  - api-name: core.make-json-object       # [2]
-    arguments:
-    - api-attribute: field_host
-      source: output
-      source-key: instance_id
-    - api-attribute: field_status
-      source: result
-      source-key: '[1].StandardOutputContent'
+    - api-attribute: service
+      source: cli
+      source-key: service
   results:
-  - result-name: server.show.name
-    source: result
-    source-key: '[0].Name'
   - result-name: server.show.resource
     source: result
-    source-key: '[2].Value'
+    source-key: '[0].StandardOutputContent'
 - cmd: server.start
   sequence:
   - api-name: aws.ssm.wait-command-sync

@@ -122,8 +122,9 @@ resolves the IP live at connection time and pins the instance's certificate, not
 # show your host's details
 jd host show
 
-# show your server's details
+# show your server's details (docker inspect of the jupyter container, or pick one with --service)
 jd server show
+jd server show --service traefik
 
 # connect to your host
 jd host connect

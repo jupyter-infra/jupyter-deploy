@@ -82,7 +82,8 @@ class HostHandler(BaseProjectHandler):
     def show_host(self, name: str | None = None) -> HostDetail:
         """Returns detailed information about a host.
 
-        `name` may be omitted for a single-host template; the manifest then receives an empty name.
+        Like :meth:`get_host_status`: `name` is required on a multi-host template, and a single-host
+        template ignores it (its manifest describes the one host it deploys).
         """
         self._require_name(name)
         command = self.project_manifest.get_command("host.show")
@@ -91,12 +92,10 @@ class HostHandler(BaseProjectHandler):
             output_handler=self._output_handler,
             variable_handler=self._variable_handler,
         )
-        runner.run_command_sequence(
-            command,
-            cli_paramdefs={
-                "name": StrResolvedCliParameter(parameter_name="name", value=name or ""),
-            },
-        )
+        cli_paramdefs: dict[str, ResolvedCliParameter[Any]] = {}
+        if name is not None:
+            cli_paramdefs["name"] = StrResolvedCliParameter(parameter_name="name", value=name)
+        runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
         results = collect_results(runner, command)
         return HostDetail(
             name=results.get("name", ""),

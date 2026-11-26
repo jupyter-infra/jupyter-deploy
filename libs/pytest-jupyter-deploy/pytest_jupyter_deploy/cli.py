@@ -408,6 +408,21 @@ class JDCli:
             raise JDCliError(f"Expected a JSON object from `jd proxy show --json`, got: {result.stdout!r}")
         return payload
 
+    def run_show_json(self, cmd: list[str]) -> dict:
+        """Run a `show` command with `--json` and return its parsed payload.
+
+        Raises:
+            JDCliError: If the output is not a single JSON object.
+        """
+        result = self.run_command([*cmd, "--json"])
+        try:
+            payload = json.loads(result.stdout.strip())
+        except json.JSONDecodeError as e:
+            raise JDCliError(f"`{' '.join(cmd)} --json` did not emit clean JSON: {result.stdout!r}") from e
+        if not isinstance(payload, dict):
+            raise JDCliError(f"Expected a JSON object from `{' '.join(cmd)} --json`, got: {result.stdout!r}")
+        return payload
+
     def get_proxy_port(self) -> int:
         """Return the loopback port the running proxy is bound to.
 

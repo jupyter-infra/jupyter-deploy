@@ -33,7 +33,6 @@ proxy run. A test's name is part of its selection contract when `-k` is the only
 """
 
 import contextlib
-import json
 import subprocess
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -95,38 +94,26 @@ def test_host_running(e2e_deployment: EndToEndDeployment) -> None:
     assert host_status == "running", f"Expected host status 'running', got '{host_status}'"
 
 
-def _show_json(e2e_deployment: EndToEndDeployment, cmd: list[str]) -> dict:
-    """Run a `show --json` command and parse its payload, the last line it prints."""
-    result = e2e_deployment.cli.run_command([*cmd, "--json"])
-    lines = [line for line in result.stdout.splitlines() if line.strip()]
-    assert lines, f"Expected JSON output from {cmd}, got nothing"
-    payload = json.loads(lines[-1])
-    assert isinstance(payload, dict), f"Expected a JSON object from {cmd}, got: {result.stdout!r}"
-    return payload
-
-
+@pytest.mark.cli
 def test_host_show(e2e_deployment: EndToEndDeployment) -> None:
-    """`jd host show` describes the one EC2 instance without needing --name."""
+    """`jd host show` describes the one EC2 instance, named by its instance id."""
     e2e_deployment.ensure_host_running()
     instance_id = e2e_deployment.cli.get_str_output("instance_id")
 
-    details = _show_json(e2e_deployment, ["jupyter-deploy", "host", "show"])
+    details = e2e_deployment.cli.run_show_json(["jupyter-deploy", "host", "show"])
     assert details["name"] == instance_id, f"Expected host name '{instance_id}', got: {details}"
     assert details["status"] == "running", f"Expected host status 'running', got: {details}"
     assert details["resource"]["instance_id"] == instance_id, f"Unexpected host resource: {details}"
 
-    # Naming the host explicitly answers the same.
-    named = _show_json(e2e_deployment, ["jupyter-deploy", "host", "show", "--name", instance_id])
-    assert named["name"] == instance_id, f"Expected host name '{instance_id}', got: {named}"
 
+@pytest.mark.cli
+def test_host_show_ignores_name(e2e_deployment: EndToEndDeployment) -> None:
+    """A single-host template ignores `--name`, like `jd host status`: it still shows its one instance."""
+    e2e_deployment.ensure_host_running()
+    instance_id = e2e_deployment.cli.get_str_output("instance_id")
 
-def test_host_show_rejects_unknown_name(e2e_deployment: EndToEndDeployment) -> None:
-    """`jd host show --name` with a name that is not this instance fails instead of describing it."""
-    output = e2e_deployment.cli.run_command_expecting_failure(
-        ["jupyter-deploy", "host", "show", "--name", "i-00000000000000000"]
-    )
-    assert "not found" in output, f"Expected a not-found error, got: {output}"
-    assert "Traceback" not in output, f"Expected a handled error, got a traceback: {output}"
+    details = e2e_deployment.cli.run_show_json(["jupyter-deploy", "host", "show", "--name", "i-00000000000000000"])
+    assert details["name"] == instance_id, f"Expected host name '{instance_id}', got: {details}"
 
 
 def test_host_connect_whoami(e2e_deployment: EndToEndDeployment) -> None:

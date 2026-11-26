@@ -417,7 +417,7 @@ class TestHostHandler(unittest.TestCase):
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
-    def test_show_host_without_name_passes_empty_name_on_single_host_template(
+    def test_show_host_without_name_omits_name_on_single_host_template(
         self,
         mock_cmd_runner_class: Mock,
         mock_tf_variables_handler: Mock,
@@ -434,8 +434,9 @@ class TestHostHandler(unittest.TestCase):
 
         HostHandler(display_manager=NullDisplay()).show_host()
 
+        # Like host.status: no name is passed, and a single-host manifest does not read one.
         cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
-        self.assertEqual(cli_paramdefs["name"].value, "")
+        self.assertNotIn("name", cli_paramdefs)
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")

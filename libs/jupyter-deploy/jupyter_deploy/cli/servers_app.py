@@ -378,16 +378,21 @@ def list_servers(
 def show(
     name: Annotated[
         str | None,
-        typer.Option("--name", help="Name of the server to show details for; optional for single-server templates."),
+        typer.Option("--name", help="Name of the server to show details for; ignored by single-server templates."),
     ] = None,
     project_dir: Annotated[
         Path | None,
         typer.Option("--path", "-p", help="Directory of the project."),
     ] = None,
+    service: Annotated[
+        str, typer.Option("--service", "-s", help="Name of the service to show details for.")
+    ] = "default",
     scope: Annotated[str, typer.Option("--scope", help="Scope or group the server belongs to.")] = "",
     json_output: Annotated[bool, typer.Option("--json", help="Output as JSON.")] = False,
 ) -> None:
     """Display detailed information about a server.
+
+    By default, shows your main application service. Specify --service to target a specific service.
 
     Run either from a project directory that you created with <jd init>;
     or pass --path <project-dir>.
@@ -400,7 +405,7 @@ def show(
         with simple_display_manager.spinner(
             f"Getting server details for {name}..." if name else "Getting server details..."
         ):
-            details = handler.show_server(name=name, scope=scope or None)
+            details = handler.show_server(service=service, name=name, scope=scope or None)
 
         if json_output:
             console.print(json.dumps(asdict(details)), highlight=False, markup=False, soft_wrap=True)

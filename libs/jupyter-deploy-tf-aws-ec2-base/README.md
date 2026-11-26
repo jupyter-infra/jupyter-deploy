@@ -123,8 +123,9 @@ jd server status
 # show your host's details
 jd host show
 
-# show your server's details
+# show your server's details (docker inspect of the jupyter container, or pick one with --service)
 jd server show
+jd server show --service traefik
 
 # connect to your host
 jd host connect
@@ -382,6 +383,7 @@ The template provides two variable presets:
 | `server_status_check_document` | Name of the SSM document to verify if the server is ready to serve traffic |
 | `server_update_document` | Name of the SSM document to control server container operations |
 | `server_logs_document` | Name of the SSM document to print server logs to terminal |
+| `server_show_document` | Name of the SSM document to inspect a server container |
 | `server_exec_document` | Name of the SSM document to execute commands inside server containers |
 | `server_connect_document` | Name of the SSM document to start interactive shell sessions inside server containers (jupyter or traefik) |
 | `auth_check_document` | Name of the SSM document to view authorized users, teams and organization |

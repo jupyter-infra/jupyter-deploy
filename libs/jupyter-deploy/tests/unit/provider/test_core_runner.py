@@ -1,7 +1,7 @@
 import unittest
 
 from jupyter_deploy.engine.supervised_execution import NullDisplay
-from jupyter_deploy.exceptions import InstructionNotFoundError, InvalidInstructionArgumentError, ResourceNotFoundError
+from jupyter_deploy.exceptions import InstructionNotFoundError, InvalidInstructionArgumentError
 from jupyter_deploy.provider.core.core_runner import CoreInstructionRunner
 from jupyter_deploy.provider.resolved_argdefs import (
     ListStrResolvedInstructionArgument,
@@ -129,75 +129,3 @@ class TestCoreRunnerDispatch(unittest.TestCase):
     def test_unknown_instruction_raises(self) -> None:
         with self.assertRaises(InstructionNotFoundError):
             CoreInstructionRunner(NullDisplay()).execute_instruction("core.unknown", {})
-
-
-class TestMatchName(unittest.TestCase):
-    def _run(self, **args: str) -> dict:
-        return CoreInstructionRunner(NullDisplay()).execute_instruction(
-            "core.match-name",
-            {k: StrResolvedInstructionArgument(argument_name=k, value=v) for k, v in args.items()},
-        )
-
-    def test_returns_expected_as_name(self) -> None:
-        result = self._run(expected="jupyter")
-        self.assertEqual(result, {"Name": result["Name"]})
-        self.assertEqual(result["Name"].value, "jupyter")
-
-    def test_matching_name_passes(self) -> None:
-        self.assertEqual(self._run(expected="i-123", name="i-123")["Name"].value, "i-123")
-
-    def test_empty_name_is_not_a_mismatch(self) -> None:
-        self.assertEqual(self._run(expected="i-123", name="")["Name"].value, "i-123")
-
-    def test_mismatched_name_raises_not_found_with_kind(self) -> None:
-        with self.assertRaises(ResourceNotFoundError) as ctx:
-            self._run(expected="i-123", name="i-999", kind="host")
-        self.assertEqual(ctx.exception.resource_kind, "host")
-        self.assertEqual(ctx.exception.resource_name, "i-999")
-        self.assertIn("i-123", ctx.exception.original_message)
-
-    def test_mismatch_without_kind_says_resource(self) -> None:
-        with self.assertRaises(ResourceNotFoundError) as ctx:
-            self._run(expected="jupyter", name="other")
-        self.assertEqual(ctx.exception.resource_kind, "resource")
-
-    def test_missing_expected_raises(self) -> None:
-        with self.assertRaises(KeyError):
-            self._run(name="x")
-
-    def test_empty_expected_raises(self) -> None:
-        with self.assertRaises(InvalidInstructionArgumentError):
-            self._run(expected="")
-
-
-class TestMakeJsonObject(unittest.TestCase):
-    def _runner(self) -> CoreInstructionRunner:
-        return CoreInstructionRunner(NullDisplay())
-
-    def test_packs_field_operands_in_order(self) -> None:
-        result = self._runner().execute_instruction(
-            "core.make-json-object",
-            {
-                "field_host": StrResolvedInstructionArgument(argument_name="field_host", value="i-123"),
-                "field_status": StrResolvedInstructionArgument(argument_name="field_status", value="IN_SERVICE\n"),
-                "other": StrResolvedInstructionArgument(argument_name="other", value="ignored"),
-            },
-        )
-        self.assertEqual(result["Value"].value, '{"host": "i-123", "status": "IN_SERVICE"}')
-
-    def test_no_fields_returns_empty_object(self) -> None:
-        self.assertEqual(self._runner().execute_instruction("core.make-json-object", {})["Value"].value, "{}")
-
-    def test_empty_key_raises(self) -> None:
-        with self.assertRaises(InvalidInstructionArgumentError):
-            self._runner().execute_instruction(
-                "core.make-json-object",
-                {"field_": StrResolvedInstructionArgument(argument_name="field_", value="x")},
-            )
-
-    def test_non_str_operand_raises(self) -> None:
-        with self.assertRaises(InvalidInstructionArgumentError):
-            self._runner().execute_instruction(
-                "core.make-json-object",
-                {"field_names": ListStrResolvedInstructionArgument(argument_name="field_names", value=["a"])},
-            )

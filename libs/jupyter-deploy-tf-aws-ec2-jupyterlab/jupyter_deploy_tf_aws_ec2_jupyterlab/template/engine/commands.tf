@@ -93,6 +93,31 @@ mainSteps:
           fi
           docker logs {{service}} $EXTRA
 DOC
+  ssm_server_show    = <<DOC
+schemaVersion: '2.2'
+description: Returns the docker inspect details of a service container.
+parameters:
+  service:
+    type: String
+    description: "The service container to inspect (jupyter, traefik, auth-sidecar or bedrock-sidecar)."
+    default: jupyter
+    allowedValues:
+      - jupyter
+      - traefik
+      - auth-sidecar
+      - bedrock-sidecar
+mainSteps:
+  - action: aws:runShellScript
+    name: Show
+    inputs:
+      runCommand:
+        - |
+          # Print the container as one JSON object: `docker inspect` alone wraps it in a list.
+          # The Go template is assembled in the shell because a literal double brace would be
+          # parsed as an SSM parameter reference.
+          L='{'
+          docker inspect --format "$L$L"'json .}}' {{service}}
+DOC
   ssm_server_exec    = <<DOC
 schemaVersion: '2.2'
 description: Execute a command inside a service container.
@@ -229,6 +254,15 @@ resource "aws_ssm_document" "server_logs" {
   document_format = "YAML"
 
   content = local.ssm_server_logs
+  tags    = local.combined_tags
+}
+
+resource "aws_ssm_document" "server_show" {
+  name            = "server-show-${local.doc_postfix}"
+  document_type   = "Command"
+  document_format = "YAML"
+
+  content = local.ssm_server_show
   tags    = local.combined_tags
 }
 

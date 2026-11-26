@@ -97,28 +97,28 @@ class ServerHandler(BaseProjectHandler):
         resource_json = runner.get_result_value(command, "server.status.resource", str)
         return evaluate_status_rules(resource_json, rules)
 
-    def show_server(self, name: str | None = None, scope: str | None = None) -> ServerDetail:
+    def show_server(self, service: str = "default", name: str | None = None, scope: str | None = None) -> ServerDetail:
         """Returns detailed information about a server.
 
-        `name` may be omitted for a single-server template; the manifest then receives an empty name.
+        Like :meth:`get_server_status`: `name` is required on a multi-server template, and a
+        single-server template ignores it. `service` picks which container a template that runs
+        several (EC2: jupyter, traefik, ...) describes; when the manifest yields no name, the
+        detail is named after that service.
         """
         self._require_name(name)
-        resolved_scope = self._resolve_scope(scope)
         command = self.project_manifest.get_command("server.show")
         runner = cmd_runner.ManifestCommandRunner(
             display_manager=self.display_manager,
             output_handler=self._output_handler,
             variable_handler=self._variable_handler,
         )
-        runner.run_command_sequence(
-            command,
-            cli_paramdefs={
-                "name": StrResolvedCliParameter(parameter_name="name", value=name or ""),
-                "scope": StrResolvedCliParameter(parameter_name="scope", value=resolved_scope),
-            },
-        )
+        cli_paramdefs = self._build_cli_paramdefs(service=service, allow_all_services=False, name=name, scope=scope)
+        runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
         results = collect_results(runner, command)
-        return ServerDetail(name=results.get("name", ""), resource=results.get("resource", {}))
+        return ServerDetail(
+            name=results.get("name") or cli_paramdefs["service"].value,
+            resource=results.get("resource", {}),
+        )
 
     def _build_cli_paramdefs(
         self,

@@ -181,7 +181,7 @@ $ jd host show [OPTIONS]
 
 **Options**:
 
-* `--name <str>`: Name of the host to show details for; optional for single-host templates.
+* `--name <str>`: Name of the host to show details for; ignored by single-host templates.
 * `-p, --path <path>`: Directory of the project.
 * `--json`: Output as JSON.
 * `--help`: Show this message and exit.

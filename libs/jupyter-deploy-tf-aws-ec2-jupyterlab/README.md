@@ -157,8 +157,9 @@ resolves the IP live at connection time and pins the instance's certificate, not
 # show your host's details
 jd host show
 
-# show your server's details
+# show your server's details (docker inspect of the jupyter container, or pick one with --service)
 jd server show
+jd server show --service traefik
 
 # connect to your host
 jd host connect
@@ -453,6 +454,7 @@ The template provides one variable preset:
 | `server_status_check_document` | Name of the SSM document to check the server status |
 | `server_update_document` | Name of the SSM document to control server container operations (start/stop/restart) |
 | `server_logs_document` | Name of the SSM document to retrieve server container logs |
+| `server_show_document` | Name of the SSM document to inspect a server container |
 | `server_exec_document` | Name of the SSM document to execute commands inside server containers |
 | `server_connect_document` | Name of the SSM document to start interactive shell sessions inside server containers |
 | `auth_users_update_document` | Name of the SSM document to update the allowlisted IAM user names |

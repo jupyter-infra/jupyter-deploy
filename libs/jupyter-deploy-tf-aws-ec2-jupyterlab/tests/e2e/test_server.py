@@ -12,8 +12,6 @@ Omitted: covered by the base template suite (`test_server.py`)
   three are argument-plumbing in the CLI layer, identical for every template.
 """
 
-import json
-
 import pexpect
 import pytest
 from pytest_jupyter_deploy.cli import JDCliError
@@ -34,35 +32,27 @@ def test_server_running(e2e_deployment: EndToEndDeployment) -> None:
     assert server_status == "IN_SERVICE", f"Expected server status 'IN_SERVICE', got '{server_status}'"
 
 
-def _show_json(e2e_deployment: EndToEndDeployment, cmd: list[str]) -> dict:
-    """Run a `show --json` command and parse its payload, the last line it prints."""
-    result = e2e_deployment.cli.run_command([*cmd, "--json"])
-    lines = [line for line in result.stdout.splitlines() if line.strip()]
-    assert lines, f"Expected JSON output from {cmd}, got nothing"
-    payload = json.loads(lines[-1])
-    assert isinstance(payload, dict), f"Expected a JSON object from {cmd}, got: {result.stdout!r}"
-    return payload
-
-
+@pytest.mark.cli
 def test_server_show(e2e_deployment: EndToEndDeployment) -> None:
-    """`jd server show` reports the `jupyter` server, its host and its status without needing --name."""
+    """`jd server show` prints the `docker inspect` of the jupyter container by default."""
     e2e_deployment.ensure_server_running()
-    instance_id = e2e_deployment.cli.get_str_output("instance_id")
 
-    details = _show_json(e2e_deployment, ["jupyter-deploy", "server", "show"])
+    details = e2e_deployment.cli.run_show_json(["jupyter-deploy", "server", "show"])
     assert details["name"] == "jupyter", f"Expected server name 'jupyter', got: {details}"
-    assert details["resource"] == {"host": instance_id, "status": "IN_SERVICE"}, f"Unexpected details: {details}"
-
-    # Naming the server explicitly answers the same.
-    named = _show_json(e2e_deployment, ["jupyter-deploy", "server", "show", "--name", "jupyter"])
-    assert named["name"] == "jupyter", f"Expected server name 'jupyter', got: {named}"
+    assert details["resource"]["Name"] == "/jupyter", f"Expected the jupyter container, got: {details['resource']}"
+    assert details["resource"]["State"]["Running"] is True, f"Expected a running container: {details['resource']}"
 
 
-def test_server_show_rejects_unknown_name(e2e_deployment: EndToEndDeployment) -> None:
-    """`jd server show --name` with a name other than `jupyter` fails instead of describing it."""
-    output = e2e_deployment.cli.run_command_expecting_failure(["jupyter-deploy", "server", "show", "--name", "default"])
-    assert "not found" in output, f"Expected a not-found error, got: {output}"
-    assert "Traceback" not in output, f"Expected a handled error, got a traceback: {output}"
+@pytest.mark.cli
+def test_server_show_service(e2e_deployment: EndToEndDeployment) -> None:
+    """`jd server show --service` inspects that service's container instead; `--name` is ignored."""
+    e2e_deployment.ensure_server_running()
+
+    details = e2e_deployment.cli.run_show_json(
+        ["jupyter-deploy", "server", "show", "--service", "traefik", "--name", "anything"]
+    )
+    assert details["name"] == "traefik", f"Expected server name 'traefik', got: {details}"
+    assert details["resource"]["Name"] == "/traefik", f"Expected the traefik container, got: {details['resource']}"
 
 
 def test_stop_server(e2e_deployment: EndToEndDeployment) -> None:

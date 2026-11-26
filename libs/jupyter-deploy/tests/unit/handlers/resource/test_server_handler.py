@@ -7,7 +7,7 @@ import yaml
 
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.supervised_execution import NullDisplay
-from jupyter_deploy.exceptions import ResourceNameRequiredError
+from jupyter_deploy.exceptions import InvalidServiceError, ResourceNameRequiredError
 from jupyter_deploy.handlers.resource.server_handler import ServerHandler
 from jupyter_deploy.manifest import (
     JupyterDeployManifest,
@@ -433,7 +433,7 @@ class TestServerHandler(unittest.TestCase):
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
     @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
     @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
-    def test_show_server_without_name_passes_empty_name_on_single_server_template(
+    def test_show_server_without_name_omits_name_on_single_server_template(
         self,
         mock_cmd_runner_class: Mock,
         mock_tf_variables_handler: Mock,
@@ -450,8 +450,55 @@ class TestServerHandler(unittest.TestCase):
 
         ServerHandler(display_manager=NullDisplay()).show_server(scope="default")
 
+        # Like server.status: no name is passed, and a single-server manifest does not read one.
         cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
-        self.assertEqual(cli_paramdefs["name"].value, "")
+        self.assertNotIn("name", cli_paramdefs)
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_show_server_passes_validated_service_and_names_detail_after_it(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        mock_retrieve_manifest.return_value = self.mock_full_manifest.model_copy(update={"multi_server": False})
+        mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
+        mock_tf_outputs_handler.return_value = mock_output_handler
+        mock_tf_variables_handler.return_value = Mock()
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        # The EC2 manifests yield no name result; the detail is named after the service.
+        mock_cmd_runner_fns["get_result_value_with_fallback"].side_effect = ["", '{"Name": "/jupyter"}']
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        result = ServerHandler(display_manager=NullDisplay()).show_server()
+
+        cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
+        self.assertEqual(cli_paramdefs["service"].value, "jupyter")  # "default" -> first declared service
+        self.assertEqual(result.name, "jupyter")
+        self.assertEqual(result.resource, {"Name": "/jupyter"})
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_show_server_rejects_all_and_unknown_services(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        mock_retrieve_manifest.return_value = self.mock_full_manifest.model_copy(update={"multi_server": False})
+        mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
+        mock_tf_variables_handler.return_value = Mock()
+        handler = ServerHandler(display_manager=NullDisplay())
+        for service in ("all", "not-a-service"):
+            with self.subTest(service=service), self.assertRaises(InvalidServiceError):
+                handler.show_server(service=service)
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")

@@ -1,15 +1,12 @@
-import json
 import re
 from enum import Enum
 
-from jupyter_deploy.exceptions import InstructionNotFoundError, InvalidInstructionArgumentError, ResourceNotFoundError
+from jupyter_deploy.exceptions import InstructionNotFoundError, InvalidInstructionArgumentError
 from jupyter_deploy.provider.instruction_runner import InstructionRunner
 from jupyter_deploy.provider.resolved_argdefs import (
     ListStrResolvedInstructionArgument,
     ResolvedInstructionArgument,
     StrResolvedInstructionArgument,
-    require_arg,
-    retrieve_optional_arg,
 )
 from jupyter_deploy.provider.resolved_resultdefs import (
     ListStrResolvedInstructionResult,
@@ -19,7 +16,6 @@ from jupyter_deploy.provider.resolved_resultdefs import (
 
 _LIST_ARG_RE = re.compile(r"^list_(\d+)$")
 _VALUE_ARG_RE = re.compile(r"^value_(\d+)$")
-_FIELD_ARG_PREFIX = "field_"
 
 
 class CoreInstruction(str, Enum):
@@ -27,8 +23,6 @@ class CoreInstruction(str, Enum):
 
     CONCAT_LISTS_OF_STR = "concat-lists-of-str"
     COALESCE_STR = "coalesce-str"
-    MATCH_NAME = "match-name"
-    MAKE_JSON_OBJECT = "make-json-object"
 
 
 class CoreInstructionRunner(InstructionRunner):
@@ -94,52 +88,6 @@ class CoreInstructionRunner(InstructionRunner):
 
         return {"Value": StrResolvedInstructionResult(result_name="Value", value="")}
 
-    def _match_name(
-        self, resolved_arguments: dict[str, ResolvedInstructionArgument]
-    ) -> dict[str, ResolvedInstructionResult]:
-        """Resolve the name of a resource a template has exactly one of, rejecting any other name.
-
-        For a single-resource template (one EC2 host, one jupyter server) the name is fixed by the
-        template rather than looked up, so a `name` the user typed can only be right or wrong. Wrong
-        raises: answering for a resource that does not exist would report a confident status for it.
-        An absent or empty `name` is not a mismatch: single-resource templates let users omit `--name`.
-
-        Returns the expected name as `Name`.
-        """
-        expected = require_arg(resolved_arguments, "expected", StrResolvedInstructionArgument).value
-        if not expected:
-            raise InvalidInstructionArgumentError("match-name requires a non-empty 'expected' name")
-        name = retrieve_optional_arg(resolved_arguments, "name", StrResolvedInstructionArgument, "").value
-        kind = retrieve_optional_arg(resolved_arguments, "kind", StrResolvedInstructionArgument, "").value
-
-        if name and name != expected:
-            raise ResourceNotFoundError(kind or "resource", name, f"the only {kind or 'resource'} is '{expected}'")
-
-        return {"Name": StrResolvedInstructionResult(result_name="Name", value=expected)}
-
-    def _make_json_object(
-        self, resolved_arguments: dict[str, ResolvedInstructionArgument]
-    ) -> dict[str, ResolvedInstructionResult]:
-        """Pack `field_<key>` str operands into one JSON object `{"<key>": value, ...}`.
-
-        The manifest's results carry one scalar each, while a `show` payload is a single object; this
-        assembles that object from values earlier steps produced. Keys keep their declaration order.
-        """
-        fields: dict[str, str] = {}
-        for arg_name, arg in resolved_arguments.items():
-            if not arg_name.startswith(_FIELD_ARG_PREFIX):
-                continue
-            key = arg_name.removeprefix(_FIELD_ARG_PREFIX)
-            if not key:
-                raise InvalidInstructionArgumentError(f"make-json-object operand '{arg_name}' has an empty key")
-            if not isinstance(arg, StrResolvedInstructionArgument):
-                raise InvalidInstructionArgumentError(
-                    f"make-json-object operand '{arg_name}' must be a str, got {type(arg).__name__}"
-                )
-            fields[key] = arg.value.strip()
-
-        return {"Value": StrResolvedInstructionResult(result_name="Value", value=json.dumps(fields))}
-
     def execute_instruction(
         self,
         instruction_name: str,
@@ -155,9 +103,5 @@ class CoreInstructionRunner(InstructionRunner):
             return self._concat_lists_of_str(resolved_arguments)
         elif instruction == CoreInstruction.COALESCE_STR:
             return self._coalesce_str(resolved_arguments)
-        elif instruction == CoreInstruction.MATCH_NAME:
-            return self._match_name(resolved_arguments)
-        elif instruction == CoreInstruction.MAKE_JSON_OBJECT:
-            return self._make_json_object(resolved_arguments)
 
         raise InstructionNotFoundError(f"Unknown core instruction: '{instruction_name}'")
