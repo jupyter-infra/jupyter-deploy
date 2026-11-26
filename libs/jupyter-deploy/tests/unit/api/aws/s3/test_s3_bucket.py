@@ -65,6 +65,25 @@ class TestFindBucketsByTag(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["Name"], "tagged-bucket")
 
+    def test_skips_bucket_deleted_after_listing(self) -> None:
+        client_error = type("ClientError", (Exception,), {})
+        mock_s3 = Mock()
+        mock_paginator = Mock()
+        mock_paginator.paginate.return_value = [{"Buckets": [{"Name": "deleted-bucket"}, {"Name": "tagged-bucket"}]}]
+        mock_s3.get_paginator.return_value = mock_paginator
+        gone_error = client_error()
+        gone_error.response = {"Error": {"Code": "NoSuchBucket"}}
+        mock_s3.get_bucket_tagging.side_effect = [
+            gone_error,
+            {"TagSet": [{"Key": "Source", "Value": "jupyter-deploy-cli"}]},
+        ]
+        mock_s3.exceptions.ClientError = client_error
+
+        result = find_buckets_by_tag(mock_s3, "Source", "jupyter-deploy-cli")
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["Name"], "tagged-bucket")
+
     def test_returns_all_matching_buckets(self) -> None:
         mock_s3 = Mock()
         mock_paginator = Mock()
