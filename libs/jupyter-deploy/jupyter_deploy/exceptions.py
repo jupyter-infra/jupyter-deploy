@@ -827,6 +827,21 @@ class ProxyStartError(JupyterDeployError, RuntimeError):
         super().__init__(message)
 
 
+class ProxySessionNotFoundError(JupyterDeployError, LookupError):
+    """Raised when a proxy session cannot be found for the project.
+
+    Attributes:
+        session_id: The session asked for, or None when the project has no session at all.
+    """
+
+    def __init__(self, session_id: str | None = None) -> None:
+        self.session_id = session_id
+        if session_id is None:
+            super().__init__("No proxy session found for this project.")
+        else:
+            super().__init__(f"Proxy session '{session_id}' not found for this project.")
+
+
 class ProxyAlreadyRunningError(JupyterDeployError, RuntimeError):
     """Raised by ``jd proxy start`` when a confirmed proxy is already running for the project.
 

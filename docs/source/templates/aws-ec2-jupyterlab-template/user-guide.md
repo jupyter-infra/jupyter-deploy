@@ -65,6 +65,10 @@ jd proxy open
 jd proxy status
 jd proxy show --json
 
+# list its runs and read the logs of the latest one
+jd proxy sessions
+jd proxy logs
+
 # stop it
 jd proxy stop
 ```

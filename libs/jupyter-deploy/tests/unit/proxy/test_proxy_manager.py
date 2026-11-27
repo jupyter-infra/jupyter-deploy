@@ -12,10 +12,12 @@ from jupyter_deploy.exceptions import (
     ProxyAlreadyRunningError,
     ProxyIdentityUnconfirmedError,
     ProxyNotInstalledError,
+    ProxySessionNotFoundError,
     ProxyStartError,
     UrlNotSecureError,
 )
 from jupyter_deploy.handlers.payloads import ProxyStatus
+from jupyter_deploy.proxy import proxy_utils
 from jupyter_deploy.proxy.proxy_manager import (
     DEFAULT_DETACHED_IDLE_TIMEOUT_SECONDS,
     PROXY_REFRESH_FAILED_EXIT_CODE,
@@ -129,10 +131,10 @@ class TestLatestRunning(_ManagerTestCase):
 
 
 class TestTerminateRunning(_ManagerTestCase):
-    def test_removes_stale_status_file_of_a_dead_proxy(self) -> None:
-        # Housekeeping for the case above: once the process is gone, drop the status file so
-        # later scans skip the directory and no stale record claims to be running. The PID is
-        # NOT reported as stopped — we did not stop it.
+    def test_keeps_status_file_of_a_proxy_that_was_already_dead(self) -> None:
+        # A record whose process is gone, but which we did not signal, is the evidence that the
+        # run crashed: keep it so `jd proxy sessions` still reports it as dead until it is
+        # pruned. The PID is NOT reported as stopped — we did not stop it.
         with tempfile.TemporaryDirectory() as tmp:
             manager = self._manager_rooted_at(tmp)
             instance_dir = self._write_instance(
@@ -142,7 +144,88 @@ class TestTerminateRunning(_ManagerTestCase):
             )
             with patch("jupyter_deploy.proxy.proxy_utils.cmd_utils.is_pid_alive", return_value=False):
                 self.assertEqual(manager._terminate_running(), [])
-            self.assertFalse((instance_dir / "status.json").exists())
+            self.assertTrue((instance_dir / "status.json").exists())
+
+    def test_crashed_session_still_reads_dead_after_a_stop(self) -> None:
+        # `jd proxy stop` / the `jd open` restart must not turn a crashed run into a clean stop.
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self._write_instance(
+                manager,
+                "20260610-180100.123",
+                {"schema_version": 1, "state": "running", "pid": 4321, "port": 51000, "process_created_at": 1.0},
+            )
+            with patch("jupyter_deploy.proxy.proxy_utils.cmd_utils.is_pid_alive", return_value=False):
+                manager._terminate_running()
+                sessions = manager.sessions()
+            self.assertEqual([(s.session_id, s.state) for s in sessions], [("20260610-180100.123", "dead")])
+
+    def test_records_dead_on_disk_and_keeps_the_other_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            payload = {"schema_version": 1, "state": "running", "pid": 4321, "port": 51000, "process_created_at": 1.0}
+            instance_dir = self._write_instance(manager, "20260610-180100.123", payload)
+            with patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=False):
+                manager._terminate_running()
+            on_disk = json.loads((instance_dir / "status.json").read_text())
+            self.assertEqual(on_disk, {**payload, "state": "dead"})
+
+    def test_does_not_overwrite_a_published_terminal_state(self) -> None:
+        # The proxy said why it ended (`failed`, e.g. expired credentials); keep that, not `dead`.
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            payload = {"schema_version": 1, "state": "failed", "pid": 4321, "port": 51000, "process_created_at": 1.0}
+            instance_dir = self._write_instance(manager, "20260610-180100.123", payload)
+            with patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=False):
+                manager._terminate_running()
+            self.assertEqual(json.loads((instance_dir / "status.json").read_text()), payload)
+
+    def test_crashed_run_stays_dead_after_its_pid_is_reused(self) -> None:
+        # A stop finds the crashed run's process gone and records `dead`. Later the OS hands that
+        # PID to an unrelated program: the run must still read `dead`, not `unconfirmed`, and
+        # `jd proxy stop` must say nothing is running rather than refuse over an unverifiable PID.
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self._write_instance(
+                manager,
+                "20260610-180100.123",
+                {"schema_version": 1, "state": "running", "pid": 4321, "port": 51000, "process_created_at": 1.0},
+            )
+            with (
+                patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=False),
+                self.assertRaises(NoProxyFoundError),
+            ):
+                manager.stop()
+
+            with (
+                patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=True),
+                patch("jupyter_deploy.cmd_utils.get_pid_create_time", return_value=9999.0),  # someone else's PID
+                patch("jupyter_deploy.cmd_utils.terminate_process") as terminate,
+            ):
+                self.assertEqual(
+                    [(s.session_id, s.state) for s in manager.sessions()], [("20260610-180100.123", "dead")]
+                )
+                self.assertEqual(manager._unconfirmed_live(), [])
+                with self.assertRaises(NoProxyFoundError):
+                    manager.stop()
+                terminate.assert_not_called()
+
+    def test_unwritable_record_warns_and_does_not_fail_the_stop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            display = Mock()
+            manager = ProxyManager(project_path=Path(tmp), token_command=_TOKEN_COMMAND, display_manager=display)
+            self._write_instance(
+                manager,
+                "20260610-180100.123",
+                {"schema_version": 1, "state": "running", "pid": 4321, "port": 51000, "process_created_at": 1.0},
+            )
+            with (
+                patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=False),
+                patch("jupyter_deploy.proxy.proxy_utils.os.replace", side_effect=PermissionError("read-only")),
+            ):
+                self.assertEqual(manager._terminate_running(), [])
+            display.warning.assert_called_once()
+            self.assertEqual(list((manager._target_dir / "20260610-180100.123").glob(".status-*")), [])
 
 
 class TestLaunch(_ManagerTestCase):
@@ -860,3 +943,156 @@ class TestLaunchPrunes(_ManagerTestCase):
 
             # 3 kept from before this launch, plus the one just created.
             self.assertEqual(len(manager._instance_dirs()), 4)
+
+
+class TestSessions(_ManagerTestCase):
+    def _states(self, manager: ProxyManager) -> dict[str, str]:
+        return {s.session_id: s.state for s in manager.sessions()}
+
+    def test_lists_newest_first_with_state_from_disk(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            # clean shutdown: the proxy deleted its status.json, only logs remain
+            (manager._target_dir / "20260610-180000.000").mkdir(parents=True)
+            self._write_instance(manager, "20260610-180100.000", {"state": "failed", "pid": 111})
+            self._write_instance(manager, "20260610-180200.000", {"state": "running", "pid": 222})  # killed
+            self._write_instance(
+                manager,
+                "20260610-180300.000",
+                {"state": "running", "pid": 333, "port": 8003, "process_created_at": 300.0},
+            )
+            with (
+                patch("jupyter_deploy.cmd_utils.is_pid_alive", side_effect=lambda pid: pid == 333),
+                patch("jupyter_deploy.cmd_utils.get_pid_create_time", return_value=300.0),
+            ):
+                result = manager.sessions()
+
+            self.assertEqual(
+                [(s.session_id, s.state) for s in result],
+                [
+                    ("20260610-180300.000", "running"),
+                    ("20260610-180200.000", "dead"),
+                    ("20260610-180100.000", "failed"),
+                    ("20260610-180000.000", "stopped"),
+                ],
+            )
+            self.assertEqual(result[0].pid, 333)
+            self.assertEqual(result[0].port, 8003)
+            self.assertEqual(result[0].started_at, proxy_utils.session_started_at("20260610-180300.000"))
+            self.assertTrue(result[0].started_at.startswith("2026-06-10T18:03:00.000"))
+            self.assertEqual(result[0].log_dir, str(manager._target_dir / "20260610-180300.000"))
+            self.assertIsNone(result[3].pid)
+
+    def test_alive_but_unverifiable_pid_is_unconfirmed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self._write_instance(
+                manager, "20260610-180000.000", {"state": "running", "pid": 4321, "process_created_at": 100.0}
+            )
+            with (
+                patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=True),
+                patch("jupyter_deploy.cmd_utils.get_pid_create_time", return_value=9999.0),
+            ):
+                self.assertEqual(self._states(manager), {"20260610-180000.000": "unconfirmed"})
+
+    def test_corrupt_or_unreadable_status_is_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            corrupt = manager._target_dir / "20260610-180000.000"
+            corrupt.mkdir(parents=True)
+            (corrupt / "status.json").write_text("not json")
+            self._write_instance(manager, "20260610-180100.000", {"state": "running", "pid": 1})
+            real_read = proxy_utils.read_instance_status
+
+            def read(instance_dir: Path) -> ProxyStatus | None:
+                if instance_dir.name == "20260610-180100.000":
+                    raise PermissionError("denied")
+                return real_read(instance_dir)
+
+            with patch("jupyter_deploy.proxy.proxy_utils.read_instance_status", side_effect=read):
+                self.assertEqual(
+                    self._states(manager), {"20260610-180000.000": "unknown", "20260610-180100.000": "unknown"}
+                )
+
+    def test_limit_caps_from_the_newest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            for ts in ("20260610-180000.000", "20260610-180100.000", "20260610-180200.000"):
+                (manager._target_dir / ts).mkdir(parents=True)
+            ids = [s.session_id for s in manager.sessions(limit=2)]
+            self.assertEqual(ids, ["20260610-180200.000", "20260610-180100.000"])
+
+    def test_no_sessions_is_an_empty_list(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self._manager_rooted_at(tmp).sessions(), [])
+
+
+class TestSessionLogs(_ManagerTestCase):
+    def _session(self, manager: ProxyManager, ts: str, logs: dict[str, str], status: dict | None = None) -> Path:
+        instance_dir = manager._target_dir / ts
+        instance_dir.mkdir(parents=True, exist_ok=True)
+        if status is not None:
+            (instance_dir / "status.json").write_text(json.dumps(status))
+        for name, text in logs.items():
+            (instance_dir / name).write_text(text)
+        return instance_dir
+
+    def test_defaults_to_the_running_session(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self._session(
+                manager,
+                "20260610-180000.000",
+                {"0000.log": "live\n"},
+                {"state": "running", "pid": 7, "process_created_at": 1.0},
+            )
+            self._session(
+                manager, "20260610-180100.000", {"0000.log": "newer but dead\n"}, {"state": "failed", "pid": 8}
+            )
+            with (
+                patch("jupyter_deploy.cmd_utils.is_pid_alive", side_effect=lambda pid: pid == 7),
+                patch("jupyter_deploy.cmd_utils.get_pid_create_time", return_value=1.0),
+            ):
+                session_id, lines = manager.session_log_lines()
+                self.assertEqual((session_id, list(lines)), ("20260610-180000.000", ["live\n"]))
+
+    def test_defaults_to_the_newest_session_when_none_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self._session(manager, "20260610-180000.000", {"0000.log": "old\n"})
+            self._session(
+                manager, "20260610-180100.000", {"0000.log": "a\n", "0001.log": "b\n"}, {"state": "running", "pid": 9}
+            )
+            with patch("jupyter_deploy.cmd_utils.is_pid_alive", return_value=False):
+                session_id, lines = manager.session_log_lines()
+                self.assertEqual((session_id, list(lines)), ("20260610-180100.000", ["a\n", "b\n"]))
+
+    def test_reads_the_named_session(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self._session(manager, "20260610-180000.000", {"0000.log": "1\n2\n3\n"})
+            self._session(manager, "20260610-180100.000", {"0000.log": "other\n"})
+            session_id, lines = manager.session_log_tail("20260610-180000.000", max_lines=1, skip=1)
+            self.assertEqual((session_id, lines), ("20260610-180000.000", ["2\n"]))
+
+    def test_unknown_session_id_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self._session(manager, "20260610-180000.000", {})
+            with self.assertRaises(ProxySessionNotFoundError) as ctx:
+                manager.session_log_lines("20990101-000000.000")
+            self.assertEqual(ctx.exception.session_id, "20990101-000000.000")
+
+    def test_session_id_cannot_escape_the_runtime_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = self._manager_rooted_at(tmp)
+            self._session(manager, "20260610-180000.000", {})
+            (Path(tmp) / "0000.log").write_text("outside\n")
+            for session_id in ("..", "../..", "../../..", "/etc", ""):
+                with self.subTest(session_id=session_id), self.assertRaises(ProxySessionNotFoundError):
+                    manager.session_log_tail(session_id)
+
+    def test_no_sessions_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaises(ProxySessionNotFoundError) as ctx:
+            self._manager_rooted_at(tmp).session_log_lines()
+        self.assertIsNone(ctx.exception.session_id)

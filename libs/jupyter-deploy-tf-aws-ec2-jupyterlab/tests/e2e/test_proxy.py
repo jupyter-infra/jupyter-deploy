@@ -313,6 +313,61 @@ def test_proxy_logs_written_and_redact_the_token(running_proxy: str, e2e_deploym
     assert any(f.stat().st_size > 0 for f in log_files), f"Proxy log files are all empty under {log_dir}"
 
 
+def _proxy_sessions(e2e_deployment: EndToEndDeployment) -> list[dict]:
+    """Return `jd proxy sessions --json`, newest first."""
+    result = e2e_deployment.cli.run_command(["jupyter-deploy", "proxy", "sessions", "--json"])
+    return json.loads(result.stdout.strip())["sessions"]
+
+
+def test_proxy_sessions_and_logs_read_the_running_session(
+    running_proxy: str, e2e_deployment: EndToEndDeployment
+) -> None:
+    """`jd proxy sessions` lists the running proxy first; `jd proxy logs` reads its log, token-free."""
+    session_id = e2e_deployment.cli.get_proxy_log_dir().name
+
+    newest = _proxy_sessions(e2e_deployment)[0]
+    assert newest["session_id"] == session_id, f"Expected the running session first, got: {newest}"
+    assert newest["state"] == "running", f"Expected the running session to read as running: {newest}"
+    assert f"http://127.0.0.1:{newest['port']}" == running_proxy, f"Unexpected port: {newest}"
+
+    default_log = e2e_deployment.cli.run_command(["jupyter-deploy", "proxy", "logs"]).stdout
+    assert default_log.strip(), "`jd proxy logs` printed nothing for the running session"
+    assert TOKEN_PREFIX not in default_log, f"`jd proxy logs` printed a {TOKEN_PREFIX} token"
+
+    named_log = e2e_deployment.cli.run_command(["jupyter-deploy", "proxy", "logs", "--session-id", session_id]).stdout
+    assert named_log.startswith(default_log.splitlines()[0]), "--session-id should read the same session"
+
+    tail = e2e_deployment.cli.run_command(["jupyter-deploy", "proxy", "logs", "--lines", "1"]).stdout
+    assert len(tail.splitlines()) == 1, f"Expected exactly one line from --lines 1, got: {tail!r}"
+
+
+def test_proxy_logs_default_to_the_session_that_just_stopped(e2e_deployment: EndToEndDeployment) -> None:
+    """With nothing running, `jd proxy logs` reads the most recent session — the run worth debugging."""
+    e2e_deployment.ensure_server_running()
+    e2e_deployment.cli.stop_proxy_if_running()
+    e2e_deployment.cli.start_proxy()
+    session_id = e2e_deployment.cli.get_proxy_log_dir().name
+    e2e_deployment.cli.stop_proxy()
+
+    newest = _proxy_sessions(e2e_deployment)[0]
+    assert newest["session_id"] == session_id, f"Expected the stopped session first, got: {newest}"
+    assert newest["state"] == "stopped", f"A cleanly stopped proxy should read as stopped: {newest}"
+
+    log = e2e_deployment.cli.run_command(["jupyter-deploy", "proxy", "logs"]).stdout
+    assert log.strip(), "`jd proxy logs` printed nothing for the session that just stopped"
+
+
+def test_proxy_logs_unknown_session_fails_gracefully(e2e_deployment: EndToEndDeployment) -> None:
+    """An unknown --session-id is a handled error that points at `jd proxy sessions`."""
+    e2e_deployment.ensure_deployed()
+
+    output = e2e_deployment.cli.run_command_expecting_failure(
+        ["jupyter-deploy", "proxy", "logs", "--session-id", "20000101-000000.000"]
+    )
+    assert "Traceback" not in output, f"Expected a handled error, got a traceback: {output}"
+    assert "jd proxy sessions" in output, f"Expected a hint to list sessions, got: {output}"
+
+
 def test_proxy_relays_an_upstream_401_verbatim(connect_bundle: dict) -> None:
     """A proxy holding a bogus token surfaces the upstream 401, not a 502 or a crash.
 

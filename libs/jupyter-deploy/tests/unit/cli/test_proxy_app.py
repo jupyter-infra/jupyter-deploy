@@ -11,8 +11,9 @@ from jupyter_deploy.exceptions import (
     ProxyAlreadyRunningError,
     ProxyIdentityUnconfirmedError,
     ProxyNotInstalledError,
+    ProxySessionNotFoundError,
 )
-from jupyter_deploy.handlers.payloads import ProxyConnectBundle, ProxyStatus
+from jupyter_deploy.handlers.payloads import ProxyConnectBundle, ProxySession, ProxyStatus
 
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
 
@@ -32,7 +33,7 @@ class TestProxyApp(unittest.TestCase):
         runner = CliRunner()
         result = runner.invoke(proxy_app, ["--help"])
         self.assertEqual(result.exit_code, 0)
-        for cmd in ["connect-info", "start", "open", "stop", "status", "show"]:
+        for cmd in ["connect-info", "start", "open", "stop", "status", "show", "sessions", "logs"]:
             self.assertIn(cmd, _plain(result.stdout))
 
     def test_no_arg_defaults_to_help(self) -> None:
@@ -360,3 +361,117 @@ class TestShowCommand(unittest.TestCase):
 
         result = CliRunner().invoke(proxy_app, ["show"])
         self.assertNotEqual(result.exit_code, 0)
+
+
+_SESSIONS = [
+    ProxySession(
+        session_id="20260610-180100.000",
+        state="running",
+        pid=222,
+        port=8002,
+        started_at="2026-06-10T18:01:00.000",
+        log_dir="/proj/.jd-proxy/server/default/20260610-180100.000",
+    ),
+    ProxySession(session_id="20260610-180000.000", state="dead", pid=111, started_at="2026-06-10T18:00:00.000"),
+]
+
+
+class TestSessionsCommand(unittest.TestCase):
+    @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_lists_sessions_as_a_table(self, mock_project_dir: Mock, mock_handler_cls: Mock) -> None:
+        mock_project_dir.return_value.__enter__.return_value = None
+        mock_handler_cls.return_value.sessions.return_value = _SESSIONS
+
+        result = CliRunner().invoke(proxy_app, ["sessions"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        mock_handler_cls.return_value.sessions.assert_called_once_with(limit=None)
+        out = _plain(result.stdout)
+        for value in ("20260610-180100.000", "running", "222", "8002", "20260610-180000.000", "dead", "111"):
+            self.assertIn(value, out)
+        self.assertLess(out.index("20260610-180100.000"), out.index("20260610-180000.000"))
+
+    @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_json_output_and_limit(self, mock_project_dir: Mock, mock_handler_cls: Mock) -> None:
+        mock_project_dir.return_value.__enter__.return_value = None
+        mock_handler_cls.return_value.sessions.return_value = _SESSIONS[:1]
+
+        result = CliRunner().invoke(proxy_app, ["sessions", "-n", "1", "--json"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        mock_handler_cls.return_value.sessions.assert_called_once_with(limit=1)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["sessions"][0]["session_id"], "20260610-180100.000")
+        self.assertEqual(payload["sessions"][0]["port"], 8002)
+
+    @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_no_sessions_says_so_and_succeeds(self, mock_project_dir: Mock, mock_handler_cls: Mock) -> None:
+        mock_project_dir.return_value.__enter__.return_value = None
+        mock_handler_cls.return_value.sessions.return_value = []
+
+        result = CliRunner().invoke(proxy_app, ["sessions"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("No proxy session", _plain(result.stdout))
+        self.assertIn("jd proxy start", _plain(result.stdout))
+
+    def test_rejects_a_zero_limit(self) -> None:
+        result = CliRunner().invoke(proxy_app, ["sessions", "-n", "0"])
+        self.assertNotEqual(result.exit_code, 0)
+
+
+class TestLogsCommand(unittest.TestCase):
+    @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_prints_the_whole_log_by_default(self, mock_project_dir: Mock, mock_handler_cls: Mock) -> None:
+        mock_project_dir.return_value.__enter__.return_value = None
+        handler = mock_handler_cls.return_value
+        handler.session_log_lines.return_value = ("20260610-180100.000", iter(["first\n", "second\n"]))
+
+        result = CliRunner().invoke(proxy_app, ["logs"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        handler.session_log_lines.assert_called_once_with(session_id=None)
+        handler.session_log_tail.assert_not_called()
+        self.assertEqual(result.stdout, "first\nsecond\n")
+
+    @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_lines_and_skip_select_a_tail_window(self, mock_project_dir: Mock, mock_handler_cls: Mock) -> None:
+        mock_project_dir.return_value.__enter__.return_value = None
+        handler = mock_handler_cls.return_value
+        handler.session_log_tail.return_value = ("20260610-180000.000", ["[x] not markup\n"])
+
+        result = CliRunner().invoke(proxy_app, ["logs", "--session-id", "20260610-180000.000", "-l", "5", "-s", "2"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        handler.session_log_tail.assert_called_once_with(session_id="20260610-180000.000", max_lines=5, skip=2)
+        self.assertEqual(result.stdout, "[x] not markup\n")
+
+    @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_skip_alone_uses_the_default_window(self, mock_project_dir: Mock, mock_handler_cls: Mock) -> None:
+        mock_project_dir.return_value.__enter__.return_value = None
+        handler = mock_handler_cls.return_value
+        handler.session_log_tail.return_value = ("20260610-180000.000", [])
+
+        result = CliRunner().invoke(proxy_app, ["logs", "-s", "10"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        handler.session_log_tail.assert_called_once_with(session_id=None, max_lines=1000, skip=10)
+
+    @patch("jupyter_deploy.cli.proxy_app.ProxyHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_unknown_session_exits_one_with_hint(self, mock_project_dir: Mock, mock_handler_cls: Mock) -> None:
+        mock_project_dir.return_value.__enter__.return_value = None
+        mock_handler_cls.return_value.session_log_lines.side_effect = ProxySessionNotFoundError("nope")
+
+        result = CliRunner().invoke(proxy_app, ["logs", "--session-id", "nope"])
+
+        self.assertEqual(result.exit_code, 1)
+        out = _plain(result.stdout)
+        self.assertIn("nope", out)
+        self.assertIn("jd proxy sessions", out)

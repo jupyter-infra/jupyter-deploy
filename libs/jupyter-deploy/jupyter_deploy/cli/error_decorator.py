@@ -3,6 +3,7 @@
 import importlib
 from collections.abc import Generator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -56,6 +57,7 @@ from jupyter_deploy.exceptions import (
     ProxyAlreadyRunningError,
     ProxyIdentityUnconfirmedError,
     ProxyNotInstalledError,
+    ProxySessionNotFoundError,
     ProxyStartError,
     ReadConfigurationError,
     ReadManifestError,
@@ -221,7 +223,14 @@ def handle_cli_errors(console: Console) -> Generator[None, None, None]:
         console.print(f":x: {e}", style="bold red", highlight=False)
         if e.log_dir:
             console.line()
-            console.print(f":bulb: Check the proxy logs at: [bold cyan]{e.log_dir}[/]")
+            session_id = Path(e.log_dir).name
+            console.print(f":bulb: Read the proxy logs: [bold cyan]jd proxy logs --session-id {session_id}[/]")
+        raise typer.Exit(code=1) from None
+
+    except ProxySessionNotFoundError as e:
+        console.print(f":x: {e}", style="bold red", highlight=False)
+        console.line()
+        console.print(":bulb: List this project's proxy sessions: [bold cyan]jd proxy sessions[/]")
         raise typer.Exit(code=1) from None
 
     except ToolRequiredError as e:

@@ -29,6 +29,8 @@ from jupyter_deploy.exceptions import (
     OptionalParameterNotSupportedError,
     ProjectOutputsNotAvailableError,
     ProviderPermissionError,
+    ProxySessionNotFoundError,
+    ProxyStartError,
     RequiredOutputNotFoundError,
     RequiredOutputTypeError,
     ResourceNameRequiredError,
@@ -336,3 +338,21 @@ class TestConnectInfoErrorClassification(unittest.TestCase):
                 pass
 
         self.assertEqual(CliRunner().invoke(app, []).exit_code, 0)
+
+
+class TestProxyErrorHints(unittest.TestCase):
+    """The proxy errors point at the command that reads the logs, not at a directory to dig through."""
+
+    def test_start_error_points_at_jd_proxy_logs_for_its_session(self) -> None:
+        error = ProxyStartError("proxy exited early", log_dir="/proj/.jd-proxy/server/default/20260610-180000.000")
+        output = " ".join(_render(error, ["config"]).split())
+        self.assertIn("proxy exited early", output)
+        self.assertIn("jd proxy logs --session-id 20260610-180000.000", output)
+
+    def test_start_error_without_log_dir_offers_no_logs_hint(self) -> None:
+        self.assertNotIn("jd proxy logs", _render(ProxyStartError("boom"), ["config"]))
+
+    def test_session_not_found_points_at_jd_proxy_sessions(self) -> None:
+        output = " ".join(_render(ProxySessionNotFoundError("20990101-000000.000"), ["config"]).split())
+        self.assertIn("20990101-000000.000", output)
+        self.assertIn("jd proxy sessions", output)

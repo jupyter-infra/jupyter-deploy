@@ -210,7 +210,8 @@ class ProxyConnectBundle:
 class ProxyStatus:
     """Detail of a single proxy instance, as observed on disk (jd proxy show).
 
-    `alive` is the live PID probe; `running` is `alive` AND a non-terminal published state.
+    `alive` is the live PID probe (always False once the CLI recorded the run as ``dead``, since
+    the PID may since belong to another process); `running` is `alive` AND a non-terminal state.
     `started_at` is the launch timestamp (its runtime directory name); `log_dir` is where
     its console + rotating logs live.
     """
@@ -226,6 +227,33 @@ class ProxyStatus:
     # Process creation time (epoch seconds) recorded by the proxy; used to guard against
     # signaling a recycled PID. None when read from a status file that predates the field.
     process_created_at: float | None = None
+
+
+@dataclass
+class ProxySession:
+    """One run of the proxy process, as found on disk (jd proxy sessions).
+
+    A session is one timestamped runtime directory: the proxy's rotating logs plus, while it runs
+    or after it dies uncleanly, its ``status.json``. `session_id` is that directory's name, which
+    is also the launch timestamp.
+
+    `state` is what the CLI can tell from disk:
+
+    - the published state (e.g. ``running``) when the process is alive and confirmed to be this proxy;
+    - ``unconfirmed`` when the recorded PID is alive but its identity cannot be confirmed;
+    - the published terminal state (``stopped``, ``failed``) when the proxy recorded one;
+    - ``dead`` when the record claims a live state but its process is gone (killed, crashed), or
+      when ``jd proxy stop``/``restart`` already recorded that verdict in the status file;
+    - ``stopped`` when there is no status file — a clean shutdown deletes it;
+    - ``unknown`` when the status file is present but unreadable.
+    """
+
+    session_id: str
+    state: str
+    pid: int | None = None
+    port: int | None = None
+    started_at: str = ""
+    log_dir: str = ""
 
 
 @dataclass
