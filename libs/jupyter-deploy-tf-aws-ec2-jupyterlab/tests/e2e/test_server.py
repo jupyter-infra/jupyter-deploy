@@ -44,15 +44,17 @@ def test_server_show(e2e_deployment: EndToEndDeployment) -> None:
 
 
 @pytest.mark.cli
-def test_server_show_service(e2e_deployment: EndToEndDeployment) -> None:
+@pytest.mark.parametrize("service", ["auth-sidecar", "traefik"])
+def test_server_show_service(e2e_deployment: EndToEndDeployment, service: str) -> None:
     """`jd server show --service` inspects that service's container instead; `--name` is ignored."""
     e2e_deployment.ensure_server_running()
 
     details = e2e_deployment.cli.run_show_json(
-        ["jupyter-deploy", "server", "show", "--service", "traefik", "--name", "anything"]
+        ["jupyter-deploy", "server", "show", "--service", service, "--name", "anything"]
     )
-    assert details["name"] == "traefik", f"Expected server name 'traefik', got: {details}"
-    assert details["resource"]["Name"] == "/traefik", f"Expected the traefik container, got: {details['resource']}"
+    assert details["name"] == service, f"Expected server name '{service}', got: {details}"
+    assert details["resource"]["Name"] == f"/{service}", f"Expected the {service} container, got: {details['resource']}"
+    assert details["resource"]["State"]["Running"] is True, f"Expected a running container: {details['resource']}"
 
 
 def test_stop_server(e2e_deployment: EndToEndDeployment) -> None:

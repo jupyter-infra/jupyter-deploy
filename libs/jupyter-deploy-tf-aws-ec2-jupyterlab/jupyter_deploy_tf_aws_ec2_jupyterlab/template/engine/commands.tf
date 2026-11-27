@@ -95,7 +95,7 @@ mainSteps:
 DOC
   ssm_server_show    = <<DOC
 schemaVersion: '2.2'
-description: Returns the docker inspect details of a service container.
+description: Returns a summary of the docker inspect details of a service container.
 parameters:
   service:
     type: String
@@ -112,11 +112,19 @@ mainSteps:
     inputs:
       runCommand:
         - |
-          # Print the container as one JSON object: `docker inspect` alone wraps it in a list.
-          # The Go template is assembled in the shell because a literal double brace would be
-          # parsed as an SSM parameter reference.
+          # Print a bounded summary of the container as one JSON object. Not the full
+          # `docker inspect`: SSM truncates synchronous output to 2,500 characters, and the full
+          # payload carries Config.Env, which holds secrets this output must not retain.
+          # `@@` stands for the Go template's opening double brace, swapped in by sed, because a
+          # literal one would be parsed as an SSM parameter reference.
           L='{'
-          docker inspect --format "$L$L"'json .}}' {{service}}
+          F='{"Id":@@json .Id}},"Name":@@json .Name}},"Image":@@json .Config.Image}},'
+          F="$F"'"ImageId":@@json .Image}},"Created":@@json .Created}},"RestartCount":@@json .RestartCount}},'
+          F="$F"'"State":{"Status":@@json .State.Status}},"Running":@@json .State.Running}},'
+          F="$F"'"StartedAt":@@json .State.StartedAt}},"ExitCode":@@json .State.ExitCode}},'
+          F="$F"'"Health":@@if .State.Health}}@@json .State.Health.Status}}@@else}}null@@end}}},'
+          F="$F"'"Ports":@@json .NetworkSettings.Ports}}}'
+          docker inspect --format "$(printf '%s' "$F" | sed "s/@@/$L$L/g")" {{service}}
 DOC
   ssm_server_exec    = <<DOC
 schemaVersion: '2.2'

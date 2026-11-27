@@ -7,7 +7,7 @@ import yaml
 
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.supervised_execution import NullDisplay
-from jupyter_deploy.exceptions import InvalidServiceError, ResourceNameRequiredError
+from jupyter_deploy.exceptions import InvalidInstructionResultError, InvalidServiceError, ResourceNameRequiredError
 from jupyter_deploy.handlers.resource.server_handler import ServerHandler
 from jupyter_deploy.manifest import (
     JupyterDeployManifest,
@@ -480,6 +480,52 @@ class TestServerHandler(unittest.TestCase):
         self.assertEqual(cli_paramdefs["service"].value, "jupyter")  # "default" -> first declared service
         self.assertEqual(result.name, "jupyter")
         self.assertEqual(result.resource, {"Name": "/jupyter"})
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_show_server_raises_on_unparseable_resource(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        mock_retrieve_manifest.return_value = self.mock_full_manifest.model_copy(update={"multi_server": False})
+        mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
+        mock_tf_variables_handler.return_value = Mock()
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+        handler = ServerHandler(display_manager=NullDisplay())
+
+        # e.g. JSON cut off mid-object, or a JSON value that is not an object
+        for resource in ('{"Name": "/jupyter", "State": {"Sta', '["/jupyter"]'):
+            mock_cmd_runner_fns["get_result_value_with_fallback"].side_effect = ["", resource]
+            with self.subTest(resource=resource), self.assertRaises(InvalidInstructionResultError):
+                handler.show_server()
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_show_server_without_resource_returns_empty_dict(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        mock_retrieve_manifest.return_value = self.mock_full_manifest.model_copy(update={"multi_server": False})
+        mock_tf_outputs_handler.return_value = self.get_mock_outputs_handler_and_fns()[0]
+        mock_tf_variables_handler.return_value = Mock()
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_fns["get_result_value_with_fallback"].side_effect = ["", ""]
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        result = ServerHandler(display_manager=NullDisplay()).show_server()
+
+        self.assertEqual(result.resource, {})
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")

@@ -38,6 +38,39 @@ def test_host_show_ignores_name(e2e_deployment: EndToEndDeployment) -> None:
     assert details["name"] == instance_id, f"Expected host name '{instance_id}', got: {details}"
 
 
+def test_host_stop(e2e_deployment: EndToEndDeployment) -> None:
+    """Test that the host can be stopped from command line."""
+    # Prerequisites
+    e2e_deployment.ensure_host_running()
+
+    # Stop host and assert status
+    e2e_deployment.cli.run_command(["jupyter-deploy", "host", "stop"])
+    host_status = e2e_deployment.cli.get_host_status()
+    assert host_status == "stopped", f"Expected host status 'stopped', got '{host_status}'"
+
+    # Verify connection agent reports not connected
+    connection_status = e2e_deployment.cli.get_connection_status()
+    assert connection_status == "notconnected", f"Expected 'notconnected', got '{connection_status}'"
+
+
+def test_host_start(e2e_deployment: EndToEndDeployment) -> None:
+    """Test that the host can be started from command line."""
+    # Prerequisites
+    e2e_deployment.ensure_host_stopped()
+
+    # Start host (this is what we're testing)
+    e2e_deployment.cli.run_command(["jupyter-deploy", "host", "start"])
+
+    # Assert status
+    host_status = e2e_deployment.cli.get_host_status()
+    assert host_status == "running", f"Expected host status 'running', got '{host_status}'"
+
+    # Check connection status
+    e2e_deployment.wait_for_connection_agent()
+    status = e2e_deployment.cli.get_connection_status()
+    assert status == "connected", f"Expected 'connected', got '{status}'"
+
+
 def test_host_connect_whoami(e2e_deployment: EndToEndDeployment) -> None:
     """Test that we can connect to the host via SSM and run a simple command."""
     # Prerequisites

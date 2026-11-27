@@ -5,7 +5,7 @@ from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.engine.terraform import tf_outputs, tf_variables
-from jupyter_deploy.exceptions import ResourceNameRequiredError
+from jupyter_deploy.exceptions import InvalidInstructionResultError, ResourceNameRequiredError
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
 from jupyter_deploy.handlers.payloads import ServerDetail
 from jupyter_deploy.handlers.resource.resource_utils import collect_results, evaluate_status_rules
@@ -115,10 +115,13 @@ class ServerHandler(BaseProjectHandler):
         cli_paramdefs = self._build_cli_paramdefs(service=service, allow_all_services=False, name=name, scope=scope)
         runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
         results = collect_results(runner, command)
-        return ServerDetail(
-            name=results.get("name") or cli_paramdefs["service"].value,
-            resource=results.get("resource", {}),
-        )
+        resource = results.get("resource") or {}
+        if not isinstance(resource, dict):
+            # collect_results leaves unparseable JSON as a string; fail instead of passing it on.
+            raise InvalidInstructionResultError(
+                f"server.show returned a resource that is not a JSON object: {str(resource)[:200]!r}"
+            )
+        return ServerDetail(name=results.get("name") or cli_paramdefs["service"].value, resource=resource)
 
     def _build_cli_paramdefs(
         self,
