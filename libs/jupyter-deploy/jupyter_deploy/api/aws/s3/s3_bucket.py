@@ -41,8 +41,9 @@ def find_buckets_by_tag(
                             return matched
                         break
             except s3_client.exceptions.ClientError as e:
-                # Buckets without tags return NoSuchTagSet error
-                if e.response.get("Error", {}).get("Code") == "NoSuchTagSet":
+                # NoSuchTagSet: the bucket has no tags.
+                # NoSuchBucket: the bucket was deleted after ListBuckets returned it.
+                if e.response.get("Error", {}).get("Code") in ("NoSuchTagSet", "NoSuchBucket"):
                     continue
                 raise
 
