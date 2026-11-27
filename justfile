@@ -1082,7 +1082,7 @@ test-e2e-cli-jupyterlab project_dir test_filter="" options="":
     if [ -n "{{options}}" ]; then
         CLI_OPTS="$CLI_OPTS,{{options}}"
     fi
-    just test-e2e "{{project_dir}}" "{{test_filter}}" "$CLI_OPTS,marker=proxy" tf-aws-ec2-jupyterlab
+    just test-e2e "{{project_dir}}" "{{test_filter}}" "$CLI_OPTS,marker=proxy or cli" tf-aws-ec2-jupyterlab
 
 # Run EKS OIDC CLI functional tests (cli marker) against an existing deployment
 # Mirrors test-e2e-cli but targets the tf-aws-eks-oidc template.

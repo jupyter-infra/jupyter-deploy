@@ -18,6 +18,26 @@ def test_host_running(e2e_deployment: EndToEndDeployment) -> None:
     assert host_status == "running", f"Expected host status 'running', got '{host_status}'"
 
 
+def test_host_show(e2e_deployment: EndToEndDeployment) -> None:
+    """`jd host show` describes the one EC2 instance, named by its instance id."""
+    e2e_deployment.ensure_host_running()
+    instance_id = e2e_deployment.cli.get_str_output("instance_id")
+
+    details = e2e_deployment.cli.run_show_json(["jupyter-deploy", "host", "show"])
+    assert details["name"] == instance_id, f"Expected host name '{instance_id}', got: {details}"
+    assert details["status"] == "running", f"Expected host status 'running', got: {details}"
+    assert details["resource"]["instance_id"] == instance_id, f"Unexpected host resource: {details}"
+
+
+def test_host_show_ignores_name(e2e_deployment: EndToEndDeployment) -> None:
+    """A single-host template ignores `--name`, like `jd host status`: it still shows its one instance."""
+    e2e_deployment.ensure_host_running()
+    instance_id = e2e_deployment.cli.get_str_output("instance_id")
+
+    details = e2e_deployment.cli.run_show_json(["jupyter-deploy", "host", "show", "--name", "i-00000000000000000"])
+    assert details["name"] == instance_id, f"Expected host name '{instance_id}', got: {details}"
+
+
 def test_host_stop(e2e_deployment: EndToEndDeployment) -> None:
     """Test that the host can be stopped from command line."""
     # Prerequisites

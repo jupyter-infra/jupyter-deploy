@@ -32,6 +32,31 @@ def test_server_running(e2e_deployment: EndToEndDeployment) -> None:
     assert server_status == "IN_SERVICE", f"Expected server status 'IN_SERVICE', got '{server_status}'"
 
 
+@pytest.mark.cli
+def test_server_show(e2e_deployment: EndToEndDeployment) -> None:
+    """`jd server show` prints the `docker inspect` of the jupyter container by default."""
+    e2e_deployment.ensure_server_running()
+
+    details = e2e_deployment.cli.run_show_json(["jupyter-deploy", "server", "show"])
+    assert details["name"] == "jupyter", f"Expected server name 'jupyter', got: {details}"
+    assert details["resource"]["Name"] == "/jupyter", f"Expected the jupyter container, got: {details['resource']}"
+    assert details["resource"]["State"]["Running"] is True, f"Expected a running container: {details['resource']}"
+
+
+@pytest.mark.cli
+@pytest.mark.parametrize("service", ["auth-sidecar", "traefik"])
+def test_server_show_service(e2e_deployment: EndToEndDeployment, service: str) -> None:
+    """`jd server show --service` inspects that service's container instead; `--name` is ignored."""
+    e2e_deployment.ensure_server_running()
+
+    details = e2e_deployment.cli.run_show_json(
+        ["jupyter-deploy", "server", "show", "--service", service, "--name", "anything"]
+    )
+    assert details["name"] == service, f"Expected server name '{service}', got: {details}"
+    assert details["resource"]["Name"] == f"/{service}", f"Expected the {service} container, got: {details['resource']}"
+    assert details["resource"]["State"]["Running"] is True, f"Expected a running container: {details['resource']}"
+
+
 def test_stop_server(e2e_deployment: EndToEndDeployment) -> None:
     """`jd server stop` takes the app out of service while the host stays up."""
     e2e_deployment.ensure_server_running()

@@ -1385,7 +1385,7 @@ class TestServerShowCmd(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_server_handler_class.assert_called_once()
-        mock_handler_fns["show_server"].assert_called_once_with(name="my-ws", scope=None)
+        mock_handler_fns["show_server"].assert_called_once_with(service="default", name="my-ws", scope=None)
 
     @patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
@@ -1398,19 +1398,33 @@ class TestServerShowCmd(unittest.TestCase):
         result = runner.invoke(servers_app, ["show", "--name", "my-ws", "--scope", "team-a"])
 
         self.assertEqual(result.exit_code, 0)
-        mock_handler_fns["show_server"].assert_called_once_with(name="my-ws", scope="team-a")
+        mock_handler_fns["show_server"].assert_called_once_with(service="default", name="my-ws", scope="team-a")
 
     @patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")
-    def test_requires_name_option(self, mock_project_dir: Mock, mock_server_handler_class: Mock) -> None:
-        mock_server_handler, _ = self.get_mock_server_handler()
+    def test_name_is_optional(self, mock_project_dir: Mock, mock_server_handler_class: Mock) -> None:
+        mock_server_handler, mock_handler_fns = self.get_mock_server_handler()
         mock_server_handler_class.return_value = mock_server_handler
         mock_project_dir.return_value.__enter__.return_value = None
 
         runner = CliRunner()
         result = runner.invoke(servers_app, ["show"])
 
-        self.assertNotEqual(result.exit_code, 0)
+        self.assertEqual(result.exit_code, 0, result.output)
+        mock_handler_fns["show_server"].assert_called_once_with(service="default", name=None, scope=None)
+
+    @patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler")
+    @patch("jupyter_deploy.cmd_utils.project_dir")
+    def test_passes_service_option(self, mock_project_dir: Mock, mock_server_handler_class: Mock) -> None:
+        mock_server_handler, mock_handler_fns = self.get_mock_server_handler()
+        mock_server_handler_class.return_value = mock_server_handler
+        mock_project_dir.return_value.__enter__.return_value = None
+
+        runner = CliRunner()
+        result = runner.invoke(servers_app, ["show", "-s", "traefik"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        mock_handler_fns["show_server"].assert_called_once_with(service="traefik", name=None, scope=None)
 
     @patch("jupyter_deploy.handlers.resource.server_handler.ServerHandler")
     @patch("jupyter_deploy.cmd_utils.project_dir")

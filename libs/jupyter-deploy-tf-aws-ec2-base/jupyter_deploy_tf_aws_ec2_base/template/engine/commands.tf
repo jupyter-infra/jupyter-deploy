@@ -203,6 +203,39 @@ mainSteps:
           fi
           docker logs {{service}} $EXTRA
 DOC
+  ssm_server_show    = <<DOC
+schemaVersion: '2.2'
+description: Returns a summary of the docker inspect details of a service container.
+parameters:
+  service:
+    type: String
+    description: "The service container to inspect (jupyter, traefik, oauth or bedrock-sidecar)."
+    default: jupyter
+    allowedValues:
+      - jupyter
+      - traefik
+      - oauth
+      - bedrock-sidecar
+mainSteps:
+  - action: aws:runShellScript
+    name: Show
+    inputs:
+      runCommand:
+        - |
+          # Print a bounded summary of the container as one JSON object. Not the full
+          # `docker inspect`: SSM truncates synchronous output to 2,500 characters, and the full
+          # payload carries Config.Env, which holds secrets this output must not retain.
+          # `@@` stands for the Go template's opening double brace, swapped in by sed, because a
+          # literal one would be parsed as an SSM parameter reference.
+          L='{'
+          F='{"Id":@@json .Id}},"Name":@@json .Name}},"Image":@@json .Config.Image}},'
+          F="$F"'"ImageId":@@json .Image}},"Created":@@json .Created}},"RestartCount":@@json .RestartCount}},'
+          F="$F"'"State":{"Status":@@json .State.Status}},"Running":@@json .State.Running}},'
+          F="$F"'"StartedAt":@@json .State.StartedAt}},"ExitCode":@@json .State.ExitCode}},'
+          F="$F"'"Health":@@if .State.Health}}@@json .State.Health.Status}}@@else}}null@@end}}},'
+          F="$F"'"Ports":@@json .NetworkSettings.Ports}}}'
+          docker inspect --format "$(printf '%s' "$F" | sed "s/@@/$L$L/g")" {{service}}
+DOC
   ssm_server_exec    = <<DOC
 schemaVersion: '2.2'
 description: Execute a command inside a service container.
@@ -319,6 +352,15 @@ resource "aws_ssm_document" "server_logs" {
   document_format = "YAML"
 
   content = local.ssm_server_logs
+  tags    = local.combined_tags
+}
+
+resource "aws_ssm_document" "server_show" {
+  name            = "server-show-${local.doc_postfix}"
+  document_type   = "Command"
+  document_format = "YAML"
+
+  content = local.ssm_server_show
   tags    = local.combined_tags
 }
 

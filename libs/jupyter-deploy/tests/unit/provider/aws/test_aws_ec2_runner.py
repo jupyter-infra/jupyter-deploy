@@ -610,6 +610,59 @@ class TestDescribeVolumes(unittest.TestCase):
         self.assertNotIn("used", self._run([{"VolumeId": "vol-1", "Size": 30}]))
 
 
+class TestDescribeInstance(unittest.TestCase):
+    """The instance id is the host name; the resource is a summary, not the raw payload."""
+
+    @staticmethod
+    def _run(instance: dict) -> dict:
+        runner = AwsEc2Runner(NullDisplay(), region_name="us-west-2")
+        with patch("jupyter_deploy.api.aws.ec2.ec2_instance.describe_instance", Mock(return_value=instance)):
+            return runner.execute_instruction(
+                instruction_name=AwsEc2Instruction.DESCRIBE_INSTANCE,
+                resolved_arguments={
+                    "instance_id": StrResolvedInstructionArgument(argument_name="instance_id", value="i-123")
+                },
+            )
+
+    @patch("boto3.client")
+    def test_returns_name_status_and_summary(self, mock_boto: Mock) -> None:
+        results = self._run(
+            {
+                "InstanceId": "i-123",
+                "InstanceType": "t3.medium",
+                "Placement": {"AvailabilityZone": "us-west-2a"},
+                "State": {"Name": "running", "Code": 16},
+                "PrivateIpAddress": "10.0.0.5",
+                "LaunchTime": datetime(2026, 11, 1, 12, 0, tzinfo=UTC),
+                "ImageId": "ami-abc",
+                "NetworkInterfaces": [{"NetworkInterfaceId": "eni-1"}],
+            }
+        )
+        self.assertEqual(results["Name"].value, "i-123")
+        self.assertEqual(results["Status"].value, "running")
+        self.assertEqual(
+            json.loads(results["Resource"].value),
+            {
+                "instance_id": "i-123",
+                "instance_type": "t3.medium",
+                "zone": "us-west-2a",
+                "state": "running",
+                "private_ip": "10.0.0.5",
+                "launched_at": "2026-11-01T12:00:00+00:00",
+                "image_id": "ami-abc",
+            },
+        )
+
+    @patch("boto3.client")
+    def test_tolerates_missing_fields(self, mock_boto: Mock) -> None:
+        """A stopped instance has no private IP; nothing should raise for an absent field."""
+        results = self._run({"InstanceId": "i-123", "State": {"Name": "stopped"}})
+        resource = json.loads(results["Resource"].value)
+        self.assertEqual(results["Status"].value, "stopped")
+        self.assertEqual(resource["private_ip"], "")
+        self.assertEqual(resource["launched_at"], "")
+
+
 class TestExecuteInstructions(unittest.TestCase):
     def test_all_instructions_implemented(self) -> None:
         # Setup
@@ -618,6 +671,7 @@ class TestExecuteInstructions(unittest.TestCase):
 
         # Create patch targets for all methods that would be called by execute_instruction
         patches = [
+            patch.object(runner, "_describe_instance", return_value={}),
             patch.object(runner, "_describe_instance_status", return_value={}),
             patch.object(runner, "_start_instance", return_value={}),
             patch.object(runner, "_stop_instance", return_value={}),
@@ -634,6 +688,7 @@ class TestExecuteInstructions(unittest.TestCase):
         ]
 
         instruction_method_map = {
+            AwsEc2Instruction.DESCRIBE_INSTANCE: "_describe_instance",
             AwsEc2Instruction.DESCRIBE_INSTANCE_STATUS: "_describe_instance_status",
             AwsEc2Instruction.START_INSTANCE: "_start_instance",
             AwsEc2Instruction.STOP_INSTANCE: "_stop_instance",

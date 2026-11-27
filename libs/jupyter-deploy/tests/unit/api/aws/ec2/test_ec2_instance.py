@@ -9,6 +9,7 @@ from jupyter_deploy.api.aws.ec2.ec2_instance import (
     _INSTANCE_CODE_MAP,
     _INSTANCE_REVERSE_CODE_MAP,
     Ec2InstanceState,
+    describe_instance,
     describe_instance_public_ip,
     describe_instance_status,
     get_instance_stop_time,
@@ -525,6 +526,26 @@ class TestRestartInstance(unittest.TestCase):
         # Execute & Assert
         with self.assertRaises(botocore.exceptions.ClientError):
             restart_instance(mock_ec2_client, "i-123")
+
+
+class TestDescribeInstance(unittest.TestCase):
+    def test_returns_the_first_instance(self) -> None:
+        mock_client = Mock()
+        mock_client.describe_instances.return_value = {
+            "Reservations": [{"Instances": [{"InstanceId": "i-abc", "InstanceType": "t3.medium"}]}]
+        }
+
+        result = describe_instance(mock_client, "i-abc")
+
+        self.assertEqual(result, {"InstanceId": "i-abc", "InstanceType": "t3.medium"})
+        mock_client.describe_instances.assert_called_once_with(InstanceIds=["i-abc"])
+
+    def test_raises_resource_not_found_when_no_reservations(self) -> None:
+        mock_client = Mock()
+        mock_client.describe_instances.return_value = {"Reservations": []}
+
+        with self.assertRaises(ResourceNotFoundError):
+            describe_instance(mock_client, "i-missing")
 
 
 class TestDescribeInstancePublicIp(unittest.TestCase):

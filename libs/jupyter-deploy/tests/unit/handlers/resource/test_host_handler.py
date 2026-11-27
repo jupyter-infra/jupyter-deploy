@@ -7,6 +7,7 @@ import yaml
 
 from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.supervised_execution import NullDisplay
+from jupyter_deploy.exceptions import ResourceNameRequiredError
 from jupyter_deploy.handlers.resource.host_handler import HostHandler
 from jupyter_deploy.manifest import JupyterDeployManifest, JupyterDeployManifestV1
 
@@ -411,6 +412,53 @@ class TestHostHandler(unittest.TestCase):
         cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
         self.assertIn("name", cli_paramdefs)
         self.assertEqual(cli_paramdefs["name"].value, "node-1")
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_show_host_without_name_omits_name_on_single_host_template(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        mock_retrieve_manifest.return_value = self.mock_full_manifest.model_copy(update={"multi_host": False})
+        mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
+        mock_tf_outputs_handler.return_value = mock_output_handler
+        mock_tf_variables_handler.return_value = Mock()
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_fns["get_result_value_with_fallback"].side_effect = ["i-1", "running", "{}"]
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        HostHandler(display_manager=NullDisplay()).show_host()
+
+        # Like host.status: no name is passed, and a single-host manifest does not read one.
+        cli_paramdefs = mock_cmd_runner_fns["run_command_sequence"].call_args[1]["cli_paramdefs"]
+        self.assertNotIn("name", cli_paramdefs)
+
+    @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
+    @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")
+    @patch("jupyter_deploy.engine.terraform.tf_variables.TerraformVariablesHandler")
+    @patch("jupyter_deploy.provider.manifest_command_runner.ManifestCommandRunner")
+    def test_show_host_without_name_raises_on_multi_host_template(
+        self,
+        mock_cmd_runner_class: Mock,
+        mock_tf_variables_handler: Mock,
+        mock_tf_outputs_handler: Mock,
+        mock_retrieve_manifest: Mock,
+    ) -> None:
+        mock_retrieve_manifest.return_value = self.mock_full_manifest.model_copy(update={"multi_host": True})
+        mock_output_handler, _ = self.get_mock_outputs_handler_and_fns()
+        mock_tf_outputs_handler.return_value = mock_output_handler
+        mock_tf_variables_handler.return_value = Mock()
+        mock_cmd_runner, mock_cmd_runner_fns = self.get_mock_manifest_cmd_runner_and_fns()
+        mock_cmd_runner_class.return_value = mock_cmd_runner
+
+        with self.assertRaises(ResourceNameRequiredError):
+            HostHandler(display_manager=NullDisplay()).show_host()
+        mock_cmd_runner_fns["run_command_sequence"].assert_not_called()
 
     @patch("jupyter_deploy.handlers.base_project_handler.retrieve_project_manifest")
     @patch("jupyter_deploy.engine.terraform.tf_outputs.TerraformOutputsHandler")

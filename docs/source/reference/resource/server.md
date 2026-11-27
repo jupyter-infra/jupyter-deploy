@@ -235,6 +235,8 @@ $ jd server list [OPTIONS]
 
 Display detailed information about a server.
 
+By default, shows your main application service. Specify --service to target a specific service.
+
 Run either from a project directory that you created with <jd init>;
 or pass --path <project-dir>.
 
@@ -246,8 +248,9 @@ $ jd server show [OPTIONS]
 
 **Options**:
 
-* `--name <str>`: Name of the server to show details for.  [required]
+* `--name <str>`: Name of the server to show details for; ignored by single-server templates.
 * `-p, --path <path>`: Directory of the project.
+* `-s, --service <str>`: Name of the service to show details for.  [default: default]
 * `--scope <str>`: Scope or group the server belongs to.
 * `--json`: Output as JSON.
 * `--help`: Show this message and exit.

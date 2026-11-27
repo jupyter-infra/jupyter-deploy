@@ -94,6 +94,23 @@ commands:
   - result-name: host.status
     source: result
     source-key: '[0].InstanceStateName'
+- cmd: host.show
+  sequence:
+  - api-name: aws.ec2.describe-instance
+    arguments:
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+  results:
+  - result-name: host.show.name
+    source: result
+    source-key: '[0].Name'
+  - result-name: host.show.status
+    source: result
+    source-key: '[0].Status'
+  - result-name: host.show.resource
+    source: result
+    source-key: '[0].Resource'
 - cmd: host.stop
   sequence:
   - api-name: aws.ec2.stop-instance
@@ -180,6 +197,23 @@ commands:
       source-key: instance_id
   results:
   - result-name: server.status
+    source: result
+    source-key: '[0].StandardOutputContent'
+- cmd: server.show
+  sequence:
+  - api-name: aws.ssm.wait-command-sync
+    arguments:
+    - api-attribute: document_name
+      source: output
+      source-key: server_show_document
+    - api-attribute: instance_id
+      source: output
+      source-key: instance_id
+    - api-attribute: service
+      source: cli
+      source-key: service
+  results:
+  - result-name: server.show.resource
     source: result
     source-key: '[0].StandardOutputContent'
 - cmd: server.start

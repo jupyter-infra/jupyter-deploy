@@ -5,7 +5,7 @@ from jupyter_deploy.engine.enum import EngineType
 from jupyter_deploy.engine.outdefs import StrTemplateOutputDefinition
 from jupyter_deploy.engine.supervised_execution import DisplayManager
 from jupyter_deploy.engine.terraform import tf_outputs, tf_variables
-from jupyter_deploy.exceptions import ResourceNameRequiredError
+from jupyter_deploy.exceptions import InvalidInstructionResultError, ResourceNameRequiredError
 from jupyter_deploy.handlers.base_project_handler import BaseProjectHandler
 from jupyter_deploy.handlers.payloads import ServerDetail
 from jupyter_deploy.handlers.resource.resource_utils import collect_results, evaluate_status_rules
@@ -97,24 +97,31 @@ class ServerHandler(BaseProjectHandler):
         resource_json = runner.get_result_value(command, "server.status.resource", str)
         return evaluate_status_rules(resource_json, rules)
 
-    def show_server(self, name: str, scope: str | None = None) -> ServerDetail:
-        """Returns detailed information about a server."""
-        resolved_scope = self._resolve_scope(scope)
+    def show_server(self, service: str = "default", name: str | None = None, scope: str | None = None) -> ServerDetail:
+        """Returns detailed information about a server.
+
+        Like :meth:`get_server_status`: `name` is required on a multi-server template, and a
+        single-server template ignores it. `service` picks which container a template that runs
+        several (EC2: jupyter, traefik, ...) describes; when the manifest yields no name, the
+        detail is named after that service.
+        """
+        self._require_name(name)
         command = self.project_manifest.get_command("server.show")
         runner = cmd_runner.ManifestCommandRunner(
             display_manager=self.display_manager,
             output_handler=self._output_handler,
             variable_handler=self._variable_handler,
         )
-        runner.run_command_sequence(
-            command,
-            cli_paramdefs={
-                "name": StrResolvedCliParameter(parameter_name="name", value=name),
-                "scope": StrResolvedCliParameter(parameter_name="scope", value=resolved_scope),
-            },
-        )
+        cli_paramdefs = self._build_cli_paramdefs(service=service, allow_all_services=False, name=name, scope=scope)
+        runner.run_command_sequence(command, cli_paramdefs=cli_paramdefs)
         results = collect_results(runner, command)
-        return ServerDetail(name=results.get("name", ""), resource=results.get("resource", {}))
+        resource = results.get("resource") or {}
+        if not isinstance(resource, dict):
+            # collect_results leaves unparseable JSON as a string; fail instead of passing it on.
+            raise InvalidInstructionResultError(
+                f"server.show returned a resource that is not a JSON object: {str(resource)[:200]!r}"
+            )
+        return ServerDetail(name=results.get("name") or cli_paramdefs["service"].value, resource=resource)
 
     def _build_cli_paramdefs(
         self,

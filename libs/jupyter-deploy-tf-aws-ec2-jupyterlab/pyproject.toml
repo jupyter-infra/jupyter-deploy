@@ -102,7 +102,7 @@ testpaths = [
 ]
 markers = [
     "e2e: End-to-end tests using playwright (deselect with '-m \"not e2e\"')",
-    "cli: Non-mutating CLI tests for the CLI release gate; unused here, since base/eks own the generic CLI paths and this template's own ones are marked proxy",
+    "cli: Non-mutating CLI tests for the CLI release gate; this template owns the single-host/single-server CLI paths (jd host show, jd server show), while base/eks own the generic ones and the proxy paths are marked proxy",
     "proxy: Non-mutating tests of the local proxy path (jd proxy, jd open, auth sidecar, app through the proxy) for the proxy and CLI release gates (select with '-m proxy')",
     "gpu: Mutating tests that provision a GPU instance (deselect with '-m \"not gpu\"')",
 ]
